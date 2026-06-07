@@ -1,68 +1,106 @@
-import React, { useState } from 'react';
-import { 
-  View, 
-  Text as RNText, 
-  StyleSheet, 
-  ScrollView, 
-  TouchableOpacity, 
+﻿import React, { useState } from 'react';
+import {
+  View,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
   TextInput,
   Platform,
   Dimensions,
-  Modal
+  Modal,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { 
   FadeInDown, 
   FadeInUp, 
   FadeIn,
-  ScaleInCenter,
+  ZoomIn,
   Layout
 } from 'react-native-reanimated';
-import { 
-  Edit2, 
-  Check, 
-  X, 
-  Package, 
-  TrendingUp, 
-  DollarSign, 
-  History, 
+import {
+  Edit2,
+  Check,
+  X,
+  Package,
+  TrendingUp,
+  DollarSign,
+  History,
   AlertCircle,
   Truck,
   ShieldCheck,
   ChevronLeft,
+  ChevronRight,
   Calendar,
   Zap,
   Tag,
   Boxes,
   Activity,
-  Trash2
+  Trash2,
+  PhoneCall,
+  Phone
 } from 'lucide-react-native';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { Fonts } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
+import { useDialog } from '@/context/DialogContext';
 import { ItemData, updateItem, deleteItem } from '@/database/db';
 import { formatDate } from '@/utils/date-utils';
+import { AppText, AppListItem, AppRow, AppCard } from '@/components/ui';
 import PremiumActionModal from '@/components/PremiumActionModal';
-import BusinessSuccessModal from '@/components/BusinessSuccessModal';
-
 const { width } = Dimensions.get('window');
 
 const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => void }) => {
   const { colors, calendarType, language, t, theme } = useSettings();
+  const dialog = useDialog();
   const [isEditing, setIsEditing] = useState(false);
-  const [editForm, setEditForm] = useState(item);
+  const [editForm, setEditForm] = useState<any>(item);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [showSuccess, setShowSuccess] = useState<'edit' | 'delete' | null>(null);
 
   if (!item) return null;
 
   const handleSave = () => {
+    // Validate all editable fields before saving
+    if (!editForm.name.trim()) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      alert(t('form.error_name_required'));
+      return;
+    }
+    if (isNaN(editForm.basePurchasePrice) || editForm.basePurchasePrice < 0) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      alert(t('form.error_price_invalid'));
+      return;
+    }
+    if (isNaN(editForm.baseSellingPrice) || editForm.baseSellingPrice <= 0) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      alert(t('form.error_price_positive'));
+      return;
+    }
+    if (isNaN(editForm.totalBaseQuantity) || editForm.totalBaseQuantity < 0) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      alert(t('form.error_quantity_positive'));
+      return;
+    }
+    if (isNaN(editForm.lowStockThreshold ?? 0) || (editForm.lowStockThreshold ?? 0) < 0) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      alert(t('form.error_quantity_positive'));
+      return;
+    }
+    if (editForm.expiryDate && editForm.expiryDate.trim()) {
+      const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+      const isoRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(editForm.expiryDate.trim()) && !isoRegex.test(editForm.expiryDate.trim())) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        alert(t('form.error_date_format'));
+        return;
+      }
+    }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const success = updateItem(item.id, editForm);
     if (success) {
       setIsEditing(false);
-      setShowSuccess('edit');
+      if (onClose) onClose();
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       alert(t('common.error'));
@@ -73,7 +111,7 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => 
     const success = deleteItem(item.id);
     if (success) {
       setShowDeleteConfirm(false);
-      setShowSuccess('delete');
+      if (onClose) onClose();
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       alert(t('common.error'));
@@ -127,127 +165,168 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => 
             </View>
          </View>
 
-         <Animated.View entering={ScaleInCenter} style={styles.heroContent}>
+         <Animated.View entering={ZoomIn} style={styles.heroContent}>
             <View style={[styles.assetIconBox, { backgroundColor: colors.text }]}>
                <Package size={32} color={colors.background} />
             </View>
-            <RNText style={[styles.heroSub, { color: colors.textSecondary }]}>{t('detail.asset_blueprint')}</RNText>
+            <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.heroSub, { color: colors.textSecondary }]} numberOfLines={1}>{t('detail.asset_blueprint')}</AppText>
             {isEditing ? (
               <TextInput
                 style={[styles.heroInput, { color: colors.text }]}
                 value={editForm.name}
-                onChangeText={(t) => setEditForm(prev => ({ ...prev, name: t }))}
+                onChangeText={(t) => setEditForm((prev: any) => ({ ...prev, name: t }))}
                 placeholder={t('form.official_name')}
                 placeholderTextColor={colors.textSecondary}
               />
             ) : (
-              <RNText style={[styles.heroTitle, { color: colors.text }]}>{editForm.name}</RNText>
+              <AppText variant="display" weight="bold" align="center" style={[styles.heroTitle, { color: colors.text }]} numberOfLines={3}>{editForm.name}</AppText>
             )}
             <View style={[styles.statusBadge, { backgroundColor: editForm.totalBaseQuantity > 0 ? '#34C75915' : '#FF3B3015' }]}>
                <View style={[styles.statusDot, { backgroundColor: editForm.totalBaseQuantity > 0 ? '#34C759' : '#FF3B30' }]} />
-               <RNText style={[styles.statusText, { color: editForm.totalBaseQuantity > 0 ? '#34C759' : '#FF3B30' }]}>
+               <AppText variant="micro" weight="bold" transform="uppercase" shrink={false} style={[styles.statusText, { color: editForm.totalBaseQuantity > 0 ? '#34C759' : '#FF3B30' }]} numberOfLines={1}>
                   {editForm.totalBaseQuantity > 0 ? t('dashboard.stats.stable').toUpperCase() : t('inventory.out_of_stock').toUpperCase()}
-               </RNText>
+               </AppText>
             </View>
          </Animated.View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        
+
+        {/* Supplier Call Card — only shown when supplierCallEnabled is on */}
+        {editForm.supplierCallEnabled && (
+          <Animated.View entering={FadeInDown.delay(180)} style={styles.section}>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={async () => {
+                const phone = (editForm.supplierPhone || '').toString().replace(/[^0-9+]/g, '');
+                if (!phone) {
+                  await dialog.alert({ title: t('common.error'), message: t('detail.no_supplier_phone'), iconType: 'danger' });
+                  return;
+                }
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                Linking.openURL(`tel:${phone}`).catch(async () => {
+                  await dialog.alert({ title: t('common.error'), message: t('detail.could_not_call'), iconType: 'danger' });
+                });
+              }}
+              style={{
+                backgroundColor: colors.text,
+                borderRadius: 24,
+                padding: 20,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 14,
+              }}
+            >
+              <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.background + '20', justifyContent: 'center', alignItems: 'center' }}>
+                <PhoneCall size={22} color={colors.background} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <AppText variant="body-sm" weight="bold" style={{ color: colors.background }} numberOfLines={2}>
+                  {t('detail.call_supplier_cta')}
+                </AppText>
+                <AppText variant="caption" weight="medium" style={{ color: colors.background + 'B0', marginTop: 2 }} numberOfLines={1}>
+                  {editForm.supplierPhone || t('detail.no_phone_set')}
+                </AppText>
+              </View>
+              <ChevronRight size={18} color={colors.background + '90'} />
+            </TouchableOpacity>
+          </Animated.View>
+        )}
+
         {/* Magnitude Cards */}
         <Animated.View entering={FadeInDown.delay(200)} layout={Layout} style={styles.row}>
            <View style={[styles.magnitudeCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <RNText style={[styles.mLabel, { color: colors.textSecondary }]}>{t('detail.unit_margin')}</RNText>
-              <RNText style={[styles.mValue, { color: profit >= 0 ? '#34C759' : '#FF3B30' }]}>{margin.toFixed(1)}%</RNText>
+              <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.mLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('detail.unit_margin')}</AppText>
+              <AppText variant="heading" weight="bold" style={[styles.mValue, { color: profit >= 0 ? '#34C759' : '#FF3B30' }]} numberOfLines={1}>{margin.toFixed(1)}%</AppText>
               <View style={styles.mFooter}>
                  <TrendingUp size={12} color={profit >= 0 ? '#34C759' : '#FF3B30'} />
-                 <RNText style={[styles.mFooterText, { color: colors.textSecondary }]}>{profit.toFixed(2)} {t('common.etb')}</RNText>
+                 <AppText variant="micro" weight="medium" style={[styles.mFooterText, { color: colors.textSecondary }]} numberOfLines={1}>{profit.toFixed(2)} {t('common.etb')}</AppText>
               </View>
            </View>
            <View style={[styles.magnitudeCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <RNText style={[styles.mLabel, { color: colors.textSecondary }]}>{t('detail.asset_value')}</RNText>
-              <RNText style={[styles.mValue, { color: colors.text }]}>{(editForm.baseSellingPrice * editForm.totalBaseQuantity).toLocaleString()}</RNText>
+              <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.mLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('detail.asset_value')}</AppText>
+              <AppText variant="title" weight="bold" style={[styles.mValue, { color: colors.text }]} numberOfLines={1}>{(editForm.baseSellingPrice * editForm.totalBaseQuantity).toLocaleString()}</AppText>
               <View style={styles.mFooter}>
                  <DollarSign size={12} color={colors.textSecondary} />
-                 <RNText style={[styles.mFooterText, { color: colors.textSecondary }]}>{t('detail.potential_rev')}</RNText>
+                 <AppText variant="micro" weight="medium" style={[styles.mFooterText, { color: colors.textSecondary }]} numberOfLines={1}>{t('detail.potential_rev')}</AppText>
               </View>
            </View>
         </Animated.View>
 
         {/* Intelligence Nodes */}
         <Animated.View entering={FadeInDown.delay(400)} style={styles.section}>
-           <RNText style={[styles.sectionTitle, { color: colors.textSecondary }]}>{t('detail.financial_core')}</RNText>
+           <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.sectionTitle, { color: colors.textSecondary }]} numberOfLines={1}>{t('detail.financial_core')}</AppText>
            <View style={[styles.intelligenceBlock, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.node}>
                  <View style={styles.nodeInfo}>
                     <Tag size={16} color={colors.textSecondary} />
-                    <RNText style={[styles.nodeLabel, { color: colors.textSecondary }]}>{t('inventory.purchase_price')}</RNText>
+                    <AppText variant="caption" weight="bold" style={[styles.nodeLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('inventory.purchase_price')}</AppText>
                  </View>
                  {isEditing ? (
-                   <TextInput 
-                     style={[styles.nodeInput, { color: colors.text, borderColor: colors.border }]} 
+                   <TextInput
+                     style={[styles.nodeInput, { color: colors.text, borderColor: colors.border }]}
                      value={String(editForm.basePurchasePrice)}
-                     onChangeText={(t) => setEditForm(prev => ({ ...prev, basePurchasePrice: Number(t) }))}
+                     onChangeText={(t) => setEditForm((prev: any) => ({ ...prev, basePurchasePrice: Number(t) }))}
                      keyboardType="numeric"
                    />
                  ) : (
-                   <RNText style={[styles.nodeValue, { color: colors.text }]}>{editForm.basePurchasePrice.toLocaleString()} <RNText style={styles.curr}>{t('common.etb')}</RNText></RNText>
+                   <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.nodeValue, { color: colors.text }]} numberOfLines={1}>{editForm.basePurchasePrice.toLocaleString()} <AppText variant="micro" weight="medium" shrink={false} style={styles.curr}>{t('common.etb')}</AppText></AppText>
                  )}
               </View>
               <View style={styles.nodeDivider} />
               <View style={styles.node}>
                  <View style={styles.nodeInfo}>
                     <Zap size={16} color={colors.textSecondary} />
-                    <RNText style={[styles.nodeLabel, { color: colors.textSecondary }]}>{t('inventory.selling_price')}</RNText>
+                    <AppText variant="caption" weight="bold" style={[styles.nodeLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('inventory.selling_price')}</AppText>
                  </View>
                  {isEditing ? (
-                   <TextInput 
-                     style={[styles.nodeInput, { color: colors.text, borderColor: colors.border }]} 
+                   <TextInput
+                     style={[styles.nodeInput, { color: colors.text, borderColor: colors.border }]}
                      value={String(editForm.baseSellingPrice)}
-                     onChangeText={(t) => setEditForm(prev => ({ ...prev, baseSellingPrice: Number(t) }))}
+                     onChangeText={(t) => setEditForm((prev: any) => ({ ...prev, baseSellingPrice: Number(t) }))}
                      keyboardType="numeric"
                    />
                  ) : (
-                   <RNText style={[styles.nodeValue, { color: colors.text }]}>{editForm.baseSellingPrice.toLocaleString()} <RNText style={styles.curr}>{t('common.etb')}</RNText></RNText>
+                   <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.nodeValue, { color: colors.text }]} numberOfLines={1}>{editForm.baseSellingPrice.toLocaleString()} <AppText variant="micro" weight="medium" shrink={false} style={styles.curr}>{t('common.etb')}</AppText></AppText>
                  )}
               </View>
            </View>
-        </Animated.View>
+         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(500)} style={styles.section}>
-           <RNText style={[styles.sectionTitle, { color: colors.textSecondary }]}>{t('detail.logistics_scale')}</RNText>
+         <Animated.View entering={FadeInDown.delay(500)} style={styles.section}>
+           <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.sectionTitle, { color: colors.textSecondary }]} numberOfLines={1}>{t('detail.logistics_scale')}</AppText>
            <View style={[styles.intelligenceBlock, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.node}>
                  <View style={styles.nodeInfo}>
                     <Activity size={16} color={colors.textSecondary} />
-                    <RNText style={[styles.nodeLabel, { color: colors.textSecondary }]}>{t('inventory.stock_status')}</RNText>
+                    <AppText variant="caption" weight="bold" style={[styles.nodeLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('inventory.stock_status')}</AppText>
                  </View>
                  {isEditing ? (
-                   <TextInput 
-                     style={[styles.nodeInput, { color: colors.text, borderColor: colors.border }]} 
+                   <TextInput
+                     style={[styles.nodeInput, { color: colors.text, borderColor: colors.border }]}
                      value={String(editForm.totalBaseQuantity)}
-                     onChangeText={(t) => setEditForm(prev => ({ ...prev, totalBaseQuantity: Number(t) }))}
+                     onChangeText={(t) => setEditForm((prev: any) => ({ ...prev, totalBaseQuantity: Number(t) }))}
                      keyboardType="numeric"
                    />
                  ) : (
-                   <RNText style={[styles.nodeValue, { color: colors.text }]}>{editForm.totalBaseQuantity} <RNText style={styles.curr}>{editForm.baseUnit}</RNText></RNText>
+                   <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.nodeValue, { color: colors.text }]} numberOfLines={1}>{editForm.totalBaseQuantity} <AppText variant="micro" weight="medium" shrink={false} style={styles.curr}>{editForm.baseUnit}</AppText></AppText>
                  )}
               </View>
               <View style={styles.nodeDivider} />
               <View style={styles.node}>
                  <View style={styles.nodeInfo}>
                     <AlertCircle size={16} color={colors.textSecondary} />
-                    <RNText style={[styles.nodeLabel, { color: colors.textSecondary }]}>{t('detail.low_threshold')}</RNText>
+                    <AppText variant="caption" weight="bold" style={[styles.nodeLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('detail.low_threshold')}</AppText>
                  </View>
                  {isEditing ? (
-                   <TextInput 
-                     style={[styles.nodeInput, { color: colors.text, borderColor: colors.border }]} 
+                   <TextInput
+                     style={[styles.nodeInput, { color: colors.text, borderColor: colors.border }]}
                      value={String(editForm.lowStockThreshold || 0)}
-                     onChangeText={(t) => setEditForm(prev => ({ ...prev, lowStockThreshold: Number(t) }))}
+                     onChangeText={(t) => setEditForm((prev: any) => ({ ...prev, lowStockThreshold: Number(t) }))}
                      keyboardType="numeric"
                    />
                  ) : (
-                   <RNText style={[styles.nodeValue, { color: colors.text }]}>{editForm.lowStockThreshold || 0} <RNText style={styles.curr}>{editForm.baseUnit}</RNText></RNText>
+                   <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.nodeValue, { color: colors.text }]} numberOfLines={1}>{editForm.lowStockThreshold || 0} <AppText variant="micro" weight="medium" shrink={false} style={styles.curr}>{editForm.baseUnit}</AppText></AppText>
                  )}
               </View>
               {editForm.hasPacks && (
@@ -256,49 +335,49 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => 
                   <View style={styles.node}>
                      <View style={styles.nodeInfo}>
                         <Boxes size={16} color={colors.textSecondary} />
-                        <RNText style={[styles.nodeLabel, { color: colors.textSecondary }]}>{t('detail.pack_scale')}</RNText>
+                        <AppText variant="caption" weight="bold" style={[styles.nodeLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('detail.pack_scale')}</AppText>
                      </View>
-                     <RNText style={[styles.nodeValue, { color: colors.text }]}>{editForm.basePerPack} {editForm.baseUnit}/{t('form.pack')}</RNText>
+                     <AppText variant="body-sm" weight="bold" style={[styles.nodeValue, { color: colors.text }]} numberOfLines={1}>{editForm.basePerPack} {editForm.baseUnit}/{t('form.pack')}</AppText>
                   </View>
                 </>
               )}
            </View>
-        </Animated.View>
+         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(600)} style={styles.section}>
-           <RNText style={[styles.sectionTitle, { color: colors.textSecondary }]}>{t('detail.temporal_audit')}</RNText>
+         <Animated.View entering={FadeInDown.delay(600)} style={styles.section}>
+           <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.sectionTitle, { color: colors.textSecondary }]} numberOfLines={1}>{t('detail.temporal_audit')}</AppText>
            <View style={[styles.intelligenceBlock, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.node}>
                  <View style={styles.nodeInfo}>
                     <Calendar size={16} color={colors.textSecondary} />
-                    <RNText style={[styles.nodeLabel, { color: colors.textSecondary }]}>{t('inventory.expiring')}</RNText>
+                    <AppText variant="caption" weight="bold" style={[styles.nodeLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('inventory.expiring')}</AppText>
                  </View>
                  {isEditing ? (
-                   <TextInput 
-                     style={[styles.nodeInput, { color: colors.text, borderColor: colors.border }]} 
+                   <TextInput
+                     style={[styles.nodeInput, { color: colors.text, borderColor: colors.border }]}
                      value={editForm.expiryDate || ''}
-                     placeholder="YYYY-MM-DD"
+                     placeholder={t('inv.date_format_iso')}
                      placeholderTextColor={colors.textSecondary}
-                     onChangeText={(t) => setEditForm(prev => ({ ...prev, expiryDate: t }))}
+                     onChangeText={(t) => setEditForm((prev: any) => ({ ...prev, expiryDate: t }))}
                    />
                  ) : (
-                   <RNText style={[styles.nodeValue, { color: colors.text }]}>
+                   <AppText variant="body-sm" weight="bold" style={[styles.nodeValue, { color: colors.text }]} numberOfLines={1}>
                      {editForm.expiryDate ? formatDate(new Date(editForm.expiryDate), calendarType, language) : t('common.none').toUpperCase()}
-                   </RNText>
+                   </AppText>
                  )}
               </View>
               <View style={styles.nodeDivider} />
               <View style={styles.node}>
                  <View style={styles.nodeInfo}>
                     <History size={16} color={colors.textSecondary} />
-                    <RNText style={[styles.nodeLabel, { color: colors.textSecondary }]}>{t('detail.committed_on')}</RNText>
+                    <AppText variant="caption" weight="bold" style={[styles.nodeLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('detail.committed_on')}</AppText>
                  </View>
-                 <RNText style={[styles.nodeValue, { color: colors.text }]}>
+                 <AppText variant="body-sm" weight="bold" style={[styles.nodeValue, { color: colors.text }]} numberOfLines={1}>
                    {editForm.createdAt ? formatDate(new Date(editForm.createdAt), calendarType, language) : t('common.none').toUpperCase()}
-                 </RNText>
+                 </AppText>
               </View>
            </View>
-        </Animated.View>
+         </Animated.View>
 
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -314,9 +393,9 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => 
             ) : (
               <Edit2 size={18} color={colors.background} />
             )}
-            <RNText style={[styles.actionText, { color: colors.background }]}>
+            <AppText variant="body" weight="bold" shrink={false} style={[styles.actionText, { color: colors.background }]} numberOfLines={1}>
               {isEditing ? t('detail.commit_blueprint') : t('detail.modify_asset')}
-            </RNText>
+            </AppText>
          </TouchableOpacity>
       </BlurView>
 
@@ -332,21 +411,6 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => 
         />
       </Modal>
 
-      <Modal visible={showSuccess !== null} transparent animationType="fade">
-        <BusinessSuccessModal 
-          details={{
-            title: showSuccess === 'edit' ? t('detail.asset_updated') : t('detail.asset_extracted'),
-            subtitle: showSuccess === 'edit' ? t('detail.modification_secured') : t('detail.erasure_complete'),
-            mainLabel: t('inventory.header'),
-            mainValue: item.name,
-            iconType: showSuccess === 'edit' ? "expense" : "damaged"
-          }}
-          onClose={() => {
-            setShowSuccess(null);
-            if (onClose) onClose();
-          }}
-        />
-      </Modal>
     </View>
   );
 };

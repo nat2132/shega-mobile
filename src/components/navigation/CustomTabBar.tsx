@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Platform } from 'react-native';
+﻿import React, { useEffect } from 'react';
+import { View, StyleSheet, TouchableOpacity, Dimensions, Platform } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Animated, { 
@@ -10,7 +10,7 @@ import Animated, {
   Extrapolate
 } from 'react-native-reanimated';
 import { Fonts } from '@/constants/theme';
-
+import { AppText } from '@/components/ui';
 const { width } = Dimensions.get('window');
 const TAB_BAR_WIDTH = width - 40; // 20 margin on each side
 const TAB_WIDTH = TAB_BAR_WIDTH / 4;
@@ -79,16 +79,21 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, navigat
                   color={isFocused ? '#000000' : '#8E8E93'} 
                 />
               </Animated.View>
-              <Text style={[
-                styles.label, 
-                { 
-                  color: isFocused ? '#000000' : '#8E8E93',
-                  fontFamily: isFocused ? Fonts.bold : Fonts.medium,
-                  fontWeight: isFocused ? '700' : '500'
-                }
-              ]}>
+              <AppText
+                variant="caption"
+                numberOfLines={1}
+                ellipsizeMode="tail"
+                style={[
+                  styles.label,
+                  {
+                    color: isFocused ? '#000000' : '#8E8E93',
+                    fontFamily: isFocused ? Fonts.bold : Fonts.medium,
+                    fontWeight: isFocused ? '700' : '500',
+                  },
+                ]}
+              >
                 {label}
-              </Text>
+              </AppText>
             </TouchableOpacity>
           );
         })}
@@ -128,7 +133,6 @@ const styles = StyleSheet.create({
     paddingTop: 10,
   },
   label: {
-    fontSize: 12,
     marginTop: 4,
   },
   dot: {

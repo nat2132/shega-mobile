@@ -1,149 +1,174 @@
+﻿import SaleSuccessModal from '@/components/SaleSuccessModal';
+import ExpenseReminderModal from '@/components/ExpenseReminderModal';
+import { NotificationBell } from '@/components/NotificationBell';
+import { DashboardAlerts } from '@/components/DashboardAlerts';
 import { Fonts } from '@/constants/theme';
-import {
-  Bell,
-  ChevronLeft,
-  ChevronRight,
-  Clock,
-  Eye,
-  EyeOff,
-  Handshake,
-  Package,
-  TrendingUp,
-  Wallet,
-  Search,
-  Plus,
-  ArrowUpRight,
-  LayoutDashboard,
-  Zap
-} from 'lucide-react-native';
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  Dimensions,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text as RNText,
-  TouchableOpacity,
-  View,
-  Image,
-  Alert,
-  RefreshControl,
-  Platform,
-} from 'react-native';
 import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import { router, useFocusEffect } from 'expo-router';
+import {
+    AlertTriangle,
+    ArrowUpRight,
+    Bell,
+    ChevronLeft,
+    ChevronRight,
+    Clock,
+    Handshake,
+    Package,
+    Plus,
+    RefreshCw,
+    Search,
+    ShoppingBag,
+    TrendingDown,
+    TrendingUp,
+    Zap
+} from 'lucide-react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+    Dimensions,
+    Image,
+    Modal,
+    Platform,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    TouchableOpacity,
+    View,
+} from 'react-native';
+import AdjustmentDetailsScreen from '../adjustement/adjustment-details';
+import ExpenseDetailsScreen from '../expense/expense-details';
+import AddAssetFlow from '../inventory/inventroy-form';
+import PendingSales from '../sales/pending';
+import GlobalCheckout from '../sales/sale-form';
+import SaleDetailsScreen from '../sales/sales-details';
+import SalesRecordScreen from '../sales/sales-record';
+import SearchScreen from '../sales/search';
+import ActivityLedgerScreen from './activity-ledger';
+import OnCreditCustomersScreen from './debt-list';
+import LowStockItemsScreen from './low-stock-list';
+import OnCreditItemsScreen from './oncredit-list';
 
 const { width } = Dimensions.get('window');
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useFocusEffect } from 'expo-router';
-import LowStockItemsScreen from './low-stock-list';
-import OnCreditCustomersScreen from './debt-list';
-import OnCreditItemsScreen from './oncredit-list';
-import SalesRecordScreen from '../sales/sales-record';
-import InventoryRecordScreen from '../inventory/inventory-record';
-import SaleDetailsScreen from '../sales/sales-details';
-import ItemDetailsScreen from '../inventory/item-details';
-import ExpenseDetailsScreen from '../expense/expense-details';
-import AdjustmentDetailsScreen from '../adjustement/adjustment-details';
-import SearchScreen from '../sales/search';
-import GlobalCheckout from '../sales/sale-form';
-import PendingSales from '../sales/pending';
-import AddAssetFlow from '../inventory/inventroy-form';
-import ActivityLedgerScreen from './activity-ledger';
-import SaleSuccessModal from '@/components/SaleSuccessModal';
 
-import { 
-  GestureHandlerRootView, 
-  GestureDetector, 
-  Gesture 
-} from 'react-native-gesture-handler';
-import * as SecureStore from 'expo-secure-store';
-import Svg, { Path } from 'react-native-svg';
-import Animated, { 
-  useAnimatedProps,
-  useAnimatedStyle,
-  useSharedValue, 
-  withSpring, 
-  FadeIn, 
-  FadeOut,
-  FadeInDown,
-  FadeInUp,
-  runOnJS 
-} from 'react-native-reanimated';
+import { PROFILE_IMAGES, useSettings } from '@/context/SettingsContext';
+import { useDialog } from '@/context/DialogContext';
 import { useSidebar } from '@/context/SidebarContext';
-import { useSettings, PROFILE_IMAGES } from '@/context/SettingsContext';
-import { getRecentItems, ItemData, getActivityFeed, getDashboardStats, getInventoryStats, getDebtCustomers, getOnCreditItems, getSaleById, getExpenseById, getAdjustmentById } from '@/database/db';
-import RecentItemCard from '@/components/RecentItemCard';
-import { formatDate } from '@/utils/date-utils';
-import { formatAbbreviated } from '@/utils/number-utils';
-import GlobalHeader from '@/components/GlobalHeader';
+import { getActivityFeed, getAdjustmentById, getDashboardStats, getDebtCustomers, getExpenseById, getInventoryStats, getLowStockItems, getOnCreditItems, getRecentItems, getSaleById, ItemData } from '@/database/db';
+import { generateBulkTestData } from '@/database/generateTestData';
 import { useNotifications } from '@/hooks/useNotifications';
+import { formatDate, toEthiopianHour, isEthiopianDayHour } from '@/utils/date-utils';
+import {
+    Gesture,
+    GestureDetector
+} from 'react-native-gesture-handler';
+import Animated, {
+    FadeIn,
+    FadeInDown,
+    FadeInUp,
+    FadeOut,
+    runOnJS,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring
+} from 'react-native-reanimated';
+import Svg, { Circle, Defs, LinearGradient, Path, Stop } from 'react-native-svg';
+import { SparklineSkeleton } from '@/components/ChartSkeleton';
+import { AppText } from '@/components/ui';
+const SparklineChart = React.memo(({ todayValue = 0, yesterdayValue = 0, color = '#2F6FED', loading = false }: {
+  todayValue?: number;
+  yesterdayValue?: number;
+  color?: string;
+  loading?: boolean;
+}) => {
+  const widthSize = width - 80;
+  const heightSize = 90;
 
-const AnimatedPath = Animated.createAnimatedComponent(Path);
+  // While data is still being fetched, render a skeleton. Otherwise
+  // the user briefly sees the default flat curve (todayValue === 0
+  // triggers the `isPositive` branch and a flat-line SVG) which is
+  // visually misleading.
+  if (loading || (todayValue === 0 && yesterdayValue === 0)) {
+    return <SparklineSkeleton width={widthSize} height={heightSize} />;
+  }
 
-// Removed local PROFILE_IMAGES definition as it's now in SettingsContext
+  // Sanitise inputs (defensive — guards against NaN from upstream).
+  const safeToday = Number.isFinite(todayValue) ? todayValue : 0;
+  const safeYesterday = Number.isFinite(yesterdayValue) ? yesterdayValue : 0;
 
-const PremiumGauge = ({ percentage = 0.5, color = '#2F6FED' }) => {
-  const size = width * 0.85;
-  const strokeWidth = 14;
-  const radius = (size - strokeWidth) / 2;
-  const center = size / 2;
-  const circumference = 2 * Math.PI * radius;
-  
-  // We only show a semi-circle (180 degrees)
-  const arcLength = circumference / 2;
-  const progress = useSharedValue(0);
+  // Determine trend based on today vs yesterday comparison
+  const isPositive = safeToday > safeYesterday;
+  const isNegative = safeToday < safeYesterday;
 
-  useEffect(() => {
-    progress.value = withSpring(percentage, { damping: 15, stiffness: 80 });
-  }, [percentage]);
+  // SVG path strings and dot Y-coordinate are derived from the
+  // current metric — memoised so the chart doesn't re-render when
+  // the parent (e.g., theme) changes for unrelated reasons.
+  const { d, fillD, dotY } = useMemo(() => {
+    let pathStr = `M 0 55 Q ${widthSize * 0.25} 25, ${widthSize * 0.5} 65 T ${widthSize} 35`;
+    let dot = 35;
 
-  const animatedProps = useAnimatedProps(() => ({
-    strokeDashoffset: arcLength * (1 - progress.value)
-  }));
+    if (isPositive) {
+      pathStr = `M 0 65 Q ${widthSize * 0.25} 50, ${widthSize * 0.5} 30 T ${widthSize} 15`;
+      dot = 15;
+    } else if (isNegative) {
+      pathStr = `M 0 20 Q ${widthSize * 0.25} 35, ${widthSize * 0.5} 60 T ${widthSize} 75`;
+      dot = 75;
+    }
 
-  const { colors } = useSettings();
+    return {
+      d: pathStr,
+      fillD: `${pathStr} L ${widthSize} ${heightSize} L 0 ${heightSize} Z`,
+      dotY: dot,
+    };
+  }, [isPositive, isNegative, widthSize, heightSize]);
 
   return (
-    <View style={[styles.premiumGaugeCont, { width: size, height: size / 1.6 }]}>
-      <Svg height={size} width={size} viewBox={`0 0 ${size} ${size}`}>
-        {/* Background Track */}
+    <View style={{ height: heightSize, width: '100%', justifyContent: 'center', alignItems: 'center', marginVertical: 15 }}>
+      <Svg height={heightSize} width={widthSize}>
+        <Defs>
+          <LinearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0%" stopColor={color} stopOpacity={0.2} />
+            <Stop offset="100%" stopColor={color} stopOpacity={0.0} />
+          </LinearGradient>
+        </Defs>
+        <Path d={fillD} fill="url(#chartGradient)" />
         <Path
-          d={`M ${strokeWidth/2} ${size/2} A ${radius} ${radius} 0 0 1 ${size - strokeWidth/2} ${size/2}`}
-          fill="none"
-          stroke={colors.border}
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-          strokeDasharray={`${arcLength} ${circumference}`}
-        />
-        {/* Active Fill (Animated) */}
-        <AnimatedPath
-          d={`M ${strokeWidth/2} ${size/2} A ${radius} ${radius} 0 0 1 ${size - strokeWidth/2} ${size/2}`}
+          d={d}
           fill="none"
           stroke={color}
-          strokeWidth={strokeWidth}
-          strokeDasharray={`${arcLength} ${circumference}`}
-          animatedProps={animatedProps}
+          strokeWidth={3}
           strokeLinecap="round"
         />
+        {/* Glow Ring behind the dot */}
+        <Circle
+          cx={widthSize - 4}
+          cy={dotY}
+          r={7}
+          fill={color}
+          opacity={0.3}
+        />
+        <Circle
+          cx={widthSize - 4}
+          cy={dotY}
+          r={4}
+          fill={color}
+        />
+        <Circle
+          cx={widthSize - 4}
+          cy={dotY}
+          r={1.5}
+          fill="#FFF"
+        />
       </Svg>
-      
-      {/* Decorative Glow dots */}
-      <View style={[styles.gaugeGlowNode, { left: 0, bottom: 10, backgroundColor: color }]} />
-      <View style={[styles.gaugeGlowNode, { right: 0, bottom: 10, backgroundColor: colors.border }]} />
     </View>
   );
-};
-
-
-
-
+});
+SparklineChart.displayName = 'SparklineChart';
 
   const DashboardScreen = () => {
     const { openSidebar } = useSidebar();
-    const { userProfile, colors, calendarType, language, theme, t } = useSettings();
+    const { userProfile, colors, calendarType, language, timeSystem, theme, t } = useSettings();
     const { notifCount } = useNotifications();
+    const dialog = useDialog();
     const [isPrivate, setIsPrivate] = useState(false);
     const [activeModal, setActiveModal] = useState<string | null>(null);
     const [showSalesRecord, setShowSalesRecord] = useState(false);
@@ -165,9 +190,9 @@ const PremiumGauge = ({ percentage = 0.5, color = '#2F6FED' }) => {
     const [invStats, setInvStats] = useState<any>(null);
     const [debtCustomersCount, setDebtCustomersCount] = useState(0);
     const [creditItemsCount, setCreditItemsCount] = useState(0);
+    const [lowStockCount, setLowStockCount] = useState(0);
     const [refreshing, setRefreshing] = useState(false);
     const [showActivityLedger, setShowActivityLedger] = useState(false);
-
 
   const expandedWidth = useSharedValue(56);
   useEffect(() => {
@@ -188,9 +213,10 @@ const PremiumGauge = ({ percentage = 0.5, color = '#2F6FED' }) => {
     const items = getRecentItems(3) as ItemData[];
     setRecentInventoryItems(items);
     
-    // Fetch unified activities
-    const activities = await getActivityFeed(10);
-    setRecentActivities(activities);
+// Fetch unified activities
+     const today = new Date().toISOString().split('T')[0];
+     const activities = await getActivityFeed({ limit: 5, date: today });
+     setRecentActivities(activities);
 
     // Fetch live metrics
     const stats = getDashboardStats();
@@ -204,6 +230,9 @@ const PremiumGauge = ({ percentage = 0.5, color = '#2F6FED' }) => {
 
     const creditItems = await getOnCreditItems();
     setCreditItemsCount(creditItems.length);
+
+    const lowStock = await getLowStockItems();
+    setLowStockCount(lowStock.length);
   };
 
   const onRefresh = React.useCallback(async () => {
@@ -212,12 +241,39 @@ const PremiumGauge = ({ percentage = 0.5, color = '#2F6FED' }) => {
     setTimeout(() => setRefreshing(false), 1000);
   }, []);
 
+  const handleSeedData = async () => {
+    await dialog.choose({
+      title: t('dashboard.seed_title'),
+      message: t('dashboard.seed_message'),
+      cancelText: t('common.cancel'),
+      choices: [
+        { label: '10', onPress: () => doSeed(10) },
+        { label: '100', onPress: () => doSeed(100) },
+        { label: '1,000', onPress: () => doSeed(1000) },
+        { label: '10,000', onPress: () => doSeed(10000) },
+      ],
+    });
+  };
+
+  const doSeed = async (count: number) => {
+    const start = Date.now();
+    const result = generateBulkTestData(count);
+    const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+    await dialog.alert({
+      title: result.success ? t('dashboard.seed_success') : t('dashboard.seed_error'),
+      message: `${result.message}\n\n⏱️ ${elapsed}s`,
+      iconType: result.success ? 'success' : 'danger',
+    });
+    loadDashboardData();
+  };
+
   // Helper to render activity items
   const renderActivityItem = (activity: any) => {
     const isSale = activity.category === 'sale';
     const isExpense = activity.category === 'expense';
     const isAdjustment = activity.category === 'adjustment';
-    
+    const isInventory = activity.category === 'inventory';
+
     let Icon = TrendingUp;
     let iconBg = colors.primary;
     let label = '';
@@ -225,29 +281,66 @@ const PremiumGauge = ({ percentage = 0.5, color = '#2F6FED' }) => {
     let prefix = '';
 
     if (isSale) {
-      Icon = ArrowUpRight;
+      Icon = ShoppingBag;
       iconBg = colors.primary;
-      label = `${activity.quantity} ${activity.unitType} ${t('dashboard.activity.sold')}`;
+      label = `${activity.quantity || 0} ${t('dashboard.activity.sold')}`;
       amountColor = colors.success || '#34C759';
       prefix = '+';
     } else if (isExpense) {
-      Icon = Wallet;
+      Icon = TrendingDown;
       iconBg = '#FF3B30';
-      label = t('dashboard.recorded_today') || 'Recorded Today';
+      label = activity.expenseCategory || t('expense.not_recurring');
       amountColor = '#FF3B30';
       prefix = '-';
     } else if (isAdjustment) {
-      Icon = Zap;
-      iconBg = '#FF9500';
-      label = activity.type === 'price_up' ? t('adjustment.price_increased') : 
-              activity.type === 'price_down' ? t('adjustment.price_decreased') : t('dashboard.activity.damaged');
+      const adjType = activity.adjType || activity.type;
+      if (adjType === 'price_up') {
+        Icon = TrendingUp;
+        iconBg = '#34C759';
+        label = t('adjustment.price_increased');
+        amountColor = '#34C759';
+        prefix = '+';
+      } else if (adjType === 'price_down') {
+        Icon = TrendingDown;
+        iconBg = '#FF3B30';
+        label = t('adjustment.price_decreased');
+        amountColor = '#FF3B30';
+        prefix = '-';
+      } else {
+        Icon = AlertTriangle;
+        iconBg = '#FF9500';
+        label = t('dashboard.activity.damaged');
+        // For damaged, show loss amount (quantity * purchase price)
+        amountColor = '#FF9500';
+        prefix = '-';
+      }
+    } else if (isInventory) {
+      Icon = Package;
+      iconBg = colors.primary;
+      label = `${activity.quantity || 0} ${t('dashboard.activity.added')}`;
+      amountColor = colors.success || '#34C759';
+      prefix = '+';
+    }
+
+    // Name
+    const activityName = activity.name || activity.label ||
+      (isSale ? t('inventory.header') : (isExpense ? t('expense.header') : (isAdjustment ? t('adjustment.header') : t('inventory.header'))));
+    
+    // Amount
+    let displayAmt = typeof activity.amount === 'number' && !isNaN(activity.amount)
+      ? activity.amount
+      : (typeof activity.value === 'number' && !isNaN(activity.value) ? activity.value : null);
+    
+    // For damaged items, compute loss as quantity * basePurchasePrice
+    if (isAdjustment && activity.adjType === 'damaged' && activity.quantity && activity.basePurchasePrice) {
+      displayAmt = activity.quantity * activity.basePurchasePrice;
     }
 
     return (
-      <TouchableOpacity 
-        key={`${activity.category}-${activity.id}`} 
-        style={[styles.premiumActivityCard, { borderBottomColor: colors.border }]} 
-        activeOpacity={0.7} 
+      <TouchableOpacity
+        key={`${activity.category ?? activity.type}-${activity.id}`}
+        style={[styles.premiumActivityCard, { borderBottomColor: colors.border }]}
+        activeOpacity={0.7}
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           if (isSale) {
@@ -265,21 +358,28 @@ const PremiumGauge = ({ percentage = 0.5, color = '#2F6FED' }) => {
         <View style={[styles.activityIconCircle, { backgroundColor: iconBg + '15' }]}>
           <Icon size={20} color={iconBg} />
         </View>
-        
+
         <View style={styles.activityInfo}>
-          <RNText style={[styles.activityName, { color: colors.text }]}>{activity.name || (isSale ? t('inventory.header') : (isExpense ? t('expense.header') : t('adjustment.header')))}</RNText>
-          <RNText style={[styles.activityMeta, { color: colors.textSecondary }]}>{label}</RNText>
+          <AppText
+            style={[styles.activityName, { color: colors.text }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.6}
+          >
+            {activityName}
+          </AppText>
+          <AppText variant="title-sm" weight="medium" style={[styles.activityMeta, { color: colors.textSecondary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{label}</AppText>
         </View>
 
         <View style={styles.activityRight}>
-          {activity.amount && (
-            <RNText style={[styles.activityAmount, { color: amountColor }]}>
-              {prefix}{activity.amount}
-            </RNText>
+          {displayAmt !== null && (
+            <AppText variant="title-sm" weight="bold" shrink={false} style={[styles.activityAmount, { color: amountColor }]} numberOfLines={1}>
+              {prefix}{displayAmt.toLocaleString()} {t('common.etb')}
+            </AppText>
           )}
-          <RNText style={[styles.activityTime, { color: colors.textSecondary }]}>
+          <AppText variant="caption" weight="medium" style={[styles.activityTime, { color: colors.textSecondary }]} numberOfLines={1}>
             {activity.createdAt ? formatDate(new Date(activity.createdAt), calendarType, language) : t('dashboard.activity.just_now')}
-          </RNText>
+          </AppText>
         </View>
       </TouchableOpacity>
     );
@@ -290,37 +390,37 @@ const PremiumGauge = ({ percentage = 0.5, color = '#2F6FED' }) => {
   const METRICS_DATA = metrics ? [
     { 
       label: t('dashboard.stats.gross_profit'), 
-      value: `${formatAbbreviated(metrics.today.grossProfit)} ETB`, 
-      secondary: `${formatAbbreviated(metrics.yesterday.grossProfit)} ETB ${t('dashboard.stats.yesterday')}`,
-      percentage: metrics.yesterday.grossProfit > 0 ? Math.min(metrics.today.grossProfit / (metrics.yesterday.grossProfit * 1.5), 1) : 0.5, 
-      status: metrics.today.grossProfit > metrics.yesterday.grossProfit ? t('dashboard.stats.growing') : (metrics.today.grossProfit < metrics.yesterday.grossProfit ? t('dashboard.stats.stable') : t('dashboard.stats.normal'))
+      value: `${metrics.today.grossProfit.toLocaleString()} ${t('common.etb')}`, 
+      secondary: `${metrics.yesterday.grossProfit.toLocaleString()} ${t('common.etb')} ${t('dashboard.stats.yesterday')}`,
+      todayValue: metrics.today.grossProfit,
+      yesterdayValue: metrics.yesterday.grossProfit,
     },
     { 
       label: t('dashboard.stats.revenue'), 
-      value: `${formatAbbreviated(metrics.today.revenue)} ETB`, 
-      secondary: `${formatAbbreviated(metrics.yesterday.revenue)} ETB ${t('dashboard.stats.yesterday')}`, 
-      percentage: metrics.yesterday.revenue > 0 ? Math.min(metrics.today.revenue / (metrics.yesterday.revenue * 1.5), 1) : 0.5, 
-      status: metrics.today.revenue > metrics.yesterday.revenue * 1.2 ? t('dashboard.stats.great') : (metrics.today.revenue >= metrics.yesterday.revenue ? t('dashboard.stats.on_track') : t('dashboard.stats.slow'))
+      value: `${metrics.today.revenue.toLocaleString()} ${t('common.etb')}`, 
+      secondary: `${metrics.yesterday.revenue.toLocaleString()} ${t('common.etb')} ${t('dashboard.stats.yesterday')}`, 
+      todayValue: metrics.today.revenue,
+      yesterdayValue: metrics.yesterday.revenue,
     },
     { 
       label: t('dashboard.stats.sales_count'), 
       value: `${metrics.today.salesCount} ${t('common.items')}`, 
       secondary: `${metrics.yesterday.salesCount} ${t('dashboard.stats.yesterday')}`, 
-      percentage: metrics.yesterday.salesCount > 0 ? Math.min(metrics.today.salesCount / (metrics.yesterday.salesCount * 1.5), 1) : 0.5, 
-      status: metrics.today.salesCount > metrics.yesterday.salesCount ? t('dashboard.stats.high_traffic') : t('dashboard.stats.normal') 
+      todayValue: metrics.today.salesCount,
+      yesterdayValue: metrics.yesterday.salesCount,
     },
     { 
       label: t('dashboard.stats.expense'), 
-      value: `${metrics.today.expenses.toLocaleString()} ETB`, 
+      value: `${metrics.today.expenses.toLocaleString()} ${t('common.etb')}`, 
       secondary: `${metrics.yesterday.expenses.toLocaleString()} ${t('dashboard.stats.yesterday')}`, 
-      percentage: metrics.yesterday.expenses > 0 ? Math.min(metrics.today.expenses / (metrics.yesterday.expenses * 1.5), 1) : 0.2, 
-      status: metrics.today.expenses > metrics.yesterday.expenses ? t('dashboard.stats.spending_higher') : t('dashboard.stats.controlled') 
+      todayValue: metrics.today.expenses,
+      yesterdayValue: metrics.yesterday.expenses,
     },
   ] : [
-    { label: t('dashboard.stats.gross_profit'), value: '0 ETB', secondary: "0 ETB", percentage: 0, status: t('common.loading') },
-    { label: t('dashboard.stats.revenue'), value: '0 ETB', secondary: "0 ETB", percentage: 0, status: t('common.loading') },
-    { label: t('dashboard.stats.sales_count'), value: `0 ${t('common.items')}`, secondary: `Target: 50 ${t('common.items')}`, percentage: 0, status: t('common.loading') },
-    { label: t('dashboard.stats.expense'), value: '0 ETB', secondary: "0 ETB", percentage: 0, status: t('common.loading') },
+    { label: t('dashboard.stats.gross_profit'), value: `0 ${t('common.etb')}`, secondary: `0 ${t('common.etb')}`, todayValue: 0, yesterdayValue: 0 },
+    { label: t('dashboard.stats.revenue'), value: `0 ${t('common.etb')}`, secondary: `0 ${t('common.etb')}`, todayValue: 0, yesterdayValue: 0 },
+    { label: t('dashboard.stats.sales_count'), value: `0 ${t('common.items')}`, secondary: `Target: 50 ${t('common.items')}`, todayValue: 0, yesterdayValue: 0 },
+    { label: t('dashboard.stats.expense'), value: `0 ${t('common.etb')}`, secondary: `0 ${t('common.etb')}`, todayValue: 0, yesterdayValue: 0 },
   ];
 
   const handleNextMetric = () => {
@@ -343,9 +443,9 @@ const PremiumGauge = ({ percentage = 0.5, color = '#2F6FED' }) => {
     });
 
   const quickStats = [
-    { id: 1, title: t('dashboard.low_stock'), value: invStats?.lowStockCount?.toString() || '0', icon: Package, color: '#FF9500' },
-    { id: 2, title: t('dashboard.credit_customers'), value: debtCustomersCount.toString(), icon: Handshake, color: '#34C759' },
-    { id: 3, title: t('dashboard.credit_items'), value: creditItemsCount.toString(), icon: Clock, color: '#FF3B30' },
+    { id: 1, title: t('dashboard.low_stock'), value: lowStockCount.toString(), icon: Package, color: '#FF9500' },
+    { id: 4, title: t('dashboard.credit_customers'), value: debtCustomersCount.toString(), icon: Handshake, color: '#34C759' },
+    { id: 5, title: t('dashboard.credit_items'), value: creditItemsCount.toString(), icon: Clock, color: '#FF3B30' },
   ];
 
   return (
@@ -373,23 +473,39 @@ const PremiumGauge = ({ percentage = 0.5, color = '#2F6FED' }) => {
           {/* Custom Integrated Header */}
           <View style={styles.integratedHeader}>
             <View style={{ flex: 1 }}>
-              <RNText style={[styles.greetingLabel, { color: colors.textSecondary }]}>
-                {new Date().getHours() < 12 ? t('dashboard.greeting_morning') : new Date().getHours() < 18 ? t('dashboard.greeting_afternoon') : t('dashboard.greeting_evening')},
-              </RNText>
-              <RNText style={[styles.businessNameHeading, { color: colors.text }]}>{userProfile.businessName}</RNText>
+              <AppText variant="body" weight="medium" style={[styles.greetingLabel, { color: colors.textSecondary }]} numberOfLines={2}>
+                {(() => {
+                  // Greeting respects the active time system. In
+                  // Ethiopian mode the user is greeted based on the
+                  // Ethiopian hour (12:00 ETH at 6 AM, etc.), so the
+                  // "morning" greeting fires earlier in the day.
+                  const localHour = new Date().getHours();
+                  const ethHour = toEthiopianHour(localHour);
+                  const activeHour = timeSystem === 'ethiopian' ? ethHour : localHour;
+                  if (activeHour < 6) return t('dashboard.greeting_evening');
+                  if (activeHour < 12) return t('dashboard.greeting_morning');
+                  if (activeHour < 18) return t('dashboard.greeting_afternoon');
+                  return t('dashboard.greeting_evening');
+                })()}
+              </AppText>
+              <AppText variant="heading-lg" weight="bold" style={[styles.businessNameHeading, { color: colors.text }]} numberOfLines={2}>{userProfile.name}</AppText>
+              <AppText variant="body-sm" weight="medium" style={[styles.dateLabel, { color: colors.textSecondary }]} numberOfLines={1}>
+                {formatDate(new Date(), calendarType, language)}
+              </AppText>
             </View>
             
             <View style={styles.headerActions}>
               <TouchableOpacity 
+                onPress={handleSeedData} 
+                style={[styles.headerIconBtn, { borderColor: colors.border }]}
+              >
+                <AppText variant="title" shrink={false} style={{ color: colors.text }}>🧪</AppText>
+              </TouchableOpacity>
+              <TouchableOpacity 
                 onPress={() => router.push('/notifications')} 
                 style={[styles.headerIconBtn, { borderColor: colors.border }]}
               >
-                 <Bell size={24} color={colors.text} strokeWidth={2} />
-                 {notifCount > 0 && (
-                   <View style={[styles.notifBadge, { backgroundColor: colors.primary }]}>
-                     <RNText style={styles.notifBadgeText}>{notifCount}</RNText>
-                   </View>
-                 )}
+                  <NotificationBell size={24} />
               </TouchableOpacity>
 
               <TouchableOpacity 
@@ -397,64 +513,91 @@ const PremiumGauge = ({ percentage = 0.5, color = '#2F6FED' }) => {
                 activeOpacity={0.7}
                 style={[styles.headerAvatarWrap, { borderColor: colors.border }]}
               >
-                <Image source={PROFILE_IMAGES[userProfile.avatarIndex]} style={styles.headerAvatar} />
+                <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={styles.headerAvatar} />
                 <View style={[styles.onlineIndicator, { backgroundColor: '#34C759', borderColor: colors.background }]} />
               </TouchableOpacity>
             </View>
           </View>
 
+          {/* Dashboard Alert Cards - action required */}
+          <View style={{ paddingHorizontal: 25 }}>
+            <DashboardAlerts />
+          </View>
+
           {/* Metric Hub Area */}
           <Animated.View entering={FadeIn.duration(600)} style={styles.metricHub}>
             <GestureDetector gesture={panGesture}>
-              <View style={styles.dialWrapper}>
-                <PremiumGauge 
-                  percentage={METRICS_DATA[currentMetric].percentage} 
-                  color={currentMetric === 3 ? colors.error : colors.primary} 
-                />
+              <View style={[styles.metricCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 
-                <View style={styles.dialContent}>
-                  <Animated.View 
-                    key={currentMetric}
-                    entering={FadeInDown.duration(400)} 
-                    style={styles.dialTextGroup}
-                  >
-                    <RNText style={[styles.dialLabel, { color: colors.textSecondary }]}>
-                      {METRICS_DATA[currentMetric].label}
-                    </RNText>
-                    
-                    <View style={styles.dialValueRow}>
-                      <RNText style={[styles.dialValue, { color: colors.text }]}>
+{/* Header row with metric details and status */}
+                 <View style={styles.metricCardHeader}>
+                   <View style={{ flex: 1 }}>
+                      <AppText variant="caption" weight="medium" style={[styles.metricLabel, { color: colors.textSecondary }]} numberOfLines={2}>
+                        {METRICS_DATA[currentMetric].label}
+                      </AppText>
+                      <AppText variant="display" weight="extrabold" shrink={false} style={[styles.metricValue, { color: colors.text, fontSize: METRICS_DATA[currentMetric].value.length > 12 ? 22 : 28 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                         {isPrivate ? '••••••' : METRICS_DATA[currentMetric].value}
-                      </RNText>
+                      </AppText>
                     </View>
 
-                    <View style={[styles.statusPill, { backgroundColor: colors.surface }]}>
-                      <Zap size={12} color={colors.primary} fill={colors.primary} />
-                      <RNText style={[styles.statusPillText, { color: colors.text }]}>
-                        {METRICS_DATA[currentMetric].status}
-                      </RNText>
-                    </View>
-                  </Animated.View>
+                    <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                      <View style={[styles.statusPill, { backgroundColor: colors.surface }]}>
+                        <Zap size={12} color={currentMetric === 3 ? '#FF3B30' : colors.primary} fill={currentMetric === 3 ? '#FF3B30' : colors.primary} />
+                        <AppText variant="caption" weight="bold" shrink={false} style={[styles.statusPillText, { color: colors.text }]} numberOfLines={1}>
+                          {METRICS_DATA[currentMetric].todayValue > METRICS_DATA[currentMetric].yesterdayValue ? t('dashboard.stats.growing') : (METRICS_DATA[currentMetric].todayValue < METRICS_DATA[currentMetric].yesterdayValue ? t('dashboard.stats.declining') : t('dashboard.stats.normal'))}
+                        </AppText>
+                      </View>
+                      <AppText variant="caption" weight="medium" style={[styles.metricSecondary, { color: colors.textSecondary }]} numberOfLines={1}>
+                        {METRICS_DATA[currentMetric].secondary}
+                      </AppText>
+                   </View>
+                 </View>
+
+                 {/* Animated Sparkline Trend */}
+                 <React.Fragment key={currentMetric}>
+                   <Animated.View entering={FadeInDown.duration(400)}>
+                     <SparklineChart
+                       todayValue={METRICS_DATA[currentMetric].todayValue}
+                       yesterdayValue={METRICS_DATA[currentMetric].yesterdayValue}
+                       color={currentMetric === 3 ? '#FF3B30' : colors.primary}
+                       loading={!metrics}
+                     />
+                   </Animated.View>
+                 </React.Fragment>
+
+                {/* Card footer: navigation & page indicators */}
+                <View style={styles.metricCardFooter}>
+                  <TouchableOpacity onPress={handlePrevMetric} style={styles.navArrow}>
+                    <ChevronLeft size={20} color={colors.textSecondary} />
+                  </TouchableOpacity>
+
+                  <View style={styles.dialPagination}>
+                    {METRICS_DATA.map((_, i) => (
+                      <React.Fragment key={i}>
+                        <View 
+                          style={[
+                            styles.paginationDot, 
+                            { backgroundColor: i === currentMetric ? colors.primary : colors.border, width: i === currentMetric ? 16 : 6 }
+                          ]} 
+                        />
+                      </React.Fragment>
+                    ))}
+                  </View>
+
+                  <TouchableOpacity onPress={handleNextMetric} style={styles.navArrow}>
+                    <ChevronRight size={20} color={colors.textSecondary} />
+                  </TouchableOpacity>
                 </View>
 
-                {/* Dial Navigation Dots */}
-                <View style={styles.dialPagination}>
-                  {METRICS_DATA.map((_, i) => (
-                    <View 
-                      key={i} 
-                      style={[
-                        styles.paginationDot, 
-                        { backgroundColor: i === currentMetric ? colors.primary : colors.border, width: i === currentMetric ? 16 : 6 }
-                      ]} 
-                    />
-                  ))}
-                </View>
               </View>
             </GestureDetector>
           </Animated.View>
 
           {/* Quick Stats Scrollable Section */}
           <View style={styles.bentoSection}>
+            <View style={styles.bentoSectionHeader}>
+              <AppText variant="title" weight="bold" style={[styles.bentoSectionTitle, { color: colors.text }]} numberOfLines={2}>{t('dashboard.quick_status')}</AppText>
+            </View>
             <ScrollView 
               horizontal 
               showsHorizontalScrollIndicator={false}
@@ -466,30 +609,36 @@ const PremiumGauge = ({ percentage = 0.5, color = '#2F6FED' }) => {
               {quickStats.map((stat, idx) => {
                 const StatIcon = stat.icon;
                 return (
-                  <Animated.View 
-                    key={stat.id}
-                    entering={FadeInDown.delay(100 * idx).duration(500)}
-                  >
+                  <React.Fragment key={stat.id}>
+                    <Animated.View 
+                      entering={FadeInDown.delay(100 * idx).duration(500)}
+                    >
                     <TouchableOpacity 
                       style={[styles.bentoCard, { backgroundColor: colors.card, borderColor: colors.border }]} 
-                      activeOpacity={0.9}
+                      activeOpacity={0.7}
                       onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                         if (stat.id === 1) setActiveModal('lowStock');
-                        else if (stat.id === 2) setActiveModal('onCreditCustomers');
-                        else if (stat.id === 3) setActiveModal('onCreditItems');
+                        else if (stat.id === 4) setActiveModal('onCreditCustomers');
+                        else if (stat.id === 5) setActiveModal('onCreditItems');
                       }}
                     >
-                      <View style={[styles.bentoIconBox, { backgroundColor: stat.color + '15' }]}>
-                        <StatIcon size={20} color={stat.color} />
+                      <View style={styles.bentoCardTop}>
+                        <View style={[styles.bentoIconBox, { backgroundColor: stat.color + '20' }]}>
+                          <StatIcon size={20} color={stat.color} />
+                        </View>
+                        <View style={[styles.bentoArrow, { backgroundColor: stat.color + '15' }]}>
+                          <ArrowUpRight size={14} color={stat.color} />
+                        </View>
                       </View>
-                      <RNText style={[styles.bentoValue, { color: colors.text }]}>{stat.value}</RNText>
-                      <RNText style={[styles.bentoLabel, { color: colors.textSecondary }]}>{stat.title}</RNText>
-                      
-                      <View style={styles.bentoArrow}>
-                        <ArrowUpRight size={14} color={colors.textSecondary} />
+              <AppText variant="display" weight="extrabold" shrink={false} style={[styles.bentoValue, { color: colors.text }]} numberOfLines={1}>{stat.value}</AppText>
+              <AppText variant="caption" weight="medium" style={[styles.bentoLabel, { color: colors.textSecondary }]} numberOfLines={2}>{stat.title}</AppText>
+                      <View style={[styles.bentoViewBtn, { backgroundColor: stat.color + '12' }]}>
+                        <AppText variant="caption" weight="bold" shrink={false} style={[styles.bentoViewBtnText, { color: stat.color }]} numberOfLines={1}>View →</AppText>
                       </View>
                     </TouchableOpacity>
-                  </Animated.View>
+                    </Animated.View>
+                  </React.Fragment>
                 );
               })}
             </ScrollView>
@@ -499,25 +648,27 @@ const PremiumGauge = ({ percentage = 0.5, color = '#2F6FED' }) => {
           <View style={styles.feedSection}>
             <View style={styles.feedHeader}>
               <View>
-                <RNText style={[styles.feedTitle, { color: colors.text }]}>{t('dashboard.recent_activity')}</RNText>
-                <RNText style={[styles.feedSub, { color: colors.textSecondary }]}>{t('dash.live_overview')}</RNText>
+                <AppText variant="heading" weight="bold" style={[styles.feedTitle, { color: colors.text }]} numberOfLines={2}>{t('dashboard.recent_activity')}</AppText>
+                <AppText variant="body-sm" weight="medium" style={[styles.feedSub, { color: colors.textSecondary }]} numberOfLines={1}>{t('dash.live_overview')}</AppText>
               </View>
               <TouchableOpacity onPress={() => setShowActivityLedger(true)} style={styles.viewAllBtn}>
-                <RNText style={[styles.viewAllBtnText, { color: colors.primary }]}>{t('common.view_all')}</RNText>
+                <AppText variant="body" weight="bold" shrink={false} style={[styles.viewAllBtnText, { color: colors.primary }]} numberOfLines={1}>{t('common.view_all')}</AppText>
               </TouchableOpacity>
             </View>
 
             {recentActivities.length > 0 ? (
               <View style={styles.feedList}>
                 {recentActivities.map((activity, idx) => (
-                  <Animated.View key={idx} entering={FadeInDown.delay(200 + (idx * 50)).duration(500)}>
-                    {renderActivityItem(activity)}
-                  </Animated.View>
+                  <React.Fragment key={idx}>
+                    <Animated.View entering={FadeInDown.delay(200 + (idx * 50)).duration(500)}>
+                      {renderActivityItem(activity)}
+                    </Animated.View>
+                  </React.Fragment>
                 ))}
               </View>
             ) : (
               <View style={styles.emptyFeed}>
-                 <RNText style={[styles.emptyFeedText, { color: colors.textSecondary }]}>{t('dashboard.no_activity')}</RNText>
+                 <AppText variant="caption" weight="medium" style={[styles.emptyFeedText, { color: colors.textSecondary }]} numberOfLines={2}>{t('dashboard.no_activity')}</AppText>
               </View>
             )}
           </View>
@@ -536,11 +687,11 @@ const PremiumGauge = ({ percentage = 0.5, color = '#2F6FED' }) => {
               )}
               
               <TouchableOpacity 
-                style={[styles.dockMainBtn, { backgroundColor: isBarExpanded ? colors.primary : colors.text }]} 
+                style={[styles.dockMainBtn, { backgroundColor: isBarExpanded ? colors.text : colors.text }]} 
                 activeOpacity={0.8}
                 onPress={() => setIsBarExpanded(!isBarExpanded)}
               >
-                <Plus size={24} color={isBarExpanded ? "#FFF" : colors.background} />
+                <Plus size={24} color={colors.background} />
               </TouchableOpacity>
               
               {isBarExpanded && (
@@ -568,12 +719,12 @@ const PremiumGauge = ({ percentage = 0.5, color = '#2F6FED' }) => {
             <View style={styles.modalHeader}>
               <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
               <TouchableOpacity onPress={() => setActiveModal(null)} style={styles.closeBtn}>
-                <RNText style={[styles.closeBtnText, { color: colors.textSecondary }]}>✕</RNText>
+                <AppText variant="title" shrink={false} style={[styles.closeBtnText, { color: colors.textSecondary }]}>✕</AppText>
               </TouchableOpacity>
             </View>
-            <RNText style={[styles.sheetTitle, { color: colors.text }]}>
+            <AppText variant="heading" weight="bold" style={[styles.sheetTitle, { color: colors.text }]} numberOfLines={2}>
               {activeModal === 'lowStock' ? t('dashboard.low_stock') : activeModal === 'onCreditCustomers' ? t('dashboard.credit_customers') : t('dashboard.credit_items')}
-            </RNText>
+            </AppText>
             <ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={false}>
               {activeModal === 'lowStock' && <LowStockItemsScreen />}
               {activeModal === 'onCreditCustomers' && <OnCreditCustomersScreen />}
@@ -718,22 +869,37 @@ const PremiumGauge = ({ percentage = 0.5, color = '#2F6FED' }) => {
                onFinish={async (saleMetadata: any) => {
                  try {
                    const { insertSale } = await import('@/database/db');
+                   
                    for (const item of pendingSales) {
+                     // Validate item data
+                     if (!item.id || typeof item.id !== 'number') {
+                       throw new Error(`Invalid item ID: ${item.id}`);
+                     }
+                     if (!item.quantity || item.quantity <= 0) {
+                       throw new Error(`Invalid quantity for item: ${item.id}`);
+                     }
+                     
                      const finalUnitPrice = item.unitType === 'pack' ? item.packSellingPrice : item.baseSellingPrice;
                      const finalUnitLabel = item.unitType === 'pack' ? item.purchaseUnit : item.baseUnit;
+                     
+                     // Validate and sanitize customer info
+                     const customerName = saleMetadata.customerName ? saleMetadata.customerName.trim() : '';
+                     const customerPhone = saleMetadata.customerPhone ? saleMetadata.customerPhone.trim() : '';
+                     const discount = Math.max(0, Number(saleMetadata.discount) || 0);
+                     const vat = Math.min(100, Math.max(0, Number(saleMetadata.vat) || 0));
                      
                      await insertSale({
                        itemId: item.id,
                        quantity: item.quantity,
                        unit: finalUnitLabel,
                        unitType: item.unitType,
-                       discount: Number(saleMetadata.discount) / pendingSales.length,
-                       vat: saleMetadata.vat,
+                       discount: discount / pendingSales.length,
+                       vat: vat,
                        totalPrice: finalUnitPrice * item.quantity,
                        paymentMethod: saleMetadata.paymentMethod,
                        paymentStatus: saleMetadata.paymentStatus,
-                       customerName: saleMetadata.customerName,
-                       customerPhone: saleMetadata.customerPhone,
+                       customerName: customerName,
+                       customerPhone: customerPhone,
                      });
                    }
                    setPendingSales([]);
@@ -746,9 +912,13 @@ const PremiumGauge = ({ percentage = 0.5, color = '#2F6FED' }) => {
                      paymentStatus: saleMetadata.paymentStatus,
                      customerName: saleMetadata.customerName,
                    });
-                 } catch (e) {
-                   Alert.alert('Error', 'Failed to save sale.');
-                 }
+                  } catch (e) {
+                    await dialog.alert({
+                      title: t('common.error'),
+                      message: t('sale.save_error'),
+                      iconType: 'danger',
+                    });
+                  }
                }}
             />
           </View>
@@ -825,21 +995,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 4,
     borderWidth: 2,
-    borderColor: '#FFF',
   },
   notifBadgeText: {
-    color: '#FFF',
-    fontSize: 9,
     fontFamily: Fonts.bold,
   },
   greetingLabel: {
-    fontSize: 14,
     fontFamily: Fonts.medium,
     marginBottom: 2,
   },
   businessNameHeading: {
-    fontSize: 24,
     fontFamily: Fonts.bold,
+    marginBottom: 2,
+  },
+  dateLabel: {
+    fontFamily: Fonts.medium,
+    opacity: 0.7,
   },
   headerAvatarWrap: {
     width: 50,
@@ -870,46 +1040,43 @@ const styles = StyleSheet.create({
     marginTop: 15,
     marginBottom: 30,
   },
-  dialWrapper: {
-    alignItems: 'center',
-    position: 'relative',
+  metricCard: {
+    borderRadius: 24,
+    borderWidth: 1,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
   },
-  premiumGaugeCont: {
-    alignItems: 'center',
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  gaugeGlowNode: {
-    position: 'absolute',
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    shadowOpacity: 0.5,
-    shadowRadius: 5,
-    elevation: 5,
-  },
-  dialContent: {
-    position: 'absolute',
-    top: 40,
-    alignItems: 'center',
-    width: '100%',
-  },
-  dialTextGroup: {
-    alignItems: 'center',
-  },
-  dialLabel: {
-    fontSize: 16,
-    fontFamily: Fonts.medium,
-    marginBottom: 8,
-  },
-  dialValueRow: {
+  metricCardHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
   },
-  dialValue: {
-    fontSize: 36,
+  metricLabel: {
     fontFamily: Fonts.bold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  metricValue: {
+    fontFamily: Fonts.bold,
+  },
+  metricSecondary: {
+    fontFamily: Fonts.medium,
+  },
+  metricCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  navArrow: {
+    padding: 6,
+    borderRadius: 12,
   },
   statusPill: {
     flexDirection: 'row',
@@ -920,7 +1087,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   statusPillText: {
-    fontSize: 12,
     fontFamily: Fonts.bold,
   },
   dialPagination: {
@@ -938,18 +1104,33 @@ const styles = StyleSheet.create({
     paddingLeft: 25,
     marginBottom: 30,
   },
+  bentoSectionHeader: {
+    paddingRight: 25,
+    marginBottom: 14,
+  },
+  bentoSectionTitle: {
+    fontFamily: Fonts.bold,
+  },
   bentoGrid: {
     flexDirection: 'row',
     paddingRight: 25,
     gap: 15,
   },
   bentoCard: {
-    width: width * 0.45,
-    padding: 18,
-    borderRadius: 24,
+    flex: 1,
+    padding: 16,
+    borderRadius: 20,
     borderWidth: 1,
     position: 'relative',
     overflow: 'hidden',
+    minHeight: 140,
+    justifyContent: 'space-between',
+  },
+  bentoCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   bentoIconBox: {
     width: 40,
@@ -957,22 +1138,64 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 15,
   },
   bentoValue: {
-    fontSize: 20,
-    fontFamily: Fonts.bold,
-    marginBottom: 2,
+    fontFamily: Fonts.extrabold,
+    marginBottom: 4,
+    letterSpacing: -0.5,
   },
   bentoLabel: {
-    fontSize: 11,
     fontFamily: Fonts.medium,
+    lineHeight: 16,
+    marginBottom: 10,
   },
   bentoArrow: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bentoViewBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  bentoViewBtnText: {
+    fontFamily: Fonts.bold,
+  },
+  bentoArrowLabel: {
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  bentoArrowLabelText: {
+    fontFamily: Fonts.bold,
+  },
+  viewAllBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  emptyFeedText: {
+    fontFamily: Fonts.medium,
+  },
+  closeBtn: {
     position: 'absolute',
     top: 15,
-    right: 15,
-    opacity: 0.5,
+    right: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  closeBtnText: {
+    fontFamily: Fonts.medium,
   },
   feedSection: {
     paddingHorizontal: 25,
@@ -984,16 +1207,13 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   feedTitle: {
-    fontSize: 20,
     fontFamily: Fonts.bold,
     marginBottom: 2,
   },
   feedSub: {
-    fontSize: 13,
     fontFamily: Fonts.medium,
   },
   viewAllBtnText: {
-    fontSize: 14,
     fontFamily: Fonts.bold,
   },
   feedList: {
@@ -1017,24 +1237,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   activityName: {
-    fontSize: 16,
     fontFamily: Fonts.bold,
     marginBottom: 2,
   },
   activityMeta: {
-    fontSize: 13,
     fontFamily: Fonts.medium,
   },
   activityRight: {
     alignItems: 'flex-end',
   },
   activityAmount: {
-    fontSize: 16,
     fontFamily: Fonts.bold,
     marginBottom: 2,
   },
   activityTime: {
-    fontSize: 11,
     fontFamily: Fonts.medium,
   },
   emptyFeed: {
@@ -1106,7 +1322,6 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   sheetTitle: {
-    fontSize: 22,
     fontFamily: Fonts.bold,
     paddingHorizontal: 25,
     paddingBottom: 20,

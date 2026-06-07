@@ -1,0 +1,557 @@
+category,1,Fasteners,screw,0
+category,2,Measuring & Layout,ruler,0
+category,3,Hardware,tool,0
+category,4,Paint & Supplies,paint,0
+category,5,Electrical,zap,0
+category,6,Plumbing,pipe,0
+category,7,Packing & Storage,box,0
+category,8,Cleaning Supplies,spray,0
+category,9,Safety & PPE,shield,0
+category,10,Building Materials,brick,0
+category,11,Grocery / Consumables,shopping,0
+category,12,Other,more,0
+item,1,Cement (50KG),10,258,552,2025-11-01 09:01:43
+item,2,Nail (5mm),1,73,50,2023-12-13 18:55:01
+item,3,AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA,1,261,60,2024-08-17 06:42:43
+item,4,test ' OR '1'='1,4,461,1242,2025-11-07 07:50:36
+item,5,🔥🚀🏆✨⭐ Special ★ Item ☆,4,352,1121,2026-07-29 18:52:23
+item,6,"PVC Pipe 1""",6,999999999,196,2026-05-26 03:27:59
+item,7,"PVC Pipe 2""",6,384,279,2024-08-29 11:44:54
+item,8,"PVC Elbow 1""",6,10,86,2026-05-20 14:27:58
+item,9,Electrical Wire 1.5mm,5,317,94,2026-09-15 07:43:13
+item,10,Electrical Wire 2.5mm,5,246,178,2025-12-04 07:59:37
+item,11,Light Bulb LED 9W,5,491,206,2024-02-13 02:24:06
+item,12,Light Bulb LED 12W,5,290,257,2025-12-14 23:25:02
+item,13,Switch Socket,5,96,73,2025-11-15 23:40:28
+item,14,Measuring Tape 5m,2,134,132,2023-10-18 20:06:10
+item,15,Measuring Tape 10m,2,197,242,2024-10-29 21:37:36
+item,16,Spirit Level 60cm,2,151,352,2026-03-29 15:15:56
+item,17,Bolt M8,1,383,36,2026-01-30 09:39:48
+item,18,Bolt M10,1,126,31,2024-03-20 21:07:41
+item,19,"Screw 2""",1,213,48,2026-10-08 23:10:44
+item,20,"Screw 4""",1,212,31,2025-06-07 12:22:45
+item,21,Cooking Oil (3L),11,419,375,2023-07-27 12:05:42
+item,22,Milk Powder (400g),11,274,284,2023-01-16 21:14:12
+item,23,Sugar (50KG),11,413,2819,2023-04-05 01:45:39
+item,24,Rice (10KG),11,404,663,2024-02-15 17:57:35
+item,25,Pasta (500g),11,429,85,2023-11-30 02:32:53
+item,26,Tomato Paste (500g),11,365,128,2026-09-22 13:32:58
+item,27,Sandpaper Grit 120,4,324,71,2026-11-14 05:01:00
+item,28,Steel Wire (2mm),3,466,41,2025-09-23 18:45:07
+item,29,Wood Glue (1L),3,329,199,2026-10-23 07:39:15
+item,30,Masking Tape,4,87,95,2023-04-02 03:47:09
+item,31,Hand Soap (5L),8,190,335,2023-09-10 03:52:16
+item,32,Bleach (1L),8,294,120,2024-11-25 12:12:40
+item,33,Safety Gloves,9,122,161,2026-11-12 13:00:03
+item,34,Safety Goggles,9,396,191,2026-05-06 17:55:27
+item,35,Hard Hat,9,61,383,2025-10-18 14:10:31
+item,36,Bucket 10L,8,17,192,2025-11-11 06:35:22
+item,37,Mop,8,355,121,2025-07-04 15:51:21
+item,38,Broom,8,174,89,2025-02-07 17:58:24
+item,39,Ceramic Tile 30x30,10,416,493,2025-05-02 15:49:14
+item,40,Ceramic Tile 60x60,10,219,792,2024-08-06 20:11:39
+item,41,Adhesive Cement,10,273,213,2025-04-15 17:47:27
+item,42,Plaster (25KG),10,393,244,2025-03-16 11:28:32
+item,43,Steel Rebar 12mm,10,461,352,2026-10-04 23:40:37
+item,44,Steel Rebar 16mm,10,107,492,2023-04-01 20:16:48
+item,45,Water Tank 500L,6,17,3497,2025-03-07 17:41:56
+item,46,Water Tank 1000L,6,204,5495,2025-03-24 23:56:18
+item,47,Generator 2.5kVA,5,12,12516,2024-06-05 07:48:12
+item,48,Generator 5kVA,5,34,22021,2023-10-31 06:42:47
+item,49,Wheelbarrow,3,83,1839,2023-11-16 04:18:59
+item,50,Shovel,3,106,389,2024-05-13 08:28:44
+item,51,Pickaxe,3,427,517,2025-03-25 21:26:18
+item,52,Pro Cement (50KG) 466,10,155,593,2026-06-06 06:31:42
+item,53,Standard Nail (5mm) 963,1,32,19,2023-12-02 03:02:12
+item,54,Pro Nail (10mm) 685,1,48,38,2024-04-26 00:58:44
+item,55,Deluxe Paint Red (4L) 662,4,45,1219,2024-01-25 07:38:01
+item,56,Premium Paint White (4L) 619,4,76,1100,2026-11-10 23:55:29
+item,57,"Super PVC Pipe 1"" 629",6,55,136,2026-07-18 23:55:11
+item,58,"Deluxe PVC Pipe 2"" 82",6,99,286,2025-03-09 16:33:51
+item,59,"Super PVC Elbow 1"" 599",6,120,76,2024-11-29 01:56:22
+item,60,Pro Electrical Wire 1.5mm 991,5,228,108,2023-01-24 22:56:30
+item,61,Premium Electrical Wire 2.5mm 282,5,324,154,2025-11-26 14:27:01
+item,62,Premium Light Bulb LED 9W 175,5,303,186,2023-11-11 06:43:38
+item,63,Deluxe Light Bulb LED 12W 255,5,474,227,2026-12-05 13:30:38
+item,64,Standard Switch Socket 392,5,455,81,2025-04-19 11:07:36
+item,65,Pro Measuring Tape 5m 424,2,160,159,2023-09-10 22:19:27
+item,66,Pro Measuring Tape 10m 161,2,212,237,2024-08-07 19:54:56
+item,67,Deluxe Spirit Level 60cm 704,2,261,362,2025-01-13 04:34:51
+item,68,Deluxe Bolt M8 6,1,153,35,2026-05-21 14:44:07
+item,69,Economy Bolt M10 554,1,430,2,2026-12-02 04:21:11
+item,70,"Pro Screw 2"" 841",1,300,44,2024-07-15 05:49:01
+item,71,"Premium Screw 4"" 720",1,381,25,2026-08-21 04:54:18
+item,72,Super Cooking Oil (3L) 173,11,31,391,2023-11-09 08:31:36
+item,73,Deluxe Milk Powder (400g) 565,11,289,286,2026-12-04 04:22:04
+item,74,Economy Sugar (50KG) 531,11,471,2844,2023-06-10 20:33:27
+item,75,Deluxe Rice (10KG) 355,11,117,645,2023-06-05 21:52:11
+item,76,Standard Pasta (500g) 880,11,90,54,2025-05-21 23:27:53
+item,77,Standard Tomato Paste (500g) 756,11,378,78,2024-06-14 22:47:05
+item,78,Economy Sandpaper Grit 120 264,4,242,60,2023-05-25 02:17:11
+item,79,Super Steel Wire (2mm) 887,3,438,104,2025-09-29 14:51:31
+item,80,Pro Wood Glue (1L) 871,3,146,166,2024-11-01 04:57:09
+item,81,Economy Masking Tape 508,4,230,103,2023-02-06 15:26:07
+item,82,Economy Hand Soap (5L) 32,8,95,382,2025-05-31 13:06:08
+item,83,Super Bleach (1L) 672,8,84,108,2025-01-20 06:43:32
+item,84,Standard Safety Gloves 716,9,441,128,2026-10-12 05:14:54
+item,85,Super Safety Goggles 501,9,57,209,2023-03-12 03:44:27
+item,86,Premium Hard Hat 418,9,101,408,2026-02-12 22:16:15
+item,87,Standard Bucket 10L 875,8,451,185,2023-03-25 12:38:21
+item,88,Economy Mop 987,8,127,120,2023-09-26 12:13:07
+item,89,Super Broom 32,8,160,77,2026-01-30 14:54:26
+item,90,Economy Ceramic Tile 30x30 198,10,321,486,2023-10-10 13:17:34
+item,91,Super Ceramic Tile 60x60 317,10,164,754,2024-08-24 17:27:52
+item,92,Standard Adhesive Cement 852,10,189,191,2026-01-22 22:24:00
+item,93,Super Plaster (25KG) 430,10,462,258,2026-04-09 23:15:41
+item,94,Standard Steel Rebar 12mm 935,10,165,355,2025-12-09 01:23:49
+item,95,Super Steel Rebar 16mm 11,10,36,443,2024-02-10 23:16:30
+item,96,Deluxe Water Tank 500L 48,6,178,3511,2024-02-09 08:51:32
+item,97,Standard Water Tank 1000L 633,6,107,5546,2026-01-31 13:04:13
+item,98,Deluxe Generator 2.5kVA 217,5,462,12529,2026-08-12 20:33:31
+item,99,Premium Generator 5kVA 760,5,440,22049,2024-11-27 21:22:05
+item,100,Deluxe Wheelbarrow 510,3,293,1818,2024-10-27 05:07:05
+sale,1,91,7,79073.04,Cash,Debt,2024-12-07 02:11:03
+sale,2,73,18,5117.52,Cash,Paid,2023-11-17 21:06:07
+sale,3,3,56,3315.18,Cash,Paid,2023-12-23 03:45:27
+sale,4,32,57,6838.06,Cash,Paid,2025-04-26 02:18:04
+sale,5,82,70,26703.24,Cash,Paid,2024-05-10 18:36:00
+sale,6,100,32,58140.7,Cash,Paid,2024-12-06 07:21:07
+sale,7,34,42,8007.6,Cash,Paid,2026-11-12 17:23:34
+sale,8,22,64,18086.93,Cash,Paid,2023-12-17 13:52:47
+sale,9,13,89,6467.65,Cash,Debt,2025-08-04 11:10:21
+sale,10,36,94,18043.27,Cash,Paid,2024-06-20 16:12:10
+sale,11,100,13,567185.32,Cash,Paid,2023-11-14 01:05:31
+sale,12,18,53,1626.42,Cash,Paid,2024-12-23 08:23:41
+sale,13,48,38,836769.89,Cash,Paid,2026-12-11 09:25:05
+sale,14,34,43,8175.37,Cash,Paid,2023-02-07 12:53:29
+sale,15,91,86,64832.68,Cash,Paid,2024-06-17 06:01:44
+sale,16,53,78,1482,Bank,Paid,2025-04-14 15:29:12
+sale,17,41,19,4029.78,Cash,Debt,2023-11-08 08:59:16
+sale,18,1,85,46892.9,Cash,Paid,2024-09-11 16:19:56
+sale,19,23,62,174744.5,Cash,Paid,2026-09-18 08:14:59
+sale,20,63,24,5436.14,Cash,Paid,2025-03-27 05:50:51
+sale,21,65,14,60065.61,Cash,Paid,2023-07-01 09:14:47
+sale,22,76,99,5303.75,Cash,Paid,2026-05-05 10:08:48
+sale,23,9,81,7578.56,Cash,Paid,2023-02-15 13:11:39
+sale,24,90,76,36908.87,Cash,Paid,2026-03-10 19:00:52
+sale,25,83,72,7774.38,Cash,Debt,2023-04-19 19:00:41
+sale,26,25,61,5170.22,Bank,Paid,2023-02-27 05:39:05
+sale,27,79,77,7969.87,Cash,Paid,2023-04-26 16:32:03
+sale,28,93,17,4371.52,Cash,Paid,2024-04-10 04:01:35
+sale,29,88,28,3315.69,Cash,Paid,2026-05-17 18:21:16
+sale,30,93,66,17025.93,Cash,Paid,2024-06-21 09:50:49
+sale,31,97,14,1630524,Cash,Paid,2023-09-30 00:02:28
+sale,32,43,62,21791.8,Cash,Paid,2024-04-16 10:27:53
+sale,33,75,54,34818.79,Cash,Debt,2025-02-21 17:07:15
+sale,34,84,81,10353.12,Cash,Paid,2026-05-31 22:55:06
+sale,35,87,8,1472.75,Cash,Paid,2025-10-30 13:35:49
+sale,36,55,62,75534.92,Cash,Paid,2025-10-26 00:48:06
+sale,37,13,45,3242.39,Cash,Paid,2023-08-26 17:54:29
+sale,38,5,30,33612.55,Cash,Paid,2026-01-31 14:57:22
+sale,39,93,72,18551.07,Cash,Paid,2025-12-26 02:35:00
+sale,40,44,11,5401.32,Cash,Paid,2026-04-30 02:26:51
+sale,41,53,7,2765.27,Cash,Debt,2026-10-20 10:48:46
+sale,42,92,38,7233.8,Cash,Paid,2024-06-24 00:58:40
+sale,43,29,72,14292.92,Cash,Paid,2023-01-07 07:54:46
+sale,44,30,50,4748.81,Cash,Paid,2026-05-06 13:25:51
+sale,45,64,47,3771.55,Cash,Paid,2023-01-10 08:49:06
+sale,46,85,79,16511,Bank,Paid,2026-07-13 02:52:34
+sale,47,94,70,24835.21,Cash,Paid,2023-04-04 04:15:46
+sale,48,60,90,9710.41,Cash,Paid,2024-06-15 15:23:21
+sale,49,67,77,27854.06,Cash,Debt,2024-05-22 23:09:50
+sale,50,82,72,27443.93,Cash,Paid,2025-12-04 16:56:50
+sale,51,63,19,34472.72,Bank,Paid,2025-12-02 09:13:06
+sale,52,61,67,10294.9,Cash,Paid,2024-06-22 10:18:15
+sale,53,92,71,13516.32,Cash,Paid,2024-09-10 08:16:13
+sale,54,9,32,3007.31,Cash,Paid,2024-02-05 04:19:27
+sale,55,27,33,2309.36,Cash,Paid,2024-09-28 01:18:01
+sale,56,92,58,11046.2,Cash,Paid,2025-08-18 20:47:38
+sale,57,24,68,45012.85,Cash,Debt,2025-05-25 07:31:16
+sale,58,77,23,1778.04,Cash,Paid,2025-10-26 20:08:59
+sale,59,5,25,28020.49,Cash,Paid,2026-04-07 14:56:07
+sale,60,35,69,26380,Cash,Paid,2026-08-02 16:29:09
+sale,61,62,20,63240,Cash,Paid,2024-07-06 00:53:13
+sale,62,61,75,11529.05,Cash,Paid,2023-02-08 00:27:58
+sale,63,58,82,23415.12,Cash,Paid,2023-03-01 03:39:32
+sale,64,30,52,4912.53,Cash,Paid,2026-08-25 09:43:47
+sale,65,18,10,272.75,Cash,Debt,2023-08-31 00:54:41
+sale,66,95,97,42931.86,Cash,Paid,2025-10-13 07:30:46
+sale,67,51,46,23745.22,Cash,Paid,2025-04-13 19:08:19
+sale,68,84,54,6892.63,Cash,Paid,2026-03-24 16:52:31
+sale,69,12,39,10022.69,Cash,Paid,2026-02-21 08:58:53
+sale,70,13,72,5244.3,Cash,Paid,2024-08-08 23:54:32
+sale,71,17,9,10344.37,Cash,Paid,2024-07-07 09:53:00
+sale,72,29,27,5372.24,Cash,Paid,2025-07-10 10:03:40
+sale,73,95,58,25687.81,Cash,Debt,2025-04-27 12:40:27
+sale,74,86,7,2837.37,Cash,Paid,2024-01-30 04:11:21
+sale,75,23,6,16882.38,Cash,Paid,2025-09-01 10:33:36
+sale,76,68,85,2975,Bank,Paid,2023-01-02 09:01:36
+sale,77,17,61,2166.98,Cash,Paid,2025-09-06 09:51:53
+sale,78,70,8,326.45,Cash,Paid,2025-06-17 04:42:35
+sale,79,21,42,15734.72,Cash,Paid,2023-04-29 11:43:09
+sale,80,90,68,33019.21,Cash,Paid,2024-06-04 01:49:40
+sale,81,61,13,88086.69,Cash,Debt,2026-07-04 20:36:42
+sale,82,56,70,76956.01,Cash,Paid,2023-02-05 17:24:05
+sale,83,36,55,10548.37,Cash,Paid,2024-05-14 05:20:48
+sale,84,5,96,107566.57,Cash,Paid,2023-05-19 22:39:44
+sale,85,91,99,74618.49,Cash,Paid,2026-10-23 12:28:07
+sale,86,73,65,18548.35,Cash,Paid,2024-04-15 06:26:14
+sale,87,70,98,4284.39,Cash,Paid,2023-09-02 23:11:21
+sale,88,75,64,41246.55,Cash,Paid,2025-09-23 05:46:09
+sale,89,54,28,1049.12,Cash,Debt,2025-04-07 05:56:14
+sale,90,14,39,5104.94,Cash,Paid,2025-12-22 11:44:25
+sale,91,67,4,37648,Bank,Paid,2026-09-10 12:49:21
+sale,92,57,41,5544.63,Cash,Paid,2026-04-17 10:53:54
+sale,93,30,79,7482.62,Cash,Paid,2026-08-13 12:49:46
+sale,94,94,51,18080.34,Cash,Paid,2026-06-30 00:08:35
+sale,95,85,73,15253.64,Cash,Paid,2025-09-08 12:40:57
+sale,96,80,86,14256.13,Cash,Paid,2023-01-16 15:01:33
+sale,97,77,93,7216.05,Cash,Debt,2024-07-16 10:57:57
+sale,98,39,51,25127.39,Cash,Paid,2024-06-27 14:11:55
+sale,99,33,38,6104.84,Cash,Paid,2026-07-06 18:19:11
+sale,100,55,65,79207.18,Cash,Paid,2026-05-14 05:32:12
+sale,101,13,7,16857.39,Bank,Paid,2025-08-18 17:44:20
+sale,102,22,82,23277.15,Cash,Paid,2024-04-14 17:28:09
+sale,103,35,88,33690.08,Cash,Paid,2024-06-30 12:40:40
+sale,104,19,55,2622.14,Cash,Paid,2023-03-06 12:01:06
+sale,105,93,58,14955.79,Cash,Debt,2026-02-16 20:13:05
+sale,106,32,96,11499.49,Bank,Paid,2024-01-29 03:54:21
+sale,107,100,32,58169.76,Cash,Paid,2025-04-28 16:11:09
+sale,108,43,61,21471.01,Cash,Paid,2026-03-04 05:16:13
+sale,109,49,41,75383.62,Cash,Paid,2026-10-23 23:01:46
+sale,110,1,94,51856.65,Cash,Paid,2023-02-10 01:43:58
+sale,111,30,1,3763.98,Cash,Paid,2025-05-12 18:54:44
+sale,112,75,25,16115.35,Cash,Paid,2023-06-29 16:23:51
+sale,113,16,48,16804.93,Cash,Debt,2024-03-11 04:52:09
+sale,114,97,90,499102.28,Cash,Paid,2024-08-28 08:03:17
+sale,115,86,84,34259.11,Cash,Paid,2023-10-14 19:22:41
+sale,116,98,15,187908.71,Cash,Paid,2026-05-18 22:20:47
+sale,117,86,51,20807.28,Cash,Paid,2026-05-17 12:16:49
+sale,118,28,66,2686.39,Cash,Paid,2026-09-29 04:30:24
+sale,119,28,47,1912.97,Cash,Paid,2023-07-10 16:28:47
+sale,120,40,6,4686.24,Cash,Paid,2026-03-05 20:56:51
+sale,121,28,19,26486,Cash,Debt,2025-08-16 19:12:34
+sale,122,50,87,33799.91,Cash,Paid,2024-09-28 13:31:45
+sale,123,81,94,9659.28,Cash,Paid,2025-02-13 09:17:57
+sale,124,50,89,34576.49,Cash,Paid,2026-05-24 00:28:20
+sale,125,36,92,17657.85,Cash,Paid,2024-11-01 20:29:38
+sale,126,15,3,689.01,Bank,Paid,2025-11-10 23:47:49
+sale,127,9,75,6972.1,Cash,Paid,2024-04-28 10:05:51
+sale,128,22,64,18152.85,Cash,Paid,2023-12-09 00:03:48
+sale,129,25,2,149.6,Cash,Debt,2026-11-25 18:31:30
+sale,130,94,65,23038.76,Cash,Paid,2024-10-11 20:37:39
+sale,131,85,14,140446.11,Cash,Paid,2023-09-26 22:13:33
+sale,132,18,16,488.62,Cash,Paid,2023-07-14 16:18:56
+sale,133,61,19,2921.93,Cash,Paid,2024-06-23 23:26:59
+sale,134,99,97,2138728.28,Cash,Paid,2025-07-29 19:56:50
+sale,135,4,79,98086.98,Cash,Paid,2023-12-22 01:46:43
+sale,136,87,35,6475,Bank,Paid,2026-05-21 21:16:36
+sale,137,71,25,602.03,Cash,Debt,2025-08-18 17:45:11
+sale,138,81,8,777.13,Cash,Paid,2026-12-04 20:52:01
+sale,139,64,79,6383.93,Cash,Paid,2026-11-20 14:54:04
+sale,140,11,9,1833.31,Cash,Paid,2023-10-09 15:12:09
+sale,141,11,18,129702.17,Cash,Paid,2023-02-07 06:37:47
+sale,142,71,33,801.04,Cash,Paid,2026-12-21 13:44:53
+sale,143,28,54,2177.45,Cash,Paid,2026-04-23 19:22:27
+sale,144,71,12,296.45,Cash,Paid,2026-07-29 05:25:00
+sale,145,83,5,511.23,Cash,Debt,2025-04-03 09:14:22
+sale,146,29,93,18482.87,Cash,Paid,2023-08-21 12:32:05
+sale,147,41,59,12546.76,Cash,Paid,2025-08-05 21:25:25
+sale,148,59,46,3404.4,Cash,Paid,2024-11-02 07:26:09
+sale,149,70,66,2872.89,Cash,Paid,2026-07-09 16:59:48
+sale,150,63,89,20184,Cash,Paid,2025-01-29 15:30:54
+sale,151,91,16,361920,Bank,Paid,2025-10-29 03:23:42
+sale,152,91,55,41463.26,Cash,Paid,2024-12-11 08:28:22
+sale,153,98,67,839432.47,Cash,Debt,2024-12-23 14:50:21
+sale,154,71,16,350.55,Cash,Paid,2024-11-19 00:28:26
+sale,155,55,78,95002.5,Cash,Paid,2023-01-01 10:12:31
+sale,156,42,91,22197.41,Cash,Paid,2024-09-29 21:09:56
+sale,157,49,63,115809.04,Cash,Paid,2025-09-25 01:45:59
+sale,158,66,74,17536.03,Cash,Paid,2024-01-12 23:25:22
+sale,159,89,26,1965.78,Cash,Paid,2024-05-18 20:29:53
+sale,160,89,56,4269.53,Cash,Paid,2025-03-16 15:46:21
+sale,161,37,18,52251.56,Cash,Debt,2025-12-02 06:12:06
+sale,162,33,83,13336.56,Cash,Paid,2024-06-10 11:12:47
+sale,163,4,16,19833.73,Cash,Paid,2025-05-03 12:11:25
+sale,164,96,30,105289.32,Cash,Paid,2024-08-22 22:22:42
+sale,165,46,22,120876.74,Cash,Paid,2024-03-14 20:51:08
+sale,166,91,45,33930,Cash,Paid,2023-07-27 17:07:32
+sale,167,51,99,51153.64,Cash,Paid,2026-08-07 16:52:29
+sale,168,45,57,199304.11,Cash,Paid,2024-04-23 11:55:48
+sale,169,74,73,207593.45,Cash,Debt,2023-12-15 18:01:01
+sale,170,76,78,4192.54,Cash,Paid,2024-09-05 00:59:01
+sale,171,65,8,49594.22,Cash,Paid,2026-06-09 22:36:02
+sale,172,40,97,76819.98,Cash,Paid,2025-11-21 20:52:58
+sale,173,9,72,6739.45,Cash,Paid,2023-04-28 11:42:17
+sale,174,16,43,15112.58,Cash,Paid,2026-06-24 07:20:43
+sale,175,32,9,1053.25,Cash,Paid,2025-03-04 20:28:05
+sale,176,74,97,275784.5,Bank,Paid,2024-07-29 21:55:54
+sale,177,41,21,4424.6,Cash,Debt,2023-09-15 03:25:49
+sale,178,60,20,2128.21,Cash,Paid,2025-10-26 09:25:44
+sale,179,35,77,29466.69,Cash,Paid,2026-12-21 22:01:14
+sale,180,39,2,966.33,Cash,Paid,2024-06-27 00:15:32
+sale,181,61,10,60060,Bank,Paid,2026-08-09 06:11:45
+sale,182,3,35,2083.56,Cash,Paid,2023-02-04 18:22:58
+sale,183,74,21,59694.55,Cash,Paid,2025-07-17 23:45:54
+sale,184,3,51,3018.49,Cash,Paid,2026-12-22 16:21:29
+sale,185,46,29,159338.61,Cash,Debt,2024-02-02 01:58:32
+sale,186,44,99,48694.39,Cash,Paid,2025-02-09 12:54:56
+sale,187,66,52,12318.24,Cash,Paid,2025-05-18 13:14:10
+sale,188,1,71,39178.09,Cash,Paid,2025-07-17 12:45:45
+sale,189,93,47,12078.73,Cash,Paid,2023-06-01 23:40:37
+sale,190,69,8,3.1099999999999994,Cash,Paid,2026-03-13 18:44:46
+sale,191,93,4,23702.69,Cash,Paid,2025-04-16 04:06:52
+sale,192,57,69,9378,Cash,Paid,2026-09-23 17:38:59
+sale,193,9,4,372.49,Cash,Debt,2023-07-25 06:36:31
+sale,194,67,56,20243.07,Cash,Paid,2026-02-07 21:30:21
+sale,195,20,64,1957.1,Cash,Paid,2023-03-07 06:59:57
+sale,196,49,80,147120,Cash,Paid,2024-02-20 18:22:35
+sale,197,13,10,676.31,Cash,Paid,2025-05-23 12:16:26
+sale,198,24,84,55683.4,Cash,Paid,2024-09-26 15:42:10
+sale,199,34,92,17525.56,Cash,Paid,2023-04-18 03:15:56
+sale,200,55,10,12168.15,Cash,Paid,2023-09-03 21:51:22
+sale,201,10,4,22769.59,Bank,Debt,2026-08-26 15:05:26
+sale,202,24,26,17204.47,Cash,Paid,2023-06-28 02:42:10
+sale,203,23,21,59160.63,Cash,Paid,2025-07-19 10:50:05
+sale,204,76,97,5173.92,Cash,Paid,2024-03-22 19:24:48
+sale,205,73,63,17993.09,Cash,Paid,2025-07-25 08:10:16
+sale,206,47,54,675863.64,Cash,Paid,2025-02-20 09:25:43
+sale,207,25,30,2548.57,Cash,Paid,2023-11-30 13:23:49
+sale,208,14,2,243.64,Cash,Paid,2025-01-06 09:58:52
+sale,209,39,95,46816.68,Cash,Debt,2025-10-22 18:07:31
+sale,210,72,8,3092.04,Cash,Paid,2023-12-22 23:45:33
+sale,211,78,8,4730.38,Bank,Paid,2026-10-13 14:23:21
+sale,212,74,19,54010.33,Cash,Paid,2023-04-26 23:25:27
+sale,213,24,6,3943.74,Cash,Paid,2023-01-13 12:02:54
+sale,214,6,59,11526.4,Cash,Paid,2025-06-21 06:18:04
+sale,215,53,53,957.69,Cash,Paid,2026-11-09 11:25:33
+sale,216,48,10,220208.96,Cash,Paid,2023-08-26 13:30:52
+sale,217,74,22,62537.55,Cash,Debt,2024-06-15 20:15:30
+sale,218,12,21,5346.83,Cash,Paid,2023-12-06 22:10:40
+sale,219,35,76,29100.58,Cash,Paid,2024-07-12 17:38:29
+sale,220,41,84,17874.42,Cash,Paid,2026-10-28 04:06:21
+sale,221,99,13,11465457.4,Cash,Paid,2023-01-10 19:19:41
+sale,222,21,79,29592.57,Cash,Paid,2026-11-22 15:14:35
+sale,223,69,58,114.9,Cash,Paid,2023-07-06 12:50:03
+sale,224,22,59,16755.1,Cash,Paid,2025-06-22 19:31:04
+sale,225,24,80,52971.55,Cash,Debt,2025-08-23 10:00:12
+sale,226,55,87,106053,Bank,Paid,2023-09-19 10:36:35
+sale,227,76,78,4190.92,Cash,Paid,2026-09-01 05:37:18
+sale,228,73,27,7716.88,Cash,Paid,2025-09-20 08:13:33
+sale,229,81,35,3578.72,Cash,Paid,2024-03-04 07:37:01
+sale,230,44,5,2416.37,Cash,Paid,2025-10-03 08:22:24
+sale,231,5,17,152417.07,Cash,Paid,2024-12-29 08:37:58
+sale,232,82,35,13339.78,Cash,Paid,2023-01-15 03:30:46
+sale,233,20,60,1854.4,Cash,Debt,2024-01-07 15:20:51
+sale,234,90,37,17966.73,Cash,Paid,2025-04-09 14:51:08
+sale,235,100,98,178147.63,Cash,Paid,2024-12-19 11:41:40
+sale,236,11,96,19749.39,Cash,Paid,2024-01-15 02:06:23
+sale,237,55,75,91408.6,Cash,Paid,2023-01-24 09:15:23
+sale,238,84,13,1650.98,Cash,Paid,2024-02-15 02:15:26
+sale,239,88,37,4362.95,Cash,Paid,2026-04-30 23:30:10
+sale,240,20,54,1652.35,Cash,Paid,2026-09-06 18:11:33
+sale,241,88,10,13200,Cash,Debt,2024-12-11 02:09:32
+sale,242,89,80,6114.53,Cash,Paid,2026-05-04 10:07:18
+sale,243,33,55,8834.31,Cash,Paid,2023-05-26 12:03:47
+sale,244,49,14,25743.21,Cash,Paid,2023-12-01 23:42:24
+sale,245,29,11,2145.79,Cash,Paid,2024-08-16 00:29:30
+sale,246,66,94,22216.93,Cash,Paid,2023-10-16 10:45:37
+sale,247,46,91,500037.45,Cash,Paid,2023-05-28 10:09:36
+sale,248,81,74,7582.69,Cash,Paid,2025-03-17 15:15:06
+sale,249,44,26,12770.1,Cash,Debt,2024-02-06 20:11:36
+sale,250,54,90,3377.8,Cash,Paid,2024-03-13 18:13:47
+expense,1,Salary - 3247,46871.89,Insurance,2023-06-08,1
+expense,2,Miscellaneous - 4020,31559.79,Equipment,2023-11-16,0
+expense,3,Transport - 3034,26415.98,Marketing,2025-06-07,0
+expense,4,Equipment - 5524,24976.18,Marketing,2024-01-15,0
+expense,5,Rent - 7865,45606.25,Insurance,2026-03-06,0
+expense,6,Transport - 5132,8937.29,Insurance,2024-03-25,0
+expense,7,Tax - 3505,37497.78,Marketing,2025-02-25,0
+expense,8,Tax - 5337,36434.96,Transport,2026-01-01,0
+expense,9,Equipment - 1060,37187.06,Maintenance,2024-04-25,0
+expense,10,Utilities - 7052,43082.27,Maintenance,2023-06-24,0
+expense,11,Miscellaneous - 4363,22544.64,Inventory Purchase,2026-02-20,1
+expense,12,Equipment - 7114,38839.9,Rent,2023-08-29,0
+expense,13,Miscellaneous - 5755,10254.39,Maintenance,2024-10-22,0
+expense,14,Miscellaneous - 6042,12209.44,Maintenance,2025-03-04,0
+expense,15,Equipment - 1146,4460.54,Inventory Purchase,2025-04-01,0
+expense,16,Miscellaneous - 7281,19220.72,Equipment,2023-04-27,0
+expense,17,Tax - 1391,45915.11,Insurance,2025-10-28,0
+expense,18,Equipment - 9719,22587.3,Rent,2023-03-08,0
+expense,19,Equipment - 1407,41166.42,Maintenance,2025-08-03,0
+expense,20,Miscellaneous - 1614,48206.42,Maintenance,2025-01-05,0
+expense,21,Transport - 3767,6881.84,Miscellaneous,2026-11-28,1
+expense,22,Rent - 1852,49604.33,Equipment,2026-01-13,0
+expense,23,Tax - 9593,45279.99,Utilities,2023-08-29,0
+expense,24,Rent - 5407,9416.98,Rent,2024-10-24,0
+expense,25,Insurance - 4647,5625.08,Maintenance,2024-12-31,0
+expense,26,Insurance - 9707,27449.77,Inventory Purchase,2023-11-09,0
+expense,27,Maintenance - 5137,5692.4,Maintenance,2026-06-19,0
+expense,28,Miscellaneous - 4736,46764.55,Transport,2025-02-11,0
+expense,29,Marketing - 9250,45280.19,Marketing,2023-06-15,0
+expense,30,Equipment - 9947,16674.16,Inventory Purchase,2023-05-15,0
+expense,31,Equipment - 7730,13150.19,Utilities,2024-12-26,1
+expense,32,Insurance - 2749,34469.08,Transport,2024-06-25,0
+expense,33,Miscellaneous - 9110,24392.75,Tax,2026-07-01,0
+expense,34,Salary - 4758,20239.19,Miscellaneous,2026-12-26,0
+expense,35,Marketing - 8505,25720.8,Utilities,2023-12-15,0
+expense,36,Salary - 2337,49165.06,Equipment,2026-07-24,0
+expense,37,Insurance - 1682,49520.73,Transport,2025-02-23,0
+expense,38,Insurance - 3456,40488.94,Equipment,2026-12-14,0
+expense,39,Utilities - 9327,40247.68,Salary,2024-03-08,0
+expense,40,Utilities - 1448,24758.22,Inventory Purchase,2023-11-04,0
+expense,41,Tax - 9127,20010.71,Equipment,2025-12-12,1
+expense,42,Maintenance - 7512,31181.4,Maintenance,2025-02-04,0
+expense,43,Maintenance - 2063,43292.54,Inventory Purchase,2024-10-25,0
+expense,44,Salary - 6873,27873.97,Marketing,2025-01-19,0
+expense,45,Rent - 9374,32534.82,Utilities,2026-08-27,0
+expense,46,Salary - 1316,48466.7,Inventory Purchase,2024-04-06,0
+expense,47,Marketing - 3804,19181.94,Utilities,2026-09-14,0
+expense,48,Tax - 7272,11245.41,Transport,2023-01-18,0
+expense,49,Tax - 2219,17704.15,Tax,2025-07-25,0
+expense,50,Tax - 5995,44958.57,Tax,2023-02-10,0
+expense,51,Insurance - 8490,617.19,Inventory Purchase,2024-08-23,1
+expense,52,Marketing - 6516,10987.29,Utilities,2024-12-26,0
+expense,53,Equipment - 1046,39863.38,Utilities,2026-10-05,0
+expense,54,Inventory Purchase - 1198,39411.45,Utilities,2024-06-26,0
+expense,55,Utilities - 2193,46771.28,Insurance,2024-02-16,0
+expense,56,Equipment - 6089,37208.58,Maintenance,2026-06-28,0
+expense,57,Rent - 2313,13757.55,Maintenance,2026-06-12,0
+expense,58,Rent - 6987,25375.42,Tax,2025-03-19,0
+expense,59,Tax - 2704,6402.23,Inventory Purchase,2026-07-25,0
+expense,60,Transport - 1778,49652.17,Miscellaneous,2025-04-20,0
+expense,61,Tax - 4276,31746.59,Salary,2025-09-08,1
+expense,62,Transport - 2068,10122.39,Utilities,2026-04-10,0
+expense,63,Tax - 6958,979.78,Salary,2026-03-25,0
+expense,64,Inventory Purchase - 2270,33945.18,Tax,2026-07-22,0
+expense,65,Marketing - 9455,1655.06,Inventory Purchase,2026-07-19,0
+expense,66,Miscellaneous - 4376,40043.75,Insurance,2025-09-17,0
+expense,67,Transport - 6153,44791.77,Transport,2023-08-11,0
+expense,68,Utilities - 7494,36085.43,Maintenance,2026-01-04,0
+expense,69,Miscellaneous - 5938,24844.74,Marketing,2025-05-11,0
+expense,70,Utilities - 4679,2664.43,Miscellaneous,2024-08-04,0
+expense,71,Transport - 4042,43911.27,Marketing,2025-07-12,1
+expense,72,Rent - 4732,41834.69,Insurance,2025-12-28,0
+expense,73,Rent - 3285,27696.75,Insurance,2024-06-15,0
+expense,74,Salary - 1694,12701.11,Miscellaneous,2023-08-26,0
+expense,75,Equipment - 9819,41064.97,Inventory Purchase,2024-04-16,0
+adjustment,1,46,damaged,5495,5495,5,Policy Change,2024-03-03
+adjustment,2,40,price_down,792,411.84000000000003,,Water Damage,2026-11-03
+adjustment,3,82,price_up,382,450.76,,Policy Change,2024-11-08
+adjustment,4,9,damaged,94,94,1,Promo End,2023-08-25
+adjustment,5,77,damaged,78,78,9,Defective,2025-10-27
+adjustment,6,62,damaged,186,186,5,Market Shift,2023-12-24
+adjustment,7,50,damaged,389,389,8,Water Damage,2023-05-19
+adjustment,8,44,price_up,492,605.16,,Policy Change,2024-09-07
+adjustment,9,6,damaged,196,196,1,Water Damage,2026-03-19
+adjustment,10,18,price_down,31,28.21,,Market Shift,2024-03-31
+adjustment,11,42,price_down,244,175.68,,Supplier Update,2023-04-18
+adjustment,12,32,price_down,120,110.4,,Expired,2024-02-26
+adjustment,13,21,damaged,375,375,1,Market Shift,2026-09-16
+adjustment,14,52,price_down,593,314.29,,Manual Correction,2026-02-12
+adjustment,15,65,price_up,159,170.13000000000002,,Promo End,2026-11-17
+adjustment,16,58,damaged,286,286,8,Manual Correction,2023-02-15
+adjustment,17,96,damaged,3511,3511,5,Market Shift,2024-02-20
+adjustment,18,22,price_up,284,335.12,,Broken,2024-06-19
+adjustment,19,26,price_up,128,161.28,,Supplier Update,2023-01-31
+adjustment,20,82,damaged,382,382,6,Water Damage,2026-02-08
+adjustment,21,54,damaged,38,38,5,Policy Change,2024-01-21
+adjustment,22,14,price_down,132,96.36,,Market Shift,2025-03-10
+adjustment,23,2,price_down,73,43.8,,Promo End,2024-06-03
+adjustment,24,3,price_up,60,73.2,,Promo End,2023-01-08
+adjustment,25,31,damaged,335,335,9,Policy Change,2025-11-18
+adjustment,26,54,price_up,38,50.160000000000004,,Promo End,2025-09-28
+adjustment,27,100,price_down,1818,981.72,,Supplier Update,2023-03-29
+adjustment,28,100,damaged,1818,1818,8,Market Shift,2024-03-30
+adjustment,29,88,price_down,120,92.4,,Broken,2026-11-29
+adjustment,30,51,damaged,517,517,4,Broken,2024-03-07
+adjustment,31,22,price_down,284,264.12,,Policy Change,2026-11-26
+adjustment,32,28,price_down,41,31.98,,Broken,2025-01-05
+adjustment,33,88,price_down,120,80.4,,Manual Correction,2025-07-15
+adjustment,34,8,price_up,86,125.56,,Expired,2025-04-22
+adjustment,35,40,damaged,792,792,5,Water Damage,2024-04-15
+adjustment,36,58,price_down,286,165.88,,Promo End,2024-06-19
+adjustment,37,20,price_up,31,34.410000000000004,,Market Shift,2023-02-26
+adjustment,38,47,price_up,12516,15519.84,,Manual Correction,2025-12-08
+adjustment,39,9,price_up,94,125.02000000000001,,Supplier Update,2025-11-17
+adjustment,40,19,price_down,48,26.880000000000003,,Broken,2026-12-18
+adjustment,41,23,price_up,2819,3862.03,,Supplier Update,2025-12-05
+adjustment,42,52,price_up,593,753.11,,Policy Change,2025-03-05
+adjustment,43,9,damaged,94,94,3,Expired,2023-11-12
+adjustment,44,82,price_up,382,565.36,,Manual Correction,2024-06-21
+adjustment,45,76,price_up,54,59.940000000000005,,Defective,2024-10-07
+adjustment,46,31,price_up,335,499.15,,Policy Change,2023-08-06
+adjustment,47,50,price_up,389,571.83,,Promo End,2026-08-31
+adjustment,48,27,damaged,71,71,10,Policy Change,2024-05-29
+adjustment,49,61,price_up,154,189.42,,Defective,2024-02-09
+adjustment,50,50,price_up,389,490.14,,Market Shift,2023-02-27
+return,1,208,14,2,243.64,Expired,2025-01-23
+return,2,136,87,3,555,Customer request,2026-05-24
+return,3,79,21,1,374.63619047619045,Damaged,2023-05-22
+return,4,182,3,4,238.12114285714284,Wrong item,2023-02-15
+return,5,114,97,3,16636.74266666667,Wrong item,2024-09-15
+return,6,118,28,3,122.10863636363636,Damaged,2026-10-22
+return,7,53,92,5,951.8535211267606,Wrong item,2024-09-25
+return,8,85,91,5,3768.610606060606,Wrong item,2026-11-12
+return,9,87,70,3,131.15479591836737,Customer request,2023-09-18
+return,10,127,9,3,278.884,Damaged,2024-05-03
+return,11,80,90,5,2427.883088235294,Customer request,2024-06-07
+return,12,41,53,1,395.0385714285714,Customer request,2026-11-10
+return,13,235,100,2,3635.665918367347,Wrong item,2025-01-02
+return,14,185,46,5,27472.174137931033,Defective,2024-02-26
+return,15,89,54,5,187.3428571428571,Defective,2025-05-05
+return,16,55,27,1,69.98060606060606,Defective,2024-10-07
+return,17,145,83,4,408.98400000000004,Customer request,2025-04-28
+return,18,109,49,3,5515.874634146341,Wrong item,2026-10-25
+return,19,101,13,5,12040.992857142857,Expired,2025-09-01
+return,20,224,22,1,283.98474576271184,Damaged,2025-06-23
+pack,1,78,5,136,14,Opened
+pack,2,54,26,133,118,Not Opened
+pack,3,16,41,200,108,Not Opened
+pack,4,33,8,180,4,Opened
+pack,5,69,17,105,37,Opened
+pack,6,91,28,194,71,Opened
+pack,7,19,4,163,95,Not Opened
+pack,8,38,10,17,0,Depleted
+pack,9,14,45,108,11,Opened
+pack,10,27,48,17,6,Opened
+pack,11,46,48,200,157,Not Opened
+pack,12,42,42,29,15,Not Opened
+pack,13,92,10,155,113,Not Opened
+pack,14,67,1,114,24,Opened
+pack,15,1,15,28,25,Not Opened
+pack,16,63,32,108,62,Not Opened
+pack,17,38,5,108,62,Not Opened
+pack,18,38,7,109,92,Not Opened
+pack,19,54,8,100,20,Opened
+pack,20,99,6,11,3,Opened
+pack,21,59,32,71,50,Not Opened
+pack,22,91,33,96,81,Not Opened
+pack,23,89,12,92,3,Opened
+pack,24,16,18,19,6,Opened
+pack,25,40,8,130,57,Opened
+pack,26,89,28,59,57,Not Opened
+pack,27,54,48,185,123,Not Opened
+pack,28,38,14,150,142,Not Opened
+pack,29,58,7,48,44,Not Opened
+pack,30,56,19,124,119,Not Opened
+pack,31,61,14,76,70,Not Opened
+pack,32,78,13,150,49,Opened
+pack,33,33,27,159,29,Opened
+pack,34,41,34,29,6,Opened
+pack,35,14,12,144,87,Not Opened
+pack,36,22,26,103,14,Opened
+pack,37,15,12,123,3,Opened
+pack,38,76,30,90,79,Not Opened
+pack,39,99,37,111,64,Not Opened
+pack,40,24,32,92,37,Opened
+pack,41,74,14,57,9,Opened
+pack,42,57,50,58,48,Not Opened
+pack,43,54,10,193,41,Opened
+pack,44,98,10,92,62,Not Opened
+pack,45,16,14,122,64,Not Opened
+pack,46,15,39,13,8,Not Opened
+pack,47,49,17,168,144,Not Opened
+pack,48,71,16,63,47,Not Opened
+pack,49,39,50,15,12,Not Opened
+pack,50,41,17,58,36,Not Opened

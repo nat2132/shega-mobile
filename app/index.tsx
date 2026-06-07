@@ -34,12 +34,12 @@ export default function Index() {
         // If no PIN but setup is done, go to dashboard
         router.replace('/(tabs)/dashboard');
       } else {
-        // New user or incomplete setup
-        router.replace('/inventory-onboarding');
+        // New user or incomplete setup - show choices
+        router.replace('/welcome-choice');
       }
     } catch (error) {
       console.error('[AuthCheck] Initialization failed:', error);
-      router.replace('/inventory-onboarding');
+      router.replace('/welcome-choice');
     }
   };
 

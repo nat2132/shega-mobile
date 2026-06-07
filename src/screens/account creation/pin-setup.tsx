@@ -1,17 +1,16 @@
-import React from 'react';
+﻿import React from 'react';
 import { Fonts } from '@/constants/theme';
 import {
   StyleSheet,
-  Text as RNText,
   View,
   TouchableOpacity,
-  SafeAreaView,
   Dimensions,
   Platform
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { ShieldCheck, Lock, ChevronRight, Fingerprint, ShieldAlert } from 'lucide-react-native';
+import { AppText } from '@/components/ui';
 import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
-
 const { width } = Dimensions.get('window');
 
 interface SecuritySetupScreenProps {
@@ -41,10 +40,10 @@ const SecuritySetupScreen: React.FC<SecuritySetupScreenProps> = ({ onSetPin, onS
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(200).duration(800)} style={styles.textNode}>
-          <RNText style={styles.title}>Defend Your Ledger</RNText>
-          <RNText style={styles.subtitle}>
+          <AppText style={styles.title} variant="display" weight="bold" numberOfLines={2}>Defend Your Ledger</AppText>
+          <AppText style={styles.subtitle} variant="body" weight="medium" numberOfLines={3}>
             Establish a hardware-encrypted PIN protocol{'\n'}to secure your private inventory vault.
-          </RNText>
+          </AppText>
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(400).duration(800)} style={styles.actionCluster}>
@@ -53,12 +52,12 @@ const SecuritySetupScreen: React.FC<SecuritySetupScreenProps> = ({ onSetPin, onS
             activeOpacity={0.8} 
             onPress={onSetPin}
           >
-            <RNText style={styles.primaryBtnText}>ESTABLISH PROTOCOL</RNText>
+            <AppText style={styles.primaryBtnText} variant="body" weight="bold" numberOfLines={1}>ESTABLISH PROTOCOL</AppText>
             <ChevronRight size={20} color="#FFF" />
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.secondaryBtn} onPress={onSkip} activeOpacity={0.6}>
-            <RNText style={styles.secondaryBtnText}>Skip and proceed to terminal</RNText>
+            <AppText style={styles.secondaryBtnText} variant="body" weight="semibold" numberOfLines={2}>Skip and proceed to terminal</AppText>
           </TouchableOpacity>
         </Animated.View>
       </View>
@@ -67,7 +66,7 @@ const SecuritySetupScreen: React.FC<SecuritySetupScreenProps> = ({ onSetPin, onS
       <Animated.View entering={FadeInUp.delay(600).duration(800)} style={styles.metaNode}>
         <View style={styles.securitySeal}>
            <ShieldAlert size={14} color="#999" />
-           <RNText style={styles.sealText}>LOCALLY ENCRYPTED SECURE STORAGE</RNText>
+           <AppText style={styles.sealText} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>LOCALLY ENCRYPTED SECURE STORAGE</AppText>
         </View>
         <View style={styles.pagination}>
           <View style={[styles.dot, styles.activeDot]} />
@@ -141,7 +140,6 @@ const styles = StyleSheet.create({
     marginBottom: 60,
   },
   title: {
-    fontSize: 32,
     fontFamily: Fonts.extrabold,
     fontWeight: '800',
     color: '#000',
@@ -149,7 +147,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   subtitle: {
-    fontSize: 15,
     color: '#666',
     textAlign: 'center',
     lineHeight: 24,
@@ -177,7 +174,6 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: {
     color: '#FFF',
-    fontSize: 16,
     fontFamily: Fonts.bold,
     letterSpacing: 1.2,
   },
@@ -185,7 +181,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   secondaryBtnText: {
-    fontSize: 14,
     color: '#999',
     fontFamily: Fonts.semibold,
   },
@@ -204,7 +199,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sealText: {
-    fontSize: 9,
     fontFamily: Fonts.bold,
     color: '#999',
     letterSpacing: 1,

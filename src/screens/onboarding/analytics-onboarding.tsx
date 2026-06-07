@@ -1,26 +1,30 @@
-import { Fonts } from '@/constants/theme';
+﻿import { Fonts } from '@/constants/theme';
 import {
   Dimensions,
   StyleSheet,
-  Text as RNText,
   TouchableOpacity,
   View,
   Image,
 } from 'react-native';
 import { useEffect } from 'react';
 import { MoveLeft, MoveRight } from 'lucide-react-native';
-import Animated, { 
-  FadeInDown, 
-  FadeInUp, 
-  useSharedValue, 
-  useAnimatedStyle, 
-  withRepeat, 
+import { AppText } from '@/components/ui';
+import Animated, {
+  FadeInDown,
+  FadeInUp,
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
   withTiming, 
   withDelay, 
   Easing 
 } from 'react-native-reanimated';
 
-const { width } = Dimensions.get('window');
+interface OnboardingScreenProps {
+  onGetStarted?: () => void;
+  onBack?: () => void;
+  onSkip?: () => void;
+}
 
 const AnalyticsOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onGetStarted, onBack, onSkip }) => {
   const graphY = useSharedValue(0);
@@ -37,7 +41,7 @@ const AnalyticsOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onGetStart
       -1,
       true
     ));
-  }, []);
+  }, [graphY, metricY]);
 
   const animatedGraphStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: graphY.value }],
@@ -55,7 +59,7 @@ const AnalyticsOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onGetStart
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.skipContainer} onPress={onSkip}>
-          <RNText style={styles.skipText}>SKIP</RNText>
+          <AppText style={styles.skipText} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>SKIP</AppText>
         </TouchableOpacity>
       </View>
 
@@ -84,10 +88,10 @@ const AnalyticsOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onGetStart
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(200).duration(800)} style={styles.textNode}>
-          <RNText style={styles.title}>Get Insights</RNText>
-          <RNText style={styles.subtitle}>
+          <AppText style={styles.title} variant="heading-lg" weight="bold" numberOfLines={2}>Get Insights</AppText>
+          <AppText style={styles.subtitle} variant="body-lg" weight="medium" numberOfLines={3}>
             Understand profits, losses, and trends{'\n'}at a glance.
-          </RNText>
+          </AppText>
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(400).duration(800)} style={styles.pagination}>
@@ -102,7 +106,7 @@ const AnalyticsOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onGetStart
             onPress={onGetStarted}
             activeOpacity={0.8}
           >
-            <RNText style={styles.getStartedText}>Get Started</RNText>
+            <AppText style={styles.getStartedText} variant="body" weight="bold" numberOfLines={1}>Get Started</AppText>
             <MoveRight size={20} color="#FFF" />
           </TouchableOpacity>
         </Animated.View>
@@ -133,7 +137,6 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   skipText: {
-    fontSize: 14,
     fontFamily: Fonts.bold,
     color: '#999',
     letterSpacing: 1,
@@ -147,8 +150,8 @@ const styles = StyleSheet.create({
   },
   mediaContainer: {
     marginBottom: 60,
-    width: width * 0.75,
-    height: width * 0.75,
+    width: Dimensions.get('window').width * 0.75,
+    height: Dimensions.get('window').width * 0.75,
     position: 'relative',
   },
   mediaBox: {
@@ -205,14 +208,12 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   title: {
-    fontSize: 34,
     fontFamily: Fonts.extrabold,
     color: '#000',
     textAlign: 'center',
     marginBottom: 16,
   },
   subtitle: {
-    fontSize: 18,
     color: '#777',
     textAlign: 'center',
     lineHeight: 28,
@@ -254,7 +255,6 @@ const styles = StyleSheet.create({
   },
   getStartedText: {
     color: '#FFF',
-    fontSize: 18,
     fontFamily: Fonts.bold,
     letterSpacing: 0.5,
   },

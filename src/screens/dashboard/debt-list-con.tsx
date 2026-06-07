@@ -1,17 +1,19 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Fonts } from '@/constants/theme';
 import { ArrowLeft, User, Phone, ChevronLeft, Check, Pencil } from 'lucide-react-native';
 import { router } from 'expo-router';
 import {
   StyleSheet,
-  Text,
   View,
-  SafeAreaView,
   TouchableOpacity,
   TextInput,
 } from 'react-native';
-
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSettings } from '@/context/SettingsContext';
+import { AppText, AppRow, AppCard, AppButton, AppListItem } from '@/components/ui';
+import { BorderRadius, Spacing } from '@/constants/theme';
 const DebtManagementFlow = () => {
+  const { t } = useSettings();
   const [showPaymentOptions, setShowPaymentOptions] = useState(false);
   const [paymentType, setPaymentType] = useState('full'); // 'full' or 'partial'
 
@@ -19,55 +21,55 @@ const DebtManagementFlow = () => {
     // SCREEN 3: Choose Amount Paid
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.screenHeader}>
-          <TouchableOpacity onPress={() => setShowPaymentOptions(false)} style={styles.backButton}>
-            <ChevronLeft size={24} color="#000" />
-          </TouchableOpacity>
-          <Text style={styles.screenTitle}>Payment</Text>
-          <View style={{ width: 24 }} />
-        </View>
-        <View style={styles.paymentCard}>
-          <Text style={styles.sectionTitle}>Choose Amount Paid</Text>
+      <View style={styles.screenHeader}>
+        <TouchableOpacity onPress={() => setShowPaymentOptions(false)} style={styles.backButton}>
+          <ChevronLeft size={24} color="#000" />
+        </TouchableOpacity>
+        <AppText variant="title" weight="bold" style={styles.screenTitle} numberOfLines={1}>{t('dash.payment')}</AppText>
+        <View style={{ width: 24 }} />
+      </View>
+      <View style={styles.paymentCard}>
+        <AppText variant="title" weight="bold" style={styles.sectionTitle} numberOfLines={2}>{t('dash.choose_paid')}</AppText>
 
-          {/* Full Payment Option */}
-          <TouchableOpacity 
-            style={[styles.optionRow, paymentType === 'full' && styles.selectedOption]} 
-            onPress={() => setPaymentType('full')}
-          >
-            <View style={styles.radioCircle}>
-              {paymentType === 'full' && <View style={styles.radioInner} />}
+        {/* Full Payment Option */}
+        <TouchableOpacity
+          style={[styles.optionRow, paymentType === 'full' && styles.selectedOption]}
+          onPress={() => setPaymentType('full')}
+        >
+          <View style={styles.radioCircle}>
+            {paymentType === 'full' && <View style={styles.radioInner} />}
+          </View>
+          <AppText variant="body-lg" weight="medium" style={{ flex: 1 }} numberOfLines={2}>{t('dash.paid_full')}</AppText>
+          <AppText variant="body-lg" weight="bold" shrink={false} style={styles.optionAmount} numberOfLines={1}>$1,769.00 Birr</AppText>
+        </TouchableOpacity>
+
+        {/* Partial Payment Option */}
+        <TouchableOpacity
+          style={[styles.optionRow, paymentType === 'partial' && styles.selectedOption]}
+          onPress={() => setPaymentType('partial')}
+        >
+          <View style={styles.radioCircle}>
+            {paymentType === 'partial' && <View style={styles.radioInner} />}
+          </View>
+          <AppText variant="body-lg" weight="medium" style={{ flex: 1 }} numberOfLines={2}>{t('dash.partial_payment')}</AppText>
+          <AppText variant="title" shrink={false} style={styles.editIcon}>✏️</AppText>
+        </TouchableOpacity>
+
+        {paymentType === 'partial' && (
+          <View style={styles.inputWrapper}>
+            <AppText variant="body-lg" weight="medium" style={styles.inputLabel} numberOfLines={1}>{t('dash.enter_amount')}</AppText>
+            <View style={styles.textInputContainer}>
+              <AppText variant="title" weight="bold" shrink={false} style={styles.currencyPrefix}>$</AppText>
+              <TextInput style={styles.textInput} keyboardType="numeric" placeholder="0.00" />
             </View>
-            <Text style={styles.optionText}>Paid Full Payment</Text>
-            <Text style={styles.optionAmount}>$1,769.00 ETB</Text>
-          </TouchableOpacity>
+          </View>
+        )}
 
-          {/* Partial Payment Option */}
-          <TouchableOpacity 
-            style={[styles.optionRow, paymentType === 'partial' && styles.selectedOption]} 
-            onPress={() => setPaymentType('partial')}
-          >
-            <View style={styles.radioCircle}>
-              {paymentType === 'partial' && <View style={styles.radioInner} />}
-            </View>
-            <Text style={styles.optionText}>Partial Payment</Text>
-            <Text style={styles.editIcon}>✏️</Text>
-          </TouchableOpacity>
-
-          {paymentType === 'partial' && (
-            <View style={styles.inputWrapper}>
-              <Text style={styles.inputLabel}>Enter Amount</Text>
-              <View style={styles.textInputContainer}>
-                <Text style={styles.currencyPrefix}>$</Text>
-                <TextInput style={styles.textInput} keyboardType="numeric" placeholder="0.00" />
-              </View>
-            </View>
-          )}
-
-          <TouchableOpacity style={styles.fullWidthButton}>
-            <Check size={18} color="#FFF" />
-            <Text style={styles.buttonText}>Mark as Paid</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity style={styles.fullWidthButton}>
+          <Check size={18} color="#FFF" />
+          <AppText variant="body" weight="bold" shrink={false} style={styles.buttonText}>Mark as Paid</AppText>
+        </TouchableOpacity>
+      </View>
       </SafeAreaView>
     );
   }
@@ -79,50 +81,47 @@ const DebtManagementFlow = () => {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <ChevronLeft size={24} color="#000" />
         </TouchableOpacity>
-        <Text style={styles.screenTitle}>Debt Details</Text>
+        <AppText variant="title" weight="bold" style={styles.screenTitle} numberOfLines={1}>{t('dash.debt_details')}</AppText>
         <View style={{ width: 24 }} />
       </View>
       <View style={styles.card}>
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <User size={24} color="#000" />
-            <View>
-              <Text style={styles.title}>Abebe Kebede</Text>
-              <Text style={styles.phone}>+(251) 9-123-456</Text>
+            <View style={{ flex: 1 }}>
+              <AppText variant="title" weight="bold" style={styles.title} numberOfLines={2}>Abebe Kebede</AppText>
+              <AppText variant="body" weight="medium" style={styles.phone} numberOfLines={1}>+(251) 9-123-456</AppText>
             </View>
           </View>
           <View style={styles.headerRight}>
-            <View style={styles.overdueBadge}><View style={styles.dot} /><Text style={styles.overdueText}>Overdue</Text></View>
-            <Text style={styles.daysText}>6 days overdue</Text>
+            <View style={styles.overdueBadge}><View style={styles.dot} /><AppText variant="micro" weight="bold" transform="uppercase" shrink={false} style={styles.overdueText} numberOfLines={1}>{t('dash.overdue')}</AppText></View>
+            <AppText variant="caption" weight="medium" style={styles.daysText} numberOfLines={1}>6 days overdue</AppText>
           </View>
         </View>
 
         <View style={styles.divider} />
 
         <View style={styles.itemsContainer}>
-          <View style={styles.row}><Text style={styles.itemLabel}>Nails x 2kg</Text><Text style={styles.itemValue}>500.00 ETB</Text></View>
-          <View style={styles.row}><Text style={styles.itemLabel}>Paint x 2 cans</Text><Text style={styles.itemValue}>1,249.00 ETB</Text></View>
-          <View style={styles.row}><Text style={styles.itemLabel}>Screw x 2 pieces</Text><Text style={styles.itemValue}>20.00 ETB</Text></View>
+          <AppRow label="Nails x 2kg" value="500.00 Birr" valueVariant="body" valueWeight="bold" labelMaxLines={2} style={{ marginBottom: Spacing.sm }} />
+          <AppRow label="Paint x 2 cans" value="1,249.00 Birr" valueVariant="body" valueWeight="bold" labelMaxLines={2} style={{ marginBottom: Spacing.sm }} />
+          <AppRow label="Screw x 2 pieces" value="20.00 Birr" valueVariant="body" valueWeight="bold" labelMaxLines={2} style={{ marginBottom: Spacing.sm }} />
         </View>
 
         <View style={styles.divider} />
 
-        <View style={styles.footerRow}>
-          <Text style={styles.totalLabel}>Total Debt</Text>
-          <Text style={styles.totalValue}>1,769.00 ETB</Text>
-        </View>
+        <AppRow label={t('dash.total_debt')} value="1,769.00 Birr" valueVariant="title-sm" valueWeight="bold" labelMaxLines={2} style={{ marginBottom: Spacing.lg }} />
 
         <View style={styles.actionRow}>
-          <TouchableOpacity 
-            style={styles.markPaidButton} 
+          <TouchableOpacity
+            style={styles.markPaidButton}
             onPress={() => setShowPaymentOptions(true)}
           >
             <Check size={18} color="#FFF" />
-            <Text style={styles.buttonText}>Mark as Paid</Text>
+            <AppText variant="body" weight="bold" shrink={false} style={styles.buttonText} numberOfLines={1}>{t('dash.mark_as_paid')}</AppText>
           </TouchableOpacity>
-          
+
           <TouchableOpacity style={styles.lossButton}>
-            <Text style={styles.buttonText}>Mark as a loss</Text>
+            <AppText variant="body" weight="bold" shrink={false} style={styles.buttonText} numberOfLines={1}>{t('dash.mark_loss')}</AppText>
           </TouchableOpacity>
         </View>
       </View>

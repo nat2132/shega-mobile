@@ -1,7 +1,6 @@
-import React, { useEffect } from 'react';
+﻿import React, { useEffect } from 'react';
 import { 
   View, 
-  Text, 
   StyleSheet, 
   TouchableOpacity, 
   Dimensions 
@@ -22,7 +21,7 @@ import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { useSettings } from '@/context/SettingsContext';
 import { Fonts } from '@/constants/theme';
-
+import { AppText, AppCard, AppButton } from '@/components/ui';
 const { width } = Dimensions.get('window');
 
 interface PremiumActionModalProps {
@@ -44,7 +43,7 @@ const PremiumActionModal: React.FC<PremiumActionModalProps> = ({
   onConfirm, 
   onCancel 
 }) => {
-  const { colors, theme } = useSettings();
+  const { colors, theme, t } = useSettings();
   const iconScale = useSharedValue(0);
   const ringScale = useSharedValue(0);
 
@@ -83,8 +82,8 @@ const PremiumActionModal: React.FC<PremiumActionModalProps> = ({
         </View>
 
         <Animated.View entering={FadeInDown.delay(400)} style={styles.content}>
-          <Text style={[styles.title, { color: themeColor }]}>{title.toUpperCase()}</Text>
-          <Text style={[styles.subtitle, { color: colors.text }]}>{subtitle}</Text>
+          <AppText variant="heading" weight="bold" align="center" style={[styles.title, { color: themeColor }]} numberOfLines={2}>{title.toUpperCase()}</AppText>
+          <AppText variant="body" weight="medium" align="center" style={[styles.subtitle, { color: colors.text }]} numberOfLines={3}>{subtitle}</AppText>
           
           <View style={styles.buttonRow}>
             <TouchableOpacity 
@@ -95,7 +94,7 @@ const PremiumActionModal: React.FC<PremiumActionModalProps> = ({
               }}
               activeOpacity={0.8}
             >
-              <Text style={[styles.cancelBtnText, { color: colors.text }]}>{cancelText || 'Cancel'}</Text>
+              <AppText variant="body" weight="bold" style={[styles.cancelBtnText, { color: colors.text }]} numberOfLines={1}>{cancelText || t('common.cancel')}</AppText>
             </TouchableOpacity>
 
             <TouchableOpacity 
@@ -106,7 +105,7 @@ const PremiumActionModal: React.FC<PremiumActionModalProps> = ({
               }}
               activeOpacity={0.9}
             >
-              <Text style={styles.confirmBtnText}>{actionText || 'Proceed'}</Text>
+              <AppText variant="body" weight="bold" style={styles.confirmBtnText} numberOfLines={1}>{actionText || t('common.proceed')}</AppText>
             </TouchableOpacity>
           </View>
         </Animated.View>
@@ -162,14 +161,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   title: {
-    fontSize: 14,
     fontFamily: Fonts.bold,
     letterSpacing: 2,
     marginBottom: 10,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 16,
     fontFamily: Fonts.medium,
     lineHeight: 24,
     marginBottom: 35,
@@ -198,11 +195,9 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   cancelBtnText: {
-    fontSize: 16,
     fontFamily: Fonts.bold,
   },
   confirmBtnText: {
-    fontSize: 16,
     fontFamily: Fonts.bold,
     color: '#FFF',
   },

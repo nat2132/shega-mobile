@@ -1,12 +1,10 @@
-import React, { useState } from 'react';
-import { Fonts, Typography } from '@/constants/theme';
+﻿import React, { useState } from 'react';
+import { Fonts } from '@/constants/theme';
 import {
   StyleSheet,
-  Text as RNText,
   View,
   TextInput,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
   Image,
   ActivityIndicator,
@@ -14,12 +12,13 @@ import {
   Platform,
   KeyboardAvoidingView
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
 import { User, Briefcase, Camera, ChevronRight, Sparkles, Globe, Palette, Calendar, ChevronLeft, Check } from 'lucide-react-native';
 import Animated, { FadeIn, FadeInDown, Layout, FadeOut } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import { useSettings } from '@/context/SettingsContext';
-
+import { AppText } from '@/components/ui';
 const { width } = Dimensions.get('window');
 
 const PROFILE_IMAGES = [
@@ -42,6 +41,8 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
   const [businessName, setBusinessName] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<{ fullName?: string; businessName?: string }>({});
+  const [touched, setTouched] = useState<{ fullName?: boolean; businessName?: boolean }>({});
 
   const THEMES: { id: any; color: string; name: string }[] = [
     { id: 'light', color: '#FFFFFF', name: 'Light' },
@@ -62,7 +63,22 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
 
   const handleContinue = async () => {
     if (step === 0) {
-      if (!businessName.trim()) return;
+      const newErrors: { fullName?: string; businessName?: string } = {};
+      if (!fullName.trim()) {
+        newErrors.fullName = 'Full name is required';
+      } else if (fullName.trim().length < 2) {
+        newErrors.fullName = 'Name must be at least 2 characters';
+      } else if (fullName.trim().length > 100) {
+        newErrors.fullName = 'Name is too long';
+      }
+      if (!businessName.trim()) {
+        newErrors.businessName = 'Business entity is required';
+      } else if (businessName.trim().length > 100) {
+        newErrors.businessName = 'Business name is too long';
+      }
+      setTouched({ fullName: true, businessName: true });
+      setErrors(newErrors);
+      if (Object.keys(newErrors).length > 0) return;
       setStep(1);
       return;
     }
@@ -103,10 +119,10 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
         {step === 0 ? (
           <Animated.View entering={FadeIn.duration(600)} exiting={FadeOut}>
             <View style={styles.headerNode}>
-              <RNText style={[styles.title, { color: colors.text }]}>Establish Identity</RNText>
-              <RNText style={[styles.subtitle, { color: colors.textSecondary }]}>
+              <AppText style={[styles.title, { color: colors.text }]} variant="display" weight="bold" numberOfLines={2}>Establish Identity</AppText>
+              <AppText style={[styles.subtitle, { color: colors.textSecondary }]} variant="body" weight="medium" numberOfLines={3}>
                 Define your curatorial signature for the system vault and secure ledger.
-              </RNText>
+              </AppText>
             </View>
 
             {/* Identity Avatar Node */}
@@ -121,7 +137,7 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
                      <Sparkles size={14} color="#FFF" />
                   </View>
                 </View>
-                <RNText style={[styles.avatarMeta, { color: colors.text }]}>SELECTED CURATOR ID</RNText>
+                <AppText style={[styles.avatarMeta, { color: colors.text }]} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>SELECTED CURATOR ID</AppText>
               </View>
 
               <ScrollView 
@@ -162,62 +178,100 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
                    <User size={18} color={colors.text} />
                 </View>
                 <View style={styles.inputTextContainer}>
-                   <RNText style={[styles.inputTag, { color: colors.textSecondary }]}>FULL NAME</RNText>
+                   <AppText style={[styles.inputTag, { color: colors.textSecondary }]} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>FULL NAME</AppText>
                    <TextInput
                      style={[styles.textInputNode, { color: colors.text }]}
-                     placeholder="e.g. Julian Voss"
+                     placeholder={t('account.name_placeholder')}
                      placeholderTextColor={colors.textSecondary + '80'}
                      value={fullName}
-                     onChangeText={setFullName}
+                     onChangeText={(text) => {
+                       setFullName(text);
+                       if (touched.fullName) {
+                         setErrors(prev => ({
+                           ...prev,
+                           fullName: text.trim().length < 2 && text.trim().length > 0 ? 'Name must be at least 2 characters' : undefined
+                         }));
+                       }
+                     }}
+                     onBlur={() => {
+                       setTouched(prev => ({ ...prev, fullName: true }));
+                       if (!fullName.trim()) {
+                         setErrors(prev => ({ ...prev, fullName: 'Full name is required' }));
+                       } else if (fullName.trim().length < 2) {
+                         setErrors(prev => ({ ...prev, fullName: 'Name must be at least 2 characters' }));
+                       } else {
+                         setErrors(prev => ({ ...prev, fullName: undefined }));
+                       }
+                     }}
+                     maxLength={100}
                      selectionColor={colors.primary}
+                     autoCapitalize="words"
                    />
                 </View>
+                {errors.fullName && touched.fullName && (
+                  <AppText style={[styles.errorText, { color: '#FF3B30' }]} variant="body-sm" weight="semibold" numberOfLines={2}>{errors.fullName}</AppText>
+                )}
               </View>
 
-              <View style={[styles.inputNode, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={[styles.inputNode, { backgroundColor: colors.card, borderColor: colors.border }, (touched.businessName && errors.businessName) && { borderColor: '#FF3B30' }]}>
                  <View style={[styles.inputIcon, { backgroundColor: colors.background }]}>
                     <Briefcase size={18} color={colors.text} />
                  </View>
                  <View style={styles.inputTextContainer}>
-                    <RNText style={[styles.inputTag, { color: colors.textSecondary }]}>BUSINESS ENTITY</RNText>
+                    <AppText style={[styles.inputTag, { color: colors.textSecondary }]} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>BUSINESS ENTITY</AppText>
                     <TextInput
                       style={[styles.textInputNode, { color: colors.text }]}
-                      placeholder="e.g. Voss & Co. Curators"
+                      placeholder={t('account.business_placeholder')}
                       placeholderTextColor={colors.textSecondary + '80'}
                       value={businessName}
-                      onChangeText={setBusinessName}
+                       onChangeText={(text) => {
+                         setBusinessName(text);
+                       }}
+                      onBlur={() => {
+                        setTouched(prev => ({ ...prev, businessName: true }));
+                        if (!businessName.trim()) {
+                          setErrors(prev => ({ ...prev, businessName: 'Business entity is required' }));
+                        } else {
+                          setErrors(prev => ({ ...prev, businessName: undefined }));
+                        }
+                      }}
+                      maxLength={100}
                       selectionColor={colors.primary}
+                      autoCapitalize="words"
                     />
                  </View>
               </View>
+              {errors.businessName && touched.businessName && (
+                <AppText style={[styles.errorText, { color: '#FF3B30' }]} variant="body-sm" weight="semibold" numberOfLines={2}>{errors.businessName}</AppText>
+              )}
             </View>
 
             {/* Action Node */}
             <View style={styles.actionNode}>
               <TouchableOpacity 
-                style={[styles.primaryActionBtn, { backgroundColor: colors.text }, (!businessName.trim() || loading) && { opacity: 0.6 }]} 
+                style={[styles.primaryActionBtn, { backgroundColor: colors.text }, ((!fullName.trim() || !businessName.trim()) || loading) && { opacity: 0.6 }]} 
                 activeOpacity={0.8} 
                 onPress={handleContinue}
-                disabled={!businessName.trim() || loading}
+                disabled={!fullName.trim() || !businessName.trim() || loading}
               >
-                <RNText style={[styles.actionBtnText, { color: colors.background }]}>CONTINUE TO PREFERENCES</RNText>
+                <AppText style={[styles.actionBtnText, { color: colors.background }]} variant="body" weight="bold" numberOfLines={1}>CONTINUE TO PREFERENCES</AppText>
                 <ChevronRight size={20} color={colors.background} />
               </TouchableOpacity>
-              <RNText style={[styles.securitySub, { color: colors.textSecondary }]}>SECURE AES-256 ENCRYPTED STORAGE</RNText>
+              <AppText style={[styles.securitySub, { color: colors.textSecondary }]} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>SECURE AES-256 ENCRYPTED STORAGE</AppText>
             </View>
           </Animated.View>
         ) : (
           <Animated.View entering={FadeIn.duration(600)} exiting={FadeOut}>
             <TouchableOpacity style={styles.backBtn} onPress={() => setStep(0)}>
                <ChevronLeft size={24} color={colors.text} />
-               <RNText style={[styles.backText, { color: colors.text }]}>Identity</RNText>
+               <AppText style={[styles.backText, { color: colors.text }]} variant="body" weight="semibold" numberOfLines={1}>Identity</AppText>
             </TouchableOpacity>
 
             <View style={styles.headerNode}>
-              <RNText style={[styles.title, { color: colors.text }]}>Define Environment</RNText>
-              <RNText style={[styles.subtitle, { color: colors.textSecondary }]}>
+              <AppText style={[styles.title, { color: colors.text }]} variant="display" weight="bold" numberOfLines={2}>Define Environment</AppText>
+              <AppText style={[styles.subtitle, { color: colors.textSecondary }]} variant="body" weight="medium" numberOfLines={3}>
                 Calibrate your system with the appropriate linguistic schema, visual palette, and temporal system.
-              </RNText>
+              </AppText>
             </View>
 
             {/* Preferences Sections */}
@@ -226,7 +280,7 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
                <View style={styles.prefSection}>
                   <View style={styles.prefHeader}>
                     <Globe size={18} color={colors.primary} />
-                    <RNText style={[styles.prefTitle, { color: colors.text }]}>Linguistic Schema</RNText>
+                    <AppText style={[styles.prefTitle, { color: colors.text }]} variant="title" weight="bold" numberOfLines={2}>Linguistic Schema</AppText>
                   </View>
                   <View style={styles.langGrid}>
                     {LANGUAGES.map((lang) => (
@@ -239,8 +293,8 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
                           language === lang.id && { borderColor: colors.primary, borderWidth: 2 }
                         ]}
                       >
-                         <RNText style={[styles.langText, { color: colors.text }]}>{lang.title}</RNText>
-                         <RNText style={[styles.langSub, { color: colors.textSecondary }]}>{lang.sub}</RNText>
+                         <AppText style={[styles.langText, { color: colors.text }]} variant="body" weight="bold" numberOfLines={1}>{lang.title}</AppText>
+                         <AppText style={[styles.langSub, { color: colors.textSecondary }]} variant="body-sm" weight="medium" numberOfLines={2}>{lang.sub}</AppText>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -250,7 +304,7 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
                <View style={styles.prefSection}>
                   <View style={styles.prefHeader}>
                     <Palette size={18} color={colors.primary} />
-                    <RNText style={[styles.prefTitle, { color: colors.text }]}>Visual Palette</RNText>
+                    <AppText style={[styles.prefTitle, { color: colors.text }]} variant="title" weight="bold" numberOfLines={2}>Visual Palette</AppText>
                   </View>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.themeRow}>
                     {THEMES.map((themeOption) => (
@@ -264,7 +318,7 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
                            { backgroundColor: themeOption.color, borderColor: colors.border },
                            theme === themeOption.id && { borderColor: colors.primary, borderWidth: 3 }
                          ]} />
-                         <RNText style={[styles.themeLabel, { color: colors.text }]}>{themeOption.name}</RNText>
+                         <AppText style={[styles.themeLabel, { color: colors.text }]} variant="body" weight="bold" numberOfLines={1}>{themeOption.name}</AppText>
                       </TouchableOpacity>
                     ))}
                   </ScrollView>
@@ -274,20 +328,20 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
                <View style={styles.prefSection}>
                   <View style={styles.prefHeader}>
                     <Calendar size={18} color={colors.primary} />
-                    <RNText style={[styles.prefTitle, { color: colors.text }]}>Temporal Logic</RNText>
+                    <AppText style={[styles.prefTitle, { color: colors.text }]} variant="title" weight="bold" numberOfLines={2}>Temporal Logic</AppText>
                   </View>
                   <View style={[styles.calendarToggle, { backgroundColor: colors.card, borderColor: colors.border }]}>
                      <TouchableOpacity 
                        style={[styles.calBtn, calendarType === 'ethiopian' && { backgroundColor: colors.primary }]}
                        onPress={() => setCalendarType('ethiopian')}
                      >
-                        <RNText style={[styles.calBtnText, { color: calendarType === 'ethiopian' ? '#FFF' : colors.text }]}>Ethiopian</RNText>
+                        <AppText style={[styles.calBtnText, { color: calendarType === 'ethiopian' ? '#FFF' : colors.text }]} variant="body" weight="bold" numberOfLines={1}>Ethiopian</AppText>
                      </TouchableOpacity>
                      <TouchableOpacity 
                        style={[styles.calBtn, calendarType === 'gregorian' && { backgroundColor: colors.primary }]}
                        onPress={() => setCalendarType('gregorian')}
                      >
-                        <RNText style={[styles.calBtnText, { color: calendarType === 'gregorian' ? '#FFF' : colors.text }]}>Gregorian</RNText>
+                        <AppText style={[styles.calBtnText, { color: calendarType === 'gregorian' ? '#FFF' : colors.text }]} variant="body" weight="bold" numberOfLines={1}>Gregorian</AppText>
                      </TouchableOpacity>
                   </View>
                </View>
@@ -305,12 +359,12 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
                   <ActivityIndicator color={colors.background} />
                 ) : (
                   <>
-                    <RNText style={[styles.actionBtnText, { color: colors.background }]}>ESTABLISH LEDGER</RNText>
+                    <AppText style={[styles.actionBtnText, { color: colors.background }]} variant="body" weight="bold" numberOfLines={1}>ESTABLISH LEDGER</AppText>
                     <ChevronRight size={20} color={colors.background} />
                   </>
                 )}
               </TouchableOpacity>
-              <RNText style={[styles.securitySub, { color: colors.textSecondary }]}>INITIATING SECURE ENCRYPTED ENVIRONMENT</RNText>
+              <AppText style={[styles.securitySub, { color: colors.textSecondary }]} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>INITIATING SECURE ENCRYPTED ENVIRONMENT</AppText>
             </View>
           </Animated.View>
         )}
@@ -335,7 +389,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   title: {
-    fontSize: 34,
     fontFamily: Fonts.extrabold,
     fontWeight: '800',
     color: '#000',
@@ -343,7 +396,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   subtitle: {
-    fontSize: 15,
     color: '#666',
     textAlign: 'center',
     lineHeight: 22,
@@ -387,7 +439,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatarMeta: {
-    fontSize: 10,
     fontFamily: Fonts.bold,
     letterSpacing: 1.5,
     color: '#000',
@@ -463,14 +514,12 @@ const styles = StyleSheet.create({
     marginLeft: 18,
   },
   inputTag: {
-    fontSize: 9,
     fontFamily: Fonts.bold,
     letterSpacing: 0.8,
     color: '#888',
     marginBottom: 4,
   },
   textInputNode: {
-    fontSize: 16,
     fontFamily: Fonts.semibold,
     color: '#000',
     height: 24,
@@ -495,14 +544,23 @@ const styles = StyleSheet.create({
     elevation: 8,
     marginBottom: 20,
   },
+  errorText: {
+    fontFamily: Fonts.semibold,
+    marginTop: -12,
+    marginBottom: 16,
+    marginLeft: 16,
+    letterSpacing: 0.5,
+  },
+  inputNodeError: {
+    borderColor: '#FF3B30',
+    borderWidth: 1.5,
+  },
   actionBtnText: {
     color: '#FFF',
-    fontSize: 16,
     fontFamily: Fonts.bold,
     letterSpacing: 1,
   },
   securitySub: {
-    fontSize: 10,
     fontFamily: Fonts.bold,
     letterSpacing: 1.2,
   },
@@ -513,7 +571,6 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   backText: {
-    fontSize: 14,
     fontFamily: Fonts.semibold,
   },
   preferencesWrapper: {
@@ -529,7 +586,6 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   prefTitle: {
-    fontSize: 16,
     fontFamily: Fonts.bold,
     letterSpacing: -0.5,
   },
@@ -545,11 +601,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   langText: {
-    fontSize: 16,
     fontFamily: Fonts.bold,
   },
   langSub: {
-    fontSize: 10,
     fontFamily: Fonts.medium,
     marginTop: 4,
     opacity: 0.7,
@@ -569,7 +623,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   themeLabel: {
-    fontSize: 11,
     fontFamily: Fonts.bold,
   },
   calendarToggle: {
@@ -586,7 +639,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   calBtnText: {
-    fontSize: 14,
     fontFamily: Fonts.bold,
   },
 });

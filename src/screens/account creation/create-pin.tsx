@@ -1,18 +1,18 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Fonts } from '@/constants/theme';
 import {
   StyleSheet,
-  Text as RNText,
   View,
   TouchableOpacity,
-  SafeAreaView,
   Dimensions,
   Alert,
   Platform
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
-import { Delete, ChevronRight, ShieldCheck, ArrowLeft } from 'lucide-react-native';
+import { Delete, ChevronRight, ShieldCheck, ArrowLeft, ShieldAlert } from 'lucide-react-native';
 import { useSettings } from '@/context/SettingsContext';
+import { AppText } from '@/components/ui';
 import Animated, { 
   FadeIn, 
   FadeInDown, 
@@ -31,24 +31,55 @@ interface CreatePinScreenProps {
   onSkip?: () => void;
 }
 
+const WEAK_PINS = new Set([
+  '0123', '1234', '2345', '3456', '4567', '5678', '6789',
+  '4321', '8765',
+  '2468', '1357',
+]);
+
+const validatePin = (pin: string): string | null => {
+  if (pin.length !== 4) return 'PIN must be exactly 4 digits';
+  if (WEAK_PINS.has(pin)) return 'This PIN is too common. Please choose a stronger one.';
+  if (/^(\d)\1{3}$/.test(pin)) return 'Repeating digits are not allowed.';
+  if (/^(\d)\1{2}(\d)\2$/.test(pin)) return 'Pattern is too predictable.';
+  return null;
+};
+
 const CreatePinScreen: React.FC<CreatePinScreenProps> = ({ onConfirm, onSkip }) => {
   const { setPin } = useSettings();
   const [pin, setPinLocal] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [pinPhase, setPinPhase] = useState<'create' | 'confirm'>('create');
+  const [pinError, setPinError] = useState<string | null>(null);
   const pinLength = 4;
   const shakeOffset = useSharedValue(0);
+  const shakeConfirmOffset = useSharedValue(0);
 
   const handlePress = (num: string) => {
-    if (pin.length < pinLength) {
-      setPinLocal(pin + num);
+    setPinError(null);
+    if (pinPhase === 'create') {
+      if (pin.length < pinLength) {
+        setPinLocal(pin + num);
+      }
+    } else {
+      if (confirmPin.length < pinLength) {
+        setConfirmPin(confirmPin + num);
+      }
     }
   };
 
   const handleDelete = () => {
-    setPinLocal(pin.slice(0, -1));
+    setPinError(null);
+    if (pinPhase === 'create') {
+      setPinLocal(pin.slice(0, -1));
+    } else {
+      setConfirmPin(confirmPin.slice(0, -1));
+    }
   };
 
-  const shake = () => {
-    shakeOffset.value = withSequence(
+  const shake = (target: 'create' | 'confirm' = 'create') => {
+    const offset = target === 'create' ? shakeOffset : shakeConfirmOffset;
+    offset.value = withSequence(
       withTiming(-10, { duration: 50 }),
       withTiming(10, { duration: 50 }),
       withTiming(-10, { duration: 50 }),
@@ -58,6 +89,10 @@ const CreatePinScreen: React.FC<CreatePinScreenProps> = ({ onConfirm, onSkip }) 
 
   const animatedShakeStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: shakeOffset.value }]
+  }));
+
+  const animatedConfirmShakeStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: shakeConfirmOffset.value }]
   }));
 
   const renderKey = (num: number | string, icon?: any) => (
@@ -70,7 +105,7 @@ const CreatePinScreen: React.FC<CreatePinScreenProps> = ({ onConfirm, onSkip }) 
       {icon ? (
         icon
       ) : (
-        <RNText style={styles.keyText}>{num}</RNText>
+        <AppText style={styles.keyText} variant="display" weight="bold" numberOfLines={1}>{num}</AppText>
       )}
     </TouchableOpacity>
   );
@@ -83,26 +118,49 @@ const CreatePinScreen: React.FC<CreatePinScreenProps> = ({ onConfirm, onSkip }) 
           <ArrowLeft size={22} color="#000" />
         </TouchableOpacity>
         <TouchableOpacity onPress={onSkip} style={styles.skipArea}>
-          <RNText style={styles.skipText}>LATER</RNText>
+          <AppText style={styles.skipText} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>LATER</AppText>
         </TouchableOpacity>
       </View>
 
       <Animated.View entering={FadeIn.duration(800)} style={styles.content}>
         <View style={styles.titleNode}>
-          <RNText style={styles.title}>Secure Access</RNText>
-          <RNText style={styles.subtitle}>Define a 4-digit protocol for terminal entry</RNText>
+          <AppText style={styles.title} variant="display" weight="bold" numberOfLines={2}>Secure Access</AppText>
+          <AppText style={styles.subtitle} variant="body" weight="medium" numberOfLines={3}>
+            {pinPhase === 'create'
+              ? 'Define a 4-digit protocol for terminal entry'
+              : 'Re-enter your PIN to confirm'
+            }
+          </AppText>
         </View>
 
+        {/* PIN Phase Indicator */}
+        <View style={styles.phaseIndicator}>
+          <View style={[styles.phaseDot, pinPhase === 'create' && styles.phaseDotActive]} />
+          <View style={styles.phaseLine} />
+          <View style={[styles.phaseDot, pinPhase === 'confirm' && styles.phaseDotActive]} />
+        </View>
+
+        {/* PIN Error */}
+        {pinError && (
+          <Animated.View entering={FadeIn.duration(300)} style={styles.errorBanner}>
+            <ShieldAlert size={16} color="#FF3B30" />
+            <AppText style={styles.errorBannerText} variant="body-sm" weight="semibold" numberOfLines={2}>{pinError}</AppText>
+          </Animated.View>
+        )}
+
         {/* PIN Indicators */}
-        <Animated.View style={[styles.dotsNode, animatedShakeStyle]}>
+        <Animated.View style={[styles.dotsNode, pinPhase === 'create' ? animatedShakeStyle : animatedConfirmShakeStyle]}>
           {[...Array(pinLength)].map((_, i) => {
-            const isFilled = pin.length > i;
+            const currentPin = pinPhase === 'create' ? pin : confirmPin;
+            const isFilled = currentPin.length > i;
+            const showError = pinError && pinPhase === 'create';
             return (
               <View
                 key={i}
                 style={[
                   styles.dot,
                   isFilled ? styles.dotFilled : styles.dotEmpty,
+                  showError && isFilled && styles.dotError,
                 ]}
               >
                 {isFilled && (
@@ -126,23 +184,49 @@ const CreatePinScreen: React.FC<CreatePinScreenProps> = ({ onConfirm, onSkip }) 
           <TouchableOpacity
             style={[
               styles.confirmActionBtn,
-              { backgroundColor: pin.length === pinLength ? '#000000' : 'rgba(0,0,0,0.05)' }
+              { backgroundColor: (pinPhase === 'create' ? pin.length : confirmPin.length) === pinLength ? '#000000' : 'rgba(0,0,0,0.05)' }
             ]}
-            disabled={pin.length !== pinLength}
+            disabled={(pinPhase === 'create' ? pin.length : confirmPin.length) !== pinLength}
             onPress={async () => {
               try {
-                await setPin(pin);
-                onConfirm?.();
+                if (pinPhase === 'create') {
+                  // Validate the pin
+                  const validationError = validatePin(pin);
+                  if (validationError) {
+                    setPinError(validationError);
+                    shake('create');
+                    setPinLocal('');
+                    return;
+                  }
+                  // Move to confirm phase
+                  setPinPhase('confirm');
+                } else {
+                  // Confirming - check match
+                  if (pin !== confirmPin) {
+                    setPinError('PINs do not match. Please try again.');
+                    shake('confirm');
+                    setConfirmPin('');
+                    setPinPhase('create');
+                    setPinLocal('');
+                    return;
+                  }
+                  
+                  await setPin(pin);
+                  onConfirm?.();
+                }
               } catch (error) {
-                shake();
-                Alert.alert('System Error', 'Encryption failure. Please try again.');
+                shake('create');
+                setPinError('Encryption failure. Please try again.');
+                setPinLocal('');
+                setConfirmPin('');
+                setPinPhase('create');
               }
             }}
           >
-            <RNText style={[styles.confirmBtnText, { color: pin.length === pinLength ? '#FFF' : '#BBB' }]}>
-              CONFIRM PROTOCOL
-            </RNText>
-            {pin.length === pinLength && (
+            <AppText style={[styles.confirmBtnText, { color: (pinPhase === 'create' ? pin.length : confirmPin.length) === pinLength ? '#FFF' : '#BBB' }]} variant="body" weight="bold" numberOfLines={1}>
+              {pinPhase === 'create' ? 'CONFIRM PROTOCOL' : 'VERIFY PIN'}
+            </AppText>
+            {(pinPhase === 'create' ? pin.length : confirmPin.length) === pinLength && (
                <ChevronRight size={18} color="#FFF" />
             )}
           </TouchableOpacity>
@@ -171,7 +255,6 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   skipText: {
-    fontSize: 11,
     color: '#999',
     fontFamily: Fonts.bold,
     letterSpacing: 1.5,
@@ -187,13 +270,11 @@ const styles = StyleSheet.create({
     marginBottom: 50,
   },
   title: {
-    fontSize: 32,
     fontFamily: Fonts.extrabold,
     fontWeight: '800',
     color: '#000',
   },
   subtitle: {
-    fontSize: 14,
     color: '#888',
     fontFamily: Fonts.medium,
     marginTop: 6,
@@ -242,13 +323,55 @@ const styles = StyleSheet.create({
     borderRadius: 35,
   },
   keyText: {
-    fontSize: 28,
     fontFamily: Fonts.bold,
     color: '#000',
   },
   footerNode: {
     width: '100%',
     paddingBottom: 40,
+  },
+  phaseIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 30,
+  },
+  phaseDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+  },
+  phaseDotActive: {
+    backgroundColor: '#000',
+    width: 24,
+    borderRadius: 5,
+    height: 10,
+  },
+  phaseLine: {
+    width: 30,
+    height: 2,
+    backgroundColor: 'rgba(0,0,0,0.08)',
+    borderRadius: 1,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF0F0',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginBottom: 20,
+    gap: 10,
+  },
+  errorBannerText: {
+    fontFamily: Fonts.semibold,
+    color: '#FF3B30',
+    flex: 1,
+  },
+  dotError: {
+    backgroundColor: '#FF3B30',
   },
   confirmActionBtn: {
     flexDirection: 'row',
@@ -259,7 +382,6 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   confirmBtnText: {
-    fontSize: 14,
     fontFamily: Fonts.bold,
     letterSpacing: 1.2,
   },

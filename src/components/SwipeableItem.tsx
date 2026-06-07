@@ -1,16 +1,16 @@
-import React, { useRef } from 'react';
+﻿import React, { useRef } from 'react';
 import {
   View,
   StyleSheet,
-  Alert,
   Animated,
   PanResponder,
-  Text,
   Dimensions,
 } from 'react-native';
 import { Trash2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-
+import { useSettings } from '@/context/SettingsContext';
+import { useDialog } from '@/context/DialogContext';
+import { AppText } from '@/components/ui';
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const SWIPE_THRESHOLD = -80;
 
@@ -27,6 +27,8 @@ export const SwipeableItem: React.FC<SwipeableItemProps> = ({
   itemTitle = 'this item',
   enabled = true,
 }) => {
+  const { t } = useSettings();
+  const dialog = useDialog();
   const pan = useRef(new Animated.Value(0)).current;
   const isSwipingRef = useRef(false);
 
@@ -38,32 +40,27 @@ export const SwipeableItem: React.FC<SwipeableItemProps> = ({
     }).start();
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    Alert.alert(
-      'Delete Item',
-      `Are you sure you want to delete ${itemTitle}?`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-          onPress: resetPosition,
-        },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            Animated.timing(pan, {
-              toValue: -SCREEN_WIDTH,
-              duration: 200,
-              useNativeDriver: true,
-            }).start(() => {
-              onDelete();
-            });
-          },
-        },
-      ]
-    );
+    const ok = await dialog.confirm({
+      title: t('common.delete_item'),
+      message: t('common.delete_confirm', { item: itemTitle }),
+      confirmText: t('common.delete'),
+      cancelText: t('common.cancel'),
+      iconType: 'danger',
+      destructive: true,
+    });
+    if (ok) {
+      Animated.timing(pan, {
+        toValue: -SCREEN_WIDTH,
+        duration: 200,
+        useNativeDriver: true,
+      }).start(() => {
+        onDelete();
+      });
+    } else {
+      resetPosition();
+    }
   };
 
   const panResponder = useRef(
@@ -136,7 +133,7 @@ export const SwipeableItem: React.FC<SwipeableItemProps> = ({
           ]}
         >
           <Trash2 size={20} color="#FFF" />
-          <Text style={styles.deleteText}>Delete</Text>
+          <AppText variant="body" weight="bold" style={styles.deleteText} numberOfLines={1}>{t('common.delete')}</AppText>
         </Animated.View>
       </View>
 
@@ -172,7 +169,6 @@ const styles = StyleSheet.create({
   },
   deleteText: {
     color: '#FFF',
-    fontSize: 11,
     fontWeight: '600',
     marginTop: 4,
   },

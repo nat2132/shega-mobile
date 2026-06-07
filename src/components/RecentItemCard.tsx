@@ -1,19 +1,19 @@
-import React from 'react';
-import { View, Text as RNText, StyleSheet, Pressable } from 'react-native';
+﻿import React from 'react';
+import { View, StyleSheet, Pressable } from 'react-native';
 import { Fonts } from '@/constants/theme';
 import { Package } from 'lucide-react-native';
 import { ItemData } from '@/database/db';
 import { useSettings } from '@/context/SettingsContext';
 import { SwipeableItem } from '@/components/SwipeableItem';
 import { formatDate } from '@/utils/date-utils';
-
+import { AppText, AppListItem, AppRow, AppCard } from '@/components/ui';
 interface RecentItemCardProps {
   item: ItemData;
   onPress?: () => void;
   onDelete?: () => void;
 }
 
-const RecentItemCard: React.FC<RecentItemCardProps> = ({ item, onPress, onDelete }) => {
+const RecentItemCard: React.FC<RecentItemCardProps> = React.memo(({ item, onPress, onDelete }) => {
   const { colors, calendarType, language, t } = useSettings();
   const getTimeAgo = (dateString: string) => {
     if (!dateString) return t('common.recently');
@@ -52,35 +52,37 @@ const RecentItemCard: React.FC<RecentItemCardProps> = ({ item, onPress, onDelete
           <Package size={22} color={colors.background} />
         </View>
         <View style={{ flex: 1, marginLeft: 15 }}>
-          <RNText style={[styles.itemName, { color: colors.text }]} numberOfLines={1}>{item.name}</RNText>
-          <RNText style={[styles.itemSub, { color: colors.textSecondary }]}>
+          <AppText variant="body" weight="bold" style={[styles.itemName, { color: colors.text }]} numberOfLines={1}>{item.name}</AppText>
+          <AppText variant="caption" weight="medium" style={[styles.itemSub, { color: colors.textSecondary }]} numberOfLines={2}>
             {(item.categoryName ? t(item.categoryName.toLowerCase().startsWith('category.') ? item.categoryName.toLowerCase() : 'category.' + item.categoryName.toLowerCase()) : t('common.uncategorized'))} • {t('common.added')} {getTimeAgo(item.createdAt)}
-          </RNText>
+          </AppText>
         </View>
         <View style={[styles.stockBadge, isOutOfStock ? { backgroundColor: '#FF3B30' } : { backgroundColor: colors.border }]}>
           <View style={[styles.stockDot, { backgroundColor: isOutOfStock ? '#FFF' : colors.text }]} />
-          <RNText style={[styles.stockText, { color: isOutOfStock ? '#FFF' : colors.text }]}>{isOutOfStock ? t('inventory.out_of_stock') : t('dashboard.stats.stable')}</RNText>
+          <AppText variant="micro" weight="bold" transform="uppercase" shrink={false} style={[styles.stockText, { color: isOutOfStock ? '#FFF' : colors.text }]} numberOfLines={1}>{isOutOfStock ? t('inventory.out_of_stock') : t('dashboard.stats.stable')}</AppText>
         </View>
       </View>
 
       <View style={[styles.itemFooter, { borderTopColor: colors.border }]}>
         <View style={{ flex: 1 }}>
-          <RNText style={[styles.footerLabel, { color: colors.textSecondary }]}>{t('inventory.low_stock')}</RNText>
-          <RNText style={[styles.footerValue, { color: colors.text }]}>{quantityString}</RNText>
+          <AppText variant="caption" weight="medium" style={[styles.footerLabel, { color: colors.textSecondary }]} numberOfLines={1}>Quantity</AppText>
+          <AppText variant="body-sm" weight="bold" style={[styles.footerValue, { color: colors.text }]} numberOfLines={1}>{quantityString}</AppText>
         </View>
         <View style={{ flex: 1 }}>
-          <RNText style={[styles.footerLabel, { color: colors.textSecondary }]}>{t('inventory.base_cost')}</RNText>
-          <RNText style={[styles.footerValue, { color: colors.text }]}>{formatPrice(item.basePurchasePrice)} {t('common.etb')}</RNText>
+          <AppText variant="caption" weight="medium" style={[styles.footerLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('inventory.base_cost')}</AppText>
+          <AppText variant="body-sm" weight="bold" style={[styles.footerValue, { color: colors.text }]} numberOfLines={1}>{formatPrice(item.basePurchasePrice)} {t('common.etb')}</AppText>
         </View>
         <View style={{ flex: 1, alignItems: 'flex-end' }}>
-          <RNText style={[styles.footerLabel, { color: colors.textSecondary }]}>{t('inventory.base_price')}</RNText>
-          <RNText style={[styles.footerValue, { color: colors.text }]}>{formatPrice(item.baseSellingPrice)} {t('common.etb')}</RNText>
+          <AppText variant="caption" weight="medium" style={[styles.footerLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('inventory.base_price')}</AppText>
+          <AppText variant="body-sm" weight="bold" style={[styles.footerValue, { color: colors.text }]} numberOfLines={1}>{formatPrice(item.baseSellingPrice)} {t('common.etb')}</AppText>
         </View>
       </View>
       </Pressable>
     </SwipeableItem>
   );
-};
+});
+
+RecentItemCard.displayName = 'RecentItemCard';
 
 const styles = StyleSheet.create({
   itemCard: {
@@ -100,12 +102,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   itemName: {
-    fontSize: 14,
     fontFamily: Fonts.bold,
     marginBottom: 4,
   },
   itemSub: {
-    fontSize: 10,
     fontFamily: Fonts.medium,
   },
   stockBadge: {
@@ -122,7 +122,6 @@ const styles = StyleSheet.create({
     marginRight: 5,
   },
   stockText: {
-    fontSize: 10,
     fontFamily: Fonts.medium,
   },
   itemFooter: {
@@ -133,12 +132,10 @@ const styles = StyleSheet.create({
     paddingTop: 15,
   },
   footerLabel: {
-    fontSize: 10,
     fontFamily: Fonts.medium,
     marginBottom: 4,
   },
   footerValue: {
-    fontSize: 12,
     fontFamily: Fonts.bold,
   },
 });

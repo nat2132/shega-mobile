@@ -1,27 +1,21 @@
-import React from 'react';
+﻿import React from 'react';
 import { 
   View, 
-  Text as RNText, 
   StyleSheet, 
   TouchableOpacity, 
-  ScrollView, 
-  Dimensions,
-  Platform 
+  ScrollView
 } from 'react-native';
 import { 
   Languages, 
   Check, 
   Globe, 
-  ChevronRight, 
   Zap, 
   Sparkles 
 } from 'lucide-react-native';
 import { Fonts } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
-import Animated, { FadeIn, FadeInDown, Layout } from 'react-native-reanimated';
-
-const { width } = Dimensions.get('window');
-
+import { AppText, AppCard, AppButton, AppListItem, AppRow } from '@/components/ui';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 type LangId = 'en' | 'am' | 'om' | 'ti';
 
 const LANGUAGES: { id: LangId; title: string; script: string; preview: string }[] = [
@@ -32,7 +26,7 @@ const LANGUAGES: { id: LangId; title: string; script: string; preview: string }[
 ];
 
 const TranslationSettings = () => {
-  const { language, setLanguage, colors, t, theme } = useSettings();
+   const { language, setLanguage, colors, t } = useSettings();
 
   const handleSelect = (id: LangId) => {
     setLanguage(id);
@@ -45,8 +39,8 @@ const TranslationSettings = () => {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <Animated.View entering={FadeIn.duration(600)}>
           <View style={styles.headerNode}>
-            <RNText style={[styles.headerSub, { color: colors.textSecondary }]}>{t('translation.localization')}</RNText>
-            <RNText style={[styles.headerTitle, { color: colors.text }]}>{t('translation.global_hub')}</RNText>
+            <AppText variant="body" weight="medium" style={[styles.headerSub, { color: colors.textSecondary }]} numberOfLines={2}>{t('translation.localization')}</AppText>
+            <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: colors.text }]} numberOfLines={2}>{t('translation.global_hub')}</AppText>
           </View>
 
           {/* Intelligence Preview Node */}
@@ -55,19 +49,19 @@ const TranslationSettings = () => {
               <View style={[styles.iconTag, { backgroundColor: colors.text + '08' }]}>
                  <Languages size={22} color={colors.text} />
               </View>
-              <RNText style={[styles.blueprintLabel, { color: colors.textSecondary }]}>{t('translation.preview_label')}</RNText>
+              <AppText variant="caption" weight="bold" style={[styles.blueprintLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('translation.preview_label')}</AppText>
             </View>
             <View style={styles.blueprintBody}>
-               <RNText style={[styles.previewDisplay, { color: colors.text }]}>{currentPreview}</RNText>
+               <AppText variant="title" weight="bold" style={[styles.previewDisplay, { color: colors.text }]} numberOfLines={2}>{currentPreview}</AppText>
                <View style={[styles.blueprintLine, { backgroundColor: colors.primary }]} />
             </View>
             <View style={styles.blueprintFooter}>
-               <RNText style={[styles.footerText, { color: colors.textSecondary }]}>{t('translation.preview_desc')}</RNText>
+               <AppText variant="body-sm" weight="medium" style={[styles.footerText, { color: colors.textSecondary }]} numberOfLines={2}>{t('translation.preview_desc')}</AppText>
                <Sparkles size={16} color={colors.primary} />
             </View>
           </View>
 
-          <RNText style={[styles.selectionHeading, { color: colors.textSecondary }]}>{t('translation.selection_heading')}</RNText>
+          <AppText variant="caption" weight="bold" style={[styles.selectionHeading, { color: colors.textSecondary }]} numberOfLines={1}>{t('translation.selection_heading')}</AppText>
 
           {LANGUAGES.map((lang, index) => {
             const isSelected = language === lang.id;
@@ -87,8 +81,8 @@ const TranslationSettings = () => {
                   </View>
                   
                   <View style={styles.langInfoArea}>
-                    <RNText style={[styles.langTitle, { color: colors.text }]}>{lang.title}</RNText>
-                    <RNText style={[styles.langScript, { color: colors.textSecondary }]}>{lang.script}</RNText>
+                    <AppText variant="body" weight="bold" style={[styles.langTitle, { color: colors.text }]} numberOfLines={1}>{lang.title}</AppText>
+                    <AppText variant="body-sm" weight="medium" style={[styles.langScript, { color: colors.textSecondary }]} numberOfLines={1}>{lang.script}</AppText>
                   </View>
 
                   <View style={[styles.radioBase, { borderColor: colors.border }, isSelected && { backgroundColor: colors.primary, borderColor: colors.primary }]}>
@@ -101,9 +95,9 @@ const TranslationSettings = () => {
 
           <View style={[styles.infoNode, { backgroundColor: colors.text + '05' }]}>
              <Zap size={18} color={colors.textSecondary} />
-             <RNText style={[styles.noticeText, { color: colors.textSecondary }]}>
+             <AppText variant="body-sm" weight="medium" style={[styles.noticeText, { color: colors.textSecondary }]} numberOfLines={3}>
                {t('translation.schema_notice')}
-             </RNText>
+             </AppText>
           </View>
         </Animated.View>
       </ScrollView>
@@ -122,14 +116,12 @@ const styles = StyleSheet.create({
     paddingBottom: 25,
   },
   headerSub: {
-    fontSize: 11,
     fontFamily: Fonts.semibold,
     textTransform: 'uppercase',
     letterSpacing: 1.5,
     marginBottom: 4,
   },
   headerTitle: {
-    fontSize: 28,
     fontFamily: Fonts.bold,
   },
   previewBlueprint: {
@@ -153,7 +145,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   blueprintLabel: {
-    fontSize: 10,
     fontFamily: Fonts.bold,
     letterSpacing: 1.2,
   },
@@ -161,7 +152,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   previewDisplay: {
-    fontSize: 22,
     fontFamily: Fonts.bold,
     marginBottom: 8,
   },
@@ -179,12 +169,10 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(0,0,0,0.05)',
   },
   footerText: {
-    fontSize: 11,
     fontFamily: Fonts.medium,
     fontStyle: 'italic',
   },
   selectionHeading: {
-    fontSize: 11,
     fontFamily: Fonts.bold,
     letterSpacing: 1,
     marginBottom: 15,
@@ -209,12 +197,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   langTitle: {
-    fontSize: 17,
     fontFamily: Fonts.bold,
     marginBottom: 2,
   },
   langScript: {
-    fontSize: 11,
     fontFamily: Fonts.medium,
     letterSpacing: 0.5,
   },
@@ -236,7 +222,6 @@ const styles = StyleSheet.create({
   },
   noticeText: {
     flex: 1,
-    fontSize: 12,
     lineHeight: 18,
     fontFamily: Fonts.medium,
   },

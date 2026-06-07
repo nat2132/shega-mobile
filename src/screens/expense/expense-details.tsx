@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { 
   View, 
-  Text as RNText, 
   StyleSheet, 
   TouchableOpacity, 
   ScrollView, 
@@ -13,7 +12,7 @@ import {
 import Animated, { 
   FadeInDown, 
   FadeInUp, 
-  ScaleInCenter,
+  ZoomIn,
   Layout
 } from 'react-native-reanimated';
 import { 
@@ -43,9 +42,8 @@ import { Fonts } from '@/constants/theme';
 import { updateExpense, deleteExpense } from '@/database/db';
 import { useSettings } from '@/context/SettingsContext';
 import { formatDate } from '@/utils/date-utils';
+import { AppText, AppListItem, AppRow, AppCard } from '@/components/ui';
 import PremiumActionModal from '@/components/PremiumActionModal';
-import BusinessSuccessModal from '@/components/BusinessSuccessModal';
-
 const { width } = Dimensions.get('window');
 
 const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => void }) => {
@@ -53,16 +51,31 @@ const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => vo
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState(expense);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [showSuccess, setShowSuccess] = useState<'edit' | 'delete' | null>(null);
 
-  if (!expense) return null;
+  if (!expense || !expense.id) return null;
+
+  const validateEditForm = () => {
+    const amountNum = Number(editForm.amount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      alert(t('expense.validation_amount') || 'Please enter a valid amount greater than zero');
+      return false;
+    }
+    if (!editForm.name || !editForm.name.trim()) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      alert(t('expense.validation_name') || 'Please enter a description');
+      return false;
+    }
+    return true;
+  };
 
   const handleSave = () => {
+    if (!validateEditForm()) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const success = updateExpense(expense.id, editForm);
     if (success) {
       setIsEditing(false);
-      setShowSuccess('edit');
+      if (onClose) onClose();
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       alert(t('common.error'));
@@ -76,10 +89,15 @@ const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => vo
   };
 
   const handleDelete = () => {
+    if (!expense || !expense.id) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      alert(t('common.error'));
+      return;
+    }
     const success = deleteExpense(expense.id);
     if (success) {
       setShowDeleteConfirm(false);
-      setShowSuccess('delete');
+      if (onClose) onClose();
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       alert(t('common.error'));
@@ -118,30 +136,33 @@ const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => vo
             </View>
          </View>
 
-         <Animated.View entering={ScaleInCenter} style={styles.heroContent}>
+         <Animated.View entering={ZoomIn} style={styles.heroContent}>
             <View style={[styles.badgeContainer, { backgroundColor: '#FF3B3015' }]}>
                <TrendingDown size={28} color="#FF3B30" />
             </View>
-            <RNText style={[styles.heroSub, { color: colors.textSecondary }]}>{t('expense.capital_management')}</RNText>
-            {isEditing ? (
-              <View style={styles.priceEditRow}>
-                <TextInput
-                  style={[styles.heroInput, { color: colors.text }]}
-                  value={String(editForm.amount)}
-                  keyboardType="numeric"
-                  onChangeText={(t) => setEditForm(prev => ({ ...prev, amount: Number(t) }))}
-                />
-                <RNText style={[styles.heroTitle, { color: colors.textSecondary }]}>{t('common.etb')}</RNText>
-              </View>
+            <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.heroSub, { color: colors.textSecondary }]} numberOfLines={1}>{t('expense.capital_management')}</AppText>
+{isEditing ? (
+               <View style={styles.priceEditRow}>
+                 <TextInput
+                   style={[styles.heroInput, { color: colors.text }]}
+                   value={String(editForm.amount)}
+                   keyboardType="numeric"
+                   onChangeText={(text) => {
+                     const num = Number(text);
+                     setEditForm((prev: any) => ({ ...prev, amount: isNaN(num) ? 0 : num }));
+                   }}
+                 />
+                 <AppText variant="heading" weight="bold" style={[styles.heroTitle, { color: colors.textSecondary }]} numberOfLines={1}>{t('common.etb')}</AppText>
+               </View>
             ) : (
-              <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-                <RNText style={[styles.heroTitle, { color: colors.text }]}>{editForm.amount.toLocaleString()}</RNText>
-                <RNText style={{ fontSize: 24, opacity: 0.6, color: colors.text, marginLeft: 8 }}>{t('common.etb')}</RNText>
-              </View>
+               <View style={styles.heroTitleRow}>
+                 <AppText variant="display" weight="bold" style={[styles.heroTitle, { color: colors.text }]} numberOfLines={1}>{typeof editForm.amount === 'number' ? editForm.amount.toLocaleString() : 0}</AppText>
+                 <AppText variant="heading" weight="medium" style={{ opacity: 0.6, color: colors.text, marginLeft: 8 }} numberOfLines={1}>{t('common.etb')}</AppText>
+               </View>
             )}
-            <RNText style={[styles.heroMeta, { color: colors.textSecondary }]}>
+            <AppText variant="body-sm" weight="bold" style={[styles.heroMeta, { color: colors.textSecondary }]} numberOfLines={1}>
                {editForm.date ? formatDate(new Date(editForm.date), calendarType, language) : t('common.loading')}
-            </RNText>
+            </AppText>
          </Animated.View>
       </View>
 
@@ -149,38 +170,38 @@ const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => vo
         
         {/* Magnitude & Context */}
         <Animated.View entering={FadeInDown.delay(200)} style={styles.section}>
-           <RNText style={[styles.sectionTitle, { color: colors.textSecondary }]}>{t('expense.outflow_identity')}</RNText>
+           <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.sectionTitle, { color: colors.textSecondary }]} numberOfLines={1}>{t('expense.outflow_identity')}</AppText>
            <View style={[styles.intelligenceBlock, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.node}>
                  <View style={styles.nodeInfo}>
                     <Zap size={16} color={colors.textSecondary} />
-                    <RNText style={[styles.nodeLabel, { color: colors.textSecondary }]}>{t('common.description')}</RNText>
+                    <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('common.description')}</AppText>
                  </View>
                  {isEditing ? (
                    <TextInput 
                      style={[styles.nodeInput, { color: colors.text, borderColor: colors.border }]} 
                      value={editForm.name}
-                     onChangeText={(t) => setEditForm(prev => ({ ...prev, name: t }))}
+                     onChangeText={(t) => setEditForm((prev: any) => ({ ...prev, name: t }))}
                    />
                  ) : (
-                   <RNText style={[styles.nodeValue, { color: colors.text }]}>{editForm.name}</RNText>
+                   <AppText variant="body-sm" weight="bold" style={[styles.nodeValue, { color: colors.text }]} numberOfLines={2}>{editForm.name}</AppText>
                  )}
               </View>
               <View style={styles.nodeDivider} />
               <View style={styles.node}>
                  <View style={styles.nodeInfo}>
                     <Tag size={16} color={colors.textSecondary} />
-                    <RNText style={[styles.nodeLabel, { color: colors.textSecondary }]}>{t('common.category')}</RNText>
+                    <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('common.category')}</AppText>
                  </View>
                  {isEditing ? (
                    <TextInput 
                      style={[styles.nodeInput, { color: colors.text, borderColor: colors.border }]} 
                      value={editForm.category || ''}
-                     onChangeText={(t) => setEditForm(prev => ({ ...prev, category: t }))}
+                     onChangeText={(t) => setEditForm((prev: any) => ({ ...prev, category: t }))}
                    />
                  ) : (
                    <View style={[styles.miniBadge, { backgroundColor: colors.text + '08' }]}>
-                      <RNText style={[styles.badgeText, { color: colors.textSecondary }]}>{editForm.category || t('common.none')}</RNText>
+                      <AppText variant="caption" weight="bold" transform="uppercase" shrink={false} style={[styles.badgeText, { color: colors.textSecondary }]} numberOfLines={1}>{editForm.category || t('common.none')}</AppText>
                    </View>
                  )}
               </View>
@@ -189,26 +210,26 @@ const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => vo
 
         {/* Orchestration Block (Recurring) */}
         <Animated.View entering={FadeInDown.delay(400)} style={styles.section}>
-          <RNText style={[styles.sectionTitle, { color: colors.textSecondary }]}>{t('expense.orchestration_nodes')}</RNText>
+          <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.sectionTitle, { color: colors.textSecondary }]} numberOfLines={1}>{t('expense.orchestration_nodes')}</AppText>
           <View style={[styles.intelligenceBlock, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.node}>
               <View style={styles.nodeInfo}>
                 <Repeat size={18} color={editForm.isRecurring ? colors.primary : colors.textSecondary} />
                 <View>
-                  <RNText style={[styles.nodeValue, { color: colors.text }]}>{editForm.isRecurring ? t('expense.automated') : t('expense.one_time')}</RNText>
-                  <RNText style={[styles.nodeSub, { color: colors.textSecondary }]}>{editForm.isRecurring ? t('expense.repeats_every', { frequency: t(`expense.${(editForm.frequency || 'Monthly').toLowerCase()}`) }) : t('expense.no_pulse')}</RNText>
+                  <AppText variant="body-sm" weight="bold" style={[styles.nodeValue, { color: colors.text }]} numberOfLines={1}>{editForm.isRecurring ? t('expense.automated') : t('expense.one_time')}</AppText>
+                  <AppText variant="caption" weight="medium" style={[styles.nodeSub, { color: colors.textSecondary }]} numberOfLines={2}>{editForm.isRecurring ? t('expense.repeats_every', { frequency: t(`expense.${(editForm.frequency || 'Monthly').toLowerCase()}`) }) : t('expense.no_pulse')}</AppText>
                 </View>
               </View>
             </View>
             {editForm.isRecurring && (
               <View style={styles.dateNodes}>
                 <View style={[styles.dNode, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                  <RNText style={[styles.dLabel, { color: colors.textSecondary }]}>{t('expense.committed')}</RNText>
-                  <RNText style={[styles.dValue, { color: colors.text }]}>{editForm.date ? formatDate(new Date(editForm.date), calendarType, language) : 'N/A'}</RNText>
+                  <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.dLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('expense.committed')}</AppText>
+                  <AppText variant="body-sm" weight="bold" style={[styles.dValue, { color: colors.text }]} numberOfLines={1}>{editForm.date ? formatDate(new Date(editForm.date), calendarType, language) : 'N/A'}</AppText>
                 </View>
-                <View style={[styles.dNode, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                  <RNText style={[styles.dLabel, { color: colors.textSecondary }]}>{t('expense.next_drill')}</RNText>
-                  <RNText style={[styles.dValue, { color: colors.primary }]}>{editForm.nextBillingDate ? formatDate(new Date(editForm.nextBillingDate), calendarType, language) : 'N/A'}</RNText>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.dLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('expense.next_drill')}</AppText>
+                  <AppText variant="body-sm" weight="bold" style={[styles.dValue, { color: colors.primary }]} numberOfLines={1}>{editForm.nextBillingDate ? formatDate(new Date(editForm.nextBillingDate), calendarType, language) : 'N/A'}</AppText>
                 </View>
               </View>
             )}
@@ -229,9 +250,9 @@ const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => vo
             ) : (
               <Edit2 size={18} color={colors.background} />
             )}
-            <RNText style={[styles.actionText, { color: colors.background }]}>
+            <AppText variant="body" weight="bold" style={[styles.actionText, { color: colors.background }]} numberOfLines={1}>
               {isEditing ? t('expense.commit_ledger') : t('expense.modify_outflow')}
-            </RNText>
+            </AppText>
          </TouchableOpacity>
       </BlurView>
 
@@ -247,21 +268,6 @@ const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => vo
         />
       </Modal>
 
-      <Modal visible={showSuccess !== null} transparent animationType="fade">
-        <BusinessSuccessModal 
-          details={{
-            title: showSuccess === 'edit' ? t('expense.modified_success') : t('expense.erased_success'),
-            subtitle: showSuccess === 'edit' ? t('expense.record_updated') : t('expense.funds_recovered'),
-            mainLabel: t('expense.capital_magnitude'),
-            mainValue: `${editForm.amount} ${t('common.etb')}`,
-            iconType: showSuccess === 'edit' ? "price_up" : "price_down"
-          }}
-          onClose={() => {
-            setShowSuccess(null);
-            if (onClose) onClose();
-          }}
-        />
-      </Modal>
     </View>
   );
 };
@@ -277,6 +283,7 @@ const styles = StyleSheet.create({
   heroSub: { fontSize: 13, fontFamily: Fonts.bold, letterSpacing: 1.5, marginBottom: 5 },
   heroTitle: { fontSize: 44, fontFamily: Fonts.bold, letterSpacing: -2, textAlign: 'center' },
   priceEditRow: { flexDirection: 'row', alignItems: 'baseline' },
+  heroTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   heroInput: { fontSize: 32, fontFamily: Fonts.bold, textAlign: 'center', borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)', borderRadius: 12, paddingHorizontal: 20, minWidth: 150 },
   heroMeta: { fontSize: 13, fontFamily: Fonts.bold, marginTop: 10, opacity: 0.6 },
   scrollContent: { padding: 25 },

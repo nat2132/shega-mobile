@@ -1,7 +1,6 @@
-import React, { useEffect } from 'react';
+﻿import React, { useEffect } from 'react';
 import { 
   View, 
-  Text, 
   StyleSheet, 
   TouchableOpacity, 
   Dimensions, 
@@ -15,8 +14,7 @@ import Animated, {
   withSequence,
   withTiming,
   FadeIn,
-  FadeInDown,
-  ScaleInCenter
+  FadeInDown
 } from 'react-native-reanimated';
 import { 
   Check, 
@@ -33,7 +31,7 @@ import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { useSettings } from '@/context/SettingsContext';
 import { Fonts } from '@/constants/theme';
-
+import { AppText } from '@/components/ui';
 const { width, height } = Dimensions.get('window');
 
 // Premium Confetti Particle
@@ -147,17 +145,17 @@ const SaleSuccessModal: React.FC<SaleSuccessModalProps> = ({ saleData, onClose }
         </View>
 
         <Animated.View entering={FadeInDown.delay(700)} style={styles.content}>
-          <Text style={[styles.title, { color: colors.text, opacity: 0.6 }]}>{t('common.success').toUpperCase()}</Text>
-          <Text style={[styles.subtitle, { color: colors.text }]}>
+  <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.title, { color: colors.text, opacity: 0.6 }]} numberOfLines={1}>{t('common.success').toUpperCase()}</AppText>
+  <AppText variant="heading" weight="bold" style={[styles.subtitle, { color: colors.text }]} numberOfLines={3}>
             {t('form.asset_initialized')}
-          </Text>
+          </AppText>
 
           {/* Premium Receipt Card */}
           <Animated.View entering={FadeInDown.delay(900)} style={[styles.receiptCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
              <View style={styles.receiptTop}>
                 <View>
-                   <Text style={[styles.receiptLabel, { color: colors.textSecondary }]}>{t('sale.total_settlement')}</Text>
-                   <Text style={[styles.receiptTotal, { color: colors.text }]}>{formatPrice(saleData.totalPrice)} <Text style={{ fontSize: 16, opacity: 0.6 }}>ETB</Text></Text>
+                   <AppText variant="caption" weight="medium" style={[styles.receiptLabel, { color: colors.textSecondary }]} numberOfLines={2}>{t('sale.total_settlement')}</AppText>
+                   <AppText variant="display" weight="extrabold" shrink={false} style={[styles.receiptTotal, { color: colors.text }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{formatPrice(saleData.totalPrice)} <AppText variant="body" weight="medium" style={{ opacity: 0.6 }}> {t('common.etb')}</AppText></AppText>
                 </View>
                 <View style={[styles.methodBadge, { backgroundColor: colors.text + '08' }]}>
                    {saleData.paymentMethod === 'Cash' ? (
@@ -165,7 +163,7 @@ const SaleSuccessModal: React.FC<SaleSuccessModalProps> = ({ saleData, onClose }
                    ) : (
                      <CreditCard size={16} color={colors.text} />
                    )}
-                   <Text style={[styles.methodText, { color: colors.text }]}>{saleData.paymentMethod.toUpperCase()}</Text>
+                   <AppText variant="caption" weight="bold" transform="uppercase" shrink={false} style={[styles.methodText, { color: colors.text }]} numberOfLines={1}>{saleData.paymentMethod.toUpperCase()}</AppText>
                 </View>
              </View>
 
@@ -176,25 +174,25 @@ const SaleSuccessModal: React.FC<SaleSuccessModalProps> = ({ saleData, onClose }
                    <View style={[styles.detailIconBox, { backgroundColor: colors.primary + '10' }]}>
                       <ShoppingBag size={14} color={colors.primary} />
                    </View>
-                   <Text style={[styles.detailText, { color: colors.textSecondary }]}>{t('common.items')}</Text>
-                   <Text style={[styles.detailValue, { color: colors.text }]}>{saleData.itemCount}</Text>
+                <AppText variant="caption" weight="medium" style={[styles.detailText, { color: colors.textSecondary }]} numberOfLines={2}>{t('common.items')}</AppText>
+                <AppText variant="body" weight="bold" shrink={false} style={[styles.detailValue, { color: colors.text }]} numberOfLines={1}>{saleData.itemCount}</AppText>
                 </View>
                 <View style={styles.detailRow}>
                    <View style={[styles.detailIconBox, { backgroundColor: (saleData.paymentStatus === 'Paid' ? colors.success : '#FF9500') + '10' }]}>
                       <TrendingUp size={14} color={saleData.paymentStatus === 'Paid' ? colors.success : '#FF9500'} />
                    </View>
-                   <Text style={[styles.detailText, { color: colors.textSecondary }]}>{t('expense.status')}</Text>
-                   <Text style={[styles.detailValue, { color: saleData.paymentStatus === 'Paid' ? colors.success : '#FF9500' }]}>
+                <AppText variant="caption" weight="medium" style={[styles.detailText, { color: colors.textSecondary }]} numberOfLines={2}>{t('expense.status')}</AppText>
+                <AppText variant="body" weight="bold" shrink={false} style={[styles.detailValue, { color: saleData.paymentStatus === 'Paid' ? colors.success : '#FF9500' }]} numberOfLines={2}>
                      {(saleData.paymentStatus === 'Paid' ? t('sale.settled_full') : t('sale.debt_credit')).toUpperCase()}
-                   </Text>
+                   </AppText>
                 </View>
                 {saleData.customerName && (
                   <View style={styles.detailRow}>
                      <View style={[styles.detailIconBox, { backgroundColor: colors.text + '10' }]}>
                         <Navigation size={14} color={colors.text} />
                      </View>
-                     <Text style={[styles.detailText, { color: colors.textSecondary }]}>{t('sales.customer_name')}</Text>
-                     <Text style={[styles.detailValue, { color: colors.text }]}>{saleData.customerName}</Text>
+                <AppText variant="caption" weight="medium" style={[styles.detailText, { color: colors.textSecondary }]} numberOfLines={2}>{t('sales.customer_name')}</AppText>
+                <AppText variant="body" weight="bold" style={[styles.detailValue, { color: colors.text }]} numberOfLines={2}>{saleData.customerName}</AppText>
                   </View>
                 )}
              </View>
@@ -202,14 +200,14 @@ const SaleSuccessModal: React.FC<SaleSuccessModalProps> = ({ saleData, onClose }
 
           {/* Action Row */}
           <View style={styles.actionRow}>
-             <TouchableOpacity style={[styles.subBtn, { backgroundColor: colors.card, borderColor: colors.border }]} activeOpacity={0.7}>
-                <Printer size={20} color={colors.text} />
-                <Text style={[styles.subBtnText, { color: colors.text }]}>PRINT</Text>
-             </TouchableOpacity>
-             <TouchableOpacity style={[styles.subBtn, { backgroundColor: colors.card, borderColor: colors.border }]} activeOpacity={0.7}>
-                <Share2 size={20} color={colors.text} />
-                <Text style={[styles.subBtnText, { color: colors.text }]}>SHARE</Text>
-             </TouchableOpacity>
+              <TouchableOpacity style={[styles.subBtn, { backgroundColor: colors.card, borderColor: colors.border }]} activeOpacity={0.7}>
+                 <Printer size={20} color={colors.text} />
+                 <AppText variant="caption" weight="bold" shrink={false} style={[styles.subBtnText, { color: colors.text }]} numberOfLines={1}>{t('common.print')}</AppText>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.subBtn, { backgroundColor: colors.card, borderColor: colors.border }]} activeOpacity={0.7}>
+                 <Share2 size={20} color={colors.text} />
+                 <AppText variant="caption" weight="bold" shrink={false} style={[styles.subBtnText, { color: colors.text }]} numberOfLines={1}>{t('common.share')}</AppText>
+              </TouchableOpacity>
           </View>
 
           <TouchableOpacity 
@@ -220,7 +218,7 @@ const SaleSuccessModal: React.FC<SaleSuccessModalProps> = ({ saleData, onClose }
             }}
             activeOpacity={0.9}
           >
-            <Text style={[styles.finishBtnText, { color: colors.background }]}>{t('form.continue_intake').toUpperCase()}</Text>
+            <AppText variant="caption" weight="bold" transform="uppercase" shrink={false} style={[styles.finishBtnText, { color: colors.background }]} numberOfLines={1}>{t('form.continue_intake').toUpperCase()}</AppText>
             <ChevronRight size={20} color={colors.background} />
           </TouchableOpacity>
         </Animated.View>
@@ -251,7 +249,7 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    filter: 'blur(30px)',
+    opacity: 0.3,
   },
   successRing: {
     position: 'absolute',
@@ -285,13 +283,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   title: {
-    fontSize: 12,
     fontFamily: Fonts.bold,
     letterSpacing: 4,
     marginBottom: 8,
   },
   subtitle: {
-    fontSize: 28,
     fontFamily: Fonts.extrabold,
     textAlign: 'center',
     marginBottom: 35,
@@ -316,7 +312,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   receiptLabel: {
-    fontSize: 10,
     fontFamily: Fonts.bold,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
@@ -324,7 +319,6 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   receiptTotal: {
-    fontSize: 32,
     fontFamily: Fonts.extrabold,
     letterSpacing: -1,
   },
@@ -337,7 +331,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   methodText: {
-    fontSize: 10,
     fontFamily: Fonts.extrabold,
     letterSpacing: 0.5,
   },
@@ -363,11 +356,9 @@ const styles = StyleSheet.create({
   },
   detailText: {
     flex: 1,
-    fontSize: 14,
     fontFamily: Fonts.semibold,
   },
   detailValue: {
-    fontSize: 14,
     fontFamily: Fonts.bold,
   },
   actionRow: {
@@ -387,7 +378,6 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   subBtnText: {
-    fontSize: 12,
     fontFamily: Fonts.bold,
     letterSpacing: 1.5,
   },
@@ -406,7 +396,6 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   finishBtnText: {
-    fontSize: 17,
     fontFamily: Fonts.bold,
     letterSpacing: 1,
   },

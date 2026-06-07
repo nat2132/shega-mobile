@@ -1,7 +1,6 @@
-import React, { useEffect } from 'react';
+﻿import React, { useEffect } from 'react';
 import { 
   View, 
-  Text, 
   StyleSheet, 
   TouchableOpacity, 
   Dimensions 
@@ -26,7 +25,7 @@ import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { useSettings } from '@/context/SettingsContext';
 import { Fonts } from '@/constants/theme';
-
+import { AppText, AppCard, AppButton } from '@/components/ui';
 const { width } = Dimensions.get('window');
 
 interface DataSuccessModalProps {
@@ -59,23 +58,23 @@ const DataSuccessModal: React.FC<DataSuccessModalProps> = ({ type, onClose }) =>
       case 'export':
         return {
           title: t('settings.export_data').toUpperCase(),
-          subtitle: "BACKUP SECURED",
+          subtitle: t('data.backup_secured'),
           icon: Database,
-          msg: "Your local database has been successfully packaged and shared."
+          msg: t('data.backup_msg')
         };
       case 'import':
         return {
           title: t('settings.import_success').toUpperCase(),
-          subtitle: "RESTORE COMPLETE",
+          subtitle: t('data.restore_complete'),
           icon: CloudDownload,
-          msg: "The selected backup has been applied. Your workspace is now synchronized."
+          msg: t('data.restore_msg')
         };
       case 'reset':
         return {
           title: t('settings.reset_title').toUpperCase(),
-          subtitle: "SYSTEM PURIFIED",
+          subtitle: t('data.system_purified'),
           icon: RefreshCw,
-          msg: "All local data has been cleared. The application is now in its factory state."
+          msg: t('data.reset_msg')
         };
     }
   };
@@ -96,12 +95,12 @@ const DataSuccessModal: React.FC<DataSuccessModalProps> = ({ type, onClose }) =>
         </View>
 
         <Animated.View entering={FadeInDown.delay(600)} style={styles.content}>
-          <Text style={[styles.title, { color: colors.text }]}>{details.title}</Text>
-          <Text style={[styles.subtitle, { color: colors.primary }]}>{details.subtitle}</Text>
+          <AppText variant="title" weight="bold" align="center" style={[styles.title, { color: colors.text }]} numberOfLines={2}>{details.title}</AppText>
+          <AppText variant="heading" weight="extrabold" align="center" style={[styles.subtitle, { color: colors.primary }]} numberOfLines={1}>{details.subtitle}</AppText>
           
           <View style={[styles.messageCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
              <Icon size={24} color={colors.primary} style={{ marginBottom: 12 }} />
-             <Text style={[styles.message, { color: colors.textSecondary }]}>{details.msg}</Text>
+             <AppText variant="body" weight="medium" align="center" style={[styles.message, { color: colors.textSecondary }]} numberOfLines={3}>{details.msg}</AppText>
           </View>
 
           <TouchableOpacity 
@@ -112,7 +111,7 @@ const DataSuccessModal: React.FC<DataSuccessModalProps> = ({ type, onClose }) =>
             }}
             activeOpacity={0.9}
           >
-            <Text style={[styles.finishBtnText, { color: colors.background }]}>{t('common.done').toUpperCase()}</Text>
+            <AppText variant="body" weight="bold" style={[styles.finishBtnText, { color: colors.background }]} numberOfLines={1}>{t('common.done').toUpperCase()}</AppText>
             <ChevronRight size={20} color={colors.background} />
           </TouchableOpacity>
         </Animated.View>
@@ -159,14 +158,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   title: {
-    fontSize: 14,
     fontFamily: Fonts.bold,
     letterSpacing: 4,
     marginBottom: 12,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 32,
     fontFamily: Fonts.extrabold,
     letterSpacing: -1,
     marginBottom: 30,
@@ -180,7 +177,6 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   message: {
-    fontSize: 15,
     fontFamily: Fonts.medium,
     textAlign: 'center',
     lineHeight: 24,
@@ -195,7 +191,6 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   finishBtnText: {
-    fontSize: 16,
     fontFamily: Fonts.bold,
     letterSpacing: 1,
   },

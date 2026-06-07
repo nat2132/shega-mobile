@@ -1,22 +1,21 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
-  Text as RNText,
   StyleSheet,
   TextInput,
   TouchableOpacity,
   ScrollView,
   Modal,
   Pressable,
-  Alert,
   Platform,
-  KeyboardAvoidingView
+  KeyboardAvoidingView,
+  Linking
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { 
-  FadeInDown, 
-  FadeInUp, 
-  FadeIn, 
+import Animated, {
+  FadeInDown,
+  FadeInUp,
+  FadeIn,
   FadeOut,
   useAnimatedStyle,
   useSharedValue,
@@ -24,23 +23,22 @@ import Animated, {
   withTiming,
   Layout
 } from 'react-native-reanimated';
-import { 
-  PackageCheck, 
-  ChevronDown, 
-  Info, 
-  Calendar, 
-  ArrowRight, 
-  X, 
-  Check, 
-  Plus, 
-  Package, 
-  Trash2, 
-  Shield, 
-  Building2, 
-  ShoppingCart, 
+import {
+  PackageCheck,
+  ChevronDown,
+  Info,
+  Calendar,
+  ArrowRight,
+  X,
+  Check,
+  Plus,
+  Package,
+  Trash2,
+  Shield,
+  Building2,
+  ShoppingCart,
   CheckCircle,
   BarChart3,
-  Dolly,
   Tag,
   History,
   AlertCircle,
@@ -52,50 +50,37 @@ import {
   Zap,
   Hammer,
   ShieldCheck,
-  LayoutGrid
+  LayoutGrid,
+  Phone,
+  PhoneCall
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { BlurView } from 'expo-blur';
-import { 
-  insertItem, 
-  insertCategory, 
-  getCategories, 
-  seedDefaultCategories, 
-  insertPack 
+import {
+   insertItem,
+   insertCategory,
+   getCategories,
+   insertPack,
+   getSuppliers,
+   insertContact
 } from '@/database/db';
 import { useSettings } from '@/context/SettingsContext';
+import { useDialog } from '@/context/DialogContext';
 import { Fonts } from '@/constants/theme';
 import { CustomDatePicker } from '@/components/CustomDatePicker';
-
-const UNIT_OPTIONS = ['kg', 'm', 'litre', 'pieces', 'pack', 'can', 'roll', 'sqm', 'sqft', 'ml'];
+import { AppText, AppListItem, AppRow, AppCard } from '@/components/ui';
 const QUALITY_GRADES = ['grade1', 'grade2', 'grade3'];
 
-export const DEFAULT_CATEGORIES = [
-  { id: 1, name: 'category.fasteners', icon: '🔩' },
-  { id: 2, name: 'category.measuring', icon: '📏' },
-  { id: 3, name: 'category.hardware', icon: '🪚' },
-  { id: 4, name: 'category.paint', icon: '🎨' },
-  { id: 5, name: 'category.electrical', icon: '💡' },
-  { id: 6, name: 'category.plumbing', icon: '🚰' },
-  { id: 7, name: 'category.packing', icon: '📦' },
-  { id: 8, name: 'category.cleaning', icon: '🧹' },
-  { id: 9, name: 'category.safety', icon: '🛠️' },
-  { id: 10, name: 'category.building', icon: '📐' },
-  { id: 11, name: 'category.grocery', icon: '🥫' },
-];
-
-const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?: () => void }) => {
+export const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?: () => void }) => {
   const { colors, t, calendarType, language, theme } = useSettings();
+  const dialog = useDialog();
   const router = useRouter();
   const [step, setStep] = useState(1);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
+  const [categories, setCategories] = useState<any[]>([]);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
-  const [showUnitModal, setShowUnitModal] = useState(false);
-  const [unitSelectionMode, setUnitSelectionMode] = useState<'price' | 'pack'>('price');
   
   // Data State
   const [hasPacks, setHasPacks] = useState(false);
@@ -116,21 +101,37 @@ const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?
   const [notes, setNotes] = useState('');
   const [supplierPhone, setSupplierPhone] = useState('');
   const [supplierAccount, setSupplierAccount] = useState('');
+  const [supplierName, setSupplierName] = useState('');
+  const [showSupplierModal, setShowSupplierModal] = useState(false);
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [selectedSupplier, setSelectedSupplier] = useState<any>(null);
+  const [supplierSearchQuery, setSupplierSearchQuery] = useState('');
+  const [showNewSupplierForm, setShowNewSupplierForm] = useState(false);
+  const [newSupplierName, setNewSupplierName] = useState('');
+  const [newSupplierPhone, setNewSupplierPhone] = useState('');
+  const [newSupplierAccount, setNewSupplierAccount] = useState('');
+  const [newSupplierNotes, setNewSupplierNotes] = useState('');
   const [creditToggle, setCreditToggle] = useState<'Yes' | 'No'>('No');
+  const [supplierCallEnabled, setSupplierCallEnabled] = useState<boolean>(false);
 
   const [recordDate, setRecordDate] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  useEffect(() => {
-    const loadCategories = async () => {
-      seedDefaultCategories(DEFAULT_CATEGORIES.map(c => ({ name: c.name, icon: c.icon })));
-      const dbCats: any = await getCategories();
-      if (dbCats && dbCats.length > 0) setCategories(dbCats);
-    };
-    loadCategories();
-  }, []);
+   const loadSuppliers = () => {
+     const sup = getSuppliers();
+     setSuppliers(sup);
+   };
+
+useEffect(() => {
+const loadCategories = async () => {
+        const dbCats: any = await getCategories();
+        if (dbCats && dbCats.length > 0) setCategories(dbCats);
+      };
+     loadCategories();
+     loadSuppliers();
+   }, []);
 
   // Real-time calculations
   const totalBaseQuantity = hasPacks ? (Number(totalPackQuantity) || 0) * (Number(unitsPerPack) || 0) : (Number(totalPackQuantity) || 0);
@@ -148,8 +149,23 @@ const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?
       if (Number(totalPackQuantity) <= 0) currentErrors.quantity = t('form.error_quantity_positive');
       if (hasPacks && Number(unitsPerPack) <= 0) currentErrors.unitsPerPack = t('form.error_units_positive');
     } else if (currentStep === 3) {
-      if (!packPurchasePrice || Number(packPurchasePrice) < 0) currentErrors.purchasePrice = t('form.error_price_invalid');
+      if (!packPurchasePrice || Number(packPurchasePrice) <= 0) currentErrors.purchasePrice = t('form.error_price_invalid');
       if (!baseSellingPrice || Number(baseSellingPrice) <= 0) currentErrors.sellingPrice = t('form.error_price_positive');
+      if (allowSellByPack && (!packSellingPrice || Number(packSellingPrice) <= 0)) {
+        currentErrors.packSellingPrice = t('form.error_price_positive');
+      }
+    } else if (currentStep === 4) {
+      if (creditToggle === 'Yes') {
+        if (!supplierPhone.trim()) currentErrors.supplierPhone = t('form.error_phone_required');
+        if (!supplierAccount.trim()) currentErrors.supplierAccount = t('form.error_account_required');
+      }
+      if (expiryDate && expiryDate.trim()) {
+        const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+        const isoRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(expiryDate.trim()) && !isoRegex.test(expiryDate.trim())) {
+          currentErrors.expiryDate = t('form.error_date_format');
+        }
+      }
     }
     
     setErrors(currentErrors);
@@ -171,6 +187,11 @@ const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?
   };
 
   const handleFinish = async () => {
+    // Validate all steps before saving
+    if (!validateStep(4)) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
     try {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       let finalCategoryId = selectedCategory?.id || 0;
@@ -198,8 +219,9 @@ const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?
         qualityGrade,
         notes,
         isCredit: creditToggle === 'Yes',
-        supplierPhone: creditToggle === 'Yes' ? supplierPhone : null,
-        supplierAccount: creditToggle === 'Yes' ? supplierAccount : null,
+        supplierPhone: supplierCallEnabled || creditToggle === 'Yes' ? supplierPhone : null,
+        supplierAccount: supplierCallEnabled || creditToggle === 'Yes' ? supplierAccount : null,
+        supplierCallEnabled,
         createdAt: recordDate || undefined,
       };
 
@@ -209,10 +231,13 @@ const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?
           await insertPack({ itemId: Number(insertedId), packNumber: i, quantity: Number(unitsPerPack), unit: baseUnit });
         }
       }
-      setShowSuccess(true);
+      // Call onSuccess/onClose directly instead of showing success modal
+      if (onSuccess) onSuccess();
+      else if (onClose) onClose();
+      else if (router.canGoBack()) router.back();
     } catch (e) {
       console.error(e);
-      Alert.alert(t('common.error'), t('inventory.failed_to_save'));
+      await dialog.alert({ title: t('common.error'), message: t('inventory.failed_to_save'), iconType: 'danger' });
     }
   };
 
@@ -229,44 +254,11 @@ const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?
         {[t('form.identification'), t('form.metrics'), t('form.finance'), t('form.assurance')].map((label, i) => (
           <View key={i} style={styles.stepLabelItem}>
             <View style={[styles.stepDot, step > i ? { backgroundColor: colors.text } : { backgroundColor: colors.border }]} />
-            <RNText style={[styles.stepLabelText, { color: step > i ? colors.text : colors.textSecondary }]}>{label}</RNText>
+            <AppText variant="micro" weight="bold" shrink={false} style={[styles.stepLabelText, { color: step > i ? colors.text : colors.textSecondary }]} numberOfLines={1}>{label}</AppText>
           </View>
         ))}
       </View>
     </View>
-  );
-
-  const renderSuccessVault = () => (
-    <Modal visible={showSuccess} transparent animationType="fade">
-      <BlurView intensity={80} tint={theme === 'dark' ? 'dark' : 'light'} style={styles.successOverlay}>
-        <Animated.View entering={FadeInUp} style={[styles.successCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={[styles.successIconCircle, { backgroundColor: colors.text }]}>
-            <ShieldCheck size={48} color={colors.background} />
-          </View>
-          <RNText style={[styles.successTitle, { color: colors.text }]}>{t('form.asset_initialized')}</RNText>
-          <RNText style={[styles.successSub, { color: colors.textSecondary }]}>{t('form.committed_to_vault', { name: itemName })}</RNText>
-          
-          <TouchableOpacity 
-            style={[styles.vaultBtn, { backgroundColor: colors.text }]}
-            onPress={() => { 
-                setShowSuccess(false); 
-                if (onSuccess) onSuccess(); 
-                else if (onClose) onClose();
-                else if (router.canGoBack()) router.back();
-            }}
-          >
-            <RNText style={[styles.vaultBtnText, { color: colors.background }]}>{t('form.enter_vault')}</RNText>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.addMoreBtn, { borderColor: colors.text }]}
-            onPress={() => { setShowSuccess(false); setStep(1); setItemName(''); setSelectedCategory(null); }}
-          >
-            <RNText style={[styles.addMoreText, { color: colors.text }]}>{t('form.init_another')}</RNText>
-          </TouchableOpacity>
-        </Animated.View>
-      </BlurView>
-    </Modal>
   );
 
   return (
@@ -281,7 +273,7 @@ const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?
         >
           <X size={20} color={colors.text} />
         </TouchableOpacity>
-        <RNText style={[styles.headerTitle, { color: colors.text }]}>{t('form.intelligence_intake')}</RNText>
+        <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: colors.text }]} numberOfLines={2}>{t('form.intelligence_intake')}</AppText>
         <View style={{ width: 40 }} />
       </View>
 
@@ -290,57 +282,62 @@ const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?
       <KeyboardAvoidingView 
         style={{ flex: 1 }} 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 90}
       >
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <Animated.View entering={FadeInDown} key={step} style={styles.stepContent}>
           {step === 1 && (
             <View style={styles.formCard}>
-              <RNText style={[styles.cardTitle, { color: colors.textSecondary }]}>{t('form.asset_identification')}</RNText>
+              <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.cardTitle, { color: colors.textSecondary }]} numberOfLines={1}>{t('form.asset_identification')}</AppText>
               
-              <View style={styles.inputNode}>
-                <View style={styles.nodeHeader}>
-                   <Tag size={14} color={colors.textSecondary} />
-                   <RNText style={[styles.nodeLabel, { color: colors.textSecondary }]}>{t('form.official_name')}</RNText>
+                <View style={styles.inputNode}>
+                  <View style={styles.nodeHeader}>
+                     <Tag size={14} color={colors.textSecondary} />
+                     <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('form.official_name')}</AppText>
+                     <AppText variant="micro" weight="medium" shrink={false} style={{ fontSize: 10, color: colors.textSecondary, marginLeft: 'auto' }} numberOfLines={1}>{itemName.length}/50</AppText>
+                  </View>
+                  <TextInput 
+                    style={[styles.input, { color: colors.text, borderColor: errors.itemName ? '#FF3B30' : colors.border }]} 
+                    placeholder={t('form.search_placeholder_asset')} 
+                    placeholderTextColor={colors.textSecondary}
+                    value={itemName}
+                    onChangeText={(val) => { if (val.length <= 50) { setItemName(val); if (errors.itemName) setErrors(prev => ({ ...prev, itemName: '' })); } }}
+                    maxLength={50}
+                  />
+                  {errors.itemName && <AppText variant="caption" weight="medium" style={styles.errorText} numberOfLines={2}>{errors.itemName}</AppText>}
                 </View>
-                <TextInput 
-                  style={[styles.input, { color: colors.text, borderColor: errors.itemName ? '#FF3B30' : colors.border }]} 
-                  placeholder={t('form.search_placeholder_asset')} 
-                  placeholderTextColor={colors.textSecondary}
-                  value={itemName}
-                  onChangeText={(val) => { setItemName(val); if (errors.itemName) setErrors(prev => ({ ...prev, itemName: '' })); }}
-                />
-                {errors.itemName && <RNText style={styles.errorText}>{errors.itemName}</RNText>}
-              </View>
 
+              {/* Category Selector */}
               <View style={styles.inputNode}>
                 <View style={styles.nodeHeader}>
                    <LayoutGrid size={14} color={colors.textSecondary} />
-                   <RNText style={[styles.nodeLabel, { color: colors.textSecondary }]}>{t('form.intel_category')}</RNText>
+                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('form.intel_category')}</AppText>
                 </View>
-                <TouchableOpacity 
-                  style={[styles.input, { borderColor: errors.category ? '#FF3B30' : colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
-                  onPress={() => { setShowCategoryModal(true); if (errors.category) setErrors(prev => ({ ...prev, category: '' })); }}
+                <TouchableOpacity
+                  style={[styles.input, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderColor: errors.category ? '#FF3B30' : colors.border }]}
+                  onPress={() => setShowCategoryModal(true)}
                 >
-                  <RNText style={[styles.inputText, { color: selectedCategory ? colors.text : colors.textSecondary }]}>
-                    {selectedCategory ? `${selectedCategory.icon} ${selectedCategory.name.includes('category.') ? t(selectedCategory.name) : selectedCategory.name}` : t('form.select_domain')}
-                  </RNText>
+                  <AppText variant="body" weight="medium" style={{ color: selectedCategory ? colors.text : colors.textSecondary }} numberOfLines={1}>
+                    {selectedCategory ? selectedCategory.name : t('form.new_domain')}
+                  </AppText>
                   <ChevronDown size={18} color={colors.textSecondary} />
                 </TouchableOpacity>
-                {errors.category && <RNText style={styles.errorText}>{errors.category}</RNText>}
+                 {errors.category && <AppText variant="caption" weight="medium" style={styles.errorText} numberOfLines={2}>{errors.category}</AppText>}
               </View>
 
               <View style={styles.inputNode}>
                 <View style={styles.nodeHeader}>
                    <Building2 size={14} color={colors.textSecondary} />
-                   <RNText style={[styles.nodeLabel, { color: colors.textSecondary }]}>{t('form.brand')}</RNText>
+                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('form.brand')}</AppText>
+                   <AppText variant="micro" weight="medium" shrink={false} style={{ color: colors.textSecondary, marginLeft: 'auto' }} numberOfLines={1}>{companyName.length}/50</AppText>
                 </View>
                 <TextInput 
                   style={[styles.input, { color: colors.text, borderColor: colors.border }]} 
                   placeholder={t('form.manufacturer_placeholder')} 
                   placeholderTextColor={colors.textSecondary}
                   value={companyName}
-                  onChangeText={setCompanyName}
+                  onChangeText={(val) => { if (val.length <= 50) setCompanyName(val); }}
+                  maxLength={50}
                 />
               </View>
             </View>
@@ -348,12 +345,12 @@ const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?
 
           {step === 2 && (
             <View style={styles.formCard}>
-              <RNText style={[styles.cardTitle, { color: colors.textSecondary }]}>{t('form.metrics_scaling')}</RNText>
+              <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.cardTitle, { color: colors.textSecondary }]} numberOfLines={1}>{t('form.metrics_scaling')}</AppText>
               
               <View style={[styles.intelligenceBlock, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.blockHeader}>
                    <Package size={20} color={colors.primary} />
-                   <RNText style={[styles.blockTitle, { color: colors.text }]}>{t('form.box_roll_config')}</RNText>
+                   <AppText variant="body" weight="bold" style={[styles.blockTitle, { color: colors.text }]} numberOfLines={2}>{t('form.box_roll_config')}</AppText>
                    <TouchableOpacity 
                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setHasPacks(!hasPacks); }}
                      style={[styles.switch, { backgroundColor: hasPacks ? colors.text : colors.border }]}
@@ -361,59 +358,67 @@ const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?
                      <View style={[styles.switchThumb, { backgroundColor: colors.background, left: hasPacks ? 24 : 2 }]} />
                    </TouchableOpacity>
                 </View>
-                <RNText style={[styles.blockSub, { color: colors.textSecondary }]}>{t('form.box_roll_desc')}</RNText>
+                <AppText variant="body-sm" weight="medium" style={[styles.blockSub, { color: colors.textSecondary }]} numberOfLines={2}>{t('form.box_roll_desc')}</AppText>
               </View>
 
               <View style={styles.row}>
                 {hasPacks && (
                   <View style={{ flex: 1, marginRight: 15 }}>
-                     <RNText style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 8 }]}>{t('form.bulk_unit')}</RNText>
-                     <TouchableOpacity style={[styles.input, { borderColor: colors.border, justifyContent: 'center' }]} onPress={() => { setUnitSelectionMode('pack'); setShowUnitModal(true); }}>
-                        <RNText style={[styles.inputText, { color: colors.text }]}>{t(`form.${purchaseUnit.toLowerCase()}`)}</RNText>
-                     </TouchableOpacity>
+                     <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('form.bulk_unit')}</AppText>
+                     <TextInput 
+                        style={[styles.input, { color: colors.text, borderColor: colors.border }]} 
+                        value={purchaseUnit}
+                        onChangeText={setPurchaseUnit}
+                        placeholder={t('form.bulk_unit')}
+                        placeholderTextColor={colors.textSecondary}
+                     />
                   </View>
                 )}
                 <View style={{ flex: 1 }}>
-                   <RNText style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 8 }]}>{t('form.base_unit')}</RNText>
-                   <TouchableOpacity style={[styles.input, { borderColor: colors.border, justifyContent: 'center' }]} onPress={() => { setUnitSelectionMode('price'); setShowUnitModal(true); }}>
-                      <RNText style={[styles.inputText, { color: colors.text }]}>{t(`form.${baseUnit.toLowerCase()}`)}</RNText>
-                   </TouchableOpacity>
+                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('form.base_unit')}</AppText>
+                   <TextInput 
+                      style={[styles.input, { color: colors.text, borderColor: colors.border }]} 
+                      value={baseUnit}
+                      onChangeText={setBaseUnit}
+                      placeholder={t('form.base_unit')}
+                      placeholderTextColor={colors.textSecondary}
+                   />
                 </View>
               </View>
 
               {hasPacks && (
                 <View style={styles.inputNode}>
-                   <RNText style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 8 }]}>{t('form.conversion_ratio')}</RNText>
+                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('form.conversion_ratio')}</AppText>
                    <TextInput 
                      style={[styles.input, { color: colors.text, borderColor: errors.unitsPerPack ? '#FF3B30' : colors.border, fontFamily: Fonts.bold }]} 
                      value={unitsPerPack}
                      onChangeText={(val) => { setUnitsPerPack(val); if (errors.unitsPerPack) setErrors(prev => ({ ...prev, unitsPerPack: '' })); }}
                      keyboardType="numeric"
                    />
-                   {errors.unitsPerPack && <RNText style={styles.errorText}>{errors.unitsPerPack}</RNText>}
+                   {errors.unitsPerPack && <AppText variant="caption" weight="medium" style={styles.errorText} numberOfLines={2}>{errors.unitsPerPack}</AppText>}
                 </View>
               )}
 
               <View style={styles.inputNode}>
-                 <RNText style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 8 }]}>{t('form.initial_stock', { unit: hasPacks ? t(`form.${purchaseUnit.toLowerCase()}`) : t(`form.${baseUnit.toLowerCase()}`) })}</RNText>
+                 <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 8 }]} numberOfLines={2}>{t('form.initial_stock', { unit: hasPacks ? purchaseUnit : baseUnit })}</AppText>
                  <TextInput 
                    style={[styles.input, { color: colors.text, borderColor: errors.quantity ? '#FF3B30' : colors.border, fontFamily: Fonts.bold, fontSize: 18 }]} 
                    value={totalPackQuantity}
                    onChangeText={(val) => { setTotalPackQuantity(val); if (errors.quantity) setErrors(prev => ({ ...prev, quantity: '' })); }}
                    keyboardType="numeric"
                  />
-                 {errors.quantity && <RNText style={styles.errorText}>{errors.quantity}</RNText>}
+                 {errors.quantity && <AppText variant="caption" weight="medium" style={styles.errorText} numberOfLines={2}>{errors.quantity}</AppText>}
               </View>
             </View>
           )}
 
           {step === 3 && (
             <View style={styles.formCard}>
-              <RNText style={[styles.cardTitle, { color: colors.textSecondary }]}>{t('form.financial_strategy')}</RNText>
+              <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.cardTitle, { color: colors.textSecondary }]} numberOfLines={1}>{t('form.financial_strategy')}</AppText>
               
               <View style={styles.row}>
                 <View style={{ flex: 1, marginRight: 15 }}>
-                    <RNText style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 8 }]}>{hasPacks ? t('form.bulk_cost') : t('form.unit_cost')}</RNText>
+                    <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 8 }]} numberOfLines={2}>{hasPacks ? t('form.bulk_cost') : t('form.unit_cost')}</AppText>
                     <TextInput 
                       style={[styles.input, { color: colors.text, borderColor: errors.purchasePrice ? '#FF3B30' : colors.border, fontFamily: Fonts.bold }]} 
                       placeholder="0.00"
@@ -423,9 +428,9 @@ const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?
                     />
                 </View>
                 <View style={{ flex: 1 }}>
-                   <RNText style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 8 }]}>
+                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 8 }]} numberOfLines={2}>
                      {hasPacks ? t('form.unit_selling_price') : t('form.unit_price')}
-                   </RNText>
+                   </AppText>
                    <TextInput 
                       style={[styles.input, { color: colors.text, borderColor: errors.sellingPrice ? '#FF3B30' : (isLossDetected ? '#FF3B30' : colors.border), fontFamily: Fonts.bold }]} 
                       placeholder={hasPacks && unitsPerPack ? (Number(packPurchasePrice) / Number(unitsPerPack) * 1.2).toFixed(2) : "0.00"}
@@ -436,28 +441,28 @@ const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?
                 </View>
               </View>
               {(errors.purchasePrice || errors.sellingPrice) && (
-                <RNText style={[styles.errorText, { marginBottom: 10 }]}>
+                <AppText variant="caption" weight="medium" style={[styles.errorText, { marginBottom: 10 }]} numberOfLines={2}>
                   {errors.purchasePrice || errors.sellingPrice}
-                </RNText>
+                </AppText>
               )}
 
               <View style={[styles.financeSummary, { backgroundColor: colors.card, borderColor: colors.border }]}>
                  <View style={styles.summaryRow}>
-                    <RNText style={[styles.summaryLabel, { color: colors.textSecondary }]}>{t('form.profit_per', { unit: t(`form.${baseUnit.toLowerCase()}`) })}</RNText>
-                    <RNText style={[styles.summaryValue, baseMargin > 0 ? { color: '#34C759' } : { color: '#FF3B30' }]}>
+                    <AppText variant="caption" weight="medium" style={[styles.summaryLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('form.profit_per', { unit: baseUnit })}</AppText>
+                    <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.summaryValue, baseMargin > 0 ? { color: '#34C759' } : { color: '#FF3B30' }]} numberOfLines={1}>
                        {(Number(baseSellingPrice) - baseCostPrice).toFixed(2)} {t('common.etb')}
-                    </RNText>
+                    </AppText>
                  </View>
                  <View style={styles.summaryRow}>
-                    <RNText style={[styles.summaryLabel, { color: colors.textSecondary }]}>{t('form.intel_margin')}</RNText>
-                    <RNText style={[styles.summaryValue, baseMargin > 0 ? { color: '#34C759' } : { color: '#FF3B30' }]}>
+                    <AppText variant="caption" weight="medium" style={[styles.summaryLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('form.intel_margin')}</AppText>
+                    <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.summaryValue, baseMargin > 0 ? { color: '#34C759' } : { color: '#FF3B30' }]} numberOfLines={1}>
                        {baseMargin.toFixed(1)}%
-                    </RNText>
+                    </AppText>
                  </View>
                  {isLossDetected && (
                    <View style={styles.warningRow}>
                       <AlertCircle size={14} color="#FF3B30" />
-                      <RNText style={styles.warningText}>{t('form.loss_detected', { cost: baseCostPrice.toFixed(2) })}</RNText>
+                      <AppText variant="caption" weight="bold" style={styles.warningText} numberOfLines={2}>{t('form.loss_detected', { cost: baseCostPrice.toFixed(2) })}</AppText>
                    </View>
                  )}
               </View>
@@ -466,20 +471,21 @@ const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?
                  style={[styles.advToggle, { borderColor: colors.border }]}
                  onPress={() => setAllowSellByPack(!allowSellByPack)}
               >
-                 <RNText style={[styles.advToggleText, { color: colors.text }]}>{t('form.adv_bulk_selling')}</RNText>
+                 <AppText variant="body-sm" weight="bold" style={[styles.advToggleText, { color: colors.text }]} numberOfLines={2}>{t('form.adv_bulk_selling')}</AppText>
                  <ChevronDown size={18} color={colors.textSecondary} />
               </TouchableOpacity>
               
               {allowSellByPack && (
                 <Animated.View entering={FadeInDown} style={styles.inputNode}>
-                   <RNText style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 8 }]}>{t('form.bulk_selling_price')}</RNText>
+                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('form.bulk_selling_price')}</AppText>
                    <TextInput 
-                     style={[styles.input, { color: colors.text, borderColor: colors.border, fontFamily: Fonts.bold }]} 
+                     style={[styles.input, { color: colors.text, borderColor: errors.packSellingPrice ? '#FF3B30' : colors.border, fontFamily: Fonts.bold }]} 
                      placeholder={hasPacks && packPurchasePrice ? (Number(packPurchasePrice) * 1.2).toFixed(2) : "0.00"}
                      value={packSellingPrice}
-                     onChangeText={setPackSellingPrice}
+                     onChangeText={(val) => { setPackSellingPrice(val); if (errors.packSellingPrice) setErrors(prev => ({ ...prev, packSellingPrice: '' })); }}
                      keyboardType="numeric"
                    />
+                   {errors.packSellingPrice && <AppText variant="caption" weight="medium" style={styles.errorText} numberOfLines={2}>{errors.packSellingPrice}</AppText>}
                 </Animated.View>
               )}
             </View>
@@ -487,7 +493,7 @@ const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?
 
           {step === 4 && (
             <View style={styles.formCard}>
-              <RNText style={[styles.cardTitle, { color: colors.textSecondary }]}>{t('form.asset_assurance')}</RNText>
+              <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.cardTitle, { color: colors.textSecondary }]} numberOfLines={1}>{t('form.asset_assurance')}</AppText>
 
               {/* Record Date */}
               <TouchableOpacity 
@@ -496,10 +502,10 @@ const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?
               >
                 <Calendar size={18} color={colors.primary} style={{ marginRight: 10 }} />
                 <View style={{ flex: 1 }}>
-                  <RNText style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 2 }]}>{t('common.record_date')}</RNText>
-                  <RNText style={[{ fontSize: 16, fontFamily: Fonts.bold, color: recordDate ? colors.text : colors.textSecondary }]}>
+                  <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 2 }]} numberOfLines={1}>{t('common.record_date')}</AppText>
+                  <AppText variant="body" weight="bold" style={{ color: recordDate ? colors.text : colors.textSecondary }} numberOfLines={1}>
                     {recordDate || t('common.today')}
-                  </RNText>
+                  </AppText>
                 </View>
                 <ChevronDown size={18} color={colors.textSecondary} />
               </TouchableOpacity>
@@ -507,18 +513,19 @@ const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?
               <View style={styles.inputNode}>
                 <View style={styles.nodeHeader}>
                    <Calendar size={14} color={colors.textSecondary} />
-                   <RNText style={[styles.nodeLabel, { color: colors.textSecondary }]}>{t('form.expiration_archive')}</RNText>
+                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('form.expiration_archive')}</AppText>
                 </View>
                 <TextInput 
-                  style={[styles.input, { color: colors.text, borderColor: colors.border }]} 
-                  placeholder="DD/MM/YYYY" 
+                  style={[styles.input, { color: colors.text, borderColor: errors.expiryDate ? '#FF3B30' : colors.border }]} 
+                  placeholder={t('inv.date_format')} 
                   placeholderTextColor={colors.textSecondary}
                   value={expiryDate}
-                  onChangeText={setExpiryDate}
+                  onChangeText={(val) => { setExpiryDate(val); if (errors.expiryDate) setErrors(prev => ({ ...prev, expiryDate: '' })); }}
                 />
+                 {errors.expiryDate && <AppText variant="caption" weight="medium" style={styles.errorText} numberOfLines={2}>{errors.expiryDate}</AppText>}
               </View>
 
-              <RNText style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 12 }]}>{t('form.quality_classification')}</RNText>
+              <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 12 }]} numberOfLines={1}>{t('form.quality_classification')}</AppText>
               <View style={styles.gradeGrid}>
                  {QUALITY_GRADES.map(g => (
                    <TouchableOpacity 
@@ -526,16 +533,91 @@ const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?
                      style={[styles.gradeChip, { backgroundColor: colors.card, borderColor: qualityGrade === g ? colors.primary : colors.border }]}
                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setQualityGrade(g); }}
                    >
-                     <RNText style={[styles.gradeText, { color: qualityGrade === g ? colors.primary : colors.textSecondary }]}>{t(`form.${g}`)}</RNText>
+                     <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.gradeText, { color: qualityGrade === g ? colors.primary : colors.textSecondary }]} numberOfLines={1}>{t(`form.${g}`)}</AppText>
                    </TouchableOpacity>
                  ))}
+              </View>
+
+              {/* Supplier Selection */}
+              <TouchableOpacity
+                style={[styles.intelligenceBlock, { backgroundColor: colors.card, borderColor: colors.border, flexDirection: 'row', alignItems: 'center' }]}
+                onPress={() => { loadSuppliers(); setShowSupplierModal(true); }}
+              >
+                <Truck size={20} color={colors.primary} />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <AppText variant="body" weight="bold" style={[styles.blockTitle, { color: colors.text }]} numberOfLines={2}>{t('form.supplier_label')}</AppText>
+                  <AppText variant="body-sm" weight="medium" style={[styles.blockSub, { color: colors.textSecondary }]} numberOfLines={2}>
+                    {selectedSupplier ? selectedSupplier.fullName : t('form.tap_select_supplier')}
+                  </AppText>
+                  {selectedSupplier?.phone && supplierCallEnabled && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 6 }}>
+                      <Phone size={12} color={colors.primary} />
+                      <AppText variant="caption" weight="medium" shrink={false} style={{ color: colors.primary }} numberOfLines={1}>
+                        {selectedSupplier.phone}
+                      </AppText>
+                    </View>
+                  )}
+                </View>
+                {selectedSupplier?.phone && supplierCallEnabled ? (
+                  <TouchableOpacity
+                    onPress={(e) => {
+                      e.stopPropagation?.();
+                      Haptics.impactAsync(Haptics.ImpactFeedbackType.Medium);
+                      const phone = selectedSupplier.phone.replace(/[^0-9+]/g, '');
+                      Linking.openURL(`tel:${phone}`).catch(async () => {
+                        await dialog.alert({ title: t('common.error'), message: t('form.could_not_call'), iconType: 'danger' });
+                      });
+                    }}
+                    style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary + '20', justifyContent: 'center', alignItems: 'center' }}
+                  >
+                    <PhoneCall size={18} color={colors.primary} />
+                  </TouchableOpacity>
+                ) : (
+                  <ChevronDown size={18} color={colors.textSecondary} />
+                )}
+              </TouchableOpacity>
+
+              <View style={[styles.intelligenceBlock, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <View style={styles.blockHeader}>
+                   <PhoneCall size={20} color={colors.primary} />
+                   <View style={{ flex: 1 }}>
+                     <AppText variant="body" weight="bold" style={[styles.blockTitle, { color: colors.text }]} numberOfLines={2}>{t('form.supplier_call_title')}</AppText>
+                      <AppText variant="micro" weight="medium" style={{ color: colors.textSecondary, marginTop: 2 }} numberOfLines={2}>
+                        {t('form.supplier_call_sub')}
+                      </AppText>
+                   </View>
+                   <TouchableOpacity
+                     onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setSupplierCallEnabled(!supplierCallEnabled); }}
+                     style={[styles.switch, { backgroundColor: supplierCallEnabled ? colors.text : colors.border }]}
+                   >
+                     <View style={[styles.switchThumb, { backgroundColor: colors.background, left: supplierCallEnabled ? 24 : 2 }]} />
+                   </TouchableOpacity>
+                </View>
+                {supplierCallEnabled && (
+                  <Animated.View entering={FadeInDown} style={{ marginTop: 12, gap: 8 }}>
+                    <AppText variant="micro" weight="medium" style={{ color: colors.textSecondary, lineHeight: 16 }} numberOfLines={4}>
+                      {t('form.supplier_call_help')}
+                    </AppText>
+                    {!selectedSupplier && (
+                      <TouchableOpacity
+                        onPress={() => { loadSuppliers(); setShowSupplierModal(true); }}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8 }}
+                      >
+                        <Plus size={14} color={colors.primary} />
+                        <AppText variant="caption" weight="bold" shrink={false} style={{ color: colors.primary }} numberOfLines={1}>
+                          {t('form.tap_select_supplier_short')}
+                        </AppText>
+                      </TouchableOpacity>
+                    )}
+                  </Animated.View>
+                )}
               </View>
 
               <View style={[styles.intelligenceBlock, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.blockHeader}>
                    <CreditCard size={20} color={colors.primary} />
-                   <RNText style={[styles.blockTitle, { color: colors.text }]}>{t('form.supplier_credit')}</RNText>
-                   <TouchableOpacity 
+                   <AppText variant="body" weight="bold" style={[styles.blockTitle, { color: colors.text }]} numberOfLines={2}>{t('form.supplier_credit')}</AppText>
+                   <TouchableOpacity
                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setCreditToggle(creditToggle === 'Yes' ? 'No' : 'Yes'); }}
                      style={[styles.switch, { backgroundColor: creditToggle === 'Yes' ? colors.text : colors.border }]}
                    >
@@ -547,22 +629,24 @@ const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?
               {creditToggle === 'Yes' && (
                 <Animated.View entering={FadeInDown} style={styles.row}>
                    <View style={{ flex: 1, marginRight: 15 }}>
-                      <RNText style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 8 }]}>{t('common.phone')}</RNText>
+                      <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('common.phone')}</AppText>
                       <TextInput 
-                        style={[styles.input, { color: colors.text, borderColor: colors.border }]} 
+                        style={[styles.input, { color: colors.text, borderColor: errors.supplierPhone ? '#FF3B30' : colors.border }]} 
                         value={supplierPhone}
-                        onChangeText={setSupplierPhone}
+                        onChangeText={(val) => { setSupplierPhone(val); if (errors.supplierPhone) setErrors(prev => ({ ...prev, supplierPhone: '' })); }}
                         keyboardType="phone-pad"
                       />
+                      {errors.supplierPhone && <AppText variant="caption" weight="medium" style={styles.errorText} numberOfLines={2}>{errors.supplierPhone}</AppText>}
                    </View>
                    <View style={{ flex: 1 }}>
-                      <RNText style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 8 }]}>{t('common.account')}</RNText>
+                      <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('common.account')}</AppText>
                       <TextInput 
-                        style={[styles.input, { color: colors.text, borderColor: colors.border }]} 
+                        style={[styles.input, { color: colors.text, borderColor: errors.supplierAccount ? '#FF3B30' : colors.border }]} 
                         value={supplierAccount}
-                        onChangeText={setSupplierAccount}
+                        onChangeText={(val) => { setSupplierAccount(val); if (errors.supplierAccount) setErrors(prev => ({ ...prev, supplierAccount: '' })); }}
                         keyboardType="numeric"
                       />
+                      {errors.supplierAccount && <AppText variant="caption" weight="medium" style={styles.errorText} numberOfLines={2}>{errors.supplierAccount}</AppText>}
                    </View>
                 </Animated.View>
               )}
@@ -580,18 +664,15 @@ const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?
                style={[styles.nextBtn, { backgroundColor: colors.text, flex: 1 }]} 
                onPress={step < 4 ? handleNext : handleFinish}
              >
-               <RNText style={[styles.nextBtnText, { color: colors.background }]}>
+                 <AppText variant="body" weight="bold" shrink={false} style={[styles.nextBtnText, { color: colors.background }]} numberOfLines={1}>
                  {step < 4 ? t('form.continue_intake') : t('form.initialize_asset')}
-               </RNText>
+               </AppText>
                <ArrowRight size={18} color={colors.background} />
              </TouchableOpacity>
           </View>
         </Animated.View>
       </ScrollView>
       </KeyboardAvoidingView>
-
-      {/* MODALS */}
-      {renderSuccessVault()}
 
       <CustomDatePicker
         visible={showDatePicker}
@@ -607,7 +688,7 @@ const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?
               <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
             </View>
             <View style={styles.modalHeader}>
-               <RNText style={[styles.modalTitle, { color: colors.text }]}>{t('form.category_intel')}</RNText>
+               <AppText variant="title" weight="bold" style={[styles.modalTitle, { color: colors.text }]} numberOfLines={2}>{t('form.category_intel')}</AppText>
                <TouchableOpacity onPress={() => setShowNewCategory(!showNewCategory)}>
                   <Plus size={24} color={colors.text} />
                </TouchableOpacity>
@@ -621,17 +702,24 @@ const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?
                     value={newCategoryName}
                     onChangeText={setNewCategoryName}
                  />
-                 <TouchableOpacity 
-                   style={[styles.addBtn, { backgroundColor: colors.text }]}
-                   onPress={() => {
-                     const newCat = { id: Date.now(), name: newCategoryName, icon: '📦' };
-                     setCategories([...categories, newCat]);
-                     setSelectedCategory(newCat);
-                     setNewCategoryName('');
-                     setShowNewCategory(false);
-                     setShowCategoryModal(false);
-                   }}
-                 >
+                  <TouchableOpacity
+                    style={[styles.addBtn, { backgroundColor: colors.text }]}
+                    onPress={async () => {
+                      const name = newCategoryName.trim();
+                      if (!name) return;
+                      const exists = categories.some(c => c.name.toLowerCase() === name.toLowerCase());
+                      if (exists) {
+                        await dialog.alert({ title: t('common.error'), message: t('form.category_exists'), iconType: 'danger' });
+                        return;
+                      }
+                      const newCat = { id: Date.now(), name, icon: '📦' };
+                      setCategories([...categories, newCat]);
+                      setSelectedCategory(newCat);
+                      setNewCategoryName('');
+                      setShowNewCategory(false);
+                      setShowCategoryModal(false);
+                    }}
+                  >
                    <Check size={20} color={colors.background} />
                  </TouchableOpacity>
               </View>
@@ -644,8 +732,8 @@ const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?
                   style={[styles.catItem, { borderColor: colors.border }]}
                   onPress={() => { setSelectedCategory(cat); setShowCategoryModal(false); Haptics.selectionAsync(); }}
                 >
-                  <RNText style={styles.catIcon}>{cat.icon}</RNText>
-                  <RNText style={[styles.catName, { color: colors.text }]}>{cat.name.includes('category.') ? t(cat.name) : cat.name}</RNText>
+                  <AppText variant="heading" shrink={false} style={styles.catIcon}>{cat.icon}</AppText>
+                  <AppText variant="body" weight="bold" style={[styles.catName, { color: colors.text }]} numberOfLines={2}>{cat.name.includes('category.') ? t(cat.name) : cat.name}</AppText>
                   {selectedCategory?.id === cat.id && <Check size={18} color={colors.primary} />}
                 </TouchableOpacity>
               ))}
@@ -654,33 +742,104 @@ const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?
         </Pressable>
       </Modal>
 
-      <Modal visible={showUnitModal} transparent animationType="slide">
-        <Pressable style={styles.modalOverlay} onPress={() => setShowUnitModal(false)}>
-          <View style={[styles.categorySheet, { backgroundColor: colors.background }]}>
+      {/* Supplier Selection Modal */}
+      <Modal visible={showSupplierModal} transparent animationType="slide">
+        <Pressable style={styles.modalOverlay} onPress={() => { setShowSupplierModal(false); setShowNewSupplierForm(false); }}>
+          <Pressable style={[styles.categorySheet, { backgroundColor: colors.background }]}>
             <View style={styles.modalHandleRow}>
               <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
             </View>
-            <RNText style={[styles.modalTitle, { color: colors.text, alignSelf: 'center', marginBottom: 20 }]}>{t('form.unit_scale')}</RNText>
+            
+            <View style={styles.modalHeader}>
+              <AppText variant="title" weight="bold" style={[styles.modalTitle, { color: colors.text }]} numberOfLines={2}>Select Supplier</AppText>
+              <TouchableOpacity onPress={() => { setShowNewSupplierForm(!showNewSupplierForm); }}>
+                <Plus size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            {/* New Supplier Form */}
+            {showNewSupplierForm && (
+              <View style={{ paddingHorizontal: 25, marginBottom: 20, gap: 12 }}>
+                <TextInput
+                  style={[styles.input, { color: colors.text, borderColor: colors.border }]}
+                  placeholder={t('common.supplier_name_ph')}
+                  placeholderTextColor={colors.textSecondary}
+                  value={newSupplierName}
+                  onChangeText={setNewSupplierName}
+                />
+                <TextInput
+                  style={[styles.input, { color: colors.text, borderColor: colors.border }]}
+                  placeholder={t('contacts.phone_ph')}
+                  placeholderTextColor={colors.textSecondary}
+                  value={newSupplierPhone}
+                  onChangeText={setNewSupplierPhone}
+                  keyboardType="phone-pad"
+                />
+                <TextInput
+                  style={[styles.input, { color: colors.text, borderColor: colors.border }]}
+                  placeholder={t('common.account_number_ph')}
+                  placeholderTextColor={colors.textSecondary}
+                  value={newSupplierAccount}
+                  onChangeText={setNewSupplierAccount}
+                  keyboardType="numeric"
+                />
+                <TouchableOpacity
+                  style={[styles.addBtn, { backgroundColor: colors.text, alignSelf: 'flex-end' }]}
+                  onPress={async () => {
+                    if (!newSupplierName.trim()) {
+                      await dialog.alert({ title: 'Error', message: 'Supplier name is required', iconType: 'danger' });
+                      return;
+                    }
+                    const id = await insertContact({
+                      fullName: newSupplierName.trim(),
+                      category: 'supplier',
+                      phone: newSupplierPhone.trim() || undefined,
+                      accountNumber: newSupplierAccount.trim() || undefined,
+                      notes: newSupplierNotes.trim() || undefined,
+                    });
+                    if (id) {
+                      const newSup = { id: Number(id), fullName: newSupplierName.trim(), phone: newSupplierPhone.trim(), accountNumber: newSupplierAccount.trim(), category: 'supplier' };
+                      setSuppliers([...suppliers, newSup]);
+                      setSelectedSupplier(newSup);
+                      setShowSupplierModal(false);
+                      setShowNewSupplierForm(false);
+                      setNewSupplierName('');
+                      setNewSupplierPhone('');
+                      setNewSupplierAccount('');
+                    }
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  }}
+                >
+                  <Check size={20} color={colors.background} />
+                </TouchableOpacity>
+              </View>
+            )}
+
             <ScrollView contentContainerStyle={styles.catScroll}>
-               {UNIT_OPTIONS.map(u => (
-                 <TouchableOpacity 
-                    key={u} 
-                    style={[styles.catItem, { borderColor: colors.border }]}
-                    onPress={() => { 
-                      if (unitSelectionMode === 'pack') setPurchaseUnit(u); 
-                      else setBaseUnit(u); 
-                      setShowUnitModal(false); 
-                      Haptics.selectionAsync(); 
-                    }}
-                 >
-                   <RNText style={[styles.catName, { color: colors.text }]}>{t(`form.${u.toLowerCase()}`)}</RNText>
-                   {(unitSelectionMode === 'pack' ? purchaseUnit === u : baseUnit === u) && <Check size={18} color={colors.primary} />}
-                 </TouchableOpacity>
-               ))}
+              {suppliers.length === 0 && !showNewSupplierForm && (
+                <View style={{ padding: 30, alignItems: 'center' }}>
+                  <AppText variant="body" weight="medium" align="center" style={[styles.catName, { color: colors.textSecondary }]} numberOfLines={2}>No suppliers yet. Tap + to add one.</AppText>
+                </View>
+              )}
+              {suppliers.map((sup) => (
+                <TouchableOpacity
+                  key={sup.id}
+                  style={[styles.catItem, { borderColor: colors.border }]}
+                  onPress={() => { setSelectedSupplier(sup); setShowSupplierModal(false); Haptics.selectionAsync(); }}
+                >
+                    <AppText variant="heading" shrink={false} style={styles.catIcon}>🚚</AppText>
+                    <View style={{ marginLeft: 12, flex: 1 }}>
+                      <AppText variant="body" weight="bold" style={[styles.catName, { color: colors.text }]} numberOfLines={1}>{sup.fullName}</AppText>
+                      {sup.phone && <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }} numberOfLines={1}>{sup.phone}</AppText>}
+                  </View>
+                  {selectedSupplier?.id === sup.id && <Check size={18} color={colors.primary} />}
+                </TouchableOpacity>
+              ))}
             </ScrollView>
-          </View>
+          </Pressable>
         </Pressable>
       </Modal>
+
     </SafeAreaView>
   );
 };
@@ -720,8 +879,11 @@ const styles = StyleSheet.create({
   warningRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 5 },
   warningText: { fontSize: 11, fontFamily: Fonts.bold, color: '#FF3B30' },
   errorText: { fontSize: 10, fontFamily: Fonts.semibold, color: '#FF3B30', marginTop: 4, marginLeft: 5 },
-  advToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 15, borderRadius: 18, borderDash: 1, borderStyle: 'dashed', borderWidth: 1 },
+  advToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 15, borderRadius: 18, borderStyle: 'dashed', borderWidth: 1 },
   advToggleText: { fontSize: 14, fontFamily: Fonts.bold },
+  inlineCategoryRow: { flexDirection: 'row', paddingVertical: 8, gap: 8 },
+  inlineCategoryChip: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 14, borderWidth: 1, gap: 6 },
+  inlineCategoryText: { fontSize: 13, fontFamily: Fonts.medium },
   gradeGrid: { flexDirection: 'row', gap: 10 },
   gradeChip: { flex: 1, paddingVertical: 12, borderRadius: 12, borderWidth: 1, alignItems: 'center' },
   gradeText: { fontSize: 13, fontFamily: Fonts.bold },

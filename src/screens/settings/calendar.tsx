@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+﻿import React from 'react';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { CheckCircle2, Calendar } from 'lucide-react-native';
 import { Fonts } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
 import { formatDate } from '@/utils/date-utils';
-
+import { AppText, AppCard, AppButton, AppListItem, AppRow } from '@/components/ui';
 type CalendarId = 'ethiopian' | 'gregorian';
 
 const CalendarSettings = () => {
@@ -29,8 +29,8 @@ const CalendarSettings = () => {
             <Calendar size={22} color={isSelected ? colors.text : colors.textSecondary} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.cardTitle, { color: colors.text }]}>{title}</Text>
-            <Text style={[styles.cardDate, { color: colors.textSecondary }]}>{dateDisplay}</Text>
+            <AppText variant="title-sm" weight="bold" style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>{title}</AppText>
+            <AppText variant="body-sm" weight="medium" style={[styles.cardDate, { color: colors.textSecondary }]} numberOfLines={2}>{dateDisplay}</AppText>
           </View>
         </View>
         {isSelected ? (
@@ -44,9 +44,9 @@ const CalendarSettings = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Text style={[styles.headerLabel, { color: colors.textSecondary }]}>{t('settings.calendar_settings')}</Text>
-      <Text style={[styles.mainTitle, { color: colors.text }]}>{t('settings.date_format')}</Text>
-      <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{t('settings.date_format_desc')}</Text>
+      <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.headerLabel, { color: colors.textSecondary }]} numberOfLines={2}>{t('settings.calendar_settings')}</AppText>
+      <AppText variant="display" weight="bold" style={[styles.mainTitle, { color: colors.text }]} numberOfLines={2}>{t('settings.date_format')}</AppText>
+      <AppText variant="body-sm" weight="medium" style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={3}>{t('settings.date_format_desc')}</AppText>
 
       <CalendarOption
         id="ethiopian"
@@ -60,12 +60,12 @@ const CalendarSettings = () => {
       />
 
       <View style={[styles.infoBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-          📅 {t('settings.currently_active')} <Text style={[styles.infoHighlight, { color: colors.text }]}>{calendarType === 'ethiopian' ? t('settings.ethiopian') : t('settings.gregorian')}</Text>
-        </Text>
+        <AppText variant="body-sm" weight="medium" style={[styles.infoText, { color: colors.textSecondary }]} numberOfLines={3}>
+          📅 {t('settings.currently_active')} <AppText variant="body-sm" weight="bold" style={[styles.infoHighlight, { color: colors.text }]} numberOfLines={1}>{calendarType === 'ethiopian' ? t('settings.ethiopian') : t('settings.gregorian')}</AppText>
+        </AppText>
       </View>
 
-      <Text style={[styles.note, { color: colors.textSecondary, textAlign: 'center', marginTop: 10 }]}>{t('settings.immediate_apply')}</Text>
+      <AppText variant="caption" weight="medium" style={[styles.note, { color: colors.textSecondary, textAlign: 'center', marginTop: 10 }]} numberOfLines={2}>{t('settings.immediate_apply')}</AppText>
     </View>
   );
 };
@@ -94,6 +94,7 @@ const styles = StyleSheet.create({
   },
   infoText: { fontSize: 13, fontFamily: Fonts.medium, color: '#555' },
   infoHighlight: { fontFamily: Fonts.bold, fontWeight: '700', color: '#000' },
+  note: { fontSize: 12, fontFamily: Fonts.medium, color: '#8E8E93' },
   saveButton: { backgroundColor: '#000', padding: 18, borderRadius: 30, alignItems: 'center', marginTop: 'auto', marginBottom: 30 },
   saveButtonText: { color: '#FFF', fontSize: 16, fontFamily: Fonts.bold, fontWeight: '700' },
 });

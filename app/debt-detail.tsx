@@ -1,5 +1,5 @@
-import DebtManagementFlow from '../src/screens/dashboard/debt-list-con';
+import DebtManagementScreen from '../src/screens/dashboard/debt-management';
 
 export default function DebtDetailPage() {
-  return <DebtManagementFlow />;
+  return <DebtManagementScreen />;
 }

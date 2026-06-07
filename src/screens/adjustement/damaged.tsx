@@ -1,14 +1,12 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { 
   View, 
-  Text, 
   StyleSheet, 
   TextInput, 
   TouchableOpacity, 
   ScrollView, 
   KeyboardAvoidingView, 
   Platform, 
-  Alert,
   Modal 
 } from 'react-native';
 import { 
@@ -39,12 +37,14 @@ import * as Haptics from 'expo-haptics';
 import { Fonts } from '@/constants/theme';
 import { searchInventory, insertAdjustment } from '@/database/db';
 import { useSettings } from '@/context/SettingsContext';
+import { useDialog } from '@/context/DialogContext';
 import BusinessSuccessModal, { BusinessSuccessDetails } from '@/components/BusinessSuccessModal';
 import { CustomDatePicker } from '@/components/CustomDatePicker';
 import { Calendar } from 'lucide-react-native';
-
+import { AppText, AppListItem, AppRow, AppCard } from '@/components/ui';
 const DamagedItemForm = ({ onComplete }: { onComplete?: () => void }) => {
   const { colors, theme, t } = useSettings();
+  const dialog = useDialog();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [selectedItem, setSelectedItem] = useState<any>(null);
@@ -81,9 +81,44 @@ const DamagedItemForm = ({ onComplete }: { onComplete?: () => void }) => {
   };
 
   const handleConfirm = async () => {
-    if (!selectedItem || !quantity || isNaN(parseFloat(quantity))) {
+    if (!selectedItem) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert(t('common.error'), t('adj.select_asset'));
+      await dialog.alert({
+        title: t('common.error'),
+        message: t('adj.select_asset'),
+        iconType: 'danger',
+      });
+      return;
+    }
+
+    const qty = parseFloat(quantity);
+    if (!quantity || isNaN(qty) || qty <= 0) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      await dialog.alert({
+        title: t('common.error'),
+        message: t('adj.valid_quantity'),
+        iconType: 'danger',
+      });
+      return;
+    }
+
+    if (qty > selectedItem.totalBaseQuantity) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      await dialog.alert({
+        title: t('common.error'),
+        message: 'Cannot exceed available stock',
+        iconType: 'danger',
+      });
+      return;
+    }
+
+    if (!reason?.trim()) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      await dialog.alert({
+        title: t('common.error'),
+        message: t('adj.select_reason'),
+        iconType: 'danger',
+      });
       return;
     }
 
@@ -92,7 +127,7 @@ const DamagedItemForm = ({ onComplete }: { onComplete?: () => void }) => {
       type: 'damaged',
       oldValue: null,
       newValue: null,
-      quantity: parseFloat(quantity),
+      quantity: qty,
       unitType: unitType,
       reason: reason,
       date: new Date().toISOString().split('T')[0],
@@ -108,13 +143,17 @@ const DamagedItemForm = ({ onComplete }: { onComplete?: () => void }) => {
         mainLabel: t('adj.loss_qty'),
         mainValue: `${quantity} ${unitType === 'pack' ? (selectedItem?.purchaseUnit || t('adj.pack')) : (selectedItem?.baseUnit || t('adj.unit'))}`,
         secondaryLabel: t('adj.magnitude'),
-        secondaryValue: `-${calculateLossValue().toLocaleString()} ETB`,
+        secondaryValue: `-${calculateLossValue().toLocaleString()} ${t('common.etb')}`,
         iconType: 'damaged',
         itemName: selectedItem.name
       });
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert(t('common.error'), t('adj.record_failed'));
+      await dialog.alert({
+        title: t('common.error'),
+        message: t('adj.record_failed'),
+        iconType: 'danger',
+      });
     }
   };
 
@@ -128,11 +167,11 @@ const DamagedItemForm = ({ onComplete }: { onComplete?: () => void }) => {
         <Animated.View entering={FadeInDown.duration(600)} style={styles.header}>
             <View style={styles.headerRow}>
                <View>
-                <Text style={[styles.headerSub, { color: colors.textSecondary }]}>{t('adj.integrity_audit')}</Text>
-                <Text style={[styles.headerTitle, { color: colors.text }]}>{t('adj.stock_integrity')}</Text>
+                <AppText variant="body-sm" weight="bold" transform="uppercase" style={[styles.headerSub, { color: colors.textSecondary }]} numberOfLines={1}>{t('adj.integrity_audit')}</AppText>
+                <AppText variant="display-lg" weight="bold" style={[styles.headerTitle, { color: colors.text }]} numberOfLines={2}>{t('adj.stock_integrity')}</AppText>
              </View>
-               <View style={[styles.modeBadge, { backgroundColor: warningColor + '15' }]}>
-                  <Text style={[styles.modeText, { color: warningColor }]}>{t('common.damaged').toUpperCase()}</Text>
+                <View style={[styles.modeBadge, { backgroundColor: warningColor + '15' }]}>
+                   <AppText variant="micro" weight="bold" shrink={false} style={[styles.modeText, { color: warningColor }]} numberOfLines={1}>{t('common.damaged').toUpperCase()}</AppText>
                </View>
             </View>
         </Animated.View>
@@ -140,15 +179,15 @@ const DamagedItemForm = ({ onComplete }: { onComplete?: () => void }) => {
         {/* Integrity Impact Visualization */}
         <Animated.View entering={FadeInDown.delay(200).duration(600)} style={styles.impactContainer}>
            <View style={[styles.impactCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-             <Text style={[styles.impactLabel, { color: colors.textSecondary }]}>{t('adj.valuation_impact')}</Text>
+             <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.impactLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('adj.valuation_impact')}</AppText>
              
              <View style={styles.impactRow}>
                 <View style={{ flex: 1 }}>
-                   <Text style={[styles.impactKey, { color: colors.textSecondary }]}>{t('adj.asset_drain')}</Text>
-                   <Text style={[styles.impactValueMain, { color: colors.text }]}>
+                   <AppText variant="body-sm" weight="bold" transform="uppercase" style={[styles.impactKey, { color: colors.textSecondary }]} numberOfLines={1}>{t('adj.asset_drain')}</AppText>
+                   <AppText variant="display-lg" weight="bold" style={[styles.impactValueMain, { color: colors.text }]} numberOfLines={1}>
                      - {quantity || '0'} 
-                     <Text style={styles.smallUnit}> {unitType === 'pack' ? (selectedItem?.purchaseUnit || t('adj.pack')) : (selectedItem?.baseUnit || t('adj.unit'))}</Text>
-                   </Text>
+                     <AppText variant="body" weight="medium" style={styles.smallUnit}> {unitType === 'pack' ? (selectedItem?.purchaseUnit || t('adj.pack')) : (selectedItem?.baseUnit || t('adj.unit'))}</AppText>
+                   </AppText>
                 </View>
                 <View style={[styles.impactIconBox, { backgroundColor: warningColor + '15' }]}>
                    <TrendingDown size={28} color={warningColor} />
@@ -158,17 +197,17 @@ const DamagedItemForm = ({ onComplete }: { onComplete?: () => void }) => {
              <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
              <View style={styles.impactRow}>
-                <Text style={[styles.impactKey, { color: colors.textSecondary }]}>{t('adj.loss_magnitude')}</Text>
-                <Text style={[styles.impactValueSecondary, { color: warningColor }]}>
-                  - {lossValue.toLocaleString()} <Text style={styles.smallCurr}>{t('common.etb')}</Text>
-                </Text>
+                <AppText variant="body-sm" weight="bold" transform="uppercase" style={[styles.impactKey, { color: colors.textSecondary }]} numberOfLines={1}>{t('adj.loss_magnitude')}</AppText>
+                <AppText variant="heading-lg" weight="bold" style={[styles.impactValueSecondary, { color: warningColor }]} numberOfLines={1}>
+                  - {lossValue.toLocaleString()} <AppText variant="caption" weight="bold" style={styles.smallCurr}>{t('common.etb')}</AppText>
+                </AppText>
              </View>
 
              <View style={styles.logRow}>
                <History size={12} color={colors.textSecondary} />
-               <Text style={[styles.logText, { color: colors.textSecondary }]}>
-                 {t('adj.audit_id')}: <Text style={styles.boldLog}>LSS-{new Date().getTime().toString().slice(-6)}</Text>
-               </Text>
+               <AppText variant="micro" weight="bold" style={[styles.logText, { color: colors.textSecondary }]} numberOfLines={1}>
+                  {t('adj.audit_id')}: <AppText variant="micro" weight="bold" style={styles.boldLog} numberOfLines={1}>LSS-{new Date().getTime().toString().slice(-6)}</AppText>
+               </AppText>
              </View>
            </View>
         </Animated.View>
@@ -177,7 +216,7 @@ const DamagedItemForm = ({ onComplete }: { onComplete?: () => void }) => {
           <View style={styles.inputGroup}>
             <View style={styles.labelRow}>
                <Search size={14} color={colors.textSecondary} />
-               <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{t('adj.target_asset')}</Text>
+               <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('adj.target_asset')}</AppText>
             </View>
             <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <TextInput
@@ -193,8 +232,8 @@ const DamagedItemForm = ({ onComplete }: { onComplete?: () => void }) => {
                 {searchResults.map((item) => (
                   <TouchableOpacity key={item.id} style={[styles.resultItem, { borderBottomColor: colors.border }]} onPress={() => handleSelectItem(item)}>
                     <View>
-                       <Text style={[styles.resultText, { color: colors.text }]}>{item.name}</Text>
-                       <Text style={[styles.resultSubtext, { color: colors.textSecondary }]}>{t('adj.available')}: {item.totalBaseQuantity} {item.baseUnit}</Text>
+                       <AppText variant="body-lg" weight="bold" style={[styles.resultText, { color: colors.text }]} numberOfLines={1}>{item.name}</AppText>
+                       <AppText variant="caption" weight="medium" style={[styles.resultSubtext, { color: colors.textSecondary }]} numberOfLines={1}>{t('adj.available')}: {item.totalBaseQuantity} {item.baseUnit}</AppText>
                     </View>
                     <ChevronRight size={16} color={colors.textSecondary} />
                   </TouchableOpacity>
@@ -207,7 +246,7 @@ const DamagedItemForm = ({ onComplete }: { onComplete?: () => void }) => {
             <View style={[styles.inputGroup, { flex: 1.2, marginRight: 15 }]}>
               <View style={styles.labelRow}>
                  <Zap size={14} color={colors.textSecondary} />
-                 <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{t('adj.loss_qty')}</Text>
+                 <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('adj.loss_qty')}</AppText>
               </View>
               <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <TextInput
@@ -215,7 +254,7 @@ const DamagedItemForm = ({ onComplete }: { onComplete?: () => void }) => {
                   value={quantity}
                   onChangeText={setQuantity}
                   keyboardType="numeric"
-                  placeholder="0"
+                  placeholder={t('inv.qty_ph')}
                   placeholderTextColor={colors.textSecondary}
                 />
               </View>
@@ -224,20 +263,20 @@ const DamagedItemForm = ({ onComplete }: { onComplete?: () => void }) => {
             <View style={[styles.inputGroup, { flex: 1 }]}>
               <View style={styles.labelRow}>
                  <LayoutGrid size={14} color={colors.textSecondary} />
-                 <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{t('adj.scale')}</Text>
+                 <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('adj.scale')}</AppText>
               </View>
               <View style={[styles.unitToggleRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
                  <TouchableOpacity 
                    style={[styles.unitBtn, unitType === 'base' && [styles.activeUnit, { backgroundColor: colors.text }]]} 
                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setUnitType('base'); }}
                  >
-                   <Text style={[styles.unitBtnText, { color: colors.textSecondary }, unitType === 'base' && { color: colors.background }]}>{t('adj.unit')}</Text>
+                   <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.unitBtnText, { color: colors.textSecondary }, unitType === 'base' && { color: colors.background }]} numberOfLines={1}>{t('adj.unit')}</AppText>
                  </TouchableOpacity>
                  <TouchableOpacity 
                    style={[styles.unitBtn, unitType === 'pack' && [styles.activeUnit, { backgroundColor: colors.text }]]} 
                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setUnitType('pack'); }}
                  >
-                   <Text style={[styles.unitBtnText, { color: colors.textSecondary }, unitType === 'pack' && { color: colors.background }]}>{t('adj.pack')}</Text>
+                   <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.unitBtnText, { color: colors.textSecondary }, unitType === 'pack' && { color: colors.background }]} numberOfLines={1}>{t('adj.pack')}</AppText>
                  </TouchableOpacity>
               </View>
             </View>
@@ -246,10 +285,10 @@ const DamagedItemForm = ({ onComplete }: { onComplete?: () => void }) => {
           <View style={styles.inputGroup}>
             <View style={styles.labelRow}>
                <Info size={14} color={colors.textSecondary} />
-               <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{t('adj.loss_reason')}</Text>
+               <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('adj.loss_reason')}</AppText>
             </View>
             <TouchableOpacity style={[styles.dropdownWrapper, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => Haptics.selectionAsync()}>
-              <Text style={[styles.dropdownText, { color: colors.text }]}>{reason}</Text>
+              <AppText variant="subtitle" weight="bold" style={[styles.dropdownText, { color: colors.text }]} numberOfLines={1}>{reason}</AppText>
               <ChevronDown color={colors.textSecondary} size={20} />
             </TouchableOpacity>
             <View style={styles.reasonsRow}>
@@ -259,7 +298,7 @@ const DamagedItemForm = ({ onComplete }: { onComplete?: () => void }) => {
                   style={[styles.reasonTag, { backgroundColor: colors.card, borderColor: reason === r ? warningColor : colors.border }]} 
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setReason(r); }}
                 >
-                  <Text style={[styles.reasonTagText, { color: reason === r ? warningColor : colors.textSecondary }]}>{r}</Text>
+                  <AppText variant="caption" weight="bold" shrink={false} style={[styles.reasonTagText, { color: reason === r ? warningColor : colors.textSecondary }]} numberOfLines={1}>{r}</AppText>
                 </TouchableOpacity>
               ))}
             </View>
@@ -273,10 +312,10 @@ const DamagedItemForm = ({ onComplete }: { onComplete?: () => void }) => {
         >
           <Calendar size={18} color={warningColor} style={{ marginRight: 10 }} />
           <View style={{ flex: 1 }}>
-            <Text style={[{ fontSize: 11, fontFamily: Fonts.semibold, color: colors.textSecondary, textTransform: 'uppercase' }]}>{t('common.record_date') || 'Record Date'}</Text>
-            <Text style={[{ fontSize: 16, fontFamily: Fonts.bold, color: recordDate ? colors.text : colors.textSecondary, marginTop: 2 }]}>
+            <AppText variant="micro" weight="semibold" transform="uppercase" style={{ color: colors.textSecondary }} numberOfLines={1}>{t('common.record_date') || 'Record Date'}</AppText>
+            <AppText variant="subtitle" weight="bold" style={{ color: recordDate ? colors.text : colors.textSecondary, marginTop: 2 }} numberOfLines={1}>
               {recordDate || (t('common.today') || 'Today (Default)')}
-            </Text>
+            </AppText>
           </View>
         </TouchableOpacity>
 
@@ -286,7 +325,7 @@ const DamagedItemForm = ({ onComplete }: { onComplete?: () => void }) => {
           onPress={handleConfirm}
         >
           <ShieldAlert color={colors.background} size={20} />
-          <Text style={[styles.confirmText, { color: colors.background }]}>{t('adj.authorize_loss')}</Text>
+          <AppText variant="subtitle" weight="bold" style={[styles.confirmText, { color: colors.background }]} numberOfLines={1}>{t('adj.authorize_loss')}</AppText>
         </TouchableOpacity>
         
         <View style={{ height: 100 }} />
@@ -356,6 +395,7 @@ const styles = StyleSheet.create({
   resultSubtext: { fontSize: 12, fontFamily: Fonts.medium, marginTop: 2 },
   confirmBtn: { height: 65, borderRadius: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 25 },
   confirmText: { fontSize: 16, fontFamily: Fonts.bold, letterSpacing: 0.5 },
+  modeText: { fontSize: 11, fontFamily: Fonts.bold },
 });
 
 export default DamagedItemForm;

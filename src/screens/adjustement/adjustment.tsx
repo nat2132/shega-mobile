@@ -1,113 +1,124 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Dimensions, FlatList, RefreshControl, Platform, TextInput, Image } from 'react-native';
-import { 
-  Box, 
-  MoveUpRight, 
-  MoveDownRight, 
-  AlertTriangle, 
-  ArrowRight, 
-  Package,
-  Search,
-  Plus,
-  Activity,
-  ShieldCheck,
-  TrendingUp,
-  TrendingDown,
-  Layers,
-  Zap,
-  Info,
-  Calendar,
-  ChevronRight,
-  RefreshCw,
-  SlidersHorizontal,
-  ChevronUp,
-  Bell
-} from 'lucide-react-native';
-import Animated, { 
-  FadeInDown, 
-  FadeInUp,
-  FadeIn,
-  FadeOut,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring
-} from 'react-native-reanimated';
+﻿import { Fonts } from '@/constants/theme';
+import { PROFILE_IMAGES, useSettings } from '@/context/SettingsContext';
+import { useSidebar } from '@/context/SidebarContext';
+import { formatTime } from '@/utils/date-utils';
+import { getAdjustmentDashboardMetrics, getRecentAdjustments } from '@/database/db';
+import { useNotifications } from '@/hooks/useNotifications';
+import { useFocusEffect } from '@react-navigation/native';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
-import { Fonts } from '@/constants/theme';
-import { useFocusEffect } from '@react-navigation/native';
-import { getRecentAdjustments, getAdjustmentSummary } from '@/database/db';
-import IncreaseScreen from './increase';
-import DecreaseScreen from './decrease';
-import DamagedScreen from './damaged';
-import AdjustmentDetailsScreen from './adjustment-details';
-import { useSettings, PROFILE_IMAGES } from '@/context/SettingsContext';
-import { useNotifications } from '@/hooks/useNotifications';
 import { useRouter } from 'expo-router';
-import { useSidebar } from '@/context/SidebarContext';
+import {
+    AlertTriangle,
+    BarChart3,
+    Bell,
+    Box,
+    ChevronRight,
+    DollarSign,
+    Eye,
+    Plus,
+    RefreshCw,
+    TrendingDown,
+    TrendingUp
+} from 'lucide-react-native';
+import React, { useCallback, useState } from 'react';
+import { Dimensions, Image, Modal, Platform, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { AppText, AppListItem, AppRow, AppCard } from '@/components/ui';
+import Animated, {
+    FadeInDown,
+    FadeInUp,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring
+} from 'react-native-reanimated';
+import AdjustmentDetailsScreen from './adjustment-details';
+import DamagedScreen from './damaged';
+import DecreaseScreen from './decrease';
+import IncreaseScreen from './increase';
+const AdjustmentItem = React.memo(({ item, onPress }: { item: any; onPress: () => void }) => {
+  const { colors, timeSystem, language, t } = useSettings();
 
-const CalibrationLedgerItem = ({ item, onPress }: { item: any; onPress: () => void }) => {
-  const { colors, t } = useSettings();
-  
-  const getStatusConfig = () => {
-    switch(item.type) {
-      case 'price_up': return { 
-        icon: <TrendingUp size={20} color="#34C759" />, 
-        bg: '#34C75915',
+  if (!item) return null;
+
+  const safeType = item?.type || 'unknown';
+  const safeItem = {
+    itemName: item?.itemName || t('common.unknown_item'),
+    reason: item?.reason || t('adj.manual_correction'),
+    createdAt: item?.createdAt || item?.date || '',
+    newValue: Number(item?.newValue) || 0,
+    quantity: Number(item?.quantity) || 0,
+    type: safeType
+  };
+
+  const config = React.useMemo(() => {
+    switch(safeType) {
+      case 'price_up': return {
+        icon: <TrendingUp size={18} color={colors.textSecondary} />,
+        bg: colors.surface,
         label: t('adjustment.price_increase')
       };
-      case 'price_down': return { 
-        icon: <TrendingDown size={20} color="#FF3B30" />, 
-        bg: '#FF3B3015',
+      case 'price_down': return {
+        icon: <TrendingDown size={18} color={colors.textSecondary} />,
+        bg: colors.surface,
         label: t('adjustment.price_decrease')
       };
-      case 'damaged': return { 
-        icon: <AlertTriangle size={20} color="#FF9500" />, 
-        bg: '#FF950015',
+      case 'damaged': return {
+        icon: <AlertTriangle size={18} color={colors.textSecondary} />,
+        bg: colors.surface,
         label: t('adjustment.damaged')
       };
-      default: return { 
-        icon: <Zap size={20} color={colors.textSecondary} />, 
-        bg: colors.border,
+      default: return {
+        icon: <BarChart3 size={18} color={colors.textSecondary} />,
+        bg: colors.surface,
         label: t('adj.manual')
       };
     }
-  };
+  }, [safeType, colors.surface, colors.textSecondary, t]);
 
-  const config = getStatusConfig();
+  const timeStr = safeItem.createdAt ? formatTime(safeItem.createdAt, timeSystem, language) : '';
 
   return (
-    <TouchableOpacity 
-      style={[styles.ledgerItem, { borderBottomColor: colors.border }]} 
+    <TouchableOpacity
+      style={[styles.adjItem, { borderBottomColor: colors.border }]}
       onPress={onPress}
       activeOpacity={0.7}
     >
-      <View style={[styles.ledgerIconCircle, { backgroundColor: config.bg }]}>
+      <View style={[styles.adjIconCircle, { backgroundColor: config.bg }]}>
         {config.icon}
       </View>
-      <View style={styles.ledgerMain}>
-        <Text style={[styles.ledgerName, { color: colors.text }]}>{item.itemName}</Text>
-        <Text style={[styles.ledgerCategory, { color: colors.textSecondary }]}>
-          {item.reason || t('adj.manual_correction')} • {item.createdAt?.split(' ')[0] || item.date}
-        </Text>
+      <View style={styles.adjMain}>
+        <AppText variant="body" weight="bold" style={[styles.adjName, { color: colors.text }]} numberOfLines={1}>{safeItem.itemName}</AppText>
+        <AppText variant="caption" weight="medium" style={[styles.adjType, { color: colors.textSecondary }]} numberOfLines={1}>{config.label}</AppText>
       </View>
-      <View style={styles.ledgerEnd}>
-        {item.type === 'damaged' ? (
-          <Text style={[styles.ledgerAmount, { color: '#FF3B30' }]}>-{item.quantity}</Text>
+      <View style={styles.adjEnd}>
+        {safeType === 'damaged' ? (
+          <AppText variant="body" weight="bold" shrink={false} style={[styles.adjAmount, { color: colors.text }]}>-{safeItem.quantity}</AppText>
         ) : (
-          <Text style={[styles.ledgerAmount, { color: item.type === 'price_up' ? '#34C759' : '#FF3B30' }]}>
-            {item.newValue?.toLocaleString()}
-          </Text>
-        )}
-        <Text style={[styles.ledgerCurrency, { color: colors.textSecondary }]}>
-          {item.type === 'damaged' ? t('adj.units_suffix') : 'ETB'}
-        </Text>
+          <AppText variant="body" weight="bold" shrink={false} style={[styles.adjAmount, { color: colors.text }]}>{safeItem.newValue.toLocaleString()}</AppText>
+          )}
+        <AppText variant="caption" weight="medium" style={[styles.adjTime, { color: colors.textSecondary }]} numberOfLines={1}>
+          {timeStr || t('common.n_a')}
+        </AppText>
       </View>
     </TouchableOpacity>
   );
+});
+AdjustmentItem.displayName = 'AdjustmentItem';
+
+const MetricCard = ({ label, value, color, icon: Icon, accent }: { label: string; value: string; color: string; icon: any; accent?: string }) => {
+  const { colors } = useSettings();
+  return (
+    <View style={[styles.metricCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={[styles.metricIconBox, { backgroundColor: colors.surface }]}>
+        <Icon size={20} color={colors.textSecondary} />
+      </View>
+      <AppText variant="heading" weight="bold" style={[styles.metricValue, { color: colors.text }]} numberOfLines={1}>{value}</AppText>
+      <AppText variant="caption" weight="medium" style={[styles.metricLabel, { color: colors.textSecondary }]} numberOfLines={2}>{label}</AppText>
+    </View>
+  );
 };
 
-const CalibrationSuite = () => {
+const AdjustmentScreen = () => {
   const { colors, t, theme, userProfile } = useSettings();
   const { openSidebar } = useSidebar();
   const { notifCount } = useNotifications();
@@ -117,28 +128,26 @@ const CalibrationSuite = () => {
   const [showDecrease, setShowDecrease] = useState(false);
   const [showDamaged, setShowDamaged] = useState(false);
   const [selectedAdjustment, setSelectedAdjustment] = useState<any>(null);
-  const [summary, setSummary] = useState<any>(null);
+  const [metrics, setMetrics] = useState<any>(null);
   const [adjustments, setAdjustments] = useState<any[]>([]);
   const [isBarExpanded, setIsBarExpanded] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isSearchVisible, setIsSearchVisible] = useState(false);
-  const searchInputRef = React.useRef<TextInput>(null);
 
   const { width } = Dimensions.get('window');
   const expandedWidth = useSharedValue(56);
+  
   React.useEffect(() => {
     expandedWidth.value = withSpring(isBarExpanded ? width - 50 : 56, { damping: 15, stiffness: 100 });
-  }, [isBarExpanded, width]);
+  }, [isBarExpanded, width, expandedWidth]);
 
   const expandStyle = useAnimatedStyle(() => ({
     width: expandedWidth.value,
   }));
 
   const loadData = useCallback(async () => {
-    const data = await getRecentAdjustments();
+    const data = await getRecentAdjustments(undefined, 5);
     setAdjustments(data);
-    const summaryData = getAdjustmentSummary();
-    setSummary(summaryData);
+    const metricsData = getAdjustmentDashboardMetrics();
+    setMetrics(metricsData);
   }, []);
 
   useFocusEffect(
@@ -150,6 +159,25 @@ const CalibrationSuite = () => {
   const onRefresh = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     await loadData();
+  };
+
+  const handleViewHistory = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // Trigger the adjustment details full screen
+    setSelectedAdjustment({ viewAll: true } as any);
+  };
+
+  const getNetChangeColor = () => {
+    if (!metrics) return colors.text;
+    if (metrics.netValueChange > 0) return '#34C759';
+    if (metrics.netValueChange < 0) return '#FF3B30';
+    return colors.text;
+  };
+
+  const getNetChangePrefix = () => {
+    if (!metrics) return '';
+    if (metrics.netValueChange > 0) return '+';
+    return '';
   };
 
   return (
@@ -167,8 +195,8 @@ const CalibrationSuite = () => {
         {/* Integrated Header */}
         <View style={styles.integratedHeader}>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.headerLabel, { color: colors.textSecondary }]}>{t('adj.stock_rectification')}</Text>
-            <Text style={[styles.headerTitle, { color: colors.text }]}>{t('adj.calibration_suite')}</Text>
+            <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.headerLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('adj.stock_rectification')}</AppText>
+            <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: colors.text }]} numberOfLines={2}>{t('adj.calibration_suite')}</AppText>
           </View>
           
           <View style={styles.headerActions}>
@@ -179,169 +207,157 @@ const CalibrationSuite = () => {
                <Bell size={22} color={colors.text} />
                {notifCount > 0 && (
                  <View style={[styles.notifBadge, { backgroundColor: colors.primary }]}>
-                   <Text style={styles.notifBadgeText}>{notifCount}</Text>
+                   <AppText variant="micro" weight="bold" shrink={false} style={styles.notifBadgeText} numberOfLines={1}>{notifCount}</AppText>
                  </View>
                )}
             </TouchableOpacity>
 
             <TouchableOpacity 
-              style={[styles.headerIconBox, { borderColor: colors.border }]}
-              onPress={() => Haptics.selectionAsync()}
-            >
-               <SlidersHorizontal size={22} color={colors.text} />
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.headerAvatarBox, { borderColor: colors.border, marginLeft: 15 }]}
+              style={[styles.headerAvatarBox, { borderColor: colors.border, marginLeft: 10 }]}
               onPress={openSidebar}
             >
-               <Image source={PROFILE_IMAGES[userProfile.avatarIndex]} style={styles.headerAvatar} />
+                <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={styles.headerAvatar} />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Calibration Hero */}
-        <Animated.View entering={FadeInDown.delay(200).duration(600)} style={styles.heroSection}>
-          <View style={[styles.heroCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.heroTopRow}>
-              <View>
-                <Text style={[styles.heroLabel, { color: colors.textSecondary }]}>{t('adj.monthly_records')}</Text>
-                <Text style={[styles.heroValue, { color: colors.text }]}>{summary?.totalRecords?.toString().padStart(2, '0')}</Text>
+        {/* Dashboard Metrics Grid */}
+        <Animated.View entering={FadeInDown.delay(200).duration(600)} style={styles.metricsGrid}>
+          <View style={styles.metricsRow}>
+            <MetricCard 
+              label={t('adj.metric_items_increased')}
+              value={t('adj.items_suffix', { count: String(metrics?.itemsIncreased || 0) })}
+              color="#34C759"
+              icon={TrendingUp}
+            />
+            <MetricCard 
+              label={t('adj.metric_items_decreased')}
+              value={t('adj.items_suffix', { count: String(metrics?.itemsDecreased || 0) })}
+              color="#FF3B30"
+              icon={TrendingDown}
+            />
+          </View>
+          <View style={styles.metricsRow}>
+            <MetricCard 
+              label={t('adj.metric_damaged')}
+              value={t('adj.units_suffix', { count: String(metrics?.damagedItems || 0) })}
+              color="#FF9500"
+              icon={AlertTriangle}
+            />
+            <MetricCard 
+              label={t('adj.metric_value_lost')}
+              value={`${(metrics?.estimatedValueLost || 0).toLocaleString()} ${t('common.etb')}`}
+              color="#FF3B30"
+              icon={DollarSign}
+            />
+          </View>
+          <View style={styles.metricsRow}>
+            <View style={[styles.netMetricCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.netMetricRow}>
+                <BarChart3 size={22} color={colors.textSecondary} />
+                <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.netMetricLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('adj.metric_net_change')}</AppText>
               </View>
-              <View style={[styles.fidelityIndicator, { backgroundColor: colors.primary + '15' }]}>
-                <ShieldCheck size={24} color={colors.primary} />
-                <Text style={[styles.fidelityText, { color: colors.primary }]}>{t('adj.active')}</Text>
-              </View>
-            </View>
-            <View style={[styles.heroFooter, { borderTopColor: colors.border }]}>
-              <View style={styles.impactStat}>
-                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{t('adj.capital_leakage')}</Text>
-                <Text style={[styles.statValue, { color: '#FF3B30' }]}>-{summary?.capitalLeakage?.toLocaleString() || 0} ETB</Text>
-              </View>
-              <View style={styles.impactStat}>
-                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{t('adj.last_sync')}</Text>
-                <Text style={[styles.statValue, { color: colors.text }]}>{t('adj.just_now')}</Text>
-              </View>
+              <AppText variant="heading" weight="bold" style={[styles.netMetricValue, { color: colors.text }]} numberOfLines={1}>
+                {getNetChangePrefix()}{(metrics?.netValueChange || 0).toLocaleString()} {t('common.etb')}
+              </AppText>
             </View>
           </View>
         </Animated.View>
 
-        {/* Intelligence Bento */}
-        <View style={styles.bentoSection}>
-          <Animated.View entering={FadeInDown.delay(400).duration(600)} style={[styles.mainBento, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.bentoHeaderRow}>
-               <Text style={[styles.bentoLabel, { color: colors.textSecondary }]}>{t('adj.adjustment_hotspot')}</Text>
-               <Zap size={16} color={colors.primary} />
-            </View>
-            <Text style={[styles.hotspotName, { color: colors.text }]}>{summary?.topItem?.name || t('adj.searching')}</Text>
-            <Text style={[styles.hotspotSub, { color: colors.textSecondary }]}>
-               {summary?.topItem?.count || 0} {t('adj.corrections_month')}
-            </Text>
-            <View style={styles.hotspotVisual}>
-               <Layers size={40} color={colors.primary} opacity={0.2} strokeWidth={1} />
-            </View>
-          </Animated.View>
-
-          <View style={styles.bentoRow}>
-            <View style={[styles.smallBento, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.bentoLabel, { color: colors.textSecondary }]}>{t('adj.yield_flux')}</Text>
-              <View style={styles.fluxRow}>
-                <View style={styles.fluxItem}>
-                   <ChevronUp size={14} color="#34C759" />
-                   <Text style={[styles.fluxVal, { color: '#34C759' }]}>{summary?.typeDistribution?.find((t:any) => t.type === 'price_up')?.count || 0}</Text>
-                </View>
-                <View style={styles.fluxItem}>
-                   <TrendingDown size={14} color="#FF3B30" />
-                   <Text style={[styles.fluxVal, { color: '#FF3B30' }]}>{summary?.typeDistribution?.find((t:any) => t.type === 'price_down')?.count || 0}</Text>
-                </View>
-              </View>
-            </View>
-            
-            <View style={[styles.smallBento, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.bentoLabel, { color: colors.textSecondary }]}>{t('adj.integrity_loss')}</Text>
-              <Text style={[styles.bentoBigVal, { color: '#FF9500' }]}>{summary?.typeDistribution?.find((td:any) => td.type === 'damaged')?.count || 0}</Text>
-              <Text style={[styles.bentoSubText, { color: colors.textSecondary }]}>{t('adj.units_damaged')}</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Calibration Ledger */}
-        <View style={styles.ledgerSection}>
+        {/* Recent Adjustments Section */}
+        <Animated.View entering={FadeInDown.delay(400).duration(600)} style={styles.recentSection}>
           <View style={styles.sectionHeader}>
             <View>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('adj.calibration_ledger')}</Text>
-              <Text style={[styles.sectionSub, { color: colors.textSecondary }]}>{t('adj.historical_record')}</Text>
+              <AppText variant="subtitle" weight="bold" style={[styles.sectionTitle, { color: colors.text }]} numberOfLines={2}>{t('adj.recent_title')}</AppText>
+              <AppText variant="body-sm" weight="medium" style={[styles.sectionSub, { color: colors.textSecondary }]} numberOfLines={2}>{t('adj.recent_sub')}</AppText>
             </View>
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <TouchableOpacity onPress={() => {
-                setIsSearchVisible(!isSearchVisible);
-                if (!isSearchVisible) {
-                  setTimeout(() => searchInputRef.current?.focus(), 100);
-                }
-              }}>
-                <Search size={22} color={isSearchVisible ? colors.primary : colors.textSecondary} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}>
-                <Info size={20} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity 
+              style={[styles.viewAllBtn, { backgroundColor: colors.primary + '15' }]}
+              onPress={handleViewHistory}
+            >
+              <AppText variant="body-sm" weight="bold" style={[styles.viewAllText, { color: colors.primary }]} numberOfLines={1}>{t('common.view_all')}</AppText>
+              <ChevronRight size={16} color={colors.primary} />
+            </TouchableOpacity>
           </View>
 
-          {isSearchVisible && (
-            <Animated.View entering={FadeInUp} exiting={FadeOut} style={[styles.searchBarContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Search size={20} color={colors.textSecondary} style={{ marginRight: 10 }} />
-              <TextInput
-                ref={searchInputRef}
-                style={[styles.searchInput, { color: colors.text }]}
-                placeholder={t('adj.search_placeholder')}
-                placeholderTextColor={colors.textSecondary}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-              />
-              {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setSearchQuery('')}>
-                  <RNText style={{ color: colors.primary, fontFamily: Fonts.bold }}>Clear</RNText>
-                </TouchableOpacity>
-              )}
-            </Animated.View>
-          )}
-
-          {adjustments.filter(a => a.itemName.toLowerCase().includes(searchQuery.toLowerCase()) || (a.reason && a.reason.toLowerCase().includes(searchQuery.toLowerCase()))).length > 0 ? (
-            <View style={styles.ledgerList}>
-              {adjustments
-                .filter(a => a.itemName.toLowerCase().includes(searchQuery.toLowerCase()) || (a.reason && a.reason.toLowerCase().includes(searchQuery.toLowerCase())))
-                .map((item, index) => (
-                  <Animated.View key={item.id} entering={FadeInDown.delay(200 + index * 50).duration(400)}>
-                  <CalibrationLedgerItem item={item} onPress={() => setSelectedAdjustment(item)} />
+          {adjustments.length > 0 ? (
+            <View style={styles.adjList}>
+              {adjustments.map((item, index) => (
+                <Animated.View key={item.id} entering={FadeInUp.delay(500 + index * 50).duration(400)}>
+                  <AdjustmentItem item={item} onPress={() => setSelectedAdjustment(item)} />
                 </Animated.View>
               ))}
             </View>
           ) : (
             <View style={styles.emptyState}>
-              <Box size={60} color={colors.border} strokeWidth={1} />
-              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{t('adjustment.no_records')}</Text>
+              <Box size={50} color={colors.border} strokeWidth={1} />
+              <AppText variant="body" weight="medium" align="center" style={[styles.emptyText, { color: colors.textSecondary }]} numberOfLines={2}>{t('adjustment.no_records')}</AppText>
             </View>
           )}
-        </View>
+        </Animated.View>
 
       </ScrollView>
       
-      {/* Expanding Smart FAB */}
+      {/* Quick Actions FAB */}
       <View style={styles.dockedBarWrapper}>
         <Animated.View style={[expandStyle, { height: 56, borderRadius: 28, overflow: 'hidden' }]}>
           <BlurView intensity={Platform.OS === 'ios' ? 80 : 100} tint={theme === 'light' ? 'light' : 'dark'} style={[styles.dockedBar, { borderColor: colors.border, paddingHorizontal: isBarExpanded ? 10 : 0 }]}>
             {isBarExpanded && (
-              <Animated.View entering={FadeIn.delay(100)} exiting={FadeOut.duration(100)}>
+              <Animated.View entering={FadeInUp.delay(100)}>
                 <TouchableOpacity 
                   style={styles.dockBtn}
                   onPress={() => { 
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); 
-                    setIsBarExpanded(false); 
-                    setIsSearchVisible(true);
-                    setTimeout(() => searchInputRef.current?.focus(), 300);
+                    setIsBarExpanded(false);
+                    setShowIncrease(true);
                   }}
                 >
-                  <Search size={22} color={colors.textSecondary} />
+                  <TrendingUp size={20} color="#34C759" />
+                </TouchableOpacity>
+              </Animated.View>
+            )}
+            
+            {isBarExpanded && (
+              <Animated.View entering={FadeInUp.delay(150)}>
+                <TouchableOpacity 
+                  style={styles.dockBtn}
+                  onPress={() => { 
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); 
+                    setIsBarExpanded(false);
+                    setShowDecrease(true);
+                  }}
+                >
+                  <TrendingDown size={20} color="#FF3B30" />
+                </TouchableOpacity>
+              </Animated.View>
+            )}
+
+            {isBarExpanded && (
+              <Animated.View entering={FadeInUp.delay(200)}>
+                <TouchableOpacity 
+                  style={styles.dockBtn}
+                  onPress={() => { 
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); 
+                    setIsBarExpanded(false);
+                    setShowDamaged(true);
+                  }}
+                >
+                  <AlertTriangle size={20} color="#FF9500" />
+                </TouchableOpacity>
+              </Animated.View>
+            )}
+
+            {isBarExpanded && (
+              <Animated.View entering={FadeInUp.delay(250)}>
+                <TouchableOpacity 
+                  style={styles.dockBtn}
+                  onPress={() => { 
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); 
+                    setIsBarExpanded(false);
+                    handleViewHistory();
+                  }}
+                >
+                  <Eye size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
               </Animated.View>
             )}
@@ -357,19 +373,12 @@ const CalibrationSuite = () => {
                 }
               }}
             >
-              <Plus size={24} color={isBarExpanded ? colors.background : colors.background} strokeWidth={2.5} />
+              {isBarExpanded ? (
+                <RefreshCw size={24} color={colors.background} strokeWidth={2.5} />
+              ) : (
+                <Plus size={24} color={colors.background} strokeWidth={2.5} />
+              )}
             </TouchableOpacity>
-
-            {isBarExpanded && (
-              <Animated.View entering={FadeIn.delay(100)} exiting={FadeOut.duration(100)}>
-                <TouchableOpacity 
-                  style={styles.dockBtn}
-                  onPress={() => { onRefresh(); setIsBarExpanded(false); }}
-                >
-                  <RefreshCw size={22} color={colors.textSecondary} />
-                </TouchableOpacity>
-              </Animated.View>
-            )}
           </BlurView>
         </Animated.View>
       </View>
@@ -378,18 +387,22 @@ const CalibrationSuite = () => {
       <Modal visible={showOptions} transparent animationType="fade" onRequestClose={() => setShowOptions(false)}>
         <TouchableOpacity style={styles.modalOverlayC} activeOpacity={1} onPress={() => setShowOptions(false)}>
           <View style={[styles.optionsBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.optionsTitle, { color: colors.text }]}>{t('adjustment.select_type')}</Text>
-            <TouchableOpacity style={[styles.optionBtn, { borderBottomColor: colors.border }]} onPress={() => { setShowOptions(false); setShowIncrease(true); }}>
+            <AppText variant="heading" weight="bold" align="center" style={[styles.optionsTitle, { color: colors.text }]} numberOfLines={2}>{t('adjustment.select_type')}</AppText>
+              <TouchableOpacity style={[styles.optionBtn, { borderBottomColor: colors.border }]} onPress={() => { setShowOptions(false); setShowIncrease(true); }}>
               <TrendingUp size={20} color="#34C759" style={{ marginRight: 15 }} />
-              <Text style={[styles.optionText, { color: colors.text }]}>{t('adjustment.price_increase')}</Text>
+              <AppText variant="subtitle" weight="bold" style={[styles.optionText, { color: colors.text }]} numberOfLines={1}>{t('adj.add_increase')}</AppText>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.optionBtn, { borderBottomColor: colors.border }]} onPress={() => { setShowOptions(false); setShowDecrease(true); }}>
               <TrendingDown size={20} color="#FF3B30" style={{ marginRight: 15 }} />
-              <Text style={[styles.optionText, { color: colors.text }]}>{t('adjustment.price_decrease')}</Text>
+              <AppText variant="subtitle" weight="bold" style={[styles.optionText, { color: colors.text }]} numberOfLines={1}>{t('adj.add_decrease')}</AppText>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.optionBtn} onPress={() => { setShowOptions(false); setShowDamaged(true); }}>
+            <TouchableOpacity style={[styles.optionBtn, { borderBottomColor: colors.border }]} onPress={() => { setShowOptions(false); setShowDamaged(true); }}>
               <AlertTriangle size={20} color="#FF9500" style={{ marginRight: 15 }} />
-              <Text style={[styles.optionText, { color: colors.text }]}>{t('adjustment.damaged')}</Text>
+              <AppText variant="subtitle" weight="bold" style={[styles.optionText, { color: colors.text }]} numberOfLines={1}>{t('adj.record_damage')}</AppText>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.optionBtn} onPress={() => { setShowOptions(false); handleViewHistory(); }}>
+              <Eye size={20} color={colors.textSecondary} style={{ marginRight: 15 }} />
+              <AppText variant="subtitle" weight="bold" style={[styles.optionText, { color: colors.text }]} numberOfLines={1}>{t('adj.view_history')}</AppText>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -431,13 +444,19 @@ const CalibrationSuite = () => {
            <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setSelectedAdjustment(null)} />
            <View style={[styles.bottomSheetContainer, { backgroundColor: colors.background, height: Dimensions.get('window').height * 0.88 }]}>
               <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
-              {selectedAdjustment && (
+              {selectedAdjustment && selectedAdjustment.viewAll ? (
+                <AdjustmentDetailsScreen 
+                  adjustment={null} 
+                  onClose={() => setSelectedAdjustment(null)} 
+                  onRefresh={() => loadData()} 
+                />
+              ) : selectedAdjustment ? (
                 <AdjustmentDetailsScreen 
                   adjustment={selectedAdjustment} 
                   onClose={() => setSelectedAdjustment(null)} 
                   onRefresh={() => loadData()} 
                 />
-              )}
+              ) : null}
            </View>
         </View>
       </Modal>
@@ -448,7 +467,7 @@ const CalibrationSuite = () => {
 const styles = StyleSheet.create({
   screenWrapper: { flex: 1 },
   scrollContent: { paddingBottom: 220, paddingTop: 10 },
-  bgWash: { position: 'absolute', width: 400, height: 400, borderRadius: 200, filter: 'blur(80px)' },
+  bgWash: { position: 'absolute', width: 400, height: 400, borderRadius: 200, opacity: 0.3 },
   integratedHeader: {
     paddingHorizontal: 25,
     paddingTop: 60,
@@ -460,7 +479,6 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 15,
   },
   headerIconBtn: {
     width: 48,
@@ -486,56 +504,156 @@ const styles = StyleSheet.create({
   },
   notifBadgeText: {
     color: '#FFF',
-    fontSize: 9,
     fontFamily: Fonts.bold,
   },
   headerLabel: { fontSize: 12, fontFamily: Fonts.bold, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 4 },
   headerTitle: { fontSize: 28, fontFamily: Fonts.bold },
-  headerIconBox: { width: 48, height: 48, borderRadius: 24, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
-  heroSection: { paddingHorizontal: 25, marginBottom: 30 },
-  heroCard: { borderRadius: 30, padding: 25, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 10 },
-  heroTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 },
-  heroLabel: { fontSize: 13, fontFamily: Fonts.semibold, textTransform: 'uppercase', marginBottom: 8 },
-  heroValue: { fontSize: 42, fontFamily: Fonts.extrabold, letterSpacing: -1 },
-  fidelityIndicator: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 15 },
-  fidelityText: { fontSize: 12, fontFamily: Fonts.bold },
-  heroFooter: { flexDirection: 'row', justifyContent: 'space-between', paddingTop: 20, borderTopWidth: 1 },
-  impactStat: { gap: 4 },
-  statLabel: { fontSize: 11, fontFamily: Fonts.semibold, textTransform: 'uppercase' },
-  statValue: { fontSize: 16, fontFamily: Fonts.bold },
-  bentoSection: { paddingHorizontal: 25, marginBottom: 40, gap: 12 },
-  mainBento: { borderRadius: 24, padding: 20, borderWidth: 1, height: 160 },
-  bentoHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-  bentoLabel: { fontSize: 11, fontFamily: Fonts.bold, textTransform: 'uppercase' },
-  hotspotName: { fontSize: 20, fontFamily: Fonts.bold, marginBottom: 4 },
-  hotspotSub: { fontSize: 13, fontFamily: Fonts.medium },
-  hotspotVisual: { position: 'absolute', right: 20, bottom: 20 },
-  bentoRow: { flexDirection: 'row', gap: 12 },
-  smallBento: { flex: 1, borderRadius: 24, padding: 20, borderWidth: 1, height: 110, justifyContent: 'center' },
-  fluxRow: { gap: 8, marginTop: 10 },
-  fluxItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  fluxVal: { fontSize: 14, fontFamily: Fonts.bold },
-  bentoBigVal: { fontSize: 28, fontFamily: Fonts.bold, marginTop: 4 },
-  bentoSubText: { fontSize: 11, fontFamily: Fonts.semibold, marginTop: 2 },
-  ledgerSection: { paddingHorizontal: 25 },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 20 },
-  sectionTitle: { fontSize: 22, fontFamily: Fonts.bold },
-  sectionSub: { fontSize: 13, fontFamily: Fonts.medium, marginTop: 4 },
-  ledgerList: { gap: 2 },
-  ledgerItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 18, borderBottomWidth: 1 },
-  ledgerIconCircle: { width: 48, height: 48, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
-  ledgerMain: { flex: 1 },
-  ledgerName: { fontSize: 16, fontFamily: Fonts.bold, marginBottom: 4 },
-  ledgerCategory: { fontSize: 12, fontFamily: Fonts.medium },
-  ledgerEnd: { alignItems: 'flex-end' },
-  ledgerAmount: { fontSize: 16, fontFamily: Fonts.bold, marginBottom: 2 },
-  ledgerCurrency: { fontSize: 11, fontFamily: Fonts.bold, textTransform: 'uppercase' },
-  emptyState: { alignItems: 'center', paddingVertical: 60 },
-  emptyText: { fontSize: 14, fontFamily: Fonts.medium, marginTop: 15 },
+  headerAvatarBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1,
+    padding: 3,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerAvatar: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 20,
+  },
+  // Metrics Section
+  metricsGrid: {
+    paddingHorizontal: 25,
+    marginBottom: 30,
+    gap: 10,
+  },
+  metricsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  metricCard: {
+    flex: 1,
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    minHeight: 100,
+  },
+  metricIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  metricValue: {
+    fontFamily: Fonts.bold,
+    marginBottom: 4,
+  },
+  metricLabel: {
+    fontFamily: Fonts.medium,
+    lineHeight: 14,
+  },
+  netMetricCard: {
+    flex: 1,
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+  },
+  netMetricRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  netMetricLabel: {
+    fontFamily: Fonts.bold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  netMetricValue: {
+    fontFamily: Fonts.bold,
+  },
+  // Recent Adjustments
+  recentSection: {
+    paddingHorizontal: 25,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontFamily: Fonts.bold,
+  },
+  sectionSub: {
+    fontFamily: Fonts.medium,
+    marginTop: 4,
+  },
+  viewAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 14,
+    gap: 4,
+  },
+  viewAllText: {
+    fontFamily: Fonts.bold,
+  },
+  adjList: {
+    gap: 2,
+  },
+  adjItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+  },
+  adjIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  adjMain: {
+    flex: 1,
+  },
+  adjName: {
+    fontFamily: Fonts.bold,
+    marginBottom: 2,
+  },
+  adjType: {
+    fontFamily: Fonts.medium,
+  },
+  adjEnd: {
+    alignItems: 'flex-end',
+  },
+  adjAmount: {
+    fontFamily: Fonts.bold,
+    marginBottom: 2,
+  },
+  adjTime: {
+    fontFamily: Fonts.medium,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 50,
+  },
+  emptyText: {
+    fontFamily: Fonts.medium,
+    marginTop: 15,
+  },
+  // FAB
   dockedBarWrapper: { position: 'absolute', bottom: 120, alignSelf: 'center', zIndex: 1000, alignItems: 'center', justifyContent: 'center' },
   dockedBar: { flex: 1, borderRadius: 35, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly', paddingHorizontal: 10, borderWidth: 1, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 10 },
   dockBtn: { width: 50, height: 50, justifyContent: 'center', alignItems: 'center' },
   dockMainBtn: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 6 },
+  // Modals
   modalOverlayC: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   optionsBox: { width: '85%', borderRadius: 28, padding: 25, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 15 },
   optionsTitle: { fontSize: 20, fontFamily: Fonts.bold, marginBottom: 25, textAlign: 'center' },
@@ -554,51 +672,6 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
   },
-  searchBarContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    borderRadius: 18,
-    borderWidth: 1,
-    marginBottom: 20,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    fontFamily: Fonts.medium,
-  },
-  headerAvatarBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 1,
-    padding: 3,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerAvatar: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 20,
-  },
-  notifBadge: {
-    position: 'absolute',
-    top: -5,
-    right: -5,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'white',
-  },
-  notifBadgeText: {
-    color: 'white',
-    fontSize: 10,
-    fontFamily: Fonts.bold,
-  },
 });
 
-export default CalibrationSuite;
+export default AdjustmentScreen;

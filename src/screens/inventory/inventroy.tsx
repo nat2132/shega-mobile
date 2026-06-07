@@ -1,91 +1,163 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  View, 
-  Text as RNText,
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  TouchableOpacity, 
-  Image, 
-  Modal, 
-  Dimensions,
-  RefreshControl,
-  Platform
-} from 'react-native';
+﻿import { Fonts } from '@/constants/theme';
+import { PROFILE_IMAGES, useSettings } from '@/context/SettingsContext';
+import { useSidebar } from '@/context/SidebarContext';
+import { useDialog } from '@/context/DialogContext';
+import {
+    getExpiringItems,
+    getInventoryComparisonStats,
+    getInventoryStats,
+    getInventorySummary,
+    getLowStockItems,
+    getMovingItemsWithFilters,
+    getRecentItems,
+    getSlowMovingItems,
+    getTopHighestValueItems,
+    getTopSellingItems,
+    getWarehouses,
+    updateItem,
+    ItemData
+} from '@/database/db';
+import { useNotifications } from '@/hooks/useNotifications';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Fonts } from '@/constants/theme';
-import { 
-  Bell, 
-  Search, 
-  EyeOff, 
-  ChevronLeft, 
-  ChevronRight, 
-  ShoppingCart, 
-  TrendingUp, 
-  TrendingDown, 
-  Package, 
-  Eye, 
-  Plus,
-  Zap,
-  ShieldCheck,
-  AlertCircle,
-  BarChart3,
-  Layers,
-  ArrowUpRight,
-  Filter
+import * as Print from 'expo-print';
+import { router, useFocusEffect } from 'expo-router';
+import * as Sharing from 'expo-sharing';
+import {
+    BarChart3,
+    Bell,
+    Download,
+    Eye,
+    EyeOff,
+    Handshake,
+    Package,
+    Plus,
+    Search,
+    ShieldCheck,
+    ShoppingBag,
+    Trash2 as TrashIcon,
+    TrendingDown,
+    TrendingUp,
+    Warehouse,
+    X,
+    Zap
 } from 'lucide-react-native';
-import Animated, { 
-  FadeIn, 
-  FadeInDown, 
-  FadeInUp,
-  useSharedValue,
-  withSpring,
-  useAnimatedStyle,
-  FadeOut
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+    Dimensions,
+    FlatList,
+    Image,
+    Modal,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    TextInput,
+    TouchableOpacity,
+    View
+} from 'react-native';
+import Animated, {
+    FadeIn,
+    FadeInDown,
+    FadeOut,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring
 } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useSidebar } from '@/context/SidebarContext';
-import { useSettings, PROFILE_IMAGES } from '@/context/SettingsContext';
-import Svg, { Path, Circle } from 'react-native-svg';
-import { useFocusEffect } from 'expo-router';
-import { useNotifications } from '@/hooks/useNotifications';
-import { router } from 'expo-router';
+import Svg, { Path } from 'react-native-svg';
+import OnCreditListScreen from '../dashboard/oncredit-list-con';
 import InventoryRecordScreen from './inventory-record';
 import AddAssetFlow from './inventroy-form';
 import ItemDetailsScreen from './item-details';
-import { 
-  getRecentItems, 
-  ItemData, 
-  getInventoryStats, 
-  getInventoryComparisonStats,
-  getInventorySummary,
-  getTopSellingItems,
-  getLowStockItems,
-  getSlowMovingItems,
-  getExpiringItems
-} from '@/database/db';
-
-const SparklineChart = () => {
+import WarehouseManagerModal from './warehouse-manager';
+import { SparklineSkeleton, CategoryBarSkeleton } from '@/components/ChartSkeleton';
+import { ChartEmpty } from '@/components/ChartStateView';
+import { AppText, AppListItem, AppCard, AppButton, AppRow } from '@/components/ui';
+import { BorderRadius, Spacing } from '@/constants/theme';
+const SparklineChart = React.memo(({ data, loading }: { data?: number[]; loading?: boolean } = {}) => {
   const { colors } = useSettings();
+  // If we have real numeric data, derive an SVG path from it.
+  // Otherwise fall back to a skeleton placeholder (or the previous
+  // hardcoded curve when no loading flag is provided, to preserve
+  // existing call-sites that have not yet been wired up).
+  if (loading) {
+    return <SparklineSkeleton width={100} height={30} />;
+  }
+  if (Array.isArray(data) && data.length >= 2) {
+    const safe = data.map((n) => (Number.isFinite(n) ? Math.max(0, n) : 0));
+    const max = Math.max(...safe, 1);
+    const step = 100 / (safe.length - 1);
+    const points = safe.map((v, i) => {
+      const x = i * step;
+      const y = 38 - (v / max) * 30;
+      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`;
+    });
+    return (
+      <Svg width="100" height="30" viewBox="0 0 100 40">
+        <Path
+          d={points.join(' ')}
+          stroke={colors.primary}
+          strokeWidth="3"
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </Svg>
+    );
+  }
   return (
     <Svg width="100" height="30" viewBox="0 0 100 40">
-      <Path 
-        d="M0 35 C15 35, 25 5, 40 20 C55 35, 75 15, 100 5" 
-        stroke={colors.primary} strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" 
+      <Path
+        d="M0 35 C15 35, 25 5, 40 20 C55 35, 75 15, 100 5"
+        stroke={colors.primary} strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round"
       />
     </Svg>
   );
-};
+});
+SparklineChart.displayName = 'SparklineChart';
 
-const InventoryLedgerItem = ({ item, onPress }: { item: ItemData, onPress: () => void }) => {
+/**
+ * A single stock-by-category bar row. Memoised because the parent
+ * (QuickStats) re-renders on every theme/language change and we want
+ * to keep the visible row steady.
+ */
+const CategoryBarRow = React.memo(({ item, idx }: { item: any; idx: number }) => {
+  const { colors, t } = useSettings();
+  const safeName = item?.name
+    ? t(item.name.toLowerCase().startsWith('category.') ? item.name.toLowerCase() : 'category.' + item.name.toLowerCase())
+    : item?.name;
+  const safeCount = Number(item?.count) || 0;
+  return (
+    <AppListItem
+      left={
+        <View style={[styles.qsIconBox, { backgroundColor: colors.text }]}>
+          <Package size={20} color={colors.background} />
+        </View>
+      }
+      title={safeName}
+      subtitle={`${safeCount} ${t('inv.items_suffix')}`}
+      titleMaxLines={2}
+      subtitleMaxLines={1}
+      noBorder
+      padding={Spacing.md}
+      style={{
+        backgroundColor: colors.background,
+        borderRadius: BorderRadius.lg,
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.05)',
+        marginBottom: Spacing.sm,
+      }}
+    />
+  );
+});
+CategoryBarRow.displayName = 'CategoryBarRow';
+
+const InventoryLedgerItem = React.memo(({ item, onPress }: { item: ItemData, onPress: () => void }) => {
   const { colors, t } = useSettings();
   const isLow = (item.totalBaseQuantity || 0) < 10;
-  
+
   return (
-    <TouchableOpacity 
-      style={[styles.ledgerItem, { borderBottomColor: colors.border }]} 
+    <TouchableOpacity
+      style={[styles.ledgerItem, { borderBottomColor: colors.border }]}
       onPress={onPress}
       activeOpacity={0.7}
     >
@@ -93,29 +165,31 @@ const InventoryLedgerItem = ({ item, onPress }: { item: ItemData, onPress: () =>
         <Package size={22} color={isLow ? colors.primary : colors.textSecondary} />
       </View>
       <View style={styles.ledgerMain}>
-        <RNText style={[styles.ledgerName, { color: colors.text }]}>{item.name}</RNText>
-        <RNText style={[styles.ledgerCategory, { color: colors.textSecondary }]}>
+        <AppText variant="body" weight="bold" style={[styles.ledgerName, { color: colors.text }]} numberOfLines={1}>{item.name}</AppText>
+        <AppText variant="caption" weight="medium" style={[styles.ledgerCategory, { color: colors.textSecondary }]} numberOfLines={1}>
           {(item.categoryName ? t(item.categoryName.toLowerCase().startsWith('category.') ? item.categoryName.toLowerCase() : 'category.' + item.categoryName.toLowerCase()) : t('common.general'))} • {t('form.' + (item.baseUnit || 'pieces').toLowerCase())}
-        </RNText>
+        </AppText>
       </View>
       <View style={styles.ledgerEnd}>
-        <RNText style={[styles.ledgerQty, { color: isLow ? colors.primary : colors.text }]}>
+        <AppText variant="body" weight="bold" shrink={false} style={[styles.ledgerQty, { color: isLow ? colors.primary : colors.text }]} numberOfLines={1}>
           {item.totalBaseQuantity} {t('form.' + (item.baseUnit || 'pieces').toLowerCase())}
-        </RNText>
+        </AppText>
         <View style={[styles.ledgerStatus, { backgroundColor: isLow ? (colors.primary + '15') : (colors.success + '15') }]}>
-          <RNText style={[styles.ledgerStatusText, { color: isLow ? colors.primary : colors.success }]}>
+          <AppText variant="micro" weight="bold" transform="uppercase" shrink={false} style={[styles.ledgerStatusText, { color: isLow ? colors.primary : colors.success }]} numberOfLines={1}>
             {isLow ? t('inv.low_stock') : t('inv.in_stock_label')}
-          </RNText>
+          </AppText>
         </View>
       </View>
     </TouchableOpacity>
   );
-};
+});
+InventoryLedgerItem.displayName = 'InventoryLedgerItem';
 
 const InventoryDashboard = () => {
   const { openSidebar } = useSidebar();
   const { userProfile, colors, t, theme } = useSettings();
   const { notifCount } = useNotifications();
+  const dialog = useDialog();
   const [showInventoryRecord, setShowInventoryRecord] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showItemDetails, setShowItemDetails] = useState(false);
@@ -133,16 +207,33 @@ const InventoryDashboard = () => {
   const [fastMovingItems, setFastMovingItems] = useState<any[]>([]);
   const [slowMovingItems, setSlowMovingItems] = useState<any[]>([]);
   const [expiringItems, setExpiringItems] = useState<any[]>([]);
+  const [showOrderModal, setShowOrderModal] = useState(false);
+  const [orderItems, setOrderItems] = useState<any[]>([]);
+  const [showTop10Modal, setShowTop10Modal] = useState(false);
+  const [top10Items, setTop10Items] = useState<any[]>([]);
+  const [showMovingDetail, setShowMovingDetail] = useState(false);
+  const [movingDetailType, setMovingDetailType] = useState<'fast' | 'slow'>('fast');
+  const [movingDetailFilter, setMovingDetailFilter] = useState<'qty_desc' | 'qty_asc' | 'category' | 'today' | 'week' | 'month' | 'year'>('qty_desc');
+  const [movingDetailItems, setMovingDetailItems] = useState<any[]>([]);
+  const [showOnCreditModal, setShowOnCreditModal] = useState(false);
+  const [customOrderName, setCustomOrderName] = useState('');
+  const [customOrderQty, setCustomOrderQty] = useState('1');
+  const [customOrderNotes, setCustomOrderNotes] = useState('');
+
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<number | null>(null);
+  const [showWarehouseModal, setShowWarehouseModal] = useState(false);
+  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [showHealthModal, setShowHealthModal] = useState(false);
 
   const loadAllData = useCallback(() => {
     loadRecentItems();
-    const stats = getInventoryStats();
+    const stats = getInventoryStats(selectedWarehouseId);
     if (stats) setInvStats(stats);
     
     const compStats = getInventoryComparisonStats();
     if (compStats) setInvCompStats(compStats);
 
-    const invSummary = getInventorySummary();
+    const invSummary = getInventorySummary(selectedWarehouseId);
     setSummary(invSummary);
 
     const lowItems = getLowStockItems();
@@ -156,7 +247,10 @@ const InventoryDashboard = () => {
 
     const expiring = getExpiringItems(30);
     setExpiringItems(expiring);
-  }, []);
+
+    const whs = getWarehouses();
+    setWarehouses(whs);
+  }, [selectedWarehouseId]);
 
   const { width } = Dimensions.get('window');
   const expandedWidth = useSharedValue(56);
@@ -174,10 +268,15 @@ const InventoryDashboard = () => {
     }, [loadAllData])
   );
 
-  const loadRecentItems = () => {
-    const items = getRecentItems(10) as ItemData[];
-    setRecentItems(items);
-  };
+const loadRecentItems = () => {
+     const today = new Date().toISOString().split('T')[0];
+     const allItems = getRecentItems(100) as ItemData[];
+     const todayItems = allItems.filter((item: any) => {
+       const itemDate = item.createdAt ? item.createdAt.split(' ')[0] || item.createdAt.substring(0, 10) : '';
+       return itemDate === today;
+     });
+     setRecentItems(todayItems.slice(0, 5));
+   };
 
   const onRefresh = useCallback(() => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -215,7 +314,7 @@ const InventoryDashboard = () => {
           <View style={styles.topBar}>
             <View style={{ flex: 1 }}>
               <TouchableOpacity onPress={openSidebar} style={[styles.headerAvatarBox, { borderColor: colors.border }]}>
-                <Image source={PROFILE_IMAGES[userProfile.avatarIndex]} style={styles.headerAvatar} />
+                <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={styles.headerAvatar} />
               </TouchableOpacity>
             </View>
             
@@ -227,7 +326,7 @@ const InventoryDashboard = () => {
                  <Bell size={22} color={colors.text} />
                  {notifCount > 0 && (
                    <View style={[styles.notifBadge, { backgroundColor: colors.primary }]}>
-                     <RNText style={styles.notifBadgeText}>{notifCount}</RNText>
+                     <AppText variant="micro" weight="bold" style={styles.notifBadgeText} numberOfLines={1}>{notifCount}</AppText>
                    </View>
                  )}
               </TouchableOpacity>
@@ -236,123 +335,187 @@ const InventoryDashboard = () => {
 
           {/* Hero Page Header */}
           <Animated.View entering={FadeInDown.duration(600)} style={styles.screenHeader}>
-            <RNText style={[styles.headerLabel, { color: colors.textSecondary }]}>{t('inv.inventory_management')}</RNText>
-            <RNText style={[styles.headerTitle, { color: colors.text }]}>{t('inv.stock_vault')}</RNText>
+             <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.headerLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('inv.inventory_management')}</AppText>
+             <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: colors.text }]} numberOfLines={2}>{t('inv.stock_vault')}</AppText>
+          </Animated.View>
+
+          {/* Warehouse Selector Button */}
+          <Animated.View entering={FadeInDown.delay(50).duration(600)} style={{ paddingHorizontal: 25, marginBottom: 20, flexDirection: 'row' }}>
+            <TouchableOpacity 
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                borderWidth: 1,
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 14,
+                gap: 6
+              }}
+              onPress={() => setShowWarehouseModal(true)}
+            >
+              <Warehouse size={14} color={selectedWarehouseId ? '#34C759' : colors.primary} />
+              <AppText variant="caption" weight="bold" style={{ fontSize: 12, fontFamily: Fonts.bold, color: colors.text }} numberOfLines={1}>
+                {warehouses.find(w => w.id === selectedWarehouseId)?.name || t('inv.all_warehouses')}
+              </AppText>
+            </TouchableOpacity>
           </Animated.View>
 
           {/* Vault Hero Section */}
           <View style={styles.heroSection}>
             <View style={styles.vaultCard}>
               <View style={styles.vaultTop}>
-                <View>
-                  <RNText style={[styles.vaultLabel, { color: colors.textSecondary }]}>{t('inv.portfolio_valuation')}</RNText>
-                  <TouchableOpacity onPress={toggleMetrics} style={styles.valueRow}>
-                    <RNText style={[styles.vaultValue, { color: colors.text }]}>
-                      {hideMetrics ? '••••••' : `${summary?.totalValue.toLocaleString() || '0'} ETB`}
-                    </RNText>
-                    {hideMetrics ? <Eye size={18} color={colors.textSecondary} /> : <EyeOff size={18} color={colors.textSecondary} />}
-                  </TouchableOpacity>
+                <View style={{ flex: 1 }}>
+                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.vaultLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('inv.portfolio_valuation')}</AppText>
+<TouchableOpacity onPress={toggleMetrics} style={styles.valueRow}>
+                     <AppText variant="display-lg" weight="extrabold" shrink={false} style={[styles.vaultValue, { color: colors.text, fontSize: summary?.totalValue ? (summary.totalValue >= 10000000 ? 24 : summary.totalValue >= 1000000 ? 28 : summary.totalValue >= 100000 ? 32 : 36) : 36 }]} numberOfLines={1}>
+                       {hideMetrics ? '••••••' : `${summary?.totalValue.toLocaleString() || '0'} ${t('common.etb')}`}
+                     </AppText>
+                     {hideMetrics ? <Eye size={16} color={colors.textSecondary} /> : <EyeOff size={16} color={colors.textSecondary} />}
+                   </TouchableOpacity>
                 </View>
-                <View style={[styles.healthBadge, { backgroundColor: (summary?.stockHealth || 100) > 80 ? (colors.success + '15') : (colors.primary + '15') }]}>
-                  <ShieldCheck size={14} color={(summary?.stockHealth || 100) > 80 ? (colors.success) : (colors.primary)} />
-                  <RNText style={[styles.healthText, { color: (summary?.stockHealth || 100) > 80 ? (colors.success) : (colors.primary) }]}>
+                <TouchableOpacity 
+                  onPress={() => setShowHealthModal(true)}
+                  style={[styles.healthBadge, { backgroundColor: (summary?.stockHealth || 100) > 80 ? (colors.success + '15') : (colors.primary + '15') }]}
+                >
+                  <ShieldCheck size={12} color={(summary?.stockHealth || 100) > 80 ? (colors.success) : (colors.primary)} />
+                  <AppText variant="caption" weight="bold" numberOfLines={1} style={[styles.healthText, { color: (summary?.stockHealth || 100) > 80 ? (colors.success) : (colors.primary), maxWidth: 80 }]}>
                     {t('inv.healthy_status', { percent: (summary?.stockHealth || 100).toString() })}
-                  </RNText>
-                </View>
+                  </AppText>
+                </TouchableOpacity>
               </View>
 
               <View style={styles.vaultMetricGrid}>
                 <View style={styles.miniMetric}>
-                  <RNText style={[styles.miniLabel, { color: colors.textSecondary }]}>{t('inv.assets')}</RNText>
-                  <RNText style={[styles.miniValue, { color: colors.text }]}>{summary?.totalItems || 0}</RNText>
+                  <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.miniLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('inv.assets')}</AppText>
+                  <AppText variant="title" weight="bold" shrink={false} style={[styles.miniValue, { color: colors.text }]} numberOfLines={1}>{summary?.totalItems || 0}</AppText>
                 </View>
                 <View style={styles.miniDivider} />
                 <View style={styles.miniMetric}>
-                  <RNText style={[styles.miniLabel, { color: colors.textSecondary }]}>{t('inv.restock')}</RNText>
-                  <RNText style={[styles.miniValue, { color: colors.primary }]}>{summary?.lowStockCount || 0}</RNText>
+                  <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.miniLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('inv.restock')}</AppText>
+                  <AppText variant="title" weight="bold" shrink={false} style={[styles.miniValue, { color: colors.primary }]} numberOfLines={1}>{summary?.lowStockCount || 0}</AppText>
                 </View>
                 <View style={styles.miniDivider} />
                 <View style={styles.miniMetric}>
-                  <RNText style={[styles.miniLabel, { color: colors.textSecondary }]}>{t('inv.movement')}</RNText>
-                   <RNText style={[styles.miniValue, { color: colors.text }]}>+{invCompStats?.diff || 0}</RNText>
+                  <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.miniLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('inv.movement')}</AppText>
+                   <AppText variant="title" weight="bold" shrink={false} style={[styles.miniValue, { color: colors.text }]} numberOfLines={1}>+{invCompStats?.diff || 0}</AppText>
                 </View>
               </View>
             </View>
           </View>
 
-          {/* Business Insights Bento */}
-          <View style={styles.bentoSection}>
-             <View style={styles.bentoRow}>
-               {/* High Value Item Card */}
-               <TouchableOpacity 
-                 style={[styles.highValueCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-                 activeOpacity={0.9}
-               >
-                 <Zap size={20} color={colors.primary} style={{ marginBottom: 12 }} />
-                 <RNText style={[styles.bentoLabel, { color: colors.textSecondary }]}>{t('inv.highest_value_asset')}</RNText>
-                 <RNText numberOfLines={1} style={[styles.bentoMainVal, { color: colors.text }]}>{summary?.highestValueItem?.name || '---'}</RNText>
-                 <RNText style={[styles.bentoSubVal, { color: colors.primary }]}>{summary?.highestValueItem?.value.toLocaleString()} ETB</RNText>
-               </TouchableOpacity>
-
-               {/* Fast Moving Card */}
-               <TouchableOpacity 
-                  style={[styles.smallBento, { backgroundColor: colors.card, borderColor: colors.border }]}
-                  onPress={() => setActiveQuickStatus('fastMoving')}
-                >
-                  <TrendingUp size={20} color={colors.success || '#34C759'} style={{ marginBottom: 8 }} />
-                  <RNText style={[styles.bentoLabel, { color: colors.textSecondary }]}>{t('inventory.fast_moving')}</RNText>
-                  <RNText style={[styles.bentoMainVal, { color: colors.text }]}>{invStats?.fastMoving || 0}</RNText>
-               </TouchableOpacity>
-             </View>
-
-             <View style={styles.bentoRow}>
-                {/* Categorization Map */}
-                <TouchableOpacity 
-                  style={[styles.categoryBento, { backgroundColor: colors.card, borderColor: colors.border }]}
-                  onPress={() => setActiveQuickStatus('stockCategory')}
-                >
-                  <View style={styles.bentoHeaderRow}>
-                    <RNText style={[styles.bentoLabel, { color: colors.textSecondary }]}>{t('inv.category_distribution')}</RNText>
-                    <BarChart3 size={16} color={colors.textSecondary} />
-                  </View>
-                  <View style={styles.categoryDistribution}>
-                    {summary?.categories?.slice(0, 3).map((cat: any, idx: number) => (
-                      <View key={idx} style={styles.catDistributionItem}>
-                        <View style={[styles.catBarBack, { backgroundColor: colors.surface }]}>
-                          <View style={[styles.catBarFill, { backgroundColor: colors.text, width: `${Math.min((cat.value / summary.totalValue) * 100, 100)}%` }]} />
-                        </View>
-                        <View style={styles.catLabelRow}>
-                          <RNText style={[styles.catNameText, { color: colors.text }]}>
-                            {cat.name ? t(cat.name.toLowerCase().startsWith('category.') ? cat.name.toLowerCase() : 'category.' + cat.name.toLowerCase()) : t('common.general')}
-                          </RNText>
-                          <RNText style={[styles.catValueText, { color: colors.textSecondary }]}>{Math.round((cat.value / summary.totalValue) * 100)}%</RNText>
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-                </TouchableOpacity>
-
-                {/* Slow Moving Card */}
-                <TouchableOpacity 
-                   style={[styles.smallBento, { backgroundColor: colors.card, borderColor: colors.border }]}
-                   onPress={() => setActiveQuickStatus('slowMoving')}
+           {/* Business Insights Bento */}
+            <View style={styles.bentoSection}>
+               {/* High Value Item Card - Clickable to Top 10 */}
+               <View style={styles.bentoRow}>
+                 <TouchableOpacity 
+                   style={[styles.highValueCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                   activeOpacity={0.9}
+                   onPress={() => {
+                     const items = getTopHighestValueItems(10);
+                     setTop10Items(items);
+                     setShowTop10Modal(true);
+                   }}
                  >
-                   <TrendingDown size={20} color={colors.primary} style={{ marginBottom: 8 }} />
-                   <RNText style={[styles.bentoLabel, { color: colors.textSecondary }]}>{t('inventory.slow_moving')}</RNText>
-                   <RNText style={[styles.bentoMainVal, { color: colors.text }]}>{invStats?.slowMoving || 0}</RNText>
-                </TouchableOpacity>
+                 <Zap size={20} color={colors.primary} style={{ marginBottom: 12 }} />
+                 <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.bentoLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('inv.highest_value_asset')}</AppText>
+                 <AppText variant="body" weight="bold" numberOfLines={1} style={[styles.bentoMainVal, { color: colors.text }]}>{summary?.highestValueItem?.name || '---'}</AppText>
+                 <AppText variant="body" weight="bold" style={[styles.bentoSubVal, { color: colors.primary }]} numberOfLines={1}>{summary?.highestValueItem?.value?.toLocaleString()} {t('common.etb')}</AppText>
+                 </TouchableOpacity>
+               </View>
+
+               {/* Fast & Slow Moving - Side by Side */}
+               <View style={styles.bentoRow}>
+                 <TouchableOpacity 
+                    style={[styles.smallBento, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    onPress={() => {
+                      setMovingDetailType('fast');
+                      const items = getMovingItemsWithFilters('fast', 'qty_desc');
+                      setMovingDetailItems(items as any[]);
+                      setMovingDetailFilter('qty_desc');
+                      setShowMovingDetail(true);
+                    }}
+                  >
+                   <TrendingUp size={20} color={colors.success || '#34C759'} style={{ marginBottom: 8 }} />
+                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.bentoLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('inventory.fast_moving')}</AppText>
+                   <AppText variant="body" weight="bold" style={[styles.bentoMainVal, { color: colors.text, fontSize: (invStats?.fastMoving || 0) >= 1000 ? 16 : 18 }]} numberOfLines={1}>{invStats?.fastMoving || 0}</AppText>
+                 </TouchableOpacity>
+                 <View style={{ width: 12 }} />
+                 <TouchableOpacity 
+                    style={[styles.smallBento, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    onPress={() => {
+                      setMovingDetailType('slow');
+                      const items = getMovingItemsWithFilters('slow', 'qty_asc');
+                      setMovingDetailItems(items as any[]);
+                      setMovingDetailFilter('qty_asc');
+                      setShowMovingDetail(true);
+                    }}
+                  >
+                     <TrendingDown size={20} color={colors.primary} style={{ marginBottom: 8 }} />
+                     <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.bentoLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('inventory.slow_moving')}</AppText>
+                     <AppText variant="body" weight="bold" style={[styles.bentoMainVal, { color: colors.text, fontSize: (invStats?.slowMoving || 0) >= 1000 ? 16 : 18 }]} numberOfLines={1}>{invStats?.slowMoving || 0}</AppText>
+                 </TouchableOpacity>
+               </View>
+
+               {/* Product Order Card */}
+               <View style={styles.bentoRow}>
+                 <TouchableOpacity 
+                     style={[styles.smallBento, { backgroundColor: colors.card, borderColor: colors.border }]}
+                     onPress={() => {
+                       const low = getLowStockItems();
+                       setOrderItems(low.map((item: any) => ({ ...item, orderQty: 10 }))); // Default order qty 10
+                       setShowOrderModal(true);
+                     }}
+                   >
+                    <ShoppingBag size={20} color={colors.primary} style={{ marginBottom: 8 }} />
+                    <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.bentoLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('inventory.product_order')}</AppText>
+                    <AppText variant="body" weight="bold" style={[styles.bentoMainVal, { color: colors.text, fontSize: (summary?.lowStockCount || 0) >= 1000 ? 16 : 18 }]} numberOfLines={1}>{summary?.lowStockCount || 0}</AppText>
+                  </TouchableOpacity>
+               </View>
+
+               {/* Category Distribution - Fixed percentages */}
+               <View style={styles.bentoRow}>
+                 <TouchableOpacity 
+                    style={[styles.categoryBento, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    onPress={() => setActiveQuickStatus('stockCategory')}
+                  >
+                   <View style={styles.bentoHeaderRow}>
+                     <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.bentoLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('inv.category_distribution')}</AppText>
+                     <BarChart3 size={16} color={colors.textSecondary} />
+                   </View>
+                   <View style={styles.categoryDistribution}>
+                     {summary?.categories?.slice(0, 3).map((cat: any, idx: number) => {
+                       const totalVal = summary?.totalValue || 1;
+                       const pct = totalVal > 0 ? Math.round((cat.value / totalVal) * 100) : 0;
+                       return (
+                         <View key={idx} style={styles.catDistributionItem}>
+                           <View style={[styles.catBarBack, { backgroundColor: colors.surface }]}>
+                             <View style={[styles.catBarFill, { backgroundColor: colors.text, width: `${Math.min(pct, 100)}%` }]} />
+                           </View>
+                           <View style={styles.catLabelRow}>
+                              <AppText variant="body" weight="medium" style={[styles.catNameText, { color: colors.text }]} numberOfLines={1}>
+                                {cat.name ? t(cat.name.toLowerCase().startsWith('category.') ? cat.name.toLowerCase() : 'category.' + cat.name.toLowerCase()) : t('common.general')}
+                              </AppText>
+                              <AppText variant="body" weight="bold" style={[styles.catValueText, { color: colors.textSecondary }]} numberOfLines={1}>{pct}%</AppText>
+                           </View>
+                         </View>
+                       );
+                     })}
+                   </View>
+                 </TouchableOpacity>
+               </View>
              </View>
-          </View>
 
           {/* Action Ledger Section */}
           <View style={styles.ledgerSection}>
             <View style={styles.sectionHeader}>
               <View>
-                <RNText style={[styles.sectionTitle, { color: colors.text }]}>{t('inv.stock_ledger')}</RNText>
-                <RNText style={[styles.sectionSub, { color: colors.textSecondary }]}>{t('inv.ledger_subtitle')}</RNText>
+                <AppText variant="heading" weight="bold" style={[styles.sectionTitle, { color: colors.text }]} numberOfLines={2}>{t('inv.stock_ledger')}</AppText>
+                <AppText variant="body-sm" weight="medium" style={[styles.sectionSub, { color: colors.textSecondary }]} numberOfLines={2}>{t('inv.ledger_subtitle')}</AppText>
               </View>
               <TouchableOpacity onPress={() => setShowInventoryRecord(true)}>
-                <RNText style={[styles.viewAllBtn, { color: colors.primary }]}>{t('common.view_all')}</RNText>
+                <AppText variant="body" weight="bold" shrink={false} style={[styles.viewAllBtn, { color: colors.primary }]} numberOfLines={1}>{t('common.view_all')}</AppText>
               </TouchableOpacity>
             </View>
 
@@ -371,7 +534,7 @@ const InventoryDashboard = () => {
               {recentItems.length === 0 && (
                 <View style={styles.emptyState}>
                   <Package size={48} color={colors.border} />
-                  <RNText style={[styles.emptyText, { color: colors.textSecondary }]}>{t('inv.vault_empty_state')}</RNText>
+                  <AppText variant="body" weight="medium" style={[styles.emptyText, { color: colors.textSecondary }]} numberOfLines={2}>{t('inv.vault_empty_state')}</AppText>
                 </View>
               )}
             </View>
@@ -408,8 +571,8 @@ const InventoryDashboard = () => {
             
             {isBarExpanded && (
               <Animated.View entering={FadeIn.delay(100)} exiting={FadeOut.duration(100)}>
-                <TouchableOpacity style={styles.dockBtn} onPress={() => { setActiveQuickStatus('stockCategory'); setIsBarExpanded(false); }}>
-                   <Layers size={22} color={colors.textSecondary} />
+                <TouchableOpacity style={styles.dockBtn} onPress={() => { setShowOnCreditModal(true); setIsBarExpanded(false); }}>
+                   <Handshake size={22} color={colors.textSecondary} />
                 </TouchableOpacity>
               </Animated.View>
             )}
@@ -496,39 +659,52 @@ const InventoryDashboard = () => {
             <View style={styles.modalHandleRow}>
               <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
             </View>
-            <Text style={[styles.sheetTitle, { color: colors.text }]}>
-              {activeQuickStatus === 'lowStock' ? t('inv.low_stock_items_title') 
+                  <AppText variant="heading" weight="bold" style={[styles.sheetTitle, { color: colors.text }]} numberOfLines={2}>
+                  {activeQuickStatus === 'lowStock' ? t('inv.quantity_left_title') || 'Quantity Left'
                 : activeQuickStatus === 'expiring' ? t('inv.expiring_items_title')
                 : activeQuickStatus === 'stockCategory' ? t('inv.stock_by_category_title')
                 : activeQuickStatus === 'fastMoving' ? t('inv.fast_moving_items_title')
                 : t('inv.slow_moving_items_title')}
-            </Text>
+            </AppText>
             <ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={false}>
               {/* Low Stock Items */}
               {activeQuickStatus === 'lowStock' && lowStockItems.map(item => (
-                <TouchableOpacity 
-                  key={item.id} 
-                  style={[styles.qsCard, { backgroundColor: colors.background }]}
+                <AppListItem
+                  key={item.id}
+                  left={
+                    <View style={[styles.qsIconBox, { backgroundColor: colors.text }]}>
+                      <Package size={20} color={colors.background} />
+                    </View>
+                  }
+                  title={item.name}
+                  subtitle={`${item.totalBaseQuantity} ${t('form.' + (item.baseUnit || 'pieces').toLowerCase())} ${t('inv.left_suffix')}`}
+                  titleMaxLines={2}
+                  subtitleMaxLines={1}
+                  right={
+                    <View style={[styles.qsBadge, item.totalBaseQuantity <= 0 ? [styles.qsBadgeDark, { backgroundColor: colors.text }] : [styles.qsBadgeLight, { backgroundColor: colors.border }]]}>
+                      <AppText variant="micro" weight="bold" shrink={false} style={[styles.qsBadgeText, { color: item.totalBaseQuantity <= 0 ? colors.background : colors.text }]} numberOfLines={1}>
+                        {item.totalBaseQuantity <= 0 ? t('inventory.out_of_stock') : t('inv.low_stock')}
+                      </AppText>
+                    </View>
+                  }
                   onPress={() => {
                     setSelectedItem(item);
                     setActiveQuickStatus(null);
                     setShowItemDetails(true);
                   }}
-                >
-                  <View style={[styles.qsIconBox, { backgroundColor: colors.text }]}><Package size={20} color={colors.background} /></View>
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={[styles.qsName, { color: colors.text }]}>{item.name}</Text>
-                    <Text style={[styles.qsSub, { color: colors.textSecondary }]}>{item.totalBaseQuantity} {t('form.' + (item.baseUnit || 'pieces').toLowerCase())} {t('inv.left_suffix')}</Text>
-                  </View>
-                  <View style={[styles.qsBadge, item.totalBaseQuantity <= 0 ? [styles.qsBadgeDark, { backgroundColor: colors.text }] : [styles.qsBadgeLight, { backgroundColor: colors.border }]]}>
-                    <Text style={[styles.qsBadgeText, { color: item.totalBaseQuantity <= 0 ? colors.background : colors.text }]}>
-                      {item.totalBaseQuantity <= 0 ? t('inventory.out_of_stock') : t('inv.low_stock')}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
+                  noBorder
+                  padding={Spacing.md}
+                  style={{
+                    backgroundColor: colors.background,
+                    borderRadius: BorderRadius.lg,
+                    borderWidth: 1,
+                    borderColor: 'rgba(0,0,0,0.05)',
+                    marginBottom: Spacing.sm,
+                  }}
+                />
               ))}
               {activeQuickStatus === 'lowStock' && lowStockItems.length === 0 && (
-                <Text style={[styles.emptyStatsText, { color: colors.textSecondary, textAlign: 'center', marginTop: 20 }]}>{t('inv.no_low_stock')}</Text>
+                <AppText variant="caption" weight="medium" style={[styles.emptyStatsText, { color: colors.textSecondary, textAlign: 'center', marginTop: 20 }]} numberOfLines={2}>{t('inv.no_low_stock')}</AppText>
               )}
 
               {/* Expiring Items */}
@@ -536,95 +712,590 @@ const InventoryDashboard = () => {
                 const daysDiff = Math.ceil((new Date(item.expiryDate).getTime() - Date.now()) / 86400000);
                 const urgent = daysDiff < 7;
                 return (
-                  <TouchableOpacity 
-                    key={item.id} 
-                    style={[styles.qsCard, { backgroundColor: colors.background }]}
+                  <AppListItem
+                    key={item.id}
+                    left={
+                      <View style={[styles.qsIconBox, { backgroundColor: colors.text }]}>
+                        <Package size={20} color={colors.background} />
+                      </View>
+                    }
+                    title={item.name}
+                    subtitle={t('inv.expires_in', { days: daysDiff.toString() })}
+                    titleMaxLines={2}
+                    subtitleMaxLines={1}
+                    right={
+                      <View style={[styles.qsBadge, urgent ? [styles.qsBadgeDark, { backgroundColor: colors.text }] : [styles.qsBadgeLight, { backgroundColor: colors.border }]]}>
+                        <AppText variant="micro" weight="bold" shrink={false} style={[styles.qsBadgeText, { color: urgent ? colors.background : colors.text }]} numberOfLines={1}>
+                          {urgent ? t('inv.urgent_label') : t('inv.soon_label')}
+                        </AppText>
+                      </View>
+                    }
                     onPress={() => {
                       setSelectedItem(item);
                       setActiveQuickStatus(null);
                       setShowItemDetails(true);
                     }}
-                  >
-                    <View style={[styles.qsIconBox, { backgroundColor: colors.text }]}><Package size={20} color={colors.background} /></View>
-                    <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text style={[styles.qsName, { color: colors.text }]}>{item.name}</Text>
-                      <Text style={[styles.qsSub, { color: colors.textSecondary }]}>{t('inv.expires_in', { days: daysDiff.toString() })}</Text>
-                    </View>
-                    <View style={[styles.qsBadge, urgent ? [styles.qsBadgeDark, { backgroundColor: colors.text }] : [styles.qsBadgeLight, { backgroundColor: colors.border }]]}>
-                      <Text style={[styles.qsBadgeText, { color: urgent ? colors.background : colors.text }]}>
-                        {urgent ? t('inv.urgent_label') : t('inv.soon_label')}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
+                    noBorder
+                    padding={Spacing.md}
+                    style={{
+                      backgroundColor: colors.background,
+                      borderRadius: BorderRadius.lg,
+                      borderWidth: 1,
+                      borderColor: 'rgba(0,0,0,0.05)',
+                      marginBottom: Spacing.sm,
+                    }}
+                  />
                 );
               })}
               {activeQuickStatus === 'expiring' && expiringItems.length === 0 && (
-                <Text style={[styles.emptyStatsText, { color: colors.textSecondary, textAlign: 'center', marginTop: 20 }]}>{t('inv.no_expiring')}</Text>
+                <AppText variant="caption" weight="medium" style={[styles.emptyStatsText, { color: colors.textSecondary, textAlign: 'center', marginTop: 20 }]} numberOfLines={2}>{t('inv.no_expiring')}</AppText>
               )}
 
               {/* Stock by Category */}
               {activeQuickStatus === 'stockCategory' && (summary?.categories || []).map((item: any, idx: number) => (
-                <View key={idx} style={[styles.qsCard, { backgroundColor: colors.background }]}>
-                  <View style={[styles.qsIconBox, { backgroundColor: colors.text }]}><Package size={20} color={colors.background} /></View>
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={[styles.qsName, { color: colors.text }]}>
-                      {item.name ? t(item.name.toLowerCase().startsWith('category.') ? item.name.toLowerCase() : 'category.' + item.name.toLowerCase()) : item.name}
-                    </Text>
-                    <Text style={[styles.qsSub, { color: colors.textSecondary }]}>{item.count} {t('inv.items_suffix')}</Text>
-                  </View>
-                </View>
+                <CategoryBarRow key={idx} item={item} idx={idx} />
               ))}
-              {activeQuickStatus === 'stockCategory' && (!summary?.categories || summary.categories.length === 0) && (
-                <Text style={[styles.emptyStatsText, { color: colors.textSecondary, textAlign: 'center', marginTop: 20 }]}>{t('inv.no_categories')}</Text>
+              {activeQuickStatus === 'stockCategory' && (!summary?.categories || summary.categories.length === 0) && summary && (
+                <AppText variant="caption" weight="medium" style={[styles.emptyStatsText, { color: colors.textSecondary, textAlign: 'center', marginTop: 20 }]} numberOfLines={2}>{t('inv.no_categories')}</AppText>
+              )}
+              {activeQuickStatus === 'stockCategory' && !summary && (
+                <CategoryBarSkeleton rows={3} />
               )}
 
               {/* Fast Moving */}
               {activeQuickStatus === 'fastMoving' && fastMovingItems.map(item => (
-                <TouchableOpacity 
-                   key={item.id} 
-                   style={[styles.qsCard, { backgroundColor: colors.background }]}
-                   onPress={() => {
-                     setSelectedItem(item);
-                     setActiveQuickStatus(null);
-                     setShowItemDetails(true);
-                   }}
-                >
-                  <View style={[styles.qsIconBox, { backgroundColor: colors.text }]}><TrendingUp size={18} color={colors.background} /></View>
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={[styles.qsName, { color: colors.text }]}>{item.name}</Text>
-                    <Text style={[styles.qsSub, { color: colors.textSecondary }]}>{item.totalSales} {t('inv.sold_week_suffix')}</Text>
-                  </View>
-                </TouchableOpacity>
+                <AppListItem
+                  key={item.id}
+                  left={
+                    <View style={[styles.qsIconBox, { backgroundColor: colors.text }]}>
+                      <TrendingUp size={18} color={colors.background} />
+                    </View>
+                  }
+                  title={item.name}
+                  subtitle={`${item.totalSales} ${t('inv.sold_week_suffix')}`}
+                  titleMaxLines={2}
+                  subtitleMaxLines={1}
+                  onPress={() => {
+                    setSelectedItem(item);
+                    setActiveQuickStatus(null);
+                    setShowItemDetails(true);
+                  }}
+                  noBorder
+                  padding={Spacing.md}
+                  style={{
+                    backgroundColor: colors.background,
+                    borderRadius: BorderRadius.lg,
+                    borderWidth: 1,
+                    borderColor: 'rgba(0,0,0,0.05)',
+                    marginBottom: Spacing.sm,
+                  }}
+                />
               ))}
               {activeQuickStatus === 'fastMoving' && fastMovingItems.length === 0 && (
-                <Text style={[styles.emptyStatsText, { color: colors.textSecondary, textAlign: 'center', marginTop: 20 }]}>{t('inv.no_fast_moving')}</Text>
+                <AppText variant="caption" weight="medium" style={[styles.emptyStatsText, { color: colors.textSecondary, textAlign: 'center', marginTop: 20 }]} numberOfLines={2}>{t('inv.no_fast_moving')}</AppText>
               )}
 
               {/* Slow Moving */}
               {activeQuickStatus === 'slowMoving' && slowMovingItems.map(item => (
-                <TouchableOpacity 
-                   key={item.id} 
-                   style={[styles.qsCard, { backgroundColor: colors.background }]}
-                   onPress={() => {
-                     setSelectedItem(item);
-                     setActiveQuickStatus(null);
-                     setShowItemDetails(true);
-                   }}
-                >
-                  <View style={[styles.qsIconBox, { backgroundColor: colors.text }]}><TrendingDown size={18} color={colors.background} /></View>
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={[styles.qsName, { color: colors.text }]}>{item.name}</Text>
-                    <Text style={[styles.qsSub, { color: colors.textSecondary }]}>{item.totalQty} {t('inv.sold_month_suffix')}</Text>
-                  </View>
-                </TouchableOpacity>
+                <AppListItem
+                  key={item.id}
+                  left={
+                    <View style={[styles.qsIconBox, { backgroundColor: colors.text }]}>
+                      <TrendingDown size={18} color={colors.background} />
+                    </View>
+                  }
+                  title={item.name}
+                  subtitle={`${item.totalQty} ${t('inv.sold_month_suffix')}`}
+                  titleMaxLines={2}
+                  subtitleMaxLines={1}
+                  onPress={() => {
+                    setSelectedItem(item);
+                    setActiveQuickStatus(null);
+                    setShowItemDetails(true);
+                  }}
+                  noBorder
+                  padding={Spacing.md}
+                  style={{
+                    backgroundColor: colors.background,
+                    borderRadius: BorderRadius.lg,
+                    borderWidth: 1,
+                    borderColor: 'rgba(0,0,0,0.05)',
+                    marginBottom: Spacing.sm,
+                  }}
+                />
               ))}
               {activeQuickStatus === 'slowMoving' && slowMovingItems.length === 0 && (
-                <Text style={[styles.emptyStatsText, { color: colors.textSecondary, textAlign: 'center', marginTop: 20 }]}>{t('inv.no_slow_moving')}</Text>
+                <AppText variant="caption" weight="medium" style={[styles.emptyStatsText, { color: colors.textSecondary, textAlign: 'center', marginTop: 20 }]} numberOfLines={2}>{t('inv.no_slow_moving')}</AppText>
               )}
             </ScrollView>
           </View>
         </View>
       </Modal>
+
+      {/* Product Order Modal */}
+      <Modal
+        visible={showOrderModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowOrderModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowOrderModal(false)} />
+          <View style={[styles.bottomSheetContainer, { backgroundColor: colors.background, height: '80%' }]}>
+            <View style={styles.modalHandleRow}>
+              <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+            </View>
+            <View style={{ paddingHorizontal: 25, flex: 1 }}>
+              <View style={styles.orderHeader}>
+                <View>
+                  <AppText variant="heading" weight="bold" style={[styles.sheetTitle, { color: colors.text, marginBottom: 2 }]} numberOfLines={2}>{t('inventory.create_order')}</AppText>
+                  <AppText variant="body-sm" weight="medium" style={[styles.orderSub, { color: colors.textSecondary }]} numberOfLines={1}>{t('inventory.order_items_count', { count: orderItems.length.toString() })}</AppText>
+                </View>
+                <TouchableOpacity onPress={() => setShowOrderModal(false)}>
+                   <X size={24} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={{ flex: 1, marginTop: 20 }} showsVerticalScrollIndicator={false}>
+                {orderItems.map((item, idx) => (
+                  <View key={item.id} style={[styles.orderItemCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                     <View style={{ flex: 1 }}>
+                      <AppText variant="body-lg" weight="bold" style={[styles.orderItemName, { color: colors.text }]} numberOfLines={1}>{item.name}</AppText>
+                      <AppText variant="caption" weight="medium" style={[styles.orderItemStock, { color: colors.textSecondary }]} numberOfLines={1}>{t('inv.current_stock')}: {item.totalBaseQuantity} {item.baseUnit}</AppText>
+                    </View>
+                    <View style={styles.qtyControl}>
+                      <TouchableOpacity 
+                        style={[styles.qtyBtn, { backgroundColor: colors.surface }]} 
+                        onPress={() => {
+                          const newItems = [...orderItems];
+                          newItems[idx].orderQty = Math.max(0, newItems[idx].orderQty - 1);
+                          setOrderItems(newItems);
+                        }}
+                      >
+                        <AppText variant="body" weight="bold" style={{ color: colors.text, fontSize: 18 }} numberOfLines={1}>-</AppText>
+                      </TouchableOpacity>
+                      <AppText variant="body" weight="bold" style={[styles.qtyVal, { color: colors.text }]} numberOfLines={1}>{item.orderQty}</AppText>
+                      <TouchableOpacity 
+                        style={[styles.qtyBtn, { backgroundColor: colors.surface }]} 
+                        onPress={() => {
+                          const newItems = [...orderItems];
+                          newItems[idx].orderQty += 1;
+                          setOrderItems(newItems);
+                        }}
+                      >
+                        <AppText variant="body" weight="bold" style={{ color: colors.text, fontSize: 18 }} numberOfLines={1}>+</AppText>
+                      </TouchableOpacity>
+                    </View>
+                    <TouchableOpacity 
+                      style={{ marginLeft: 15 }} 
+                      onPress={() => setOrderItems(orderItems.filter((_, i) => i !== idx))}
+                    >
+                      <TrashIcon size={18} color={colors.primary} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                {orderItems.length === 0 && (
+                  <View style={{ alignItems: 'center', marginTop: 50 }}>
+                    <Package size={48} color={colors.border} />
+                    <AppText variant="body" weight="medium" style={[styles.emptyText, { color: colors.textSecondary, marginTop: 15 }]} numberOfLines={2}>{t('inventory.no_order_items')}</AppText>
+                  </View>
+                )}
+              </ScrollView>
+
+              {/* Custom Order Section */}
+              <View style={[styles.customOrderSection, { borderTopColor: colors.border }]}>
+                <AppText variant="body-lg" weight="bold" style={[styles.customOrderTitle, { color: colors.text }]} numberOfLines={1}>{t('inventory.custom_order')}</AppText>
+                <View style={styles.customOrderRow}>
+                  <TextInput
+                    style={[styles.customOrderInput, { color: colors.text, borderColor: colors.border, flex: 2, marginRight: 8 }]}
+                    placeholder={t('inv.item_name_ph')}
+                    placeholderTextColor={colors.textSecondary}
+                    value={customOrderName}
+                    onChangeText={setCustomOrderName}
+                  />
+                  <TextInput
+                    style={[styles.customOrderInput, { color: colors.text, borderColor: colors.border, flex: 1, marginRight: 8 }]}
+                    placeholder={t('inv.qty_ph')}
+                    placeholderTextColor={colors.textSecondary}
+                    value={customOrderQty}
+                    onChangeText={setCustomOrderQty}
+                    keyboardType="numeric"
+                  />
+                  <TouchableOpacity
+                    style={[styles.customOrderAddBtn, { backgroundColor: colors.text }]}
+                    onPress={() => {
+                      if (customOrderName.trim() && Number(customOrderQty) > 0) {
+                        setOrderItems([...orderItems, {
+                          id: Date.now(),
+                          name: customOrderName.trim(),
+                          totalBaseQuantity: 0,
+                          baseUnit: 'pcs',
+                          orderQty: Number(customOrderQty),
+                          notes: customOrderNotes.trim(),
+                          isCustom: true
+                        }]);
+                        setCustomOrderName('');
+                        setCustomOrderQty('1');
+                        setCustomOrderNotes('');
+                      }
+                    }}
+                  >
+                    <Plus size={18} color={colors.background} />
+                  </TouchableOpacity>
+                </View>
+                <TextInput
+                  style={[styles.customOrderInput, { color: colors.text, borderColor: colors.border, marginTop: 8 }]}
+                  placeholder={t('inv.notes_optional')}
+                  placeholderTextColor={colors.textSecondary}
+                  value={customOrderNotes}
+                  onChangeText={setCustomOrderNotes}
+                />
+              </View>
+
+              <View style={{ paddingVertical: 20 }}>
+                <TouchableOpacity 
+                  disabled={orderItems.length === 0}
+                  style={[styles.orderSubmitBtn, { backgroundColor: colors.text, opacity: orderItems.length === 0 ? 0.5 : 1 }]}
+                  onPress={async () => {
+                    const allItems = orderItems.map(item => 
+                      item.isCustom 
+                        ? `${item.name} - Qty: ${item.orderQty}${item.notes ? ` (${item.notes})` : ''}`
+                        : `${item.name} - Stock: ${item.totalBaseQuantity} ${item.baseUnit}, Order: ${item.orderQty} ${item.baseUnit}`
+                    ).join('\n');
+                    
+                    try {
+                      const html = `
+                        <html>
+                          <head>
+                            <style>
+                              body { font-family: Helvetica; padding: 20px; }
+                              h1 { text-align: center; color: #333; }
+                              p { color: #666; }
+                              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                              th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+                              th { background-color: #f2f2f2; color: #333; }
+                            </style>
+                          </head>
+                          <body>
+                            <h1>Product Order List</h1>
+                            <p>Date: ${new Date().toLocaleDateString()}</p>
+                            <p>Total Items: ${orderItems.length}</p>
+                            <table>
+                              <thead>
+                                <tr>
+                                  <th>#</th>
+                                  <th>Item Name</th>
+                                  <th>Order Quantity</th>
+                                  <th>Notes</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                ${orderItems.map((item, idx) => `
+                                  <tr>
+                                    <td>${idx + 1}</td>
+                                    <td>${item.name}</td>
+                                    <td>${item.orderQty}</td>
+                                    <td>${item.notes || (item.isCustom ? '' : `${item.totalBaseQuantity} ${item.baseUnit} in stock`)}</td>
+                                  </tr>
+                                `).join('')}
+                              </tbody>
+                            </table>
+                          </body>
+                        </html>
+                      `;
+                      const { uri } = await Print.printToFileAsync({ html });
+                      await Sharing.shareAsync(uri);
+                      setShowOrderModal(false);
+                    } catch (e) {
+                      console.error('Export error:', e);
+                      // Fallback: share as text
+                      try {
+                        await Sharing.shareAsync(`data:text/plain;base64,${btoa(allItems)}`);
+                      } catch (e2) {
+                        console.error('Fallback export error:', e2);
+                        await dialog.alert({ title: t('common.error'), message: t('inventory.export_failed'), iconType: 'danger' });
+                      }
+                    }
+                  }}
+                >
+                  <Download size={20} color={colors.background} style={{ marginRight: 10 }} />
+                  <AppText variant="body" weight="bold" style={[styles.orderSubmitText, { color: colors.background }]} numberOfLines={1}>{t('inventory.export_order')}</AppText>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Top 10 Highest Value Items Modal */}
+      <Modal
+        visible={showTop10Modal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowTop10Modal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowTop10Modal(false)} />
+          <View style={[styles.bottomSheetContainer, { backgroundColor: colors.background, height: '80%' }]}>
+            <View style={styles.modalHandleRow}>
+              <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+            </View>
+            <View style={{ paddingHorizontal: 25, flex: 1 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <AppText variant="heading" weight="bold" style={[styles.sheetTitle, { color: colors.text, marginBottom: 0 }]} numberOfLines={2}>{t('inv.top_10_highest_value')}</AppText>
+                <TouchableOpacity onPress={() => setShowTop10Modal(false)}>
+                  <X size={24} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {top10Items.map((item, idx) => (
+                  <AppListItem
+                    key={item.id}
+                    left={
+                      <View style={[styles.rankBadge, { backgroundColor: colors.text }]}>
+                        <AppText variant="body" weight="bold" shrink={false} style={[styles.rankText, { color: colors.background }]}>{idx + 1}</AppText>
+                      </View>
+                    }
+                    title={item.name}
+                    subtitle={`${item.categoryName} \u2022 ${item.totalBaseQuantity} ${item.baseUnit}`}
+                    titleMaxLines={2}
+                    subtitleMaxLines={1}
+                    rightText={`${item.totalValue?.toLocaleString()} ${t('common.etb')}`}
+                    rightColor={colors.primary}
+                    onPress={() => {
+                      setSelectedItem(item);
+                      setShowTop10Modal(false);
+                      setShowItemDetails(true);
+                    }}
+                    noBorder
+                    padding={Spacing.md}
+                    style={{
+                      backgroundColor: colors.card,
+                      borderColor: colors.border,
+                      borderWidth: 1,
+                      borderRadius: BorderRadius.lg,
+                      marginBottom: Spacing.sm,
+                    }}
+                  />
+                ))}
+                {top10Items.length === 0 && (
+                  <View style={{ alignItems: 'center', marginTop: 50 }}>
+                    <Package size={48} color={colors.border} />
+                    <AppText variant="body" weight="medium" style={[styles.emptyText, { color: colors.textSecondary, marginTop: 15 }]} numberOfLines={2}>{t('inv.no_items_found')}</AppText>
+                  </View>
+                )}
+              </ScrollView>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Moving Detail Modal */}
+      <Modal
+        visible={showMovingDetail}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowMovingDetail(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowMovingDetail(false)} />
+          <View style={[styles.bottomSheetContainer, { backgroundColor: colors.background, height: '85%' }]}>
+            <View style={styles.modalHandleRow}>
+              <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+            </View>
+            <View style={{ paddingHorizontal: 25, flex: 1 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+                <AppText variant="heading" weight="bold" style={[styles.sheetTitle, { color: colors.text, marginBottom: 0 }]} numberOfLines={2}>
+                  {movingDetailType === 'fast' ? t('inventory.fast_moving') : t('inventory.slow_moving')}
+                </AppText>
+                <TouchableOpacity onPress={() => setShowMovingDetail(false)}>
+                  <X size={24} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Filter chips */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 15 }}>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {(['qty_desc', 'qty_asc', 'category', 'today', 'week', 'month', 'year'] as const).map(f => (
+                    <TouchableOpacity
+                      key={f}
+                      style={[styles.filterChip, { 
+                        backgroundColor: movingDetailFilter === f ? colors.text : colors.card,
+                        borderColor: colors.border
+                      }]}
+                      onPress={() => {
+                        setMovingDetailFilter(f);
+                        const items = getMovingItemsWithFilters(movingDetailType, f);
+                        setMovingDetailItems(items as any[]);
+                      }}
+                    >
+                <AppText variant="caption" weight="bold" shrink={false} style={[styles.filterChipText, {
+                  color: movingDetailFilter === f ? colors.background : colors.text
+                }]} numberOfLines={1}>
+                        {f === 'qty_desc' ? t('inv.sort_highest_price') :
+                         f === 'qty_asc' ? t('inv.sort_lowest_price') :
+                         f === 'category' ? t('inv.filter_category') :
+                         f === 'today' ? t('common.today') :
+                         f === 'week' ? t('inv.filter_this_week') :
+                         f === 'month' ? t('inv.filter_this_month') : t('inv.filter_this_year')}
+                      </AppText>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {movingDetailItems.map((item: any, idx: number) => (
+                  <AppListItem
+                    key={item.id || idx}
+                    left={
+                      <View style={[styles.qsIconBox, { backgroundColor: colors.text }]}>
+                        {movingDetailType === 'fast'
+                          ? <TrendingUp size={18} color={colors.background} />
+                          : <TrendingDown size={18} color={colors.background} />
+                        }
+                      </View>
+                    }
+                    title={item.name || item.categoryName || 'General'}
+                    subtitle={t('inv.units_moved', { count: String(item.totalQty || item.totalSales || 0) })}
+                    titleMaxLines={2}
+                    subtitleMaxLines={1}
+                    rightText={String(item.totalQty || item.totalSales || 0)}
+                    rightColor={movingDetailType === 'fast' ? '#34C759' : colors.primary}
+                    noBorder
+                    padding={Spacing.md}
+                    style={{
+                      backgroundColor: colors.card,
+                      borderRadius: BorderRadius.lg,
+                      borderWidth: 1,
+                      borderColor: 'rgba(0,0,0,0.05)',
+                      marginBottom: Spacing.sm,
+                    }}
+                  />
+                ))}
+                {movingDetailItems.length === 0 && (
+                  <View style={{ alignItems: 'center', marginTop: 50 }}>
+                    <Package size={48} color={colors.border} />
+                    <AppText variant="body" weight="medium" style={[styles.emptyText, { color: colors.textSecondary, marginTop: 15 }]} numberOfLines={2}>{t('inv.no_items_found')}</AppText>
+                  </View>
+                )}
+              </ScrollView>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* On-Credit List Modal */}
+      <Modal
+        visible={showOnCreditModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowOnCreditModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowOnCreditModal(false)} />
+          <View style={[styles.bottomSheetContainer, { backgroundColor: colors.background, height: Dimensions.get('window').height * 0.85 }]}>
+            <View style={styles.modalHandleRow}>
+              <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+            </View>
+            <OnCreditListScreen />
+          </View>
+        </View>
+      </Modal>
+
+      {/* Inventory Health Modal */}
+      <Modal
+        visible={showHealthModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowHealthModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowHealthModal(false)} />
+          <View style={[styles.bottomSheetContainer, { backgroundColor: colors.background, height: Dimensions.get('window').height * 0.8 }]}>
+            <View style={styles.modalHandleRow}>
+              <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+            </View>
+            
+            <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 10 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <AppText variant="title" weight="bold" style={{ fontSize: 20, fontFamily: Fonts.bold, color: colors.text }} numberOfLines={1}>{t('inv.stock_health_score')}</AppText>
+                <TouchableOpacity onPress={() => setShowHealthModal(false)}>
+                  <X size={24} color={colors.text} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={{ alignItems: 'center', marginVertical: 20, padding: 20, borderRadius: 16, backgroundColor: colors.surface }}>
+                <AppText variant="hero" weight="extrabold" style={{ fontSize: 48, fontFamily: Fonts.bold, color: (summary?.stockHealth || 100) > 80 ? colors.success : colors.primary }} numberOfLines={1}>
+                  {summary?.stockHealth || 100}%
+                </AppText>
+                <AppText variant="body" weight="bold" style={{ fontSize: 16, fontFamily: Fonts.bold, color: colors.text, marginTop: 8 }} numberOfLines={1}>
+                  {(summary?.stockHealth || 100) === 100 ? t('inv.health_optimal') : t('inv.health_action')}
+                </AppText>
+                <AppText variant="caption" weight="medium" style={{ fontSize: 12, fontFamily: Fonts.medium, color: colors.textSecondary, textAlign: 'center', marginTop: 8, paddingHorizontal: 10 }} numberOfLines={3}>
+                  {t('inv.health_description')}
+                </AppText>
+              </View>
+
+              <AppText variant="body" weight="bold" style={{ fontSize: 16, fontFamily: Fonts.bold, color: colors.text, marginBottom: 12 }} numberOfLines={1}>
+                {t('inv.low_stock_items', { count: String(lowStockItems.length) })}
+              </AppText>
+
+              <FlatList
+                data={lowStockItems}
+                keyExtractor={(item) => `lowstock-${item.id}`}
+                style={{ flex: 1, marginBottom: 20 }}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 8 }}
+                initialNumToRender={10}
+                maxToRenderPerBatch={6}
+                windowSize={5}
+                removeClippedSubviews={true}
+                renderItem={({ item }) => (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, borderRadius: 12, backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, marginBottom: 8 }}>
+                    <View style={{ flex: 1, marginRight: 12 }}>
+                      <AppText variant="body" weight="bold" style={{ fontSize: 14, fontFamily: Fonts.bold, color: colors.text }} numberOfLines={1}>
+                        {item.name}
+                      </AppText>
+                      <AppText variant="caption" weight="medium" style={{ fontSize: 12, fontFamily: Fonts.medium, color: colors.primary, marginTop: 2 }} numberOfLines={1}>
+                        {t('inv.current_qty', { count: String(item.totalBaseQuantity || 0) })}
+                      </AppText>
+                    </View>
+                    <TouchableOpacity
+                      style={{ backgroundColor: colors.text, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}
+                      onPress={() => {
+                        const newQty = (item.totalBaseQuantity || 0) + 50;
+                        updateItem(item.id, { totalBaseQuantity: newQty });
+                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                        loadAllData();
+                      }}
+                    >
+                      <AppText variant="caption" weight="bold" style={{ color: colors.background, fontSize: 12, fontFamily: Fonts.bold }} numberOfLines={1}>{t('inv.restock_btn')}</AppText>
+                    </TouchableOpacity>
+                  </View>
+                )}
+                ListEmptyComponent={
+                  <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                    <ShieldCheck size={48} color={colors.success} />
+                    <AppText variant="body" weight="bold" style={{ fontSize: 14, fontFamily: Fonts.bold, color: colors.text, marginTop: 12 }} numberOfLines={1}>{t('inv.all_healthy')}</AppText>
+                  </View>
+                }
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Warehouse Manager Modal */}
+      <WarehouseManagerModal
+        visible={showWarehouseModal}
+        onClose={() => setShowWarehouseModal(false)}
+        selectedWarehouseId={selectedWarehouseId}
+        onSelectWarehouse={(id) => {
+          setSelectedWarehouseId(id);
+          setShowWarehouseModal(false);
+        }}
+      />
     </View>
   );
 };
@@ -643,7 +1314,7 @@ const styles = StyleSheet.create({
     height: 300,
     borderRadius: 150,
     transform: [{ scale: 1.5 }],
-    filter: 'blur(80px)',
+    opacity: 0.2,
   },
   topBar: {
     paddingHorizontal: 25,
@@ -687,11 +1358,9 @@ const styles = StyleSheet.create({
   },
   notifBadgeText: {
     color: '#FFF',
-    fontSize: 9,
     fontFamily: Fonts.bold,
   },
   headerLabel: {
-    fontSize: 13,
     fontFamily: Fonts.bold,
     textTransform: 'uppercase',
     letterSpacing: 1.5,
@@ -699,7 +1368,6 @@ const styles = StyleSheet.create({
     opacity: 0.7
   },
   headerTitle: {
-    fontSize: 34,
     fontFamily: Fonts.bold,
     letterSpacing: -1,
     lineHeight: 46,
@@ -736,7 +1404,6 @@ const styles = StyleSheet.create({
     marginBottom: 25,
   },
   vaultLabel: {
-    fontSize: 13,
     fontFamily: Fonts.semibold,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -746,9 +1413,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    width: '100%',
   },
   vaultValue: {
-    fontSize: 32,
     fontFamily: Fonts.extrabold,
     letterSpacing: -0.5,
   },
@@ -761,7 +1428,6 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   healthText: {
-    fontSize: 11,
     fontFamily: Fonts.bold,
   },
   vaultMetricGrid: {
@@ -777,13 +1443,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   miniLabel: {
-    fontSize: 10,
     fontFamily: Fonts.semibold,
     textTransform: 'uppercase',
     marginBottom: 4,
   },
   miniValue: {
-    fontSize: 16,
     fontFamily: Fonts.bold,
   },
   miniDivider: {
@@ -794,11 +1458,10 @@ const styles = StyleSheet.create({
   bentoSection: {
     paddingHorizontal: 25,
     marginBottom: 30,
-    gap: 12,
   },
   bentoRow: {
     flexDirection: 'row',
-    gap: 12,
+    marginBottom: 12,
   },
   highValueCard: {
     flex: 1.4,
@@ -826,17 +1489,14 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   bentoLabel: {
-    fontSize: 11,
     fontFamily: Fonts.semibold,
     textTransform: 'uppercase',
   },
   bentoMainVal: {
-    fontSize: 18,
     fontFamily: Fonts.bold,
     marginBottom: 2,
   },
   bentoSubVal: {
-    fontSize: 13,
     fontFamily: Fonts.bold,
   },
   categoryDistribution: {
@@ -861,11 +1521,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   catNameText: {
-    fontSize: 12,
     fontFamily: Fonts.medium,
   },
   catValueText: {
-    fontSize: 11,
     fontFamily: Fonts.bold,
   },
   ledgerSection: {
@@ -878,16 +1536,13 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   sectionTitle: {
-    fontSize: 22,
     fontFamily: Fonts.bold,
   },
   sectionSub: {
-    fontSize: 13,
     fontFamily: Fonts.medium,
     marginTop: 4,
   },
   viewAllBtn: {
-    fontSize: 14,
     fontFamily: Fonts.bold,
   },
   ledgerList: {
@@ -911,19 +1566,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   ledgerName: {
-    fontSize: 16,
     fontFamily: Fonts.bold,
     marginBottom: 4,
   },
   ledgerCategory: {
-    fontSize: 12,
     fontFamily: Fonts.medium,
   },
   ledgerEnd: {
     alignItems: 'flex-end',
   },
   ledgerQty: {
-    fontSize: 15,
     fontFamily: Fonts.bold,
     marginBottom: 6,
   },
@@ -933,7 +1585,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   ledgerStatusText: {
-    fontSize: 10,
     fontFamily: Fonts.bold,
     textTransform: 'uppercase',
   },
@@ -943,9 +1594,19 @@ const styles = StyleSheet.create({
     gap: 15,
   },
   emptyText: {
-    fontSize: 14,
     fontFamily: Fonts.medium,
   },
+  emptyStatsText: { fontSize: 13, fontFamily: Fonts.medium },
+  orderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: 10 },
+  orderSub: { fontSize: 13, fontFamily: Fonts.medium },
+  orderItemCard: { flexDirection: 'row', alignItems: 'center', padding: 15, borderRadius: 18, borderWidth: 1, marginBottom: 12 },
+  orderItemName: { fontSize: 15, fontFamily: Fonts.bold, marginBottom: 2 },
+  orderItemStock: { fontSize: 12, fontFamily: Fonts.medium },
+  qtyControl: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  qtyBtn: { width: 32, height: 32, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  qtyVal: { fontSize: 16, fontFamily: Fonts.bold, minWidth: 25, textAlign: 'center' },
+  orderSubmitBtn: { flexDirection: 'row', height: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+  orderSubmitText: { fontSize: 16, fontFamily: Fonts.bold },
   dockedBarWrapper: {
     position: 'absolute',
     bottom: 120,
@@ -1021,7 +1682,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   sheetTitle: {
-    fontSize: 20,
     fontFamily: Fonts.bold,
     marginBottom: 20,
     paddingHorizontal: 5,
@@ -1043,12 +1703,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   qsName: {
-    fontSize: 16,
     fontFamily: Fonts.bold,
     marginBottom: 4,
   },
   qsSub: {
-    fontSize: 12,
     fontFamily: Fonts.medium,
   },
   qsBadge: {
@@ -1059,9 +1717,54 @@ const styles = StyleSheet.create({
   qsBadgeDark: {},
   qsBadgeLight: {},
   qsBadgeText: {
-    fontSize: 10,
     fontFamily: Fonts.bold,
     textTransform: 'uppercase',
+  },
+  customOrderSection: {
+    borderTopWidth: 1,
+    paddingTop: 15,
+    marginTop: 10,
+  },
+  customOrderTitle: {
+    fontFamily: Fonts.bold,
+    marginBottom: 10,
+  },
+  customOrderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  customOrderInput: {
+    height: 45,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    fontFamily: Fonts.medium,
+  },
+  customOrderAddBtn: {
+    width: 45,
+    height: 45,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  rankBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  rankText: {
+    fontFamily: Fonts.bold,
+  },
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  filterChipText: {
+    fontFamily: Fonts.bold,
   },
 });
 

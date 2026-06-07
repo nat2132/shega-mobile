@@ -1,7 +1,9 @@
 import { Tabs } from 'expo-router';
 import { CustomTabBar } from '../../src/components/CustomTabBar';
+import { useSettings } from '../../src/context/SettingsContext';
 
 export default function TabsLayout() {
+  const { t } = useSettings();
   return (
     <Tabs 
       tabBar={props => <CustomTabBar {...props} />}
@@ -12,25 +14,25 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="dashboard"
         options={{
-          title: 'Home',
+          title: t('tabs.dashboard'),
         }}
       />
       <Tabs.Screen
         name="sales-hub"
         options={{
-          title: 'Sales',
+          title: t('tabs.sales'),
         }}
       />
       <Tabs.Screen
         name="inventory"
         options={{
-          title: 'Inventory',
+          title: t('tabs.inventory'),
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
-          title: 'Settings',
+          title: t('tabs.settings'),
         }}
       />
       <Tabs.Screen
@@ -47,6 +49,12 @@ export default function TabsLayout() {
       />
       <Tabs.Screen
         name="summary"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="contacts"
         options={{
           href: null,
         }}

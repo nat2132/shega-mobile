@@ -1,19 +1,19 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Fonts } from '@/constants/theme';
 import {
   StyleSheet,
-  Text as RNText,
   View,
   TouchableOpacity,
-  SafeAreaView,
   Dimensions,
   Alert,
   Platform
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
 import * as Haptics from 'expo-haptics';
 import { Delete, Lock, ShieldCheck, Fingerprint, LucideIcon, Timer, ShieldAlert } from 'lucide-react-native';
 import { useSettings } from '@/context/SettingsContext';
+import { AppText } from '@/components/ui';
 import Animated, { 
   FadeIn, 
   FadeInDown, 
@@ -119,7 +119,7 @@ const VerifyPinScreen: React.FC<VerifyPinScreenProps> = ({ onSuccess }) => {
       {icon ? (
          icon
       ) : (
-        <RNText style={styles.keyText}>{num}</RNText>
+        <AppText style={styles.keyText} variant="display" weight="bold" numberOfLines={1}>{num}</AppText>
       )}
     </TouchableOpacity>
   );
@@ -140,14 +140,14 @@ const VerifyPinScreen: React.FC<VerifyPinScreenProps> = ({ onSuccess }) => {
                <Lock size={32} color="#000" strokeWidth={1.5} />
              )}
           </View>
-          <RNText style={[styles.title, lockoutTimer > 0 && { color: '#FF3B30' }]}>
+          <AppText style={[styles.title, lockoutTimer > 0 && { color: '#FF3B30' }]} variant="display" weight="bold" numberOfLines={2}>
             {lockoutTimer > 0 ? 'SYSTEM LOCKDOWN' : t('pin.system_key')}
-          </RNText>
-          <RNText style={styles.subtitle}>
-            {lockoutTimer > 0 
-              ? `Security Protocol Active. Cooling down in ${lockoutTimer}s` 
+          </AppText>
+          <AppText style={styles.subtitle} variant="body" weight="medium" numberOfLines={3}>
+            {lockoutTimer > 0
+              ? `Security Protocol Active. Cooling down in ${lockoutTimer}s`
               : t('pin.enter_security')}
-          </RNText>
+          </AppText>
         </View>
 
         {/* PIN Indicators */}
@@ -155,7 +155,7 @@ const VerifyPinScreen: React.FC<VerifyPinScreenProps> = ({ onSuccess }) => {
           {lockoutTimer > 0 ? (
             <View style={styles.lockoutBadge}>
                <Timer size={14} color="#FF3B30" />
-               <RNText style={styles.lockoutText}>PROTOCOL COOL-DOWN ACTIVE</RNText>
+               <AppText style={styles.lockoutText} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>PROTOCOL COOL-DOWN ACTIVE</AppText>
             </View>
           ) : (
             [...Array(pinLength)].map((_, i) => {
@@ -189,11 +189,11 @@ const VerifyPinScreen: React.FC<VerifyPinScreenProps> = ({ onSuccess }) => {
 
         {/* Footer Meta */}
         <View style={styles.footerNode}>
-           <RNText style={[styles.footerTag, attempts > 0 && lockoutTimer === 0 && { color: '#FF3B30' }]}>
-             {lockoutTimer > 0 
-               ? 'DEVICE TEMPORARILY BRICKED' 
+           <AppText style={[styles.footerTag, attempts > 0 && lockoutTimer === 0 && { color: '#FF3B30' }]} variant="caption" weight="bold" transform="uppercase" numberOfLines={2}>
+             {lockoutTimer > 0
+               ? 'DEVICE TEMPORARILY BRICKED'
                : (attempts > 0 ? `INVALID PROTOCOL: ${maxAttempts - attempts} ATTEMPTS REMAINING` : 'AES-256 SECURE ENCRYPTION ACTIVE')}
-           </RNText>
+           </AppText>
         </View>
       </Animated.View>
     </SafeAreaView>
@@ -233,13 +233,11 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   title: {
-    fontSize: 28,
     fontFamily: Fonts.extrabold,
     fontWeight: '800',
     color: '#000',
   },
   subtitle: {
-    fontSize: 13,
     color: '#999',
     fontFamily: Fonts.medium,
     marginTop: 6,
@@ -285,7 +283,6 @@ const styles = StyleSheet.create({
   },
   lockoutText: {
     color: '#FF3B30',
-    fontSize: 10,
     fontFamily: Fonts.bold,
     letterSpacing: 0.5,
   },
@@ -305,7 +302,6 @@ const styles = StyleSheet.create({
     borderRadius: 35,
   },
   keyText: {
-    fontSize: 30,
     fontFamily: Fonts.bold,
     color: '#000',
   },
@@ -313,7 +309,6 @@ const styles = StyleSheet.create({
     marginTop: 40,
   },
   footerTag: {
-    fontSize: 9,
     fontFamily: Fonts.bold,
     color: '#CCC',
     letterSpacing: 1.5,

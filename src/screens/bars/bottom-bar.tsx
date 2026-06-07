@@ -1,11 +1,11 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+﻿import React from 'react';
+import { View, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Home, TrendingUp, Package, Settings } from 'lucide-react-native';
 import { Fonts } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
-
+import { AppText } from '@/components/ui';
 /**
  * BottomBar — Reference component showing the 4-tab layout.
  * The active tab bar used in the app is CustomTabBar.tsx (powered by Expo Router).
@@ -57,7 +57,10 @@ const BottomBar: React.FC<BottomBarProps> = ({ activeTab = 'Home', onTabPress })
                 color={isFocused ? colors.text : colors.textSecondary}
                 strokeWidth={isFocused ? 2.5 : 1.8}
               />
-              <Text
+              <AppText
+                variant="caption"
+                numberOfLines={1}
+                ellipsizeMode="tail"
                 style={[
                   styles.label,
                   { color: isFocused ? colors.text : colors.textSecondary },
@@ -65,7 +68,7 @@ const BottomBar: React.FC<BottomBarProps> = ({ activeTab = 'Home', onTabPress })
                 ]}
               >
                 {tab.name}
-              </Text>
+              </AppText>
               {isFocused && (
                 <View style={[styles.activeDot, { backgroundColor: colors.text }]} />
               )}
@@ -107,7 +110,6 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   label: {
-    fontSize: 11,
     fontFamily: Fonts.medium,
     fontWeight: '500',
   },

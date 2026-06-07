@@ -1,52 +1,61 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  View, 
-  Text as RNText,
-  StyleSheet, 
-  TouchableOpacity, 
-  TextInput, 
-  FlatList, 
-  ActivityIndicator,
-  Modal,
-  Pressable,
-  Platform
-} from 'react-native';
-import { 
-  Search, 
-  Calendar, 
-  Tag, 
-  ArrowUpDown, 
-  Wallet, 
-  Clock,
-  ChevronLeft,
-  Download,
-  AlertCircle,
-  TrendingDown,
-  LayoutGrid,
-  ChevronRight,
-  Info,
-  CalendarDays
-} from 'lucide-react-native';
-import Animated, { 
-  FadeInDown, 
-  FadeInUp,
-  FadeIn,
-} from 'react-native-reanimated';
+﻿import { CustomDatePicker } from '@/components/CustomDatePicker';
+import { Fonts } from '@/constants/theme';
+import { useSettings } from '@/context/SettingsContext';
+import {
+    getDashboardStats,
+    getFilteredExpenses,
+    getUpcomingExpenses
+} from '@/database/db';
+import { formatDate } from '@/utils/date-utils';
+import { exportToCSV } from '@/utils/export';
+import { useFocusEffect } from '@react-navigation/native';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
-import { Fonts } from '@/constants/theme';
-import { 
-  getFilteredExpenses, 
-  getUpcomingExpenses, 
-  deleteExpense,
-  getDashboardStats
-} from '@/database/db';
-import { useSettings } from '@/context/SettingsContext';
-import { CustomDatePicker } from '@/components/CustomDatePicker';
-import { exportToCSV } from '@/utils/export';
-import { formatDate } from '@/utils/date-utils';
+import {
+    ArrowUpDown,
+    Calendar,
+    CalendarDays,
+    ChevronLeft,
+    Clock,
+    Download,
+    Filter,
+    Search,
+    TrendingDown,
+    Wallet,
+    AlertTriangle
+} from 'lucide-react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Dimensions,
+    FlatList,
+    Modal,
+    Platform,
+    Pressable,
+    StyleSheet,
+    TextInput,
+    TouchableOpacity,
+    View
+} from 'react-native';
+import Animated, {
+  FadeIn,
+    FadeInDown,
+    FadeInUp,
+    FadeOut,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring
+} from 'react-native-reanimated';
 import ExpenseDetailsScreen from './expense-details';
-import { useFocusEffect } from '@react-navigation/native';
+import { useDebounce } from '@/hooks/useDebounce';
+import { AppText, AppListItem, AppRow, AppButton, AppCard } from '@/components/ui';
+import { BorderRadius, Spacing } from '@/constants/theme';
+const getAmountFontSize = (amount: number): number => {
+  const digits = Math.abs(amount).toFixed(0).length;
+  if (digits <= 4) return 16;
+  if (digits <= 6) return 14;
+  if (digits <= 8) return 12;
+  return 10;
+};
 
 const BillsAndTransactions = () => {
   const { colors, calendarType, language, t, theme } = useSettings();
@@ -60,17 +69,32 @@ const BillsAndTransactions = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedSort, setSelectedSort] = useState('Date (Newest)');
+  const [dateFilterPeriod, setDateFilterPeriod] = useState<string>('');
+  const [dateFilterLabel, setDateFilterLabel] = useState('All');
+  const [isBarExpanded, setIsBarExpanded] = useState(false);
   
   // Modals
   const [dateModalVisible, setDateModalVisible] = useState(false);
   const [sortModalVisible, setSortModalVisible] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<any>(null);
 
+  const { width } = Dimensions.get('window');
+  const expandedWidth = useSharedValue(56);
+  useEffect(() => {
+    expandedWidth.value = withSpring(isBarExpanded ? width - 40 : 56, { damping: 15, stiffness: 100 });
+  }, [isBarExpanded, width]);
+
+  const expandStyle = useAnimatedStyle(() => ({
+    width: expandedWidth.value,
+  }));
+
+  const debouncedSearch = useDebounce(searchQuery, 250);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const allTrans = await getFilteredExpenses({
-         search: searchQuery,
+         search: debouncedSearch,
          date: selectedDate,
          sortBy: selectedSort === 'Highest Amount' ? 'Highest Amount' : (selectedSort === 'Lowest Amount' ? 'Lowest Amount' : undefined),
          limit: 100
@@ -78,7 +102,7 @@ const BillsAndTransactions = () => {
       const allUpcoming = await getUpcomingExpenses();
       setTransactions(allTrans);
       setUpcoming(allUpcoming);
-      
+
       const dashboardStats = getDashboardStats();
       if (dashboardStats) setStats(dashboardStats.today);
     } catch (error) {
@@ -86,7 +110,7 @@ const BillsAndTransactions = () => {
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, selectedDate, selectedSort]);
+  }, [debouncedSearch, selectedDate, selectedSort]);
 
   useFocusEffect(
     useCallback(() => {
@@ -99,46 +123,105 @@ const BillsAndTransactions = () => {
     exportToCSV(filteredData, 'Capital_Ledger_Export');
   };
 
-  const filteredData = (activeTab === 'Transactions' ? transactions : upcoming).filter(item => 
-    item.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredData = useMemo(() => {
+    const list = activeTab === 'Transactions' ? transactions : upcoming;
+    if (!debouncedSearch.trim()) return list;
+    const q = debouncedSearch.toLowerCase();
+    return list.filter((item: any) => item.name.toLowerCase().includes(q));
+  }, [activeTab, transactions, upcoming, debouncedSearch]);
 
-  const renderExpenseCard = ({ item, index }: { item: any; index: number }) => {
-    return (
-      <Animated.View entering={FadeInDown.delay(200 + index * 50)}>
-        <TouchableOpacity 
-          style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
-          activeOpacity={0.7}
-          onPress={() => setSelectedExpense(item)}
-        >
-          <View style={styles.cardMain}>
-            <View style={[styles.iconBox, { backgroundColor: colors.text }]}>
-                {activeTab === 'Transactions' ? <Wallet color={colors.background} size={20} /> : <CalendarDays color={colors.background} size={20} />}
-            </View>
-            <View style={{ flex: 1 }}>
-              <RNText style={[styles.cardTitle, { color: colors.text }]}>{item.name}</RNText>
-              <RNText style={[styles.cardDate, { color: colors.textSecondary }]}>
-                {activeTab === 'Transactions' 
-                  ? (item.date ? formatDate(new Date(item.date), calendarType, language) : 'N/A')
-                  : `Due: ${item.nextBillingDate ? formatDate(new Date(item.nextBillingDate), calendarType, language) : 'N/A'}`}
-              </RNText>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-               <RNText style={[styles.amountText, { color: colors.text }]}>
-                 {activeTab === 'Transactions' ? '-' : ''} {item.amount.toLocaleString()} 
-                 <RNText style={styles.currSmall}> {t('common.etb')}</RNText>
-               </RNText>
-               {activeTab === 'Upcoming' && (
-                 <View style={styles.payBadge}>
-                    <RNText style={[styles.payBadgeText, { color: colors.primary }]}>{t('common.search')}</RNText>
-                 </View>
-               )}
-            </View>
+  const nearestUpcoming = useMemo(() => {
+    if (upcoming.length === 0) return null;
+    return upcoming.reduce((nearest, current) => {
+      if (!nearest) return current;
+      const nearestDate = new Date(nearest.nextBillingDate).getTime();
+      const currentDate = new Date(current.nextBillingDate).getTime();
+      return currentDate < nearestDate ? current : nearest;
+    }, null);
+  }, [upcoming]);
+
+  const renderExpenseCard = useCallback(({ item, index }: { item: any; index: number }) => (
+    <ExpenseCardRow
+      item={item}
+      index={index}
+      activeTab={activeTab}
+      onPress={setSelectedExpense}
+    />
+  ), [activeTab]);
+
+const ExpenseCardRow = React.memo(({
+  item,
+  index,
+  activeTab,
+  onPress,
+}: {
+  item: any;
+  index: number;
+  activeTab: string;
+  onPress: (i: any) => void;
+}) => {
+  const { colors, calendarType, language, t } = useSettings();
+  const isOverdue = item.isOverdue === 1 || item.isOverdue === true;
+  const overdueDays = item.overdueDays || 0;
+  const isRecurringPending = item.isRecurring === 1 && item.paymentStatus === 'pending';
+
+  // Icon lives in a fixed-size column; the icon-coloured box is
+  // built via the `left` slot of AppListItem. We compose the value
+  // column out of an amount (heading-lg) and a status pill.
+  const amountPrefix = activeTab === 'Transactions' ? '-' : '';
+  const amount = `${amountPrefix} ${typeof item.amount === 'number' ? item.amount.toLocaleString() : 0} ${t('common.etb')}`;
+
+  return (
+    <Animated.View entering={FadeInDown.delay(Math.min(index, 8) * 50).duration(400)}>
+      <AppListItem
+        left={
+          <View
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 14,
+              backgroundColor: isOverdue
+                ? '#FF3B30'
+                : isRecurringPending
+                  ? colors.primary
+                  : colors.text,
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            {isOverdue ? (
+              <AlertTriangle color="#FFF" size={20} />
+            ) : activeTab === 'Transactions' ? (
+              <Wallet color={colors.background} size={20} />
+            ) : (
+              <CalendarDays color={colors.background} size={20} />
+            )}
           </View>
-        </TouchableOpacity>
-      </Animated.View>
-    );
-  };
+        }
+        title={item.name || t('common.untitled')}
+        subtitle={
+          activeTab === 'Transactions'
+            ? (item.date ? formatDate(new Date(item.date), calendarType, language) : t('common.n_a'))
+            : `${t('expense.due')}: ${item.nextBillingDate ? formatDate(new Date(item.nextBillingDate), calendarType, language) : t('common.n_a')}${isOverdue ? ` (${t('expense.overdue_days', { days: String(overdueDays) })})` : ''}`
+        }
+        rightText={amount}
+        rightColor={isOverdue ? '#FF3B30' : colors.text}
+        rightMaxLines={1}
+        onPress={() => onPress(item)}
+        padding={Spacing.md}
+        style={{
+          borderRadius: 24,
+          borderWidth: 1,
+          borderColor: isOverdue ? '#FF3B3040' : colors.border,
+          borderLeftWidth: isOverdue ? 3 : 1,
+          borderLeftColor: isOverdue ? '#FF3B30' : colors.border,
+          marginBottom: Spacing.lg,
+        }}
+      />
+    </Animated.View>
+  );
+});
+ExpenseCardRow.displayName = 'ExpenseCardRow';
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -152,8 +235,8 @@ const BillsAndTransactions = () => {
              <ChevronLeft color={colors.text} size={24} />
            </TouchableOpacity>
            <View style={{ flex: 1, marginLeft: 15 }}>
-              <RNText style={[styles.headerSub, { color: colors.textSecondary }]}>{t('expense.capital_bills')}</RNText>
-              <RNText style={[styles.headerTitle, { color: colors.text }]}>{t('expense.capital_ledger')}</RNText>
+              <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.headerSub, { color: colors.textSecondary }]} numberOfLines={1}>{t('expense.capital_bills')}</AppText>
+              <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: colors.text }]} numberOfLines={2}>{t('expense.capital_ledger')}</AppText>
            </View>
            <TouchableOpacity onPress={handleDownload} style={[styles.downloadBtn, { backgroundColor: colors.text }]}>
              <Download size={20} color={colors.background} />
@@ -166,13 +249,13 @@ const BillsAndTransactions = () => {
             style={[styles.tab, activeTab === 'Transactions' && [styles.activeTab, { backgroundColor: colors.text }]]} 
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setActiveTab('Transactions'); }}
           >
-            <RNText style={[styles.tabText, { color: colors.textSecondary }, activeTab === 'Transactions' && { color: colors.background }]}>{t('expense.executed')}</RNText>
+            <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.tabText, { color: colors.textSecondary }, activeTab === 'Transactions' && { color: colors.background }]} numberOfLines={1}>{t('expense.executed')}</AppText>
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.tab, activeTab === 'Upcoming' && [styles.activeTab, { backgroundColor: colors.text }]]} 
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setActiveTab('Upcoming'); }}
           >
-            <RNText style={[styles.tabText, { color: colors.textSecondary }, activeTab === 'Upcoming' && { color: colors.background }]}>{t('expense.upcoming')}</RNText>
+            <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.tabText, { color: colors.textSecondary }, activeTab === 'Upcoming' && { color: colors.background }]} numberOfLines={1}>{t('expense.upcoming')}</AppText>
           </TouchableOpacity>
         </View>
 
@@ -181,15 +264,15 @@ const BillsAndTransactions = () => {
           <View style={[styles.statItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
              <TrendingDown size={16} color="#FF3B30" />
              <View style={{ marginLeft: 10 }}>
-                <RNText style={[styles.statLabel, { color: colors.textSecondary }]}>{t('expense.disbursed_today')}</RNText>
-                <RNText style={[styles.statValue, { color: colors.text }]}>{stats?.expenses?.toLocaleString() || 0} {t('common.etb')}</RNText>
+                <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('expense.disbursed_today')}</AppText>
+                <AppText variant="body-lg" weight="bold" style={[styles.statValue, { color: colors.text }]} numberOfLines={1}>{stats?.expenses?.toLocaleString() || 0} {t('common.etb')}</AppText>
              </View>
           </View>
           <View style={[styles.statItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
              <Clock size={16} color={colors.primary} />
              <View style={{ marginLeft: 10 }}>
-                <RNText style={[styles.statLabel, { color: colors.textSecondary }]}>{t('expense.active_bills')}</RNText>
-                <RNText style={[styles.statValue, { color: colors.text }]}>{t('expense.scheduled', { count: upcoming.length })}</RNText>
+                <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('expense.active_bills')}</AppText>
+                <AppText variant="body" weight="bold" style={[styles.statValue, { color: colors.text }]} numberOfLines={1}>{t('expense.scheduled', { count: String(upcoming.length) })}</AppText>
              </View>
           </View>
         </Animated.View>
@@ -202,52 +285,86 @@ const BillsAndTransactions = () => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         renderItem={renderExpenseCard}
+        initialNumToRender={12}
+        maxToRenderPerBatch={8}
+        windowSize={7}
+        removeClippedSubviews={true}
         ListHeaderComponent={
-          <View style={styles.searchSection}>
-            <View style={[styles.searchBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Search size={18} color={colors.textSecondary} />
-              <TextInput
-                style={[styles.searchInput, { color: colors.text }]}
-                placeholder={t('expense.search_outflows')}
-                placeholderTextColor={colors.textSecondary}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-              />
+          <View>
+            {/* Nearest Upcoming Payment Card */}
+            {activeTab === 'Upcoming' && nearestUpcoming && (
+              <Animated.View entering={FadeInDown.delay(50)} style={[styles.upcomingCard, { backgroundColor: colors.card, borderColor: colors.primary + '40' }]}>
+                <View style={styles.upcomingCardRow}>
+                  <View style={[styles.upcomingIconBox, { backgroundColor: colors.primary + '20' }]}>
+                    <AlertTriangle size={24} color={colors.primary} />
+                  </View>
+                  <View style={styles.upcomingInfo}>
+                    <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.upcomingLabel, { color: colors.textSecondary }]} numberOfLines={1}>Next Payment</AppText>
+                    <AppText variant="body" weight="bold" style={[styles.upcomingName, { color: colors.text }]} numberOfLines={1}>{nearestUpcoming.name}</AppText>
+                    <AppText variant="caption" weight="semibold" style={[styles.upcomingDue, { color: colors.primary }]} numberOfLines={2}>
+                      Due: {nearestUpcoming.nextBillingDate ? formatDate(new Date(nearestUpcoming.nextBillingDate), calendarType, language) : 'N/A'}
+                    </AppText>
+                  </View>
+                  <View style={styles.upcomingAmountBox}>
+                    <AppText variant="body-lg" weight="bold" style={[styles.upcomingAmount, { color: colors.text }]} numberOfLines={1}>
+                      {typeof nearestUpcoming.amount === 'number' ? nearestUpcoming.amount.toLocaleString() : 0}
+                    </AppText>
+                    <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.upcomingCurr, { color: colors.textSecondary }]} numberOfLines={1}>{t('common.etb')}</AppText>
+                  </View>
+                </View>
+              </Animated.View>
+            )}
+            <View style={styles.searchSection}>
+              <View style={[styles.searchBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Search size={18} color={colors.textSecondary} />
+                <TextInput
+                  style={[styles.searchInput, { color: colors.text }]}
+                  placeholder={t('expense.search_outflows')}
+                  placeholderTextColor={colors.textSecondary}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                />
+              </View>
             </View>
           </View>
         }
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Wallet size={64} color={colors.border} />
-            <RNText style={[styles.emptyText, { color: colors.textSecondary }]}>{t('expense.no_outflows')}</RNText>
+            <AppText variant="body" weight="bold" style={[styles.emptyText, { color: colors.textSecondary }]} numberOfLines={2}>{t('expense.no_outflows')}</AppText>
           </View>
         }
       />
 
-      {/* Glassmorphic Filter Dock */}
+      {/* Expanding Smart Filter FAB */}
       <View style={styles.dockedBarWrapper}>
-        <BlurView intensity={Platform.OS === 'ios' ? 80 : 100} tint={theme === 'light' ? 'light' : 'dark'} style={[styles.dockedBar, { borderColor: colors.border, backgroundColor: theme === 'light' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.5)' }]}>
-          <TouchableOpacity 
-            style={[styles.filterPill, selectedDate ? { backgroundColor: colors.text } : null]} 
-            onPress={() => setDateModalVisible(true)}
-          >
-            <Calendar size={18} color={selectedDate ? colors.background : colors.textSecondary} />
-            <RNText style={[styles.filterPillText, { color: selectedDate ? colors.background : colors.textSecondary }]}>
-              {selectedDate ? selectedDate : t('common.date')}
-            </RNText>
-          </TouchableOpacity>
+        <Animated.View style={[expandStyle, { height: 56, borderRadius: 28, overflow: 'hidden' }]}>
+          <BlurView intensity={Platform.OS === 'ios' ? 80 : 100} tint={theme === 'light' ? 'light' : 'dark'} style={[styles.dockedBar, { borderColor: colors.border, paddingHorizontal: isBarExpanded ? 10 : 0 }]}>
+            {isBarExpanded && (
+              <Animated.View entering={FadeIn.delay(100)} exiting={FadeOut.duration(100)} style={{ flexDirection: 'row', gap: 10, alignItems: 'center', flex: 1, paddingRight: 10 }}>
+                <TouchableOpacity
+                  style={[styles.filterPill, selectedDate ? { backgroundColor: colors.text } : null]}
+                  onPress={() => { setDateModalVisible(true); setIsBarExpanded(false); }}
+                >
+                  <Calendar size={18} color={selectedDate ? colors.background : colors.textSecondary} />
+                </TouchableOpacity>
 
-          <TouchableOpacity style={styles.filterPill} onPress={() => Haptics.selectionAsync()}>
-            <LayoutGrid size={18} color={colors.textSecondary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.filterPill, selectedSort !== 'Date (Newest)' ? { backgroundColor: colors.text } : null]} 
-            onPress={() => setSortModalVisible(true)}
-          >
-            <ArrowUpDown size={18} color={selectedSort !== 'Date (Newest)' ? colors.background : colors.textSecondary} />
-          </TouchableOpacity>
-        </BlurView>
+                <TouchableOpacity
+                  style={[styles.filterPill, selectedSort !== 'Date (Newest)' ? { backgroundColor: colors.text } : null]}
+                  onPress={() => { setSortModalVisible(true); setIsBarExpanded(false); }}
+                >
+                  <ArrowUpDown size={18} color={selectedSort !== 'Date (Newest)' ? colors.background : colors.textSecondary} />
+                </TouchableOpacity>
+              </Animated.View>
+            )}
+            <TouchableOpacity
+              style={[styles.dockMainBtn, { backgroundColor: isBarExpanded ? colors.primary : colors.text }]}
+              onPress={() => setIsBarExpanded(!isBarExpanded)}
+            >
+              <Filter size={24} color={colors.background} />
+            </TouchableOpacity>
+          </BlurView>
+        </Animated.View>
       </View>
 
       {/* EXPENSE DETAILS MODAL */}
@@ -283,7 +400,7 @@ const BillsAndTransactions = () => {
           <View style={[styles.sortMenu, { backgroundColor: colors.card, borderColor: colors.border }]}>
             {['form.date_newest', 'form.amount_highest', 'form.amount_lowest', 'form.name_az'].map((optionKey, idx) => (
               <TouchableOpacity key={idx} style={[styles.sortOption, { borderBottomColor: colors.border }]} onPress={() => { setSelectedSort(t(optionKey)); setSortModalVisible(false); }}>
-                <RNText style={[styles.sortText, { color: selectedSort === t(optionKey) ? colors.primary : colors.text }]}>{t(optionKey)}</RNText>
+                <AppText variant="body" weight="bold" style={[styles.sortText, { color: selectedSort === t(optionKey) ? colors.primary : colors.text }]} numberOfLines={1}>{t(optionKey)}</AppText>
               </TouchableOpacity>
             ))}
           </View>
@@ -309,25 +426,48 @@ const styles = StyleSheet.create({
   statItem: { flex: 1, flexDirection: 'row', alignItems: 'center', padding: 15, borderRadius: 20, borderWidth: 1 },
   statLabel: { fontSize: 10, fontFamily: Fonts.bold, textTransform: 'uppercase' },
   statValue: { fontSize: 14, fontFamily: Fonts.bold },
+  // Upcoming Payment Card
+  upcomingCard: {
+    marginHorizontal: 25,
+    marginBottom: 15,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  upcomingCardRow: { flexDirection: 'row', alignItems: 'center' },
+  upcomingIconBox: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  upcomingInfo: { flex: 1, marginRight: 12 },
+  upcomingLabel: { fontSize: 10, fontFamily: Fonts.bold, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
+  upcomingName: { fontSize: 17, fontFamily: Fonts.bold, marginBottom: 4 },
+  upcomingDue: { fontSize: 12, fontFamily: Fonts.semibold },
+  upcomingAmountBox: { alignItems: 'flex-end' },
+  upcomingAmount: { fontSize: 20, fontFamily: Fonts.bold },
+  upcomingCurr: { fontSize: 10, fontFamily: Fonts.bold, marginTop: 2 },
   searchSection: { paddingHorizontal: 25, marginVertical: 15 },
   searchBox: { flexDirection: 'row', alignItems: 'center', height: 50, borderRadius: 16, borderWidth: 1, paddingHorizontal: 15 },
   searchInput: { flex: 1, marginLeft: 10, fontFamily: Fonts.medium, fontSize: 15 },
-  listContent: { paddingHorizontal: 25, paddingBottom: 120 },
-  card: { padding: 18, borderRadius: 24, borderWidth: 1, marginBottom: 15 },
-  cardMain: { flexDirection: 'row', alignItems: 'center' },
-  iconBox: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
-  cardTitle: { fontFamily: Fonts.bold, fontSize: 16, marginBottom: 4 },
-  cardDate: { fontSize: 12, fontFamily: Fonts.medium },
-  amountText: { fontFamily: Fonts.bold, fontSize: 16, textAlign: 'right' },
-  currSmall: { fontSize: 11 },
-  payBadge: { marginTop: 4, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, backgroundColor: 'transparent', alignSelf: 'flex-end' },
-  payBadgeText: { fontSize: 10, fontFamily: Fonts.bold, textTransform: 'uppercase' },
+  listContent: { paddingBottom: 120 },
+  // ExpenseCardRow now uses AppListItem; card/amount/badge styles
+  // are expressed via the `style`/`rightColor` props inline.
   emptyState: { alignItems: 'center', marginTop: 100, gap: 15 },
   emptyText: { fontSize: 16, fontFamily: Fonts.bold },
-  dockedBarWrapper: { position: 'absolute', bottom: 30, left: 20, right: 20, alignItems: 'center' },
-  dockedBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 15, paddingVertical: 10, borderRadius: 30, width: '100%', borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 15, overflow: 'hidden' },
+  dockedBarWrapper: { position: 'absolute', bottom: 120, right: 20, alignItems: 'flex-end', zIndex: 100 },
+  dockedBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 28, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 15, overflow: 'hidden' },
   filterPill: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 15, borderRadius: 20, gap: 8 },
   filterPillText: { fontSize: 13, fontFamily: Fonts.bold },
+  dockMainBtn: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   modalOverlayCenter: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
   modalBackdrop: { flex: 1, width: '100%' },

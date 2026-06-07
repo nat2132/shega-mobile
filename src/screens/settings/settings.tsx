@@ -1,39 +1,50 @@
+﻿import { Fonts } from '@/constants/theme';
+import { PROFILE_IMAGES, useSettings } from '@/context/SettingsContext';
+import { useDialog } from '@/context/DialogContext';
+import { clearDatabase } from '@/database/db';
+import * as Haptics from 'expo-haptics';
 import React, { useState } from 'react';
 import {
-  View, Text as RNText, Text, StyleSheet, Image, TouchableOpacity,
-  ScrollView, Switch, Modal, Dimensions, Alert,
-  TextInput, ActivityIndicator, Platform
+    ActivityIndicator,
+    Dimensions,
+    Image,
+    Modal,
+    ScrollView,
+    StyleSheet,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
-import { BlurView } from 'expo-blur';
-import * as Haptics from 'expo-haptics';
-import Animated, { 
-  FadeIn, 
-  FadeInDown, 
-  FadeInUp 
+import Animated, {
+    FadeInDown,
 } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import {
-  Lock, Bell, Languages, Calendar, MessageSquare,
-  CloudDownload, FilePlus, ChevronRight, BadgeCheck,
-  Trash2, Palette, Shield, User, HelpCircle,
-  LogOut, Database, Sparkles, ExternalLink, ArrowUpRight
-} from 'lucide-react-native';
-import { Fonts } from '@/constants/theme';
-import { useSettings, PROFILE_IMAGES } from '@/context/SettingsContext';
-import { clearDatabase } from '@/database/db';
-import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system/legacy';
-import * as DocumentPicker from 'expo-document-picker';
 
+import {
+    ArrowUpRight,
+    BadgeCheck,
+    Bell,
+    Calendar,
+    ChevronRight,
+    Clock,
+    CloudDownload,
+    Database,
+    HelpCircle,
+    Languages,
+    Palette,
+    Shield,
+    Trash2,
+} from 'lucide-react-native';
+
+import CalendarSettingsScreen from './calendar';
+import NotificationSettingsScreen from './notification';
 import ProfileSettingsScreen from './profile-settings';
 import SecuritySettingsScreen from './security';
-import TranslationSettingsScreen from './translation';
-import CalendarSettingsScreen from './calendar';
 import SupportScreen from './support';
-import NotificationSettingsScreen from './notification';
-import DataSuccessModal from '@/components/DataSuccessModal';
-
+import TimeSystemSettingsScreen from './time-system';
+import TranslationSettingsScreen from './translation';
+import { DataTransferModal } from '@/components/DataTransferModal';
+import { AppText, AppListItem, AppCard, AppButton, AppRow } from '@/components/ui';
+import { BorderRadius, Spacing } from '@/constants/theme';
 // ─── Shared Sub-Components ───────────────────────────────────────────────────
 
 interface SettingItemProps {
@@ -50,15 +61,15 @@ interface SettingItemProps {
 const ConfigurationGridItem = ({ icon: Icon, title, onPress, color }: { icon: any, title: string, onPress: () => void, color: string }) => {
   const { colors } = useSettings();
   return (
-    <TouchableOpacity 
-      style={[styles.gridItem, { backgroundColor: colors.card, borderColor: colors.border }]} 
+    <TouchableOpacity
+      style={[styles.gridItem, { backgroundColor: colors.card, borderColor: colors.border }]}
       onPress={onPress}
       activeOpacity={0.7}
     >
       <View style={[styles.gridIconBox, { backgroundColor: color + '15' }]}>
         <Icon size={22} color={color} strokeWidth={2.5} />
       </View>
-      <RNText style={[styles.gridTitle, { color: colors.text }]}>{title}</RNText>
+      <AppText variant="body" weight="bold" style={[styles.gridTitle, { color: colors.text }]} numberOfLines={2}>{title}</AppText>
       <ChevronRight size={14} color={colors.textSecondary} style={styles.gridChevron} />
     </TouchableOpacity>
   );
@@ -67,30 +78,32 @@ const ConfigurationGridItem = ({ icon: Icon, title, onPress, color }: { icon: an
 const SettingLedgerItem = ({ icon: Icon, title, subtitle, onPress, danger }: SettingItemProps) => {
   const { colors } = useSettings();
   return (
-    <TouchableOpacity 
-      style={[styles.ledgerItem, { borderBottomColor: colors.border }]} 
+    <AppListItem
+      left={
+        <View style={[styles.ledgerIconBox, { backgroundColor: danger ? '#FF3B3015' : colors.surface }]}>
+          <Icon size={18} color={danger ? '#FF3B30' : colors.text} strokeWidth={2.5} />
+        </View>
+      }
+      title={title}
+      subtitle={subtitle}
+      subtitleMaxLines={1}
+      titleMaxLines={1}
+      right={<ChevronRight size={16} color={colors.textSecondary} />}
       onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <View style={[styles.ledgerIconBox, { backgroundColor: danger ? '#FF3B3015' : colors.surface }]}>
-        <Icon size={18} color={danger ? '#FF3B30' : colors.text} strokeWidth={2.5} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <RNText style={[styles.ledgerTitle, { color: danger ? '#FF3B30' : colors.text }]}>{title}</RNText>
-        {subtitle && <RNText style={[styles.ledgerSub, { color: colors.textSecondary }]}>{subtitle}</RNText>}
-      </View>
-      <ChevronRight size={16} color={colors.textSecondary} />
-    </TouchableOpacity>
+      noBorder
+      padding={Spacing.md}
+      style={{ backgroundColor: 'transparent' }}
+    />
   );
 };
 
 // ─── Theme Data ──────────────────────────────────────────────────────────────
 
-const THEME_OPTIONS = (t: any) => [
+const THEME_OPTIONS = [
   {
     id: 'light' as const,
-    label: t('theme.light'),
-    subtitle: t('theme.light_sub'),
+    label: 'theme.light',
+    subtitle: 'theme.light_sub',
     bg: '#FFFFFF',
     card: '#F9F9F9',
     accent: '#000000',
@@ -99,8 +112,8 @@ const THEME_OPTIONS = (t: any) => [
   },
   {
     id: 'dark' as const,
-    label: t('theme.dark'),
-    subtitle: t('theme.dark_sub'),
+    label: 'theme.dark',
+    subtitle: 'theme.dark_sub',
     bg: '#000000',
     card: '#1C1C1E',
     accent: '#FFFFFF',
@@ -109,8 +122,8 @@ const THEME_OPTIONS = (t: any) => [
   },
   {
     id: 'midnight' as const,
-    label: t('theme.midnight'),
-    subtitle: t('theme.midnight_sub'),
+    label: 'theme.midnight',
+    subtitle: 'theme.midnight_sub',
     bg: '#0B1220',
     card: '#172033',
     accent: '#2F6FED',
@@ -119,8 +132,8 @@ const THEME_OPTIONS = (t: any) => [
   },
   {
     id: 'emerald' as const,
-    label: t('theme.emerald'),
-    subtitle: t('theme.emerald_sub'),
+    label: 'theme.emerald',
+    subtitle: 'theme.emerald_sub',
     bg: '#0E1A16',
     card: '#16241F',
     accent: '#1F8A70',
@@ -129,8 +142,8 @@ const THEME_OPTIONS = (t: any) => [
   },
   {
     id: 'charcoal' as const,
-    label: t('theme.charcoal'),
-    subtitle: t('theme.charcoal_sub'),
+    label: 'theme.charcoal',
+    subtitle: 'theme.charcoal_sub',
     bg: '#121212',
     card: '#1E1E1E',
     accent: '#B23A48',
@@ -139,8 +152,8 @@ const THEME_OPTIONS = (t: any) => [
   },
   {
     id: 'slate' as const,
-    label: t('theme.slate'),
-    subtitle: t('theme.slate_sub'),
+    label: 'theme.slate',
+    subtitle: 'theme.slate_sub',
     bg: '#0F0F14',
     card: '#1A1A22',
     accent: '#7C5CFF',
@@ -149,8 +162,8 @@ const THEME_OPTIONS = (t: any) => [
   },
   {
     id: 'cocoa' as const,
-    label: t('theme.cocoa'),
-    subtitle: t('theme.cocoa_sub'),
+    label: 'theme.cocoa',
+    subtitle: 'theme.cocoa_sub',
     bg: '#14110F',
     card: '#201A17',
     accent: '#C97C5D',
@@ -166,10 +179,11 @@ const ThemeCard = ({
   isActive,
   onPress,
 }: {
-  item: typeof THEME_OPTIONS[0];
+  item: (typeof THEME_OPTIONS)[0];
   isActive: boolean;
   onPress: () => void;
 }) => {
+  const { t } = useSettings();
   return (
     <TouchableOpacity
       activeOpacity={0.75}
@@ -181,13 +195,11 @@ const ThemeCard = ({
     >
       {/* Mini Preview */}
       <View style={themeCardStyles.preview}>
-        {/* Fake top bar */}
         <View style={[themeCardStyles.topBar, { backgroundColor: item.card }]}>
           <View style={[themeCardStyles.dot, { backgroundColor: item.accent }]} />
           <View style={[themeCardStyles.barLine, { backgroundColor: item.text, opacity: 0.25 }]} />
         </View>
 
-        {/* Fake content area */}
         <View style={[themeCardStyles.contentArea, { backgroundColor: item.card }]}>
           <View style={[themeCardStyles.accentLine, { backgroundColor: item.accent }]} />
           <View style={{ flexDirection: 'row', gap: 4, marginTop: 5 }}>
@@ -197,7 +209,6 @@ const ThemeCard = ({
           <View style={[themeCardStyles.textLine, { backgroundColor: item.text, opacity: 0.12 }]} />
         </View>
 
-        {/* Fake bottom stat row */}
         <View style={{ flexDirection: 'row', gap: 4, marginTop: 4 }}>
           <View style={[themeCardStyles.statBlock, { backgroundColor: item.card }]}>
             <View style={[themeCardStyles.statDot, { backgroundColor: item.accent }]} />
@@ -208,11 +219,9 @@ const ThemeCard = ({
         </View>
       </View>
 
-      {/* Label */}
-      <Text style={[themeCardStyles.label, { color: item.text }]}>{item.label}</Text>
-      <Text style={[themeCardStyles.subtitle, { color: item.text, opacity: 0.5 }]}>{item.subtitle}</Text>
+      <AppText variant="body" weight="bold" style={[themeCardStyles.label, { color: item.text }]} numberOfLines={1}>{t(item.label)}</AppText>
+      <AppText variant="body-sm" weight="medium" style={[themeCardStyles.subtitle, { color: item.text, opacity: 0.5 }]} numberOfLines={2}>{t(item.subtitle)}</AppText>
 
-      {/* Active indicator */}
       {isActive && (
         <View style={[themeCardStyles.activeBadge, { backgroundColor: item.accent }]}>
           <View style={themeCardStyles.activeInner} />
@@ -228,26 +237,29 @@ const ResetModal = ({
   visible, onClose, pin
 }: { visible: boolean; onClose: () => void; pin: string | null }) => {
   const { colors, t } = useSettings();
+  const dialog = useDialog();
   const [enteredPin, setEnteredPin] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleReset = async () => {
     if (pin && enteredPin !== pin) {
-      Alert.alert(t('common.error'), t('settings.pin_invalid'));
+      await dialog.alert({ title: t('common.error'), message: t('settings.pin_invalid'), iconType: 'danger' });
       return;
     }
     if (!pin) {
-      Alert.alert(
-        t('settings.no_pin'),
-        t('settings.reset_msg'),
-        [
-          { text: t('common.cancel'), style: 'cancel' },
-          { text: t('common.delete'), style: 'destructive', onPress: doReset }
-        ]
-      );
+      const ok = await dialog.confirm({
+        title: t('settings.no_pin'),
+        message: t('settings.reset_msg'),
+        confirmText: t('common.delete'),
+        cancelText: t('common.cancel'),
+        destructive: true,
+        iconType: 'danger',
+      });
+      if (!ok) return;
+      await doReset();
       return;
     }
-    doReset();
+    await doReset();
   };
 
   const doReset = async () => {
@@ -257,9 +269,9 @@ const ResetModal = ({
     if (success) {
       setEnteredPin('');
       onClose();
-      Alert.alert(`✅ ${t('settings.reset_success')}`, t('settings.reset_fresh'));
+      await dialog.alert({ title: `✅ ${t('settings.reset_success')}`, message: t('settings.reset_fresh'), iconType: 'success' });
     } else {
-      Alert.alert(t('common.error'), t('common.error'));
+      await dialog.alert({ title: t('common.error'), message: t('common.error'), iconType: 'danger' });
     }
   };
 
@@ -270,11 +282,11 @@ const ResetModal = ({
           <View style={resetStyles.iconCircle}>
             <Trash2 size={28} color="#FF3B30" />
           </View>
-          <Text style={[resetStyles.title, { color: colors.text }]}>{t('settings.reset_title')}</Text>
-          <Text style={[resetStyles.message, { color: colors.textSecondary }]}>
+          <AppText variant="title" weight="bold" style={[resetStyles.title, { color: colors.text }]} numberOfLines={2}>{t('settings.reset_title')}</AppText>
+          <AppText variant="body" weight="medium" style={[resetStyles.message, { color: colors.textSecondary }]} numberOfLines={4}>
             {t('settings.reset_msg')}{'\n'}
             {pin ? t('settings.reset_confirm_pin') : ''}
-          </Text>
+          </AppText>
 
           {pin ? (
             <TextInput
@@ -296,10 +308,10 @@ const ResetModal = ({
           >
             {loading
               ? <ActivityIndicator color="#FFF" />
-              : <Text style={resetStyles.confirmBtnText}>{t('settings.reset_btn')}</Text>}
+              : <AppText variant="body" weight="bold" style={resetStyles.confirmBtnText} numberOfLines={1}>{t('settings.reset_btn')}</AppText>}
           </TouchableOpacity>
           <TouchableOpacity style={resetStyles.cancelBtn} onPress={onClose}>
-            <Text style={resetStyles.cancelBtnText}>{t('common.cancel')}</Text>
+            <AppText variant="body" weight="bold" style={resetStyles.cancelBtnText} numberOfLines={1}>{t('common.cancel')}</AppText>
           </TouchableOpacity>
         </View>
       </View>
@@ -334,127 +346,12 @@ const SettingsScreen = () => {
   const [showNotification, setShowNotification] = useState(false);
   const [showTranslation, setShowTranslation] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
+  const [showTimeSystem, setShowTimeSystem] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
   const [showReset, setShowReset] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const [importing, setImporting] = useState(false);
-  const [successType, setSuccessType] = useState<'export'|'import'|'reset'|null>(null);
-  const [pendingImport, setPendingImport] = useState<any>(null);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
 
-  const handleExport = async () => {
-    try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      setExporting(true);
-      
-      // On some platforms/versions, SQLite files might be in different subfolders.
-      // We check the most common one first.
-      const dbDir = `${FileSystem.documentDirectory}SQLite/`;
-      const dbPath = `${dbDir}shegabe.db`;
-      
-      const info = await FileSystem.getInfoAsync(dbPath);
-      if (!info.exists) {
-        // Fallback for some Android versions or different Expo SQLite configurations
-        const altPath = `${FileSystem.documentDirectory}../databases/shegabe.db`;
-        const altInfo = await FileSystem.getInfoAsync(altPath);
-        if (!altInfo.exists) {
-          Alert.alert(t('common.error'), "Database file not found. Ensure you have some data first.");
-          return;
-        }
-        // Use the alt path if it exists
-        var finalDbPath = altPath;
-      } else {
-        var finalDbPath = dbPath;
-      }
-
-      const exportPath = `${FileSystem.cacheDirectory}shegabe_backup_${Date.now()}.db`;
-      
-      // Using the legacy export for stability as per user's system warning
-      await FileSystem.copyAsync({ from: finalDbPath, to: exportPath });
-
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(exportPath, {
-          mimeType: 'application/octet-stream',
-          dialogTitle: t('settings.export_data'),
-        });
-        setSuccessType('export');
-      } else {
-        Alert.alert(t('settings.sharing_unavailable'), `${t('settings.backup_restore')}:\n${exportPath}`);
-      }
-    } catch (e) {
-      console.error('Export Error:', e);
-      Alert.alert(t('settings.export_failed'), t('settings.export_failed_msg'));
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  const handleImport = async () => {
-    try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      setImporting(true);
-      const result = await DocumentPicker.getDocumentAsync({
-        type: '*/*',
-        copyToCacheDirectory: true,
-      });
-      if (result.canceled || !result.assets?.length) {
-        setImporting(false);
-        return;
-      }
-      const file = result.assets[0];
-      
-      // Basic extension check
-      if (!file.name.toLowerCase().endsWith('.db')) {
-        Alert.alert(t('settings.import_invalid'), t('settings.import_invalid_msg'));
-        setImporting(false);
-        return;
-      }
-
-      // Deeper validation: Check SQLite header
-      try {
-        const header = await FileSystem.readAsStringAsync(file.uri, { encoding: FileSystem.EncodingType.UTF8, length: 15 });
-        if (!header.startsWith('SQLite format 3')) {
-          Alert.alert(t('settings.import_invalid'), t('settings.import_invalid_msg'));
-          setImporting(false);
-          return;
-        }
-      } catch (e) {
-        // Fallback if read fails but extension is okay
-      }
-
-      setPendingImport(file);
-    } catch (e) {
-      console.error('Outer Import Error:', e);
-      Alert.alert(t('settings.import_failed'), t('settings.import_failed_msg'));
-    } finally {
-      setImporting(false);
-    }
-  };
-
-  const executeImport = async () => {
-    if (!pendingImport) return;
-    try {
-      setImporting(true);
-      const dbDir = `${FileSystem.documentDirectory}SQLite/`;
-      const dbPath = `${dbDir}shegabe.db`;
-      
-      // Ensure the SQLite directory exists
-      const dirInfo = await FileSystem.getInfoAsync(dbDir);
-      if (!dirInfo.exists) {
-        await FileSystem.makeDirectoryAsync(dbDir, { intermediates: true });
-      }
-
-      await FileSystem.copyAsync({ from: pendingImport.uri, to: dbPath });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setPendingImport(null);
-      setSuccessType('import');
-    } catch (err) {
-      console.error('Import Execution Error:', err);
-      Alert.alert(t('settings.import_failed'), t('settings.import_failed_msg'));
-    } finally {
-      setImporting(false);
-    }
-  };
 
   const handleOpenSub = (setter: (v: boolean) => void) => {
     Haptics.selectionAsync();
@@ -473,8 +370,8 @@ const SettingsScreen = () => {
         {/* Integrated Header */}
         <View style={styles.integratedHeader}>
           <View>
-            <RNText style={[styles.headerLabel, { color: colors.textSecondary }]}>{t('settings.system_pref')}</RNText>
-            <RNText style={[styles.headerTitle, { color: colors.text }]}>{t('settings.configuration')}</RNText>
+  <AppText variant="body" weight="medium" style={[styles.headerLabel, { color: colors.textSecondary }]} numberOfLines={2}>{t('settings.system_pref')}</AppText>
+  <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: colors.text }]} numberOfLines={2}>{t('settings.configuration')}</AppText>
           </View>
           <View style={[styles.headerIconBox, { borderColor: colors.border }]}>
              <Shield size={24} color={colors.text} />
@@ -489,16 +386,16 @@ const SettingsScreen = () => {
             style={[styles.profileBanner, { backgroundColor: colors.card, borderColor: colors.border }]}
           >
             <View style={styles.bannerAvatarBox}>
-              <Image source={PROFILE_IMAGES[userProfile.avatarIndex]} style={styles.bannerAvatar} />
+              <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={styles.bannerAvatar} />
               <View style={[styles.badgeOverlay, { backgroundColor: colors.text }]}>
                 <BadgeCheck size={16} color={colors.background} fill={colors.background} />
               </View>
             </View>
             <View style={styles.bannerInfo}>
-              <RNText style={[styles.bannerName, { color: colors.text }]}>{userProfile.name}</RNText>
-              <RNText style={[styles.bannerBusiness, { color: colors.textSecondary }]}>{userProfile.businessName}</RNText>
+            <AppText variant="title" weight="bold" style={[styles.bannerName, { color: colors.text }]} numberOfLines={2}>{userProfile.name}</AppText>
+            <AppText variant="body-sm" weight="medium" style={[styles.bannerBusiness, { color: colors.textSecondary }]} numberOfLines={1}>{userProfile.businessName}</AppText>
               <View style={[styles.profileLinkBtn, { backgroundColor: colors.text + '10' }]}>
-                <RNText style={[styles.profileLinkText, { color: colors.text }]}>{t('profile.edit')}</RNText>
+                <AppText variant="caption" weight="bold" style={[styles.profileLinkText, { color: colors.text }]} numberOfLines={1}>{t('profile.edit')}</AppText>
                 <ArrowUpRight size={14} color={colors.text} />
               </View>
             </View>
@@ -534,6 +431,12 @@ const SettingsScreen = () => {
               onPress={() => handleOpenSub(setShowCalendar)} 
               color="#FF2D55"
             />
+            <ConfigurationGridItem
+              icon={Clock}
+              title={t('settings.time_format')}
+              onPress={() => handleOpenSub(setShowTimeSystem)}
+              color="#34C759"
+            />
           </View>
         </View>
 
@@ -541,8 +444,8 @@ const SettingsScreen = () => {
         <View style={styles.paletteSection}>
           <View style={styles.sectionHead}>
             <View>
-              <RNText style={[styles.sectionTitle, { color: colors.text }]}>{t('settings.palette')}</RNText>
-              <RNText style={[styles.sectionSub, { color: colors.textSecondary }]}>{t('settings.theme_subtitle')}</RNText>
+          <AppText variant="heading" weight="bold" style={[styles.sectionTitle, { color: colors.text }]} numberOfLines={2}>{t('settings.palette')}</AppText>
+          <AppText variant="body-sm" weight="medium" style={[styles.sectionSub, { color: colors.textSecondary }]} numberOfLines={2}>{t('settings.theme_subtitle')}</AppText>
             </View>
             <Palette size={20} color={colors.textSecondary} />
           </View>
@@ -551,7 +454,7 @@ const SettingsScreen = () => {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.paletteScrollContent}
           >
-            {THEME_OPTIONS(t).map((item) => (
+            {THEME_OPTIONS.map((item) => (
               <ThemeCard
                 key={item.id}
                 item={item}
@@ -567,19 +470,19 @@ const SettingsScreen = () => {
 
         {/* Advanced System Ledger */}
         <View style={styles.ledgerSection}>
-          <RNText style={[styles.ledgerHeader, { color: colors.textSecondary }]}>{t('settings.advanced')}</RNText>
+          <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: colors.textSecondary }]} numberOfLines={1}>{t('settings.advanced')}</AppText>
           <View style={[styles.ledgerGroup, { backgroundColor: colors.card, borderColor: colors.border }]}>
              <SettingLedgerItem 
                 icon={Database} 
                 title={t('settings.export_data')} 
                 subtitle={t('settings.export_desc')}
-                onPress={handleExport}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowExportModal(true); }}
              />
              <SettingLedgerItem 
                 icon={CloudDownload} 
                 title={t('settings.import_data')} 
                 subtitle={t('settings.import_desc')}
-                onPress={handleImport}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowImportModal(true); }}
              />
              <SettingLedgerItem 
                 icon={HelpCircle} 
@@ -597,7 +500,7 @@ const SettingsScreen = () => {
         </View>
 
         <View style={styles.footer}>
-           <RNText style={[styles.versionText, { color: colors.textSecondary }]}>{t('settings.version_info', { version: '1.0.4' })}</RNText>
+           <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.versionText, { color: colors.textSecondary }]} numberOfLines={2}>{t('settings.version_info', { version: '1.0.4' })}</AppText>
         </View>
 
         <View style={{ height: 40 }} />
@@ -619,6 +522,9 @@ const SettingsScreen = () => {
       <BottomSheet visible={showCalendar} onClose={() => setShowCalendar(false)}>
         <CalendarSettingsScreen />
       </BottomSheet>
+      <BottomSheet visible={showTimeSystem} onClose={() => setShowTimeSystem(false)}>
+        <TimeSystemSettingsScreen />
+      </BottomSheet>
       <BottomSheet visible={showSupport} onClose={() => setShowSupport(false)}>
         <SupportScreen />
       </BottomSheet>
@@ -630,42 +536,22 @@ const SettingsScreen = () => {
          pin={pin} 
       />
 
-      {/* Import Confirmation Modal */}
-      <Modal visible={!!pendingImport} transparent animationType="fade">
-        <View style={resetStyles.overlay}>
-          <View style={[resetStyles.box, { backgroundColor: colors.card }]}>
-            <View style={[resetStyles.iconCircle, { borderColor: colors.primary, backgroundColor: colors.primary + '10' }]}>
-              <CloudDownload size={28} color={colors.primary} />
-            </View>
-            <Text style={[resetStyles.title, { color: colors.text }]}>{t('settings.import_title')}</Text>
-            <Text style={[resetStyles.message, { color: colors.textSecondary }]}>
-              {t('settings.import_msg')}{'\n'}
-              <Text style={{ fontFamily: Fonts.bold }}>{pendingImport?.name}</Text>
-            </Text>
+      {/* Export Modal */}
+      <DataTransferModal
+        visible={showExportModal}
+        mode="export"
+        onClose={() => setShowExportModal(false)}
+        onSuccess={(type) => { setShowExportModal(false); }}
+      />
 
-            <TouchableOpacity
-              style={[resetStyles.confirmBtn, { backgroundColor: colors.primary }]}
-              onPress={executeImport}
-              disabled={importing}
-            >
-              {importing
-                ? <ActivityIndicator color="#FFF" />
-                : <Text style={resetStyles.confirmBtnText}>{t('settings.replace').toUpperCase()}</Text>}
-            </TouchableOpacity>
-            <TouchableOpacity style={resetStyles.cancelBtn} onPress={() => setPendingImport(null)}>
-              <Text style={resetStyles.cancelBtnText}>{t('common.cancel')}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      {/* Import Modal */}
+      <DataTransferModal
+        visible={showImportModal}
+        mode="import"
+        onClose={() => setShowImportModal(false)}
+        onSuccess={(type) => { setShowImportModal(false); }}
+      />
 
-      {/* Success Modal */}
-      <Modal visible={!!successType} transparent animationType="fade">
-        <DataSuccessModal 
-          type={successType as any} 
-          onClose={() => setSuccessType(null)} 
-        />
-      </Modal>
     </View>
   );
 };
@@ -736,12 +622,12 @@ const themeCardStyles = StyleSheet.create({
     borderRadius: 2,
   },
   label: {
-    fontSize: 13,
+
     fontFamily: Fonts.bold,
     marginBottom: 1,
   },
   subtitle: {
-    fontSize: 10,
+
     fontFamily: Fonts.medium,
   },
   activeBadge: {
@@ -777,7 +663,6 @@ const styles = StyleSheet.create({
     height: 300,
     borderRadius: 150,
     transform: [{ scale: 1.5 }],
-    filter: 'blur(80px)',
   },
   integratedHeader: {
     flexDirection: 'row',
@@ -788,14 +673,14 @@ const styles = StyleSheet.create({
     paddingBottom: 25,
   },
   headerLabel: {
-    fontSize: 12,
+
     fontFamily: Fonts.semibold,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
     marginBottom: 4,
   },
   headerTitle: {
-    fontSize: 28,
+
     fontFamily: Fonts.bold,
   },
   headerIconBox: {
@@ -842,12 +727,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   bannerName: {
-    fontSize: 20,
+
     fontFamily: Fonts.bold,
     marginBottom: 4,
   },
   bannerBusiness: {
-    fontSize: 13,
+
     fontFamily: Fonts.medium,
     marginBottom: 12,
   },
@@ -861,7 +746,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   profileLinkText: {
-    fontSize: 12,
+
     fontFamily: Fonts.bold,
   },
   gridSection: {
@@ -889,7 +774,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   gridTitle: {
-    fontSize: 14,
+
     fontFamily: Fonts.bold,
   },
   gridChevron: {
@@ -908,11 +793,11 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   sectionTitle: {
-    fontSize: 20,
+
     fontFamily: Fonts.bold,
   },
   sectionSub: {
-    fontSize: 13,
+
     fontFamily: Fonts.medium,
     marginTop: 2,
   },
@@ -924,7 +809,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 25,
   },
   ledgerHeader: {
-    fontSize: 12,
+
     fontFamily: Fonts.semibold,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -951,11 +836,11 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   ledgerTitle: {
-    fontSize: 15,
+
     fontFamily: Fonts.bold,
   },
   ledgerSub: {
-    fontSize: 11,
+
     fontFamily: Fonts.medium,
     marginTop: 2,
   },
@@ -965,7 +850,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 25,
   },
   versionText: {
-    fontSize: 11,
+
     fontFamily: Fonts.medium,
   },
   modalOverlay: {
@@ -1020,12 +905,12 @@ const resetStyles = StyleSheet.create({
     marginBottom: 18,
   },
   title: {
-    fontSize: 20,
+
     fontFamily: Fonts.bold,
     marginBottom: 10,
   },
   message: {
-    fontSize: 14,
+
     textAlign: 'center',
     lineHeight: 22,
     fontFamily: Fonts.medium,
@@ -1037,7 +922,7 @@ const resetStyles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 18,
-    fontSize: 22,
+
     letterSpacing: 12,
     textAlign: 'center',
     fontFamily: Fonts.bold,
@@ -1053,7 +938,7 @@ const resetStyles = StyleSheet.create({
   },
   confirmBtnText: {
     color: '#FFF',
-    fontSize: 16,
+
     fontFamily: Fonts.bold,
   },
   cancelBtn: {
@@ -1063,7 +948,7 @@ const resetStyles = StyleSheet.create({
   },
   cancelBtnText: {
     color: '#888',
-    fontSize: 15,
+
     fontFamily: Fonts.medium,
   },
 });

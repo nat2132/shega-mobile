@@ -1,16 +1,15 @@
-import React from 'react';
+﻿import React from 'react';
 import { Fonts } from '@/constants/theme';
 import {
   StyleSheet,
-  Text as RNText,
   View,
   TouchableOpacity,
-  SafeAreaView,
   Dimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { CheckCircle2, Sparkles, ChevronRight, LayoutDashboard, Send } from 'lucide-react-native';
+import { AppText } from '@/components/ui';
 import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
-
 const { width } = Dimensions.get('window');
 
 interface SuccessScreenProps {
@@ -40,10 +39,10 @@ const SuccessScreen: React.FC<SuccessScreenProps> = ({ onGoToDashboard }) => {
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(200).duration(800)} style={styles.briefingArea}>
-          <RNText style={styles.title}>System Ready</RNText>
-          <RNText style={styles.subtitle}>
+          <AppText style={styles.title} variant="display" weight="bold" numberOfLines={2}>System Ready</AppText>
+          <AppText style={styles.subtitle} variant="body" weight="medium" numberOfLines={3}>
             Your curatorial environment is fully initialized.{'\n'}Welcome to the professional terminal.
-          </RNText>
+          </AppText>
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(400).duration(800)} style={styles.actionArea}>
@@ -52,20 +51,20 @@ const SuccessScreen: React.FC<SuccessScreenProps> = ({ onGoToDashboard }) => {
             activeOpacity={0.8} 
             onPress={onGoToDashboard}
           >
-            <RNText style={styles.btnText}>ENTER TERMINAL</RNText>
+            <AppText style={styles.btnText} variant="body" weight="bold" numberOfLines={1}>ENTER TERMINAL</AppText>
             <LayoutDashboard size={20} color="#FFF" />
           </TouchableOpacity>
 
           <View style={styles.statusIndicator}>
              <View style={styles.statusDot} />
-             <RNText style={styles.statusText}>ALL SYSTEMS NOMINAL</RNText>
+             <AppText style={styles.statusText} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>ALL SYSTEMS NOMINAL</AppText>
           </View>
         </Animated.View>
       </View>
 
       {/* Footer Branding */}
       <Animated.View entering={FadeInUp.delay(600).duration(800)} style={styles.footerBranding}>
-         <RNText style={styles.footerTag}>ESTABLISHED SECURE SESSION • AES-256</RNText>
+         <AppText style={styles.footerTag} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>ESTABLISHED SECURE SESSION • AES-256</AppText>
       </Animated.View>
     </SafeAreaView>
   );
@@ -137,7 +136,6 @@ const styles = StyleSheet.create({
     marginBottom: 60,
   },
   title: {
-    fontSize: 40,
     fontFamily: Fonts.extrabold,
     fontWeight: '800',
     color: '#000',
@@ -145,7 +143,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   subtitle: {
-    fontSize: 16,
     color: '#777',
     textAlign: 'center',
     lineHeight: 26,
@@ -173,7 +170,6 @@ const styles = StyleSheet.create({
   },
   btnText: {
     color: '#FFF',
-    fontSize: 16,
     fontFamily: Fonts.bold,
     letterSpacing: 1.5,
   },
@@ -189,7 +185,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#10B981', // Emerald green
   },
   statusText: {
-    fontSize: 10,
     fontFamily: Fonts.bold,
     color: '#888',
     letterSpacing: 1,
@@ -199,7 +194,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   footerTag: {
-    fontSize: 9,
     fontFamily: Fonts.bold,
     color: '#BBB',
     letterSpacing: 1.5,

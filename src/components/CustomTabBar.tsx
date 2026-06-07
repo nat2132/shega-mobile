@@ -1,12 +1,12 @@
-import React, { useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+﻿import React, { useEffect } from 'react';
+import { View, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import Animated, { useAnimatedStyle, withSpring, useSharedValue } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import { Home, Store, Warehouse, Settings as SettingsIcon } from 'lucide-react-native';
 import { Fonts } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
-
+import { AppText } from '@/components/ui';
 const { width } = Dimensions.get('window');
 
 type TabBarItemProps = {
@@ -104,9 +104,9 @@ const TabBarItem: React.FC<TabBarItemProps> = ({
         <View style={styles.iconContainer}>
           {getIcon()}
         </View>
-        <Text style={[styles.tabText, { color: isFocused ? colors.text : colors.textSecondary, fontFamily: isFocused ? Fonts.semibold : Fonts.medium }]}>
+        <AppText variant="caption" weight={isFocused ? 'bold' : 'medium'} shrink={false} style={[styles.tabText, { color: isFocused ? colors.text : colors.textSecondary }]} numberOfLines={1}>
           {typeof label === 'string' ? label : 'Tab'}
-        </Text>
+        </AppText>
         <View style={styles.dotContainer}>
           <Animated.View style={[styles.activeDot, { backgroundColor: isFocused ? colors.text : 'transparent' }, dotAnimatedStyle]} />
         </View>
@@ -130,7 +130,7 @@ export const CustomTabBar = (props: BottomTabBarProps) => {
             .filter(route => {
               const n = route.name;
               // Explicitly filter out auxiliary screens, keep everything else (dashboard, sales, inventory, settings)
-              return !['expense', 'adjustment', 'summary'].includes(n);
+              return !['expense', 'adjustment', 'summary', 'contacts'].includes(n);
             })
             .map((route) => {
               const index = props.state.routes.indexOf(route);
@@ -190,7 +190,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   tabText: {
-    fontSize: 12,
   },
   dotContainer: {
     height: 6,

@@ -1,7 +1,6 @@
-import React, { useEffect } from 'react';
+﻿import React, { useEffect } from 'react';
 import { 
   View, 
-  Text, 
   StyleSheet, 
   TouchableOpacity, 
   Dimensions,
@@ -30,7 +29,7 @@ import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { useSettings } from '@/context/SettingsContext';
 import { Fonts } from '@/constants/theme';
-
+import { AppText, AppCard, AppButton } from '@/components/ui';
 const { width, height } = Dimensions.get('window');
 
 // Premium Confetti Particle
@@ -157,8 +156,8 @@ const BusinessSuccessModal: React.FC<BusinessSuccessModalProps> = ({ details, on
         </View>
 
         <Animated.View entering={FadeInDown.delay(700)} style={styles.content}>
-          <Text style={[styles.title, { color: colors.text, opacity: 0.6 }]}>{details.title.toUpperCase()}</Text>
-          <Text style={[styles.subtitle, { color: themeColor }]}>{details.subtitle.toUpperCase()}</Text>
+          <AppText variant="title" weight="bold" align="center" style={[styles.title, { color: colors.text, opacity: 0.6 }]} numberOfLines={2}>{details.title.toUpperCase()}</AppText>
+          <AppText variant="heading" weight="extrabold" align="center" style={[styles.subtitle, { color: themeColor }]} numberOfLines={2}>{details.subtitle.toUpperCase()}</AppText>
           
           <View style={[styles.glassCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
              {details.itemName && (
@@ -166,22 +165,22 @@ const BusinessSuccessModal: React.FC<BusinessSuccessModalProps> = ({ details, on
                  <View style={[styles.itemIconBox, { backgroundColor: themeColor + '10' }]}>
                     <Package size={16} color={themeColor} />
                  </View>
-                 <Text style={[styles.itemName, { color: colors.text }]} numberOfLines={1}>{details.itemName}</Text>
+                 <AppText variant="body" weight="bold" style={[styles.itemName, { color: colors.text }]} numberOfLines={1}>{details.itemName}</AppText>
                </View>
              )}
 
              <View style={styles.mainMetrics}>
                 <View style={styles.metricItem}>
-                   <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>{details.mainLabel}</Text>
-                   <Text style={[styles.metricValue, { color: colors.text }]}>{details.mainValue}</Text>
+                   <AppText variant="caption" weight="bold" style={[styles.metricLabel, { color: colors.textSecondary }]} numberOfLines={1}>{details.mainLabel}</AppText>
+                   <AppText variant="heading" weight="bold" style={[styles.metricValue, { color: colors.text }]} numberOfLines={1}>{details.mainValue}</AppText>
                 </View>
                 
                 {details.secondaryValue && (
                   <>
                     <View style={[styles.dividerVertical, { backgroundColor: colors.border }]} />
                     <View style={styles.metricItem}>
-                       <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>{details.secondaryLabel}</Text>
-                       <Text style={[styles.metricValue, { color: themeColor }]}>{details.secondaryValue}</Text>
+                       <AppText variant="caption" weight="bold" style={[styles.metricLabel, { color: colors.textSecondary }]} numberOfLines={1}>{details.secondaryLabel}</AppText>
+                       <AppText variant="heading" weight="bold" style={[styles.metricValue, { color: themeColor }]} numberOfLines={1}>{details.secondaryValue}</AppText>
                     </View>
                   </>
                 )}
@@ -189,7 +188,7 @@ const BusinessSuccessModal: React.FC<BusinessSuccessModalProps> = ({ details, on
 
              <View style={[styles.footerRow, { borderTopColor: colors.border }]}>
                 <Activity size={14} color={colors.textSecondary} />
-                <Text style={[styles.footerText, { color: colors.textSecondary }]}>{t('adj.security_footer')}</Text>
+                <AppText variant="caption" weight="bold" style={[styles.footerText, { color: colors.textSecondary }]} numberOfLines={1}>{t('adj.security_footer')}</AppText>
              </View>
           </View>
 
@@ -201,7 +200,7 @@ const BusinessSuccessModal: React.FC<BusinessSuccessModalProps> = ({ details, on
             }}
             activeOpacity={0.9}
           >
-            <Text style={[styles.finishBtnText, { color: colors.background }]}>{t('common.done').toUpperCase()}</Text>
+            <AppText variant="body" weight="bold" style={[styles.finishBtnText, { color: colors.background }]} numberOfLines={1}>{t('common.done').toUpperCase()}</AppText>
             <ChevronRight size={20} color={colors.background} />
           </TouchableOpacity>
         </Animated.View>
@@ -240,7 +239,7 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    filter: 'blur(30px)',
+    opacity: 0.3,
   },
   successRing: {
     position: 'absolute',
@@ -267,14 +266,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   title: {
-    fontSize: 12,
     fontFamily: Fonts.bold,
     letterSpacing: 4,
     marginBottom: 12,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 28,
     fontFamily: Fonts.extrabold,
     letterSpacing: -0.5,
     marginBottom: 25,
@@ -306,7 +303,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   itemName: {
-    fontSize: 16,
     fontFamily: Fonts.bold,
     flex: 1,
   },
@@ -320,7 +316,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   metricLabel: {
-    fontSize: 11,
     fontFamily: Fonts.bold,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
@@ -328,7 +323,6 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   metricValue: {
-    fontSize: 22,
     fontFamily: Fonts.bold,
   },
   dividerVertical: {
@@ -347,7 +341,6 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   footerText: {
-    fontSize: 10,
     fontFamily: Fonts.bold,
     letterSpacing: 0.8,
   },
@@ -366,7 +359,6 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   finishBtnText: {
-    fontSize: 17,
     fontFamily: Fonts.bold,
     letterSpacing: 1,
   },

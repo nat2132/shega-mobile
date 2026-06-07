@@ -1,20 +1,22 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text as RNText, StyleSheet, TouchableOpacity, Modal, Pressable, ScrollView } from 'react-native';
-import { ChevronLeft, ChevronRight } from 'lucide-react-native';
-import { Fonts } from '@/constants/theme';
+﻿import { Fonts } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
-import { 
-  toEthiopianDate, 
-  getEthiopianMonthNames, 
-  getEthiopianDaysInMonth, 
-  fromEthiopianToDate 
+import {
+  fromEthiopianToDate,
+  getEthiopianDaysInMonth,
+  getEthiopianMonthNames,
+  toEthiopianDate
 } from '@/utils/date-utils';
-
+import { ChevronLeft, ChevronRight } from 'lucide-react-native';
+import React, { useEffect, useState } from 'react';
+import { Modal, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { AppText } from '@/components/ui';
 interface CustomDatePickerProps {
   visible: boolean;
   onClose: () => void;
   onSelectDate: (date: string) => void;
   initialDate?: string;
+  minDate?: string;
+  maxDate?: string;
 }
 
 export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
@@ -22,8 +24,10 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
   onClose,
   onSelectDate,
   initialDate,
+  minDate,
+  maxDate,
 }) => {
-  const { colors, calendarType, language } = useSettings();
+  const { colors, calendarType, language, t } = useSettings();
   const isEth = calendarType === 'ethiopian';
 
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -33,6 +37,27 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
   // State for navigational view (Month/Year)
   const [showMonthSelector, setShowMonthSelector] = useState(false);
   const [showYearSelector, setShowYearSelector] = useState(false);
+
+  // Parse min/max dates for constraint checking
+  const minDateObj = minDate ? (() => {
+    const parts = minDate.split('-');
+    if (parts.length === 3) {
+      const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+    return null;
+  })() : null;
+
+  const maxDateObj = maxDate ? (() => {
+    const parts = maxDate.split('-');
+    if (parts.length === 3) {
+      const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      d.setHours(23, 59, 59, 999);
+      return d;
+    }
+    return null;
+  })() : null;
 
   useEffect(() => {
     if (visible) {
@@ -112,6 +137,11 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
     const newDate = isEth 
       ? fromEthiopianToDate(viewState.year, viewState.month, day)
       : new Date(viewState.year, viewState.month - 1, day);
+    
+    // Enforce min/max date constraints
+    if (minDateObj && newDate < minDateObj) return;
+    if (maxDateObj && newDate > maxDateObj) return;
+    
     setSelectedDate(newDate);
     // Do NOT update viewState here, let the user stay in the current month view
   };
@@ -148,6 +178,12 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
           isToday = now.getDate() === i && now.getMonth() === viewState.month - 1 && now.getFullYear() === viewState.year;
         }
 
+        // Check if this day is within min/max bounds
+        const dayDate = isEth 
+          ? fromEthiopianToDate(viewState.year, viewState.month, i)
+          : new Date(viewState.year, viewState.month - 1, i);
+        const isDisabled = (minDateObj && dayDate < minDateObj) || (maxDateObj && dayDate > maxDateObj);
+
         if (selectedDate) {
           if (isEth) {
             const eth = toEthiopianDate(selectedDate);
@@ -162,7 +198,8 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
         days.push(
             <TouchableOpacity
                 key={`day-${i}`}
-                onPress={() => handleSelectDay(i)}
+                onPress={() => !isDisabled && handleSelectDay(i)}
+                activeOpacity={isDisabled ? 0.5 : 0.7}
                 style={[
                     styles.dayCircle,
                     isSelected && { 
@@ -173,16 +210,14 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
                       shadowRadius: 5, 
                       shadowOffset: {width: 0, height: 2} 
                     },
-                    isToday && !isSelected && { borderWidth: 2, borderColor: colors.primary, backgroundColor: colors.primary + '10' }
+                    isToday && !isSelected && !isDisabled && { borderWidth: 2, borderColor: colors.primary, backgroundColor: colors.primary + '10' }
                 ]}
             >
-                <RNText style={{ 
-                    color: isSelected ? colors.background : isToday ? colors.primary : colors.text, 
-                    fontFamily: (isSelected || isToday) ? Fonts.bold : Fonts.medium,
-                    fontSize: 16
-                }}>
+                <AppText variant="body" weight={(isSelected || isToday) ? 'bold' : 'medium'} style={[{ 
+                    color: isDisabled ? colors.textSecondary + '60' : (isSelected ? colors.background : isToday ? colors.primary : colors.text), 
+                }]} numberOfLines={1}>
                     {i}
-                </RNText>
+                </AppText>
             </TouchableOpacity>
         );
     }
@@ -212,9 +247,9 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
                     style={[styles.headerSubBox, showMonthSelector && { backgroundColor: colors.primary + '15' }]} 
                     onPress={() => { setShowMonthSelector(!showMonthSelector); setShowYearSelector(false); }}
                   >
-                    <RNText style={[styles.calendarHeader, { color: colors.text }]}>
+                    <AppText variant="title-sm" weight="bold" style={[styles.calendarHeader, { color: colors.text }]} numberOfLines={1}>
                       {monthNames[viewState.month - 1]}
-                    </RNText>
+                    </AppText>
                     <ChevronRight size={16} color={colors.textSecondary} style={{ transform: [{ rotate: showMonthSelector ? '90deg' : '0deg' }] }} />
                   </TouchableOpacity>
                   
@@ -222,15 +257,15 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
                     style={[styles.headerSubBox, showYearSelector && { backgroundColor: colors.primary + '15' }, { marginLeft: 10 }]} 
                     onPress={() => { setShowYearSelector(!showYearSelector); setShowMonthSelector(false); }}
                   >
-                    <RNText style={[styles.calendarHeader, { color: colors.text }]}>
+                    <AppText variant="title-sm" weight="bold" style={[styles.calendarHeader, { color: colors.text }]} numberOfLines={1}>
                       {viewState.year}
-                    </RNText>
+                    </AppText>
                     <ChevronRight size={16} color={colors.textSecondary} style={{ transform: [{ rotate: showYearSelector ? '90deg' : '0deg' }] }} />
                   </TouchableOpacity>
                 </View>
-                <RNText style={{ fontSize: 13, color: colors.primary, fontFamily: Fonts.bold, marginTop: 4, letterSpacing: 0.5 }}>
+                <AppText variant="body-sm" weight="bold" style={{ fontSize: 13, color: colors.primary, fontFamily: Fonts.bold, marginTop: 4, letterSpacing: 0.5 }} numberOfLines={1}>
                   {selectedLabel}
-                </RNText>
+                </AppText>
               </View>
             </View>
 
@@ -247,7 +282,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
                   style={[styles.selectorItem, viewState.month === idx + 1 && { backgroundColor: colors.text }]}
                   onPress={() => { setViewState({ ...viewState, month: idx + 1 }); setShowMonthSelector(false); }}
                 >
-                  <RNText style={[styles.selectorText, { color: viewState.month === idx + 1 ? colors.background : colors.text }]}>{m.substring(0, 3)}</RNText>
+                  <AppText variant="body" weight="semibold" style={[styles.selectorText, { color: viewState.month === idx + 1 ? colors.background : colors.text }]} numberOfLines={1}>{m.substring(0, 3)}</AppText>
                 </TouchableOpacity>
               ))}
             </View>
@@ -262,7 +297,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
                     style={[styles.selectorItem, viewState.year === y && { backgroundColor: colors.text }]}
                     onPress={() => { setViewState({ ...viewState, year: y }); setShowYearSelector(false); }}
                   >
-                    <RNText style={[styles.selectorText, { color: viewState.year === y ? colors.background : colors.text }]}>{y}</RNText>
+                    <AppText variant="body" weight="semibold" style={[styles.selectorText, { color: viewState.year === y ? colors.background : colors.text }]} numberOfLines={1}>{y}</AppText>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -273,7 +308,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
             <>
               <View style={styles.weekDaysRow}>
                 {['S','M','T','W','T','F','S'].map((day, idx) => (
-                  <RNText key={`wd-${idx}`} style={[styles.weekDayText as RNText, { color: colors.textSecondary }]}>{day}</RNText>
+                   <AppText key={`wd-${idx}`} variant="caption" weight="bold" style={[styles.weekDayText, { color: colors.textSecondary }]} numberOfLines={1}>{day}</AppText>
                 ))}
               </View>
 
@@ -284,16 +319,16 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
           )}
 
           <View style={styles.modalActions}>
-             <TouchableOpacity onPress={() => { onSelectDate(''); onClose(); }} style={[styles.clearBtn, { borderColor: colors.border }]}>
-               <RNText style={[styles.cancelBtnText as RNText, { color: colors.textSecondary }]}>Clear</RNText>
-             </TouchableOpacity>
-             <View style={{flexDirection: 'row', gap: 10, flex: 1, justifyContent: 'flex-end'}}>
-               <TouchableOpacity onPress={onClose} style={[styles.cancelBtn, { borderColor: colors.border }]}>
-                 <RNText style={[styles.cancelBtnText as RNText, { color: colors.text }]}>Cancel</RNText>
-               </TouchableOpacity>
-               <TouchableOpacity onPress={handleConfirm} style={[styles.selectBtn, { backgroundColor: colors.text }]}>
-                 <RNText style={{ color: colors.background, fontFamily: Fonts.bold }}>Select</RNText>
-               </TouchableOpacity>
+              <TouchableOpacity onPress={() => { onSelectDate(''); onClose(); }} style={[styles.clearBtn, { borderColor: colors.border }]}>
+                 <AppText variant="body" weight="bold" style={[styles.cancelBtnText, { color: colors.textSecondary }]} numberOfLines={1}>{t('common.clear')}</AppText>
+              </TouchableOpacity>
+              <View style={{flexDirection: 'row', gap: 10, flex: 1, justifyContent: 'flex-end'}}>
+                <TouchableOpacity onPress={onClose} style={[styles.cancelBtn, { borderColor: colors.border }]}>
+                   <AppText variant="body" weight="bold" style={[{ color: colors.text }, styles.cancelBtnText]} numberOfLines={1}>{t('common.cancel')}</AppText>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleConfirm} style={[styles.selectBtn, { backgroundColor: colors.text }]}>
+                  <AppText variant="body" weight="bold" style={{ color: colors.background, fontFamily: Fonts.bold }} numberOfLines={1}>{t('common.select')}</AppText>
+                </TouchableOpacity>
              </View>
           </View>
         </View>
@@ -324,7 +359,6 @@ const styles = StyleSheet.create({
     padding: 5,
   },
   calendarHeader: {
-    fontSize: 18,
     fontFamily: Fonts.bold,
   },
   headerTitleContainer: {
@@ -391,7 +425,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.05)',
   },
   selectorText: {
-    fontSize: 14,
     fontFamily: Fonts.semibold,
   },
   modalActions: {

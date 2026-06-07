@@ -1,22 +1,18 @@
-import React from 'react';
+﻿import React from 'react';
 import { 
   View, 
-  Text as RNText, 
   StyleSheet, 
   TouchableOpacity, 
-  Dimensions,
-  Platform,
-  Linking
+  Linking,
+  ScrollView
 } from 'react-native';
-import { Mail, Phone, ChevronRight, Headphones, MessageSquare, ExternalLink } from 'lucide-react-native';
+import { Mail, Phone, Headphones, ExternalLink } from 'lucide-react-native';
 import { Fonts } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
+import { AppText, AppCard, AppButton, AppListItem, AppRow } from '@/components/ui';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
-
-const { width } = Dimensions.get('window');
-
 const SupportCenter = () => {
-  const { t, colors, theme } = useSettings();
+   const { t, colors } = useSettings();
 
   const handleContact = (type: 'email' | 'phone') => {
     if (type === 'email') {
@@ -35,8 +31,8 @@ const SupportCenter = () => {
 
       <Animated.View entering={FadeIn.duration(600)} style={styles.content}>
         <View style={styles.headerNode}>
-          <RNText style={[styles.headerSub, { color: colors.textSecondary }]}>{t('support.assistance')}</RNText>
-          <RNText style={[styles.headerTitle, { color: colors.text }]}>{t('support.concierge')}</RNText>
+          <AppText variant="body" weight="medium" style={[styles.headerSub, { color: colors.textSecondary }]} numberOfLines={2}>{t('support.assistance')}</AppText>
+          <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: colors.text }]} numberOfLines={2}>{t('support.concierge')}</AppText>
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
@@ -50,9 +46,9 @@ const SupportCenter = () => {
                  <Mail color={colors.text} size={28} />
               </View>
               <View style={styles.cardInfo}>
-                <RNText style={[styles.cardTag, { color: colors.textSecondary }]}>{t('support.email_channel')}</RNText>
-                <RNText style={[styles.cardMain, { color: colors.text }]}>{t('support.direct_support')}</RNText>
-                <RNText style={[styles.cardDesc, { color: colors.textSecondary }]}>support@invpro.com</RNText>
+                <AppText variant="caption" weight="bold" style={[styles.cardTag, { color: colors.textSecondary }]} numberOfLines={1}>{t('support.email_channel')}</AppText>
+                <AppText variant="title" weight="bold" style={[styles.cardMain, { color: colors.text }]} numberOfLines={2}>{t('support.direct_support')}</AppText>
+                <AppText variant="body-sm" weight="medium" style={[styles.cardDesc, { color: colors.textSecondary }]} numberOfLines={2}>support@invpro.com</AppText>
               </View>
               <View style={styles.extIcon}>
                 <ExternalLink size={18} color={colors.border} />
@@ -70,9 +66,9 @@ const SupportCenter = () => {
                  <Phone color={colors.text} size={28} />
               </View>
               <View style={styles.cardInfo}>
-                <RNText style={[styles.cardTag, { color: colors.textSecondary }]}>{t('support.voice_terminal')}</RNText>
-                <RNText style={[styles.cardMain, { color: colors.text }]}>{t('support.priority_voice')}</RNText>
-                <RNText style={[styles.cardDesc, { color: colors.textSecondary }]}>{t('support.voice_hours')}</RNText>
+                <AppText variant="caption" weight="bold" style={[styles.cardTag, { color: colors.textSecondary }]} numberOfLines={1}>{t('support.voice_terminal')}</AppText>
+                <AppText variant="title" weight="bold" style={[styles.cardMain, { color: colors.text }]} numberOfLines={2}>{t('support.priority_voice')}</AppText>
+                <AppText variant="body-sm" weight="medium" style={[styles.cardDesc, { color: colors.textSecondary }]} numberOfLines={2}>{t('support.voice_hours')}</AppText>
               </View>
               <View style={styles.extIcon}>
                 <ExternalLink size={18} color={colors.border} />
@@ -83,29 +79,23 @@ const SupportCenter = () => {
           <Animated.View entering={FadeInDown.delay(400).duration(500)}>
             <View style={[styles.infoBanner, { backgroundColor: colors.text + '05' }]}>
                <Headphones size={20} color={colors.text} />
-               <RNText style={[styles.bannerText, { color: colors.textSecondary }]}>
+               <AppText variant="body-sm" weight="medium" style={[styles.bannerText, { color: colors.textSecondary }]} numberOfLines={3}>
                  {t('support.banner_text')}
-               </RNText>
+               </AppText>
             </View>
           </Animated.View>
 
           <View style={styles.footerNode}>
-             <RNText style={[styles.footerLabel, { color: colors.textSecondary }]}>{t('support.orchestration')} v4.2.0</RNText>
-             <RNText style={[styles.footerSub, { color: colors.textSecondary }]}>{t('support.cloud_sync')}</RNText>
+             <AppText variant="caption" weight="bold" style={[styles.footerLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('support.orchestration')} v4.2.0</AppText>
+             <AppText variant="caption" weight="medium" style={[styles.footerSub, { color: colors.textSecondary }]} numberOfLines={1}>{t('support.cloud_sync')}</AppText>
           </View>
         </ScrollView>
       </Animated.View>
     </View>
-  );
-};
+   );
+ };
 
-// Internal local wrap to avoid ScrollView issue since caller might wrap it
-const ScrollView = (props: any) => {
-  const { ScrollView: RNScrollView } = require('react-native');
-  return <RNScrollView {...props} />;
-};
-
-const styles = StyleSheet.create({
+ const styles = StyleSheet.create({
   container: { flex: 1 },
   glowCircle: {
     position: 'absolute',
@@ -122,14 +112,12 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
   },
   headerSub: {
-    fontSize: 12,
     fontFamily: Fonts.semibold,
     textTransform: 'uppercase',
     letterSpacing: 1.5,
     marginBottom: 4,
   },
   headerTitle: {
-    fontSize: 28,
     fontFamily: Fonts.bold,
   },
   scrollContent: {
@@ -156,18 +144,15 @@ const styles = StyleSheet.create({
     marginLeft: 20,
   },
   cardTag: {
-    fontSize: 10,
     fontFamily: Fonts.bold,
     letterSpacing: 1,
     marginBottom: 4,
   },
   cardMain: {
-    fontSize: 18,
     fontFamily: Fonts.bold,
     marginBottom: 2,
   },
   cardDesc: {
-    fontSize: 13,
     fontFamily: Fonts.medium,
   },
   extIcon: {
@@ -183,7 +168,6 @@ const styles = StyleSheet.create({
   },
   bannerText: {
     flex: 1,
-    fontSize: 12,
     lineHeight: 18,
     fontFamily: Fonts.medium,
     fontStyle: 'italic',
@@ -193,12 +177,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   footerLabel: {
-    fontSize: 12,
     fontFamily: Fonts.bold,
     marginBottom: 4,
   },
   footerSub: {
-    fontSize: 11,
     fontFamily: Fonts.medium,
     opacity: 0.6,
   },

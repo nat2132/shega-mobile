@@ -1,7 +1,6 @@
-import React from 'react';
+﻿import React from 'react';
 import { 
   View, 
-  Text as RNText, 
   StyleSheet, 
   TouchableOpacity, 
   Image, 
@@ -21,6 +20,7 @@ import { useSettings, PROFILE_IMAGES } from '@/context/SettingsContext';
 import { useSidebar } from '@/context/SidebarContext';
 import { Fonts } from '@/constants/theme';
 import { useNotifications } from '@/hooks/useNotifications';
+import { AppText } from '@/components/ui';
 import Animated, { 
   FadeIn, 
   useAnimatedStyle, 
@@ -63,7 +63,7 @@ const GlobalHeader = () => {
           >
             <View style={[styles.avatarBorder, { borderColor: colors.border }]}>
                <Image 
-                 source={PROFILE_IMAGES[userProfile.avatarIndex]} 
+                 source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} 
                  style={styles.avatarImage} 
                />
             </View>
@@ -87,7 +87,7 @@ const GlobalHeader = () => {
               <Bell size={18} color={colors.text} />
               {notifCount > 0 && (
                 <View style={[styles.badge, { borderColor: theme === 'dark' ? '#000' : '#FFF' }]}>
-                  <RNText style={styles.badgeText}>{notifCount}</RNText>
+                  <AppText variant="micro" weight="bold" style={styles.badgeText}>{notifCount}</AppText>
                 </View>
               )}
             </TouchableOpacity>
@@ -187,7 +187,6 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     color: '#FFF',
-    fontSize: 9,
     fontFamily: Fonts.bold,
     lineHeight: 12,
   },

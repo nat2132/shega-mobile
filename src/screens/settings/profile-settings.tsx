@@ -1,57 +1,88 @@
-import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  Image, 
-  TextInput, 
-  TouchableOpacity, 
-  ScrollView, 
-  Alert,
-  Platform
+﻿import React, { useState } from 'react';
+import {
+  View,
+  StyleSheet,
+  Image,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
 } from 'react-native';
-import { 
-  Pencil, 
-  Check, 
-  ShieldCheck, 
-  Camera, 
-  User, 
-  Building2, 
+import {
+  Check,
+  ShieldCheck,
+  Camera,
+  User,
+  Building2,
   BadgeCheck,
-  ChevronRight,
   Sparkles
 } from 'lucide-react-native';
-import Animated, { 
-  FadeInDown, 
-  FadeIn,
-  FadeInRight,
-  ScaleInCenter
+import Animated, {
+  FadeInDown,
+  ZoomIn
 } from 'react-native-reanimated';
-import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
 import { Fonts } from '@/constants/theme';
 import { useSettings, PROFILE_IMAGES } from '@/context/SettingsContext';
+import { useDialog } from '@/context/DialogContext';
 
+import { router } from 'expo-router';
+import { AppText, AppCard, AppButton, AppListItem, AppRow } from '@/components/ui';
 const EditProfileScreen = () => {
-  const { userProfile, setUserProfile, t, colors, theme } = useSettings();
+  const { userProfile, setUserProfile, t, colors } = useSettings();
+  const dialog = useDialog();
   const [name, setName] = useState(userProfile.name);
   const [businessName, setBusinessName] = useState(userProfile.businessName);
   const [selectedAvatar, setSelectedAvatar] = useState(userProfile.avatarIndex);
+  const [customAvatarUri, setCustomAvatarUri] = useState<string | undefined>(userProfile.avatarUri);
 
-  const handleSave = () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  const handleSave = async () => {
     setUserProfile({
       name,
       businessName,
       avatarIndex: selectedAvatar,
+      avatarUri: customAvatarUri,
     });
-    Alert.alert(t('common.success'), t('profile.updated_success'));
+    const ok = await dialog.confirm({
+      title: t('common.success'),
+      message: t('profile.updated_success'),
+      confirmText: 'OK',
+      iconType: 'success',
+    });
+    if (ok) {
+      router.replace('/dashboard');
+    }
   };
 
   const handleSelectAvatar = (index: number) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedAvatar(index);
+    setCustomAvatarUri(undefined);
   };
+
+  const handlePickImage = async () => {
+    Haptics.selectionAsync();
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
+      await dialog.alert({ title: t('permission.required'), message: t('permission.library_message'), iconType: 'info' });
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      setCustomAvatarUri(result.assets[0].uri);
+      setSelectedAvatar(-1); // -1 indicates custom image is active
+    }
+  };
+
+  const avatarSource = customAvatarUri
+    ? { uri: customAvatarUri }
+    : PROFILE_IMAGES[selectedAvatar >= 0 ? selectedAvatar : 0];
 
   return (
     <ScrollView 
@@ -62,9 +93,9 @@ const EditProfileScreen = () => {
       {/* Elite Profile Banner */}
       <View style={styles.bannerContainer}>
         <View style={[styles.bannerWash, { backgroundColor: colors.text + '05' }]} />
-        <Animated.View entering={ScaleInCenter} style={styles.avatarWrapper}>
+        <Animated.View entering={ZoomIn} style={styles.avatarWrapper}>
            <Image 
-             source={PROFILE_IMAGES[selectedAvatar]} 
+             source={avatarSource} 
              style={[styles.mainAvatar, { borderColor: colors.background }]} 
            />
            <View style={[styles.verifiedBadge, { backgroundColor: colors.primary }]}>
@@ -72,18 +103,18 @@ const EditProfileScreen = () => {
            </View>
            <TouchableOpacity 
              style={[styles.pencilIcon, { backgroundColor: colors.text }]}
-             onPress={() => Haptics.selectionAsync()}
+             onPress={handlePickImage}
            >
              <Camera size={16} color={colors.background} />
            </TouchableOpacity>
         </Animated.View>
-        <Text style={[styles.profileTitle, { color: colors.text }]}>{userProfile.businessName || 'Elite User'}</Text>
-        <Text style={[styles.profileSub, { color: colors.textSecondary }]}>Verified Identity</Text>
+        <AppText variant="heading-lg" weight="bold" style={[styles.profileTitle, { color: colors.text }]} numberOfLines={2}>{userProfile.businessName || t('profile.elite_user')}</AppText>
+        <AppText variant="caption" weight="bold" style={[styles.profileSub, { color: colors.textSecondary }]} numberOfLines={1}>{t('profile.verified_identity')}</AppText>
       </View>
 
       <Animated.View entering={FadeInDown.delay(200)} style={styles.sectionHeader}>
         <Sparkles size={16} color={colors.primary} />
-        <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>{t('settings.choose_avatar')}</Text>
+        <AppText variant="caption" weight="bold" style={[styles.sectionSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>{t('settings.choose_avatar')}</AppText>
       </Animated.View>
 
       <View style={styles.avatarGrid}>
@@ -93,11 +124,11 @@ const EditProfileScreen = () => {
               onPress={() => handleSelectAvatar(i)}
               style={[
                 styles.smallAvatarWrapper, 
-                selectedAvatar === i && [styles.selectedAvatarWrapper, { borderColor: colors.primary }]
+                selectedAvatar === i && !customAvatarUri && [styles.selectedAvatarWrapper, { borderColor: colors.primary }]
               ]}
             >
               <Image source={img} style={styles.smallAvatar} />
-              {selectedAvatar === i && (
+              {selectedAvatar === i && !customAvatarUri && (
                 <View style={[styles.checkBadge, { backgroundColor: colors.primary }]}>
                   <Check size={8} color={colors.background} strokeWidth={4} />
                 </View>
@@ -105,17 +136,36 @@ const EditProfileScreen = () => {
             </TouchableOpacity>
           </Animated.View>
         ))}
+        {/* Custom Image Upload Button */}
+        <Animated.View entering={FadeInDown.delay(1300)}>
+          <TouchableOpacity 
+            onPress={handlePickImage}
+            style={[
+              styles.smallAvatarWrapper, 
+              customAvatarUri && [styles.selectedAvatarWrapper, { borderColor: colors.primary }]
+            ]}
+          >
+            <View style={[styles.smallAvatar, { backgroundColor: colors.border, justifyContent: 'center', alignItems: 'center' }]}>
+              <Camera size={22} color={colors.textSecondary} />
+            </View>
+            {customAvatarUri && (
+              <View style={[styles.checkBadge, { backgroundColor: colors.primary }]}>
+                <Check size={8} color={colors.background} strokeWidth={4} />
+              </View>
+            )}
+          </TouchableOpacity>
+        </Animated.View>
       </View>
 
       {/* Verification Nodes */}
       <Animated.View entering={FadeInDown.delay(600)} style={styles.formContainer}>
         <View style={[styles.formCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.formLabel, { color: colors.textSecondary }]}>{t('settings.personal_info').toUpperCase()}</Text>
+          <AppText variant="caption" weight="bold" style={[styles.formLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('settings.personal_info').toUpperCase()}</AppText>
           
           <View style={styles.inputNode}>
             <View style={styles.nodeHeader}>
                <User size={14} color={colors.textSecondary} />
-               <Text style={[styles.nodeLabel, { color: colors.textSecondary }]}>{t('profile.name')}</Text>
+               <AppText variant="caption" weight="bold" style={[styles.nodeLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('profile.name')}</AppText>
             </View>
             <TextInput 
               style={[styles.input, { color: colors.text, borderColor: colors.border }]} 
@@ -130,7 +180,7 @@ const EditProfileScreen = () => {
           <View style={styles.inputNode}>
             <View style={styles.nodeHeader}>
                <Building2 size={14} color={colors.textSecondary} />
-               <Text style={[styles.nodeLabel, { color: colors.textSecondary }]}>{t('profile.business')}</Text>
+               <AppText variant="caption" weight="bold" style={[styles.nodeLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('profile.business')}</AppText>
             </View>
             <TextInput 
               style={[styles.input, { color: colors.text, borderColor: colors.border }]} 
@@ -149,10 +199,10 @@ const EditProfileScreen = () => {
           activeOpacity={0.8}
         >
           <ShieldCheck size={20} color={colors.background} />
-          <Text style={[styles.saveButtonText, { color: colors.background }]}>{t('common.save')}</Text>
+          <AppText variant="body" weight="bold" style={[styles.saveButtonText, { color: colors.background }]} numberOfLines={1}>{t('common.save')}</AppText>
         </TouchableOpacity>
         
-        <Text style={[styles.footerText, { color: colors.textSecondary }]}>{t('settings.profile_footer')}</Text>
+        <AppText variant="caption" weight="medium" style={[styles.footerText, { color: colors.textSecondary }]} numberOfLines={3}>{t('settings.profile_footer')}</AppText>
       </Animated.View>
       
       <View style={{ height: 60 }} />

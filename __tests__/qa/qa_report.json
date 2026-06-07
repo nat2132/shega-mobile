@@ -1,0 +1,282 @@
+{
+  "metadata": {
+    "timestamp": "2026-05-30T20:31:09.616256",
+    "scale": 1000,
+    "db_path": "C:\\Users\\Natol\\Desktop\\Projects\\shega-mobile\\__tests__\\qa\\..\\..\\shegabe.db",
+    "app_version": "1.0.0"
+  },
+  "summary": {
+    "total_tests": 51,
+    "passed": 24,
+    "failed": 1,
+    "warnings": 3
+  },
+  "performance": {
+    "SELECT * FROM items (full scan)": {
+      "avg": 0.0058,
+      "min": 0.00555,
+      "max": 0.00598
+    },
+    "SELECT * FROM sales (full scan)": {
+      "avg": 0.01169,
+      "min": 0.0087,
+      "max": 0.01432
+    },
+    "SELECT * FROM expenses (full scan)": {
+      "avg": 0.00208,
+      "min": 0.00138,
+      "max": 0.00316
+    },
+    "Search items by name (LIKE)": {
+      "avg": 0.00047,
+      "min": 0.00034,
+      "max": 0.00066
+    },
+    "Search sales by item name (JOIN)": {
+      "avg": 0.00102,
+      "min": 0.00092,
+      "max": 0.00119
+    },
+    "Search customers by name": {
+      "avg": 0.00052,
+      "min": 0.00046,
+      "max": 0.00062
+    },
+    "Filter items by category": {
+      "avg": 0.0008,
+      "min": 0.00049,
+      "max": 0.00123
+    },
+    "Filter sales by date": {
+      "avg": 0.00073,
+      "min": 0.00063,
+      "max": 0.00082
+    },
+    "Filter sales by payment status": {
+      "avg": 0.00224,
+      "min": 0.00207,
+      "max": 0.00258
+    },
+    "Filter expenses by category": {
+      "avg": 0.00039,
+      "min": 0.00035,
+      "max": 0.00046
+    },
+    "Dashboard stats (today)": {
+      "avg": 0.00142,
+      "min": 0.00081,
+      "max": 0.00224
+    },
+    "Top selling items": {
+      "avg": 0.00757,
+      "min": 0.00696,
+      "max": 0.0087
+    },
+    "Category distribution": {
+      "avg": 0.00081,
+      "min": 0.00074,
+      "max": 0.00093
+    },
+    "Activity feed (UNION ALL of 4 tables)": {
+      "avg": 0.00127,
+      "min": 0.00102,
+      "max": 0.0015
+    },
+    "Monthly revenue trend": {
+      "avg": 0.00295,
+      "min": 0.00182,
+      "max": 0.00457
+    },
+    "Sort items by price descending": {
+      "avg": 0.00734,
+      "min": 0.00675,
+      "max": 0.00791
+    },
+    "Sort sales by amount descending": {
+      "avg": 0.01288,
+      "min": 0.01209,
+      "max": 0.01419
+    },
+    "Sort sales by date descending": {
+      "avg": 0.01393,
+      "min": 0.01245,
+      "max": 0.01542
+    },
+    "Weekly sales chart (7 days)": {
+      "avg": 0.001,
+      "min": 0.0008,
+      "max": 0.00111
+    },
+    "Monthly sales chart": {
+      "avg": 0.00138,
+      "min": 0.00125,
+      "max": 0.00162
+    },
+    "Yearly sales chart (12 months)": {
+      "avg": 0.00263,
+      "min": 0.00243,
+      "max": 0.00297
+    }
+  },
+  "bugs": [
+    {
+      "id": "BUG-001",
+      "severity": "High",
+      "title": "Foreign key constraints not enabled",
+      "category": "Database Schema",
+      "steps_to_reproduce": "Check PRAGMA foreign_keys setting in database initialization",
+      "expected_result": "Foreign keys should be enabled for referential integrity",
+      "actual_result": "PRAGMA foreign_keys = 0",
+      "recommended_fix": "Add \"PRAGMA foreign_keys = ON\" at database initialization"
+    },
+    {
+      "id": "BUG-002",
+      "severity": "High",
+      "title": "1 items reference non-existent categories",
+      "category": "Data Integrity",
+      "steps_to_reproduce": "Query items with invalid categoryId foreign keys",
+      "expected_result": "All items should reference valid categories",
+      "actual_result": "1 items have invalid categoryId",
+      "recommended_fix": "Add ON DELETE SET NULL or validate categoryId on insert"
+    },
+    {
+      "id": "BUG-003",
+      "severity": "Critical",
+      "title": "2 SQL queries use string interpolation instead of parameterized queries",
+      "category": "Security",
+      "steps_to_reproduce": "Search db.ts for execSync() with ${} template literals",
+      "expected_result": "All queries should use parameterized statements with ? placeholders",
+      "actual_result": "Found 2 execSync() calls using string interpolation",
+      "recommended_fix": "Replace all execSync() template literals with parameterized runSync() or prepareSync() statements"
+    }
+  ],
+  "integrity": {},
+  "coverage": {
+    "schema_tables": [
+      "categories",
+      "items",
+      "item_packs",
+      "sales",
+      "expenses",
+      "adjustments",
+      "returns"
+    ],
+    "adjustments_columns": [
+      "id",
+      "itemId",
+      "type",
+      "oldValue",
+      "newValue",
+      "quantity",
+      "unitType",
+      "reason",
+      "date",
+      "createdAt"
+    ],
+    "categories_columns": [
+      "id",
+      "name",
+      "icon",
+      "isCustom"
+    ],
+    "expenses_columns": [
+      "id",
+      "name",
+      "amount",
+      "category",
+      "date",
+      "isRecurring",
+      "frequency",
+      "nextBillingDate",
+      "createdAt"
+    ],
+    "item_packs_columns": [
+      "id",
+      "itemId",
+      "packNumber",
+      "initialQuantity",
+      "currentQuantity",
+      "unit",
+      "status"
+    ],
+    "items_columns": [
+      "id",
+      "name",
+      "categoryId",
+      "companyName",
+      "purchaseUnit",
+      "baseUnit",
+      "unitsPerPack",
+      "totalPackQuantity",
+      "totalBaseQuantity",
+      "packPurchasePrice",
+      "basePurchasePrice",
+      "baseSellingPrice",
+      "packSellingPrice",
+      "allowSellByBaseUnit",
+      "allowSellByPackUnit",
+      "expiryDate",
+      "qualityGrade",
+      "notes",
+      "isCredit",
+      "supplierPhone",
+      "supplierAccount",
+      "createdAt"
+    ],
+    "returns_columns": [
+      "id",
+      "saleId",
+      "itemId",
+      "quantity",
+      "unit",
+      "unitType",
+      "totalRefund",
+      "reason",
+      "returnDate",
+      "createdAt"
+    ],
+    "sales_columns": [
+      "id",
+      "itemId",
+      "quantity",
+      "unit",
+      "unitType",
+      "discount",
+      "vat",
+      "totalPrice",
+      "paymentMethod",
+      "paymentStatus",
+      "customerName",
+      "customerPhone",
+      "packId",
+      "dueDate",
+      "paidAmount",
+      "createdAt"
+    ],
+    "sqlite_sequence_columns": [
+      "name",
+      "seq"
+    ],
+    "categories_count": 12,
+    "items_count": 1000,
+    "sales_count": 2500,
+    "expenses_count": 750,
+    "adjustments_count": 500,
+    "returns_count": 200,
+    "item_packs_count": 500
+  },
+  "final_score": 10,
+  "recommendations": [
+    "CRITICAL: Fix SQL injection vulnerabilities before launch",
+    "HIGH: Address missing foreign keys and validation gaps",
+    "Score is critical - major rework required",
+    "Add PRAGMA foreign_keys = ON to prevent orphaned records",
+    "Replace execSync() string interpolation with parameterized queries",
+    "Add CHECK constraints for non-negative stock quantities and prices",
+    "Wrap sale+stock-update in transactions to prevent race conditions",
+    "Add configurable low-stock threshold (currently hardcoded to < 10)",
+    "Add input sanitization for all user text inputs",
+    "Add default pagination limits to all filtered queries",
+    "Create database indexes for: sales.createdAt, items.name, sales.customerName"
+  ]
+}

@@ -1,14 +1,14 @@
-import { Fonts } from '@/constants/theme';
+﻿import { Fonts } from '@/constants/theme';
 import {
   Dimensions,
   StyleSheet,
-  Text as RNText,
   TouchableOpacity,
   View,
   Image,
 } from 'react-native';
 import { useEffect } from 'react';
 import { MoveLeft, MoveRight, CircleCheckBig } from 'lucide-react-native';
+import { AppText } from '@/components/ui';
 import Animated, { 
   FadeInDown, 
   FadeInUp, 
@@ -21,6 +21,12 @@ import Animated, {
 } from 'react-native-reanimated';
 
 const { width } = Dimensions.get('window');
+
+interface OnboardingScreenProps {
+  onNext?: () => void;
+  onBack?: () => void;
+  onSkip?: () => void;
+}
 
 const SalesOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNext, onBack, onSkip }) => {
   const moneyY = useSharedValue(0);
@@ -43,7 +49,7 @@ const SalesOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNext, onBack
       -1,
       true
     ));
-  }, []);
+  }, [moneyY, receiptY, checkY]);
 
   const animatedMoneyStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: moneyY.value }],
@@ -60,7 +66,7 @@ const SalesOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNext, onBack
   return (
     <View style={styles.container}>
       <TouchableOpacity style={styles.skipContainer} onPress={onSkip}>
-        <RNText style={styles.skipText}>SKIP</RNText>
+        <AppText style={styles.skipText} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>SKIP</AppText>
       </TouchableOpacity>
 
       <View style={styles.mainContent}>
@@ -101,10 +107,10 @@ const SalesOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNext, onBack
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(200).duration(800)} style={styles.textNode}>
-          <RNText style={styles.title}>Record Sales</RNText>
-          <RNText style={styles.subtitle}>
+          <AppText style={styles.title} variant="heading-lg" weight="bold" numberOfLines={2}>Record Sales</AppText>
+          <AppText style={styles.subtitle} variant="body-lg" weight="medium" numberOfLines={3}>
             Easily track every transaction{'\n'}as it happens.
-          </RNText>
+          </AppText>
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(400).duration(800)} style={styles.pagination}>
@@ -127,7 +133,7 @@ const SalesOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNext, onBack
             onPress={onNext}
             activeOpacity={0.8}
           >
-            <RNText style={styles.nextText}>Next</RNText>
+            <AppText style={styles.nextText} variant="body" weight="bold" numberOfLines={1}>Next</AppText>
             <MoveRight size={20} color="#FFF" />
           </TouchableOpacity>
         </Animated.View>
@@ -148,7 +154,6 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   skipText: {
-    fontSize: 14,
     fontFamily: Fonts.bold,
     color: '#000',
     letterSpacing: 1,
@@ -248,14 +253,12 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   title: {
-    fontSize: 34,
     fontFamily: Fonts.extrabold,
     color: '#000',
     textAlign: 'center',
     marginBottom: 16,
   },
   subtitle: {
-    fontSize: 18,
     color: '#777',
     textAlign: 'center',
     lineHeight: 28,
@@ -314,7 +317,6 @@ const styles = StyleSheet.create({
   },
   nextText: {
     color: '#FFF',
-    fontSize: 18,
     fontFamily: Fonts.bold,
     letterSpacing: 0.5,
   },

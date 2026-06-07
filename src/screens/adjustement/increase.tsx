@@ -1,12 +1,10 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { 
   View, 
-  Text, 
   StyleSheet, 
   TextInput, 
   TouchableOpacity, 
   ScrollView, 
-  Alert, 
   FlatList,
   Platform,
   Modal,
@@ -29,7 +27,6 @@ import Animated, {
   FadeInDown, 
   FadeInUp,
   FadeIn,
-  ScaleInCenter,
   useAnimatedStyle,
   useSharedValue,
   withSpring
@@ -39,12 +36,14 @@ import * as Haptics from 'expo-haptics';
 import { Fonts } from '@/constants/theme';
 import { searchInventory, insertAdjustment } from '@/database/db';
 import { useSettings } from '@/context/SettingsContext';
+import { useDialog } from '@/context/DialogContext';
 import BusinessSuccessModal, { BusinessSuccessDetails } from '@/components/BusinessSuccessModal';
 import { CustomDatePicker } from '@/components/CustomDatePicker';
 import { Calendar } from 'lucide-react-native';
-
+import { AppText, AppListItem, AppRow, AppCard } from '@/components/ui';
 const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increase' | 'decrease', onComplete?: () => void }) => {
   const { colors, theme, t } = useSettings();
+  const dialog = useDialog();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [selectedItem, setSelectedItem] = useState<any>(null);
@@ -83,16 +82,67 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
   };
 
   const handleConfirm = async () => {
-    if (!selectedItem || !newPrice) {
-      Alert.alert(t('common.error'), t('adj.select_asset'));
+    if (!selectedItem) {
+      await dialog.alert({
+        title: t('common.error'),
+        message: t('adj.select_asset'),
+        iconType: 'danger',
+      });
+      return;
+    }
+
+    const price = parseFloat(newPrice);
+    if (!newPrice || isNaN(price) || price <= 0) {
+      await dialog.alert({
+        title: t('common.error'),
+        message: t('adj.valid_price'),
+        iconType: 'danger',
+      });
+      return;
+    }
+
+    const oldPrice = selectedItem.baseSellingPrice;
+    if (price === oldPrice) {
+      await dialog.alert({
+        title: t('common.error'),
+        message: t('adj.no_price_change'),
+        iconType: 'danger',
+      });
+      return;
+    }
+
+    if (mode === 'increase' && price < oldPrice) {
+      await dialog.alert({
+        title: t('common.error'),
+        message: t('adj.increase_higher'),
+        iconType: 'danger',
+      });
+      return;
+    }
+
+    if (mode === 'decrease' && price > oldPrice) {
+      await dialog.alert({
+        title: t('common.error'),
+        message: t('adj.decrease_lower'),
+        iconType: 'danger',
+      });
+      return;
+    }
+
+    if (!reason?.trim()) {
+      await dialog.alert({
+        title: t('common.error'),
+        message: t('adj.select_reason'),
+        iconType: 'danger',
+      });
       return;
     }
 
     const adjData = {
       itemId: selectedItem.id,
       type: mode === 'increase' ? 'price_up' : 'price_down',
-      oldValue: selectedItem.baseSellingPrice,
-      newValue: parseFloat(newPrice),
+      oldValue: oldPrice,
+      newValue: price,
       quantity: 0,
       unitType: 'base',
       reason: reason || (mode === 'increase' ? t('adj.reason_market') : t('adj.reason_policy')),
@@ -108,7 +158,7 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
         title: mode === 'increase' ? t('adjustment.price_increased') : t('adjustment.price_decreased'),
         subtitle: mode === 'increase' ? t('adj.elevation_complete') : t('adj.reduction_applied'),
         mainLabel: t('adj.new_price'),
-        mainValue: `${parseFloat(newPrice).toLocaleString()} ETB`,
+        mainValue: `${parseFloat(newPrice).toLocaleString()} ${t('common.etb')}`,
         secondaryLabel: t('adj.change'),
         secondaryValue: `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`,
         iconType: mode === 'increase' ? 'price_up' : 'price_down',
@@ -116,7 +166,11 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
       });
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert(t('common.error'), t('adj.record_failed'));
+      await dialog.alert({
+        title: t('common.error'),
+        message: t('adj.record_failed'),
+        iconType: 'danger',
+      });
     }
   };
 
@@ -136,11 +190,11 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
       <Animated.View entering={FadeInDown.duration(600)} style={styles.header}>
         <View style={styles.headerRow}>
            <View>
-              <Text style={[styles.headerSub, { color: colors.textSecondary }]}>{t('adj.asset_valuation')}</Text>
-              <Text style={[styles.headerTitle, { color: colors.text }]}>{t('adj.price_rectify')}</Text>
-           </View>
-           <View style={[styles.modeBadge, { backgroundColor: themeColor + '15' }]}>
-              <Text style={[styles.modeText, { color: themeColor }]}>{t('common.' + mode).toUpperCase()}</Text>
+               <AppText variant="body-sm" weight="bold" transform="uppercase" style={[styles.headerSub, { color: colors.textSecondary }]} numberOfLines={1}>{t('adj.asset_valuation')}</AppText>
+               <AppText variant="display-lg" weight="bold" style={[styles.headerTitle, { color: colors.text }]} numberOfLines={2}>{t('adj.price_rectify')}</AppText>
+            </View>
+            <View style={[styles.modeBadge, { backgroundColor: themeColor + '15' }]}>
+               <AppText variant="micro" weight="bold" shrink={false} style={[styles.modeText, { color: themeColor }]} numberOfLines={1}>{t('common.' + mode).toUpperCase()}</AppText>
            </View>
         </View>
       </Animated.View>
@@ -151,26 +205,26 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
           <View style={[styles.impactCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.impactMain}>
                <View style={styles.impactSide}>
-                  <Text style={[styles.impactLabel, { color: colors.textSecondary }]}>{t('adj.original')}</Text>
-                  <Text style={[styles.impactPrice, { color: colors.textSecondary }]}>{selectedItem.baseSellingPrice.toLocaleString()} <Text style={styles.smallCurr}>{t('common.etb')}</Text></Text>
+                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.impactLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('adj.original')}</AppText>
+                   <AppText variant="title" weight="bold" style={[styles.impactPrice, { color: colors.textSecondary }]} numberOfLines={1}>{selectedItem.baseSellingPrice.toLocaleString()} <AppText variant="micro" weight="bold" style={styles.smallCurr}>{t('common.etb')}</AppText></AppText>
                </View>
                <View style={[styles.impactCenter, { backgroundColor: themeColor }]}>
                   <TrendingUp size={24} color={colors.background} style={{ transform: [{ rotate: mode === 'increase' ? '0deg' : '180deg' }] }} />
                </View>
                <View style={styles.impactSide}>
-                  <Text style={[styles.impactLabel, { color: colors.textSecondary }]}>{t('adj.new_price')}</Text>
-                  <Text style={[styles.impactPrice, { color: themeColor }]}>{(parseFloat(newPrice) || 0).toLocaleString()} <Text style={styles.smallCurr}>{t('common.etb')}</Text></Text>
+                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.impactLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('adj.new_price')}</AppText>
+                   <AppText variant="title" weight="bold" style={[styles.impactPrice, { color: themeColor }]} numberOfLines={1}>{(parseFloat(newPrice) || 0).toLocaleString()} <AppText variant="micro" weight="bold" style={styles.smallCurr}>{t('common.etb')}</AppText></AppText>
                </View>
             </View>
             
             <View style={[styles.impactFooter, { borderTopColor: colors.border }]}>
                <View style={styles.footerItem}>
                   <Activity size={16} color={themeColor} />
-                  <Text style={[styles.footerText, { color: themeColor }]}>
-                     {val >= 0 ? '+' : ''}{val.toLocaleString()} {t('common.etb')} ({pct >= 0 ? '+' : ''}{pct.toFixed(1)}%)
-                  </Text>
-               </View>
-               <Text style={[styles.footerSub, { color: colors.textSecondary }]}>{t('adj.market_impact')}</Text>
+                   <AppText variant="body" weight="bold" style={[styles.footerText, { color: themeColor }]} numberOfLines={1}>
+                      {val >= 0 ? '+' : ''}{val.toLocaleString()} {t('common.etb')} ({pct >= 0 ? '+' : ''}{pct.toFixed(1)}%)
+                   </AppText>
+                </View>
+                <AppText variant="caption" weight="medium" style={[styles.footerSub, { color: colors.textSecondary }]} numberOfLines={1}>{t('adj.market_impact')}</AppText>
             </View>
           </View>
         ) : (
@@ -178,7 +232,7 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
             <View style={[styles.pIconBox, { backgroundColor: colors.border + '15' }]}>
                <Package color={colors.textSecondary} size={32} />
             </View>
-            <Text style={[styles.placeholderText, { color: colors.textSecondary }]}>{t('adj.select_asset')}</Text>
+            <AppText variant="body-lg" weight="medium" align="center" style={[styles.placeholderText, { color: colors.textSecondary }]} numberOfLines={2}>{t('adj.select_asset')}</AppText>
           </View>
         )}
       </Animated.View>
@@ -188,7 +242,7 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
         <View style={styles.inputGroup}>
            <View style={styles.labelRow}>
               <Search size={14} color={colors.textSecondary} />
-              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{t('adj.search_asset')}</Text>
+              <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('adj.search_asset')}</AppText>
            </View>
            <View style={[styles.inputContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <TextInput 
@@ -214,10 +268,10 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
                        <Package size={18} color={colors.text} />
                      </View>
                      <View style={styles.resultInfo}>
-                        <Text style={[styles.resultText, { color: colors.text }]}>{item.name || 'Unknown'}</Text>
-                        <Text style={[styles.resultSubtext, { color: colors.textSecondary }]}>{item.categoryName || 'General'}</Text>
+                        <AppText variant="body-lg" weight="bold" style={[styles.resultText, { color: colors.text }]} numberOfLines={1}>{item.name || 'Unknown'}</AppText>
+                        <AppText variant="caption" weight="medium" style={[styles.resultSubtext, { color: colors.textSecondary }]} numberOfLines={1}>{item.categoryName || 'General'}</AppText>
                      </View>
-                     <Text style={[styles.resultPrice, { color: colors.primary }]}>{item.baseSellingPrice || 0} ETB</Text>
+                     <AppText variant="body" weight="bold" shrink={false} style={[styles.resultPrice, { color: colors.primary }]} numberOfLines={1}>{item.baseSellingPrice || 0} {t('common.etb')}</AppText>
                    </TouchableOpacity>
                  ))}
                </ScrollView>
@@ -231,7 +285,7 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
                <View style={[styles.inputGroup, { flex: 1 }]}>
                   <View style={styles.labelRow}>
                      <Zap size={14} color={colors.textSecondary} />
-                     <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{t('adj.precision_price')}</Text>
+                     <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('adj.precision_price')}</AppText>
                   </View>
                   <View style={[styles.inputContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
                      <TextInput 
@@ -247,12 +301,12 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
             <View style={styles.inputGroup}>
                <View style={styles.labelRow}>
                   <Info size={14} color={colors.textSecondary} />
-                  <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{t('adj.rectification_reason')}</Text>
+                  <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('adj.rectification_reason')}</AppText>
                </View>
                <TouchableOpacity style={[styles.dropdown, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => Haptics.selectionAsync()}>
-                  <Text style={[styles.dropdownText, { color: reason ? colors.text : colors.textSecondary }]}>
+                  <AppText variant="body-lg" weight="medium" style={[styles.dropdownText, { color: reason ? colors.text : colors.textSecondary }]} numberOfLines={1}>
                      {reason || t('adj.select_reason_placeholder')}
-                  </Text>
+                  </AppText>
                   <ChevronDown color={colors.textSecondary} size={20} />
                </TouchableOpacity>
                
@@ -263,7 +317,7 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
                       style={[styles.reasonChip, { backgroundColor: colors.card, borderColor: reason === r ? themeColor : colors.border }]} 
                       onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setReason(r); }}
                     >
-                      <Text style={[styles.chipText, { color: reason === r ? themeColor : colors.textSecondary }]}>{r}</Text>
+                      <AppText variant="caption" weight="bold" shrink={false} style={[styles.chipText, { color: reason === r ? themeColor : colors.textSecondary }]} numberOfLines={1}>{r}</AppText>
                     </TouchableOpacity>
                   ))}
                </View>
@@ -276,10 +330,10 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
             >
               <Calendar size={18} color={themeColor} style={{ marginRight: 10 }} />
               <View style={{ flex: 1 }}>
-                <Text style={[{ fontSize: 11, fontFamily: Fonts.semibold, color: colors.textSecondary, textTransform: 'uppercase' }]}>{t('common.record_date') || 'Record Date'}</Text>
-                <Text style={[{ fontSize: 16, fontFamily: Fonts.bold, color: recordDate ? colors.text : colors.textSecondary, marginTop: 2 }]}>
+                <AppText variant="micro" weight="semibold" transform="uppercase" style={{ color: colors.textSecondary }} numberOfLines={1}>{t('common.record_date') || 'Record Date'}</AppText>
+                <AppText variant="subtitle" weight="bold" style={{ color: recordDate ? colors.text : colors.textSecondary, marginTop: 2 }} numberOfLines={1}>
                   {recordDate || (t('common.today') || 'Today (Default)')}
-                </Text>
+                </AppText>
               </View>
             </TouchableOpacity>
 
@@ -289,15 +343,15 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
               activeOpacity={0.8}
             >
               <ShieldCheck color={colors.background} size={20} />
-              <Text style={[styles.confirmText, { color: colors.background }]}>{t('adj.commit_adjustment')}</Text>
+              <AppText variant="subtitle" weight="bold" style={[styles.confirmText, { color: colors.background }]} numberOfLines={1}>{t('adj.commit_adjustment')}</AppText>
             </TouchableOpacity>
           </>
         )}
       </Animated.View>
 
-      <Text style={[styles.footer, { color: colors.textSecondary }]}>
+      <AppText variant="micro" weight="bold" align="center" style={[styles.footer, { color: colors.textSecondary }]} numberOfLines={2}>
         {t('adj.security_footer')} 
-      </Text>
+      </AppText>
       
       <View style={{ height: 100 }} />
 
@@ -365,6 +419,9 @@ const styles = StyleSheet.create({
   confirmBtn: { height: 65, borderRadius: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 25 },
   confirmText: { fontSize: 16, fontFamily: Fonts.bold },
   footer: { textAlign: 'center', fontSize: 10, fontFamily: Fonts.bold, letterSpacing: 2, marginTop: 40, lineHeight: 18 },
+  resultIconBox: { width: 36, height: 36, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  resultInfo: { flex: 1, marginLeft: 12 },
+  inputRow: { flexDirection: 'row', alignItems: 'center' },
 });
 
 export default PriceAdjustmentForm;

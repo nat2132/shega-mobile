@@ -1,30 +1,116 @@
-import React from 'react';
-import { 
-  View, 
-  Text as RNText, 
-  StyleSheet, 
-  TouchableOpacity, 
+﻿import React, { useCallback, useMemo } from 'react';
+import {
+  View,
+  StyleSheet,
+  TouchableOpacity,
   FlatList,
   Dimensions,
-  Platform 
+  Platform
 } from 'react-native';
 import { Fonts } from '@/constants/theme';
-import { 
-  Package, 
-  Plus, 
-  Minus, 
-  X, 
-  Trash2, 
-  Repeat, 
+import {
+  Package,
+  Plus,
+  Minus,
+  X,
+  Trash2,
+  Repeat,
   ShoppingCart,
   ArrowRight,
   PlusCircle
 } from 'lucide-react-native';
 import { useSettings } from '@/context/SettingsContext';
+import * as Haptics from 'expo-haptics';
 import Animated, { FadeIn, FadeInDown, Layout } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
-
+import { AppText, AppListItem, AppRow, AppCard } from '@/components/ui';
 const { width } = Dimensions.get('window');
+
+const PendingRow = React.memo(({
+  item,
+  index,
+  onUpdate,
+  onRemove,
+}: {
+  item: any;
+  index: number;
+  onUpdate?: (id: string, updates: any) => void;
+  onRemove?: (id: string) => void;
+}) => {
+  const { colors, t } = useSettings();
+  const currentUnitPrice = item.unitType === 'pack' ? item.packSellingPrice : item.baseSellingPrice;
+  const currentUnitLabel = item.unitType === 'pack' ? item.purchaseUnit : item.baseUnit;
+  const lineTotal = (parseFloat(currentUnitPrice) || 0) * Math.max(0, item.quantity || 0);
+
+  const decrement = useCallback(() => {
+    if (item.quantity > 1) onUpdate?.(item.id, { quantity: Math.max(1, (item.quantity || 1) - 1) });
+  }, [item, onUpdate]);
+
+  const increment = useCallback(() => {
+    const maxStock = item.unitType === 'pack'
+      ? Math.floor(item.totalPackQuantity || 0)
+      : Math.floor(item.totalBaseQuantity || 0);
+    if ((item.quantity || 0) >= maxStock) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return;
+    }
+    onUpdate?.(item.id, { quantity: (item.quantity || 0) + 1 });
+  }, [item, onUpdate]);
+
+  const toggleUnit = useCallback(() => {
+    if (item.allowSellByPackUnit && item.allowSellByBaseUnit) {
+      onUpdate?.(item.id, { unitType: item.unitType === 'pack' ? 'base' : 'pack' });
+    }
+  }, [item, onUpdate]);
+
+  const handleRemove = useCallback(() => onRemove?.(item.id), [item.id, onRemove]);
+
+  return (
+    <Animated.View entering={FadeInDown.delay(Math.min(index, 6) * 50).duration(500)}>
+      <View style={[styles.itemCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={styles.cardHeader}>
+          <View style={[styles.iconBox, { backgroundColor: colors.text + '08' }]}>
+            <Package size={20} color={colors.text} />
+          </View>
+          <View style={styles.nameArea}>
+            <AppText variant="body" weight="bold" style={[styles.itemName, { color: colors.text }]} numberOfLines={1}>{item.name}</AppText>
+            <TouchableOpacity
+              style={[styles.unitBadge, { backgroundColor: colors.primary + '15' }]}
+              onPress={toggleUnit}
+            >
+              <Repeat size={10} color={colors.primary} style={{ marginRight: 4 }} />
+              <AppText variant="micro" weight="bold" transform="uppercase" shrink={false} style={[styles.unitBadgeText, { color: colors.primary }]} numberOfLines={1}>{currentUnitLabel}</AppText>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.costArea}>
+            <AppText variant="body" weight="bold" shrink={false} style={[styles.linePrice, { color: colors.text }]} numberOfLines={1}>{lineTotal.toLocaleString()} <AppText variant="caption" weight="medium" shrink={false} style={styles.currency}> {t('common.etb')}</AppText></AppText>
+            <AppText variant="caption" weight="medium" shrink={false} style={[styles.unitPrice, { color: colors.textSecondary }]} numberOfLines={1}>{(parseFloat(currentUnitPrice) || 0).toLocaleString()} / Unit</AppText>
+          </View>
+        </View>
+
+        <View style={[styles.cardFooter, { borderTopColor: colors.border }]}>
+          <View style={[styles.qtyControl, { backgroundColor: colors.background, borderColor: colors.border }]}>
+            <TouchableOpacity style={styles.qtyBtn} onPress={decrement}>
+              <Minus size={14} color={colors.text} />
+            </TouchableOpacity>
+            <AppText variant="body" weight="bold" shrink={false} style={[styles.qtyValue, { color: colors.text }]} numberOfLines={1}>{item.quantity}</AppText>
+            <TouchableOpacity style={styles.qtyBtn} onPress={increment}>
+              <Plus size={14} color={colors.text} />
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.removeBtn, { backgroundColor: '#FF3B3015' }]}
+            onPress={handleRemove}
+          >
+            <Trash2 size={16} color="#FF3B30" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Animated.View>
+  );
+});
+PendingRow.displayName = 'PendingRow';
 
 interface PendingSalesProps {
   items: any[];
@@ -36,118 +122,80 @@ interface PendingSalesProps {
 
 const PendingSales: React.FC<PendingSalesProps> = ({ items, onUpdateItem, onRemoveItem, onAddMore, onFinish }) => {
   const { colors, t, theme } = useSettings();
-  const totalAmount = items.reduce((sum, item) => sum + (item.unitType === 'pack' ? item.packSellingPrice : item.baseSellingPrice) * item.quantity, 0);
+  const safeItems = useMemo(() => (Array.isArray(items) ? items : []), [items]);
+  const totalAmount = useMemo(
+    () => safeItems.reduce((sum, item) => {
+      const price = item.unitType === 'pack' ? (parseFloat(item.packSellingPrice) || 0) : (parseFloat(item.baseSellingPrice) || 0);
+      const qty = Math.max(0, item.quantity || 0);
+      return sum + price * qty;
+    }, 0),
+    [safeItems],
+  );
+
+  const renderItem = useCallback(({ item, index }: { item: any; index: number }) => (
+    <PendingRow
+      item={item}
+      index={index}
+      onUpdate={onUpdateItem}
+      onRemove={onRemoveItem}
+    />
+  ), [onUpdateItem, onRemoveItem]);
+
+  const keyExtractor = useCallback((item: any) => item.id, []);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.headerRow}>
         <View>
-          <RNText style={[styles.headerSub, { color: colors.textSecondary }]}>{t('sale.active_transaction')}</RNText>
-          <RNText style={[styles.header, { color: colors.text }]}>{t('sale.orchestration_ledger')}</RNText>
+          <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.headerSub, { color: colors.textSecondary }]} numberOfLines={1}>{t('sale.active_transaction')}</AppText>
+          <AppText variant="title" weight="bold" style={[styles.header, { color: colors.text }]} numberOfLines={2}>{t('sale.orchestration_ledger')}</AppText>
         </View>
         <View style={[styles.badgeNode, { backgroundColor: colors.text + '08' }]}>
-           <RNText style={[styles.itemCount, { color: colors.text }]}>{items.length} Units</RNText>
+           <AppText variant="caption" weight="bold" shrink={false} style={[styles.itemCount, { color: colors.text }]} numberOfLines={1}>{safeItems.length} Units</AppText>
         </View>
       </View>
       
-      <FlatList
-        data={items}
-        keyExtractor={item => item.id}
+      <Animated.FlatList
+        data={safeItems}
+        keyExtractor={keyExtractor}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         itemLayoutAnimation={Layout.springify()}
-        renderItem={({ item, index }) => {
-          const currentUnitPrice = item.unitType === 'pack' ? item.packSellingPrice : item.baseSellingPrice;
-          const currentUnitLabel = item.unitType === 'pack' ? item.purchaseUnit : item.baseUnit;
-          const lineTotal = currentUnitPrice * item.quantity;
-          
-          return (
-            <Animated.View entering={FadeInDown.delay(index * 50).duration(500)}>
-              <View style={[styles.itemCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <View style={styles.cardHeader}>
-                  <View style={[styles.iconBox, { backgroundColor: colors.text + '08' }]}>
-                    <Package size={20} color={colors.text} />
-                  </View>
-                  <View style={styles.nameArea}>
-                    <RNText style={[styles.itemName, { color: colors.text }]} numberOfLines={1}>{item.name}</RNText>
-                    <TouchableOpacity 
-                      style={[styles.unitBadge, { backgroundColor: colors.primary + '15' }]} 
-                      onPress={() => {
-                        if (item.allowSellByPackUnit && item.allowSellByBaseUnit) {
-                          onUpdateItem?.(item.id, { unitType: item.unitType === 'pack' ? 'base' : 'pack' });
-                        }
-                      }}
-                    >
-                      <Repeat size={10} color={colors.primary} style={{ marginRight: 4 }} />
-                      <RNText style={[styles.unitBadgeText, { color: colors.primary }]}>{currentUnitLabel}</RNText>
-                    </TouchableOpacity>
-                  </View>
-                  <View style={styles.costArea}>
-                    <RNText style={[styles.linePrice, { color: colors.text }]}>{lineTotal.toLocaleString()} <RNText style={styles.currency}>ETB</RNText></RNText>
-                    <RNText style={[styles.unitPrice, { color: colors.textSecondary }]}>{currentUnitPrice} / Unit</RNText>
-                  </View>
-                </View>
-
-                <View style={[styles.cardFooter, { borderTopColor: colors.border }]}>
-                  <View style={[styles.qtyControl, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                    <TouchableOpacity 
-                      style={styles.qtyBtn} 
-                      onPress={() => {
-                        if (item.quantity > 1) onUpdateItem?.(item.id, { quantity: item.quantity - 1 });
-                      }}
-                    >
-                      <Minus size={14} color={colors.text} />
-                    </TouchableOpacity>
-                    <RNText style={[styles.qtyValue, { color: colors.text }]}>{item.quantity}</RNText>
-                    <TouchableOpacity 
-                      style={styles.qtyBtn} 
-                      onPress={() => onUpdateItem?.(item.id, { quantity: item.quantity + 1 })}
-                    >
-                      <Plus size={14} color={colors.text} />
-                    </TouchableOpacity>
-                  </View>
-                  
-                  <TouchableOpacity 
-                    style={[styles.removeBtn, { backgroundColor: '#FF3B3015' }]} 
-                    onPress={() => onRemoveItem?.(item.id)}
-                  >
-                    <Trash2 size={16} color="#FF3B30" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </Animated.View>
-          );
-        }}
+        renderItem={renderItem}
+        initialNumToRender={10}
+        maxToRenderPerBatch={6}
+        windowSize={5}
+        removeClippedSubviews={true}
         ListEmptyComponent={() => (
           <View style={styles.emptyContainer}>
             <View style={[styles.emptyIconCircle, { backgroundColor: colors.text + '05' }]}>
                <ShoppingCart size={48} color={colors.border} strokeWidth={1} />
             </View>
-            <RNText style={[styles.emptyTitle, { color: colors.text }]}>{t('sale.ledger_is_empty')}</RNText>
-            <RNText style={[styles.emptySub, { color: colors.textSecondary }]}>{t('sale.add_assets_begin')}</RNText>
+            <AppText variant="title" weight="bold" align="center" style={[styles.emptyTitle, { color: colors.text }]} numberOfLines={2}>{t('sale.ledger_is_empty')}</AppText>
+            <AppText variant="body" weight="medium" align="center" style={[styles.emptySub, { color: colors.textSecondary }]} numberOfLines={3}>{t('sale.add_assets_begin')}</AppText>
             <TouchableOpacity style={[styles.addInitialBtn, { backgroundColor: colors.text }]} onPress={onAddMore}>
                <PlusCircle size={18} color={colors.background} />
-               <RNText style={[styles.addInitialBtnText, { color: colors.background }]}>{t('sale.begin_search')}</RNText>
+               <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.addInitialBtnText, { color: colors.background }]} numberOfLines={1}>{t('sale.begin_search')}</AppText>
             </TouchableOpacity>
           </View>
         )}
       />
 
-      {items.length > 0 && (
+      {safeItems.length > 0 && (
         <View style={[styles.checkoutAnchor, { borderTopColor: colors.border }]}>
           <BlurView intensity={80} tint={theme !== 'light' ? 'dark' : 'light'} style={styles.checkoutBlur}>
             <View style={styles.summaryBox}>
               <View style={{ flex: 1, paddingRight: 10 }}>
-                <RNText style={[styles.summaryLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('sale.total_settlement')}</RNText>
-                <RNText style={[styles.totalAmount, { color: colors.text }]} adjustsFontSizeToFit numberOfLines={1}>{totalAmount.toLocaleString()} <RNText style={styles.totalCurrency}>ETB</RNText></RNText>
+                <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.summaryLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('sale.total_settlement')}</AppText>
+                <AppText variant="title" weight="bold" shrink={false} style={[styles.totalAmount, { color: colors.text }]} adjustsFontSizeToFit numberOfLines={1}>{totalAmount.toLocaleString()} <AppText variant="caption" weight="medium" shrink={false} style={styles.totalCurrency}> {t('common.etb')}</AppText></AppText>
               </View>
-              
+
               <View style={styles.actionCluster}>
                  <TouchableOpacity style={[styles.moreBtn, { borderColor: colors.border }]} onPress={onAddMore}>
                    <Plus size={22} color={colors.text} />
                  </TouchableOpacity>
                  <TouchableOpacity style={[styles.checkoutBtn, { backgroundColor: colors.text }]} onPress={onFinish}>
-                   <RNText style={[styles.checkoutBtnText, { color: colors.background }]}>{t('sale.commit')}</RNText>
+                   <AppText variant="body" weight="bold" shrink={false} style={[styles.checkoutBtnText, { color: colors.background }]} numberOfLines={1}>{t('sale.commit')}</AppText>
                    <ArrowRight size={18} color={colors.background} />
                  </TouchableOpacity>
               </View>
@@ -170,14 +218,12 @@ const styles = StyleSheet.create({
     marginBottom: 20 
   },
   headerSub: {
-    fontSize: 11,
     fontFamily: Fonts.semibold,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
     marginBottom: 2,
   },
   header: { 
-    fontSize: 22, 
     fontFamily: Fonts.bold,
   },
   badgeNode: {
@@ -186,7 +232,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   itemCount: { 
-    fontSize: 12, 
     fontFamily: Fonts.bold, 
   },
   listContent: { 
@@ -216,7 +261,6 @@ const styles = StyleSheet.create({
   },
   itemName: { 
     fontFamily: Fonts.bold, 
-    fontSize: 16, 
     marginBottom: 4 
   },
   unitBadge: { 
@@ -228,7 +272,6 @@ const styles = StyleSheet.create({
     borderRadius: 8 
   },
   unitBadgeText: { 
-    fontSize: 10, 
     fontFamily: Fonts.bold,
     textTransform: 'uppercase',
   },
@@ -237,14 +280,11 @@ const styles = StyleSheet.create({
   },
   linePrice: { 
     fontFamily: Fonts.bold, 
-    fontSize: 16 
   },
   currency: {
-    fontSize: 11,
     opacity: 0.6,
   },
   unitPrice: { 
-    fontSize: 11, 
     fontFamily: Fonts.medium, 
     marginTop: 2 
   },
@@ -269,7 +309,6 @@ const styles = StyleSheet.create({
     width: 36, 
     textAlign: 'center', 
     fontFamily: Fonts.bold, 
-    fontSize: 15 
   },
   removeBtn: { 
     width: 40,
@@ -293,11 +332,9 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   emptyTitle: { 
-    fontSize: 20, 
     fontFamily: Fonts.bold, 
   },
   emptySub: { 
-    fontSize: 14, 
     fontFamily: Fonts.medium, 
     marginTop: 8,
     textAlign: 'center',
@@ -314,7 +351,6 @@ const styles = StyleSheet.create({
   },
   addInitialBtnText: {
     fontFamily: Fonts.bold,
-    fontSize: 14,
   },
 
   checkoutAnchor: { 
@@ -334,18 +370,15 @@ const styles = StyleSheet.create({
     alignItems: 'center' 
   },
   summaryLabel: { 
-    fontSize: 12, 
     fontFamily: Fonts.semibold,
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginBottom: 4,
   },
   totalAmount: { 
-    fontSize: 26, 
     fontFamily: Fonts.bold, 
   },
   totalCurrency: {
-    fontSize: 14,
     opacity: 0.6,
   },
   actionCluster: { 
@@ -371,7 +404,6 @@ const styles = StyleSheet.create({
   },
   checkoutBtnText: { 
     fontFamily: Fonts.bold, 
-    fontSize: 16 
   },
 });
 

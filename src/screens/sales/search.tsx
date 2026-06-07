@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
-import { 
-  View, 
-  Text as RNText, 
-  TextInput, 
-  StyleSheet, 
-  FlatList, 
+﻿import React, { useCallback, useState } from 'react';
+import {
+  View,
+  TextInput,
+  StyleSheet,
+  FlatList,
   TouchableOpacity,
   Dimensions,
   Platform
@@ -16,8 +15,75 @@ import { searchInventory } from '@/database/db';
 import { useFocusEffect } from 'expo-router';
 import { useSettings } from '@/context/SettingsContext';
 import Animated, { FadeIn, FadeInDown, Layout } from 'react-native-reanimated';
-
+import { useDebounce } from '@/hooks/useDebounce';
+import { AppText, AppListItem, AppRow, AppCard } from '@/components/ui';
 const { width } = Dimensions.get('window');
+
+const SearchResultRow = React.memo(({
+  item,
+  index,
+  onPress,
+}: {
+  item: any;
+  index: number;
+  onPress?: (i: any) => void;
+}) => {
+  const { colors, t } = useSettings();
+  const isOutOfStock = item.totalBaseQuantity <= 0;
+  const hasPackPricing = !!(item.allowSellByPackUnit && item.packSellingPrice > 0);
+
+  return (
+    <Animated.View entering={FadeInDown.delay(Math.min(index, 8) * 50).duration(500)}>
+      <TouchableOpacity
+        style={[
+          styles.resultCard,
+          isOutOfStock && { opacity: 0.6 },
+          { backgroundColor: colors.card, borderColor: colors.border }
+        ]}
+        activeOpacity={0.7}
+        onPress={() => !isOutOfStock && onPress?.(item)}
+        disabled={isOutOfStock}
+      >
+        <View style={styles.cardMain}>
+          <View style={[styles.iconNode, { backgroundColor: colors.text + '08' }]}>
+            <Package size={22} color={isOutOfStock ? colors.textSecondary : colors.text} />
+            {item.totalBaseQuantity > 100 && (
+               <View style={[styles.trendBadge, { backgroundColor: colors.primary }]}>
+                  <Zap size={10} color="#FFF" />
+               </View>
+            )}
+          </View>
+
+          <View style={styles.infoArea}>
+            <AppText variant="body" weight="bold" style={[styles.itemName, { color: colors.text }]} numberOfLines={1}>{item.name}</AppText>
+            <AppText variant="body-sm" weight="medium" style={[styles.itemDetail, { color: colors.textSecondary }]} numberOfLines={1}>
+              {item.companyName || (item.categoryName ? (t('category.' + item.categoryName.toLowerCase()) !== 'category.' + item.categoryName.toLowerCase() ? t('category.' + item.categoryName.toLowerCase()) : item.categoryName) : t('common.general'))}
+            </AppText>
+          </View>
+
+          <View style={styles.priceArea}>
+            <AppText variant="body" weight="bold" shrink={false} style={[styles.mainPrice, { color: colors.text }]} numberOfLines={1}>
+              {item.baseSellingPrice.toLocaleString()} <AppText variant="caption" weight="medium" shrink={false} style={styles.currency}>{t('common.etb')}</AppText>
+            </AppText>
+            <AppText variant="caption" weight="medium" shrink={false} style={[styles.unitLabel, { color: colors.textSecondary }]} numberOfLines={1}>
+              per {item.baseUnit}
+            </AppText>
+          </View>
+        </View>
+
+        <View style={[styles.cardFooter, { borderTopColor: colors.border }]}>
+          <View style={styles.footerLeft}>
+            <AppText variant="caption" weight="semibold" style={[styles.stockStatus, { color: isOutOfStock ? colors.primary : colors.textSecondary }]} numberOfLines={1}>
+              {isOutOfStock ? t('dash.depleted') : `${item.totalBaseQuantity} ${t('form.' + (item.baseUnit || 'pieces').toLowerCase())} ${t('notif.pulse_nominal').toLowerCase()}`}
+            </AppText>
+          </View>
+          <ChevronRight size={18} color={colors.border} />
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+});
+SearchResultRow.displayName = 'SearchResultRow';
 
 interface SearchScreenProps {
   onSelectItem?: (item: any) => void;
@@ -27,13 +93,25 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onSelectItem }) => {
   const { colors, t, theme } = useSettings();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<any[]>([]);
+  const debouncedQuery = useDebounce(query, 250);
 
   useFocusEffect(
     React.useCallback(() => {
-      const data = searchInventory(query);
+      const trimmed = debouncedQuery.trim();
+      const data = searchInventory(trimmed);
       setResults(data);
-    }, [query])
+    }, [debouncedQuery])
   );
+
+  const renderItem = useCallback(({ item, index }: { item: any; index: number }) => (
+    <SearchResultRow
+      item={item}
+      index={index}
+      onPress={onSelectItem}
+    />
+  ), [onSelectItem]);
+
+  const keyExtractor = useCallback((item: any) => item.id.toString(), []);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -44,8 +122,8 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onSelectItem }) => {
 
       <Animated.View entering={FadeIn.duration(400)} style={{ flex: 1 }}>
         <View style={styles.headerArea}>
-           <RNText style={[styles.headerLabel, { color: colors.textSecondary }]}>{t('inventory.header')}</RNText>
-           <RNText style={[styles.headerTitle, { color: colors.text }]}>{t('sale.global_retrieval')}</RNText>
+           <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.headerLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('inventory.header')}</AppText>
+           <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: colors.text }]} numberOfLines={2}>{t('sale.global_retrieval')}</AppText>
         </View>
         
         <View style={styles.searchWrapper}>
@@ -68,72 +146,22 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onSelectItem }) => {
           </View>
         </View>
 
-        <FlatList
+        <Animated.FlatList
           data={results}
-          keyExtractor={item => item.id.toString()}
+          keyExtractor={keyExtractor}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
           itemLayoutAnimation={Layout.springify()}
-          renderItem={({ item, index }) => {
-            const isOutOfStock = item.totalBaseQuantity <= 0;
-            const hasPackPricing = !!(item.allowSellByPackUnit && item.packSellingPrice > 0);
-            
-            return (
-              <Animated.View entering={FadeInDown.delay(index * 50).duration(500)}>
-                <TouchableOpacity 
-                  style={[
-                    styles.resultCard, 
-                    isOutOfStock && { opacity: 0.6 }, 
-                    { backgroundColor: colors.card, borderColor: colors.border }
-                  ]} 
-                  activeOpacity={0.7}
-                  onPress={() => !isOutOfStock && onSelectItem?.(item)}
-                  disabled={isOutOfStock}
-                >
-                  <View style={styles.cardMain}>
-                    <View style={[styles.iconNode, { backgroundColor: colors.text + '08' }]}>
-                      <Package size={22} color={isOutOfStock ? colors.textSecondary : colors.text} />
-                      {item.totalBaseQuantity > 100 && (
-                         <View style={[styles.trendBadge, { backgroundColor: colors.primary }]}>
-                            <Zap size={10} color="#FFF" />
-                         </View>
-                      )}
-                    </View>
-                    
-                    <View style={styles.infoArea}>
-                      <RNText style={[styles.itemName, { color: colors.text }]} numberOfLines={1}>{item.name}</RNText>
-                      <RNText style={[styles.itemDetail, { color: colors.textSecondary }]}>
-                        {item.companyName || (item.categoryName ? (t('category.' + item.categoryName.toLowerCase()) !== 'category.' + item.categoryName.toLowerCase() ? t('category.' + item.categoryName.toLowerCase()) : item.categoryName) : t('common.general'))}
-                      </RNText>
-                    </View>
-
-                    <View style={styles.priceArea}>
-                      <RNText style={[styles.mainPrice, { color: colors.text }]}>
-                        {item.baseSellingPrice.toLocaleString()} <RNText style={styles.currency}>ETB</RNText>
-                      </RNText>
-                      <RNText style={[styles.unitLabel, { color: colors.textSecondary }]}>
-                        per {item.baseUnit}
-                      </RNText>
-                    </View>
-                  </View>
-
-                  <View style={[styles.cardFooter, { borderTopColor: colors.border }]}>
-                    <View style={styles.footerLeft}>
-                      <RNText style={[styles.stockStatus, { color: isOutOfStock ? colors.primary : colors.textSecondary }]}>
-                        {isOutOfStock ? t('dash.depleted') : `${item.totalBaseQuantity} ${t('form.' + (item.baseUnit || 'pieces').toLowerCase())} ${t('notif.pulse_nominal').toLowerCase()}`}
-                      </RNText>
-                    </View>
-                    <ChevronRight size={18} color={colors.border} />
-                  </View>
-                </TouchableOpacity>
-              </Animated.View>
-            );
-          }}
+          renderItem={renderItem}
+          initialNumToRender={12}
+          maxToRenderPerBatch={8}
+          windowSize={7}
+          removeClippedSubviews={true}
           ListEmptyComponent={() => (
             <View style={styles.emptyContainer}>
                <Box size={60} color={colors.border} strokeWidth={1} />
-               <RNText style={[styles.emptyTitle, { color: colors.text }]}>{t('sales.no_records_found')}</RNText>
-               <RNText style={[styles.emptySub, { color: colors.textSecondary }]}>{t('sale.refine_search')}</RNText>
+               <AppText variant="title" weight="bold" align="center" style={[styles.emptyTitle, { color: colors.text }]} numberOfLines={2}>{t('sales.no_records_found')}</AppText>
+               <AppText variant="body" weight="medium" align="center" style={[styles.emptySub, { color: colors.textSecondary }]} numberOfLines={3}>{t('sale.refine_search')}</AppText>
             </View>
           )}
         />
@@ -156,14 +184,12 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   headerLabel: {
-    fontSize: 12,
     fontFamily: Fonts.semibold,
     textTransform: 'uppercase',
     letterSpacing: 1.5,
     marginBottom: 4,
   },
   headerTitle: {
-    fontSize: 28,
     fontFamily: Fonts.bold,
   },
   searchWrapper: {
@@ -181,7 +207,6 @@ const styles = StyleSheet.create({
   input: { 
     flex: 1, 
     marginLeft: 12, 
-    fontSize: 16, 
     fontFamily: Fonts.medium,
   },
   clearBtn: {
@@ -227,27 +252,22 @@ const styles = StyleSheet.create({
     marginLeft: 16,
   },
   itemName: {
-    fontSize: 17,
     fontFamily: Fonts.bold,
     marginBottom: 2,
   },
   itemDetail: {
-    fontSize: 13,
     fontFamily: Fonts.medium,
   },
   priceArea: {
     alignItems: 'flex-end',
   },
   mainPrice: {
-    fontSize: 16,
     fontFamily: Fonts.bold,
   },
   currency: {
-    fontSize: 11,
     opacity: 0.6,
   },
   unitLabel: {
-    fontSize: 11,
     fontFamily: Fonts.medium,
     marginTop: 2,
   },
@@ -265,7 +285,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   stockStatus: {
-    fontSize: 12,
     fontFamily: Fonts.semibold,
   },
   emptyContainer: {
@@ -274,12 +293,10 @@ const styles = StyleSheet.create({
     paddingVertical: 100,
   },
   emptyTitle: {
-    fontSize: 18,
     fontFamily: Fonts.bold,
     marginTop: 20,
   },
   emptySub: {
-    fontSize: 14,
     fontFamily: Fonts.medium,
     marginTop: 6,
     textAlign: 'center',
