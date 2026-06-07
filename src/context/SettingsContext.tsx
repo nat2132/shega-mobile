@@ -1344,6 +1344,7 @@ const translations: Record<Language, Record<string, string>> = {
     'sidebar.stock_adjustments': 'Stock Adjustments',
     'sidebar.reports_analytics': 'Reports & Analytics',
     'sidebar.financial_reports': 'Financial Reports',
+    'sidebar.debt_management': 'Debt Management',
     'sidebar.exit_session': 'Exit Session',
 
     // Adjustment metrics
@@ -2544,6 +2545,7 @@ const translations: Record<Language, Record<string, string>> = {
     'sidebar.stock_adjustments': 'የክምችት ማስተካከያ',
     'sidebar.reports_analytics': 'ሪፖርቶች እና ትንታኔ',
     'sidebar.financial_reports': 'የፋይናንስ ሪፖርቶች',
+    'sidebar.debt_management': 'የእዳ አስተዳደር',
     'sidebar.exit_session': 'ክፍለ ጊዜ ውጣ',
 
     // Adjustment metrics
@@ -3539,6 +3541,7 @@ const translations: Record<Language, Record<string, string>> = {
     'sidebar.stock_adjustments': 'Sirreeffama Kuusaa',
     'sidebar.reports_analytics': 'Gabaasota fi Xiinxala',
     'sidebar.financial_reports': 'Gabaasota Maalii',
+    'sidebar.debt_management': 'Bulchiinsa Liqii',
     'sidebar.exit_session': 'Tartiiba Baasi',
 
     // Adjustment metrics
@@ -4604,6 +4607,7 @@ const translations: Record<Language, Record<string, string>> = {
     'sidebar.stock_adjustments': 'ምስትእንክባብ ክምችት',
     'sidebar.reports_analytics': 'ሪፖርታት ን ትንተነ',
     'sidebar.financial_reports': 'ሪፖርታት ጥንወታ',
+    'sidebar.debt_management': 'ምሕደራ ዕዳ',
     'sidebar.exit_session': 'ክፍለ እዋን ውጻ',
 
     // Adjustment metrics

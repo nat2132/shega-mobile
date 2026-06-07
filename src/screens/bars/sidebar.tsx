@@ -2,7 +2,7 @@
 import { View, TouchableOpacity, Image, StyleSheet, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { X, Banknote, SlidersHorizontal, ClipboardList, LogOut, ChevronRight, User as UserIcon, TrendingUp, Users, Phone } from 'lucide-react-native';
+import { X, Banknote, SlidersHorizontal, ClipboardList, LogOut, ChevronRight, User as UserIcon, TrendingUp, Users, Phone, HandCoins } from 'lucide-react-native';
 import { Fonts } from '@/constants/theme';
 import { useSettings, PROFILE_IMAGES } from '@/context/SettingsContext';
 import { AppText, AppListItem } from '@/components/ui';
@@ -122,6 +122,12 @@ const MyStoreMenu: React.FC<SidebarProps> = ({ onClose }) => {
                 label={t('sidebar.financial_reports')} 
                 onPress={() => handleRoute('/reports')} 
                 delay={430}
+              />
+              <MenuItem 
+                icon={HandCoins} 
+                label={t('sidebar.debt_management')} 
+                onPress={() => handleRoute('/debt-detail')} 
+                delay={460}
               />
 
               <View style={[styles.divider, { backgroundColor: colors.border }]} />
