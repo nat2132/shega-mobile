@@ -562,7 +562,7 @@ const loadCategories = async () => {
                   <TouchableOpacity
                     onPress={(e) => {
                       e.stopPropagation?.();
-                      Haptics.impactAsync(Haptics.ImpactFeedbackType.Medium);
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                       const phone = selectedSupplier.phone.replace(/[^0-9+]/g, '');
                       Linking.openURL(`tel:${phone}`).catch(async () => {
                         await dialog.alert({ title: t('common.error'), message: t('form.could_not_call'), iconType: 'danger' });
