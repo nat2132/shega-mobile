@@ -48,6 +48,29 @@ const InventoryLoss = () => {
     setRefreshing(false);
   }, []);
 
+  const keyExtractor = useCallback((item: any) => item.id, []);
+  const renderItem = useCallback(({ item }: { item: any }) => (
+    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={styles.row}>
+        <View style={[styles.iconBox, { backgroundColor: colors.text }]}>
+          <Package color={colors.background} size={24} />
+        </View>
+        <View>
+          <AppText variant="body" weight="bold" style={[styles.itemName, { color: colors.text }]} numberOfLines={2}>{item.name}</AppText>
+          <AppText variant="caption" weight="medium" style={[styles.skuText, { color: colors.textSecondary }]} numberOfLines={1}>Ref: {item.sku} • {item.quantity} {item.unit}</AppText>
+        </View>
+      </View>
+      
+      <View style={{ alignItems: 'flex-end' }}>
+        <View style={[styles.badge, { backgroundColor: '#FF3B30' }]}>
+          <View style={styles.dot} />
+          <AppText variant="micro" weight="bold" transform="uppercase" shrink={false} style={styles.badgeText} numberOfLines={1}>{item.type}</AppText>
+        </View>
+        <AppText variant="body" weight="bold" shrink={false} style={[styles.amount, { color: colors.text }]} numberOfLines={1}>{item.amount}</AppText>
+      </View>
+    </View>
+  ), [colors]);
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
@@ -57,7 +80,7 @@ const InventoryLoss = () => {
 
       <FlatList
         data={data}
-        keyExtractor={(item) => item.id}
+        keyExtractor={keyExtractor}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
@@ -66,27 +89,7 @@ const InventoryLoss = () => {
             <AppText variant="title" weight="bold" align="center" style={[styles.emptyText, { color: colors.textSecondary }]} numberOfLines={2}>{t('expense.no_loss')}</AppText>
           </View>
         }
-        renderItem={({ item }) => (
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.row}>
-              <View style={[styles.iconBox, { backgroundColor: colors.text }]}>
-                <Package color={colors.background} size={24} />
-              </View>
-              <View>
-                <AppText variant="body" weight="bold" style={[styles.itemName, { color: colors.text }]} numberOfLines={2}>{item.name}</AppText>
-                <AppText variant="caption" weight="medium" style={[styles.skuText, { color: colors.textSecondary }]} numberOfLines={1}>Ref: {item.sku} • {item.quantity} {item.unit}</AppText>
-              </View>
-            </View>
-            
-            <View style={{ alignItems: 'flex-end' }}>
-              <View style={[styles.badge, { backgroundColor: '#FF3B30' }]}>
-                <View style={styles.dot} />
-                <AppText variant="micro" weight="bold" transform="uppercase" shrink={false} style={styles.badgeText} numberOfLines={1}>{item.type}</AppText>
-              </View>
-              <AppText variant="body" weight="bold" shrink={false} style={[styles.amount, { color: colors.text }]} numberOfLines={1}>{item.amount}</AppText>
-            </View>
-          </View>
-        )}
+        renderItem={renderItem}
       />
     </View>
   );

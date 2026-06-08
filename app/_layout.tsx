@@ -1,3 +1,4 @@
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import SidebarOverlay from '@/components/SidebarOverlay';
 import { SettingsProvider } from '@/context/SettingsContext';
 import { SidebarProvider } from '@/context/SidebarContext';
@@ -9,6 +10,7 @@ import {
     Inter_600SemiBold,
     Inter_700Bold,
     Inter_800ExtraBold,
+    Inter_900Black,
     useFonts
 } from '@expo-google-fonts/inter';
 import { Stack } from 'expo-router';
@@ -60,6 +62,7 @@ export default function RootLayout() {
     Inter_600SemiBold,
     Inter_700Bold,
     Inter_800ExtraBold,
+    Inter_900Black,
   });
 
   useEffect(() => {
@@ -75,21 +78,23 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SettingsProvider>
-        <ToastProvider>
-          <DialogProvider>
-            <InAppBannerProvider>
-              <NotificationProvider>
-                <NavigationIntentProvider>
-                  <SidebarProvider>
-                    <AppShell />
-                  </SidebarProvider>
-                </NavigationIntentProvider>
-              </NotificationProvider>
-            </InAppBannerProvider>
-          </DialogProvider>
-        </ToastProvider>
-      </SettingsProvider>
+      <ErrorBoundary>
+        <SettingsProvider>
+          <ToastProvider>
+            <DialogProvider>
+              <InAppBannerProvider>
+                <NotificationProvider>
+                  <NavigationIntentProvider>
+                    <SidebarProvider>
+                      <AppShell />
+                    </SidebarProvider>
+                  </NavigationIntentProvider>
+                </NotificationProvider>
+              </InAppBannerProvider>
+            </DialogProvider>
+          </ToastProvider>
+        </SettingsProvider>
+      </ErrorBoundary>
     </GestureHandlerRootView>
   );
 }

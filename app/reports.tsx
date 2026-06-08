@@ -23,24 +23,20 @@ import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { useRouter, useSegments } from 'expo-router';
 import {
-  Bell,
-  Calendar,
-  ChevronLeft,
-  ClipboardList,
-  Download,
-  FileSpreadsheet,
-  Home,
-  Minus,
-  Package,
-  Plus,
-  Scale,
-  Settings as SettingsIcon,
-  ShoppingCart,
-  Store,
-  Trash2,
-  TrendingUp,
-  Wallet,
-  Warehouse
+    Bell,
+    Calendar,
+    ChevronLeft,
+    ClipboardList,
+    Download,
+    FileSpreadsheet,
+    Minus,
+    Package,
+    Plus,
+    Scale,
+    ShoppingCart,
+    Trash2,
+    TrendingUp,
+    Wallet
 } from 'lucide-react-native';
 import React, { useEffect, useState, useMemo } from 'react';
 import { ActivityIndicator, Dimensions, FlatList, Image, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -336,7 +332,7 @@ export default function ReportsHubScreen() {
   const currentRoute = segments.join('/');
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* Ambient glow */}
         <View style={StyleSheet.absoluteFill}>
@@ -565,23 +561,6 @@ export default function ReportsHubScreen() {
         </View>
       )}
 
-      {/* Bottom Navigation Bar */}
-      <View style={[styles.bottomNav, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
-        {[
-          { key: 'dashboard', icon: Home, label: t('tabs.dashboard') },
-          { key: 'sales-hub', icon: Store, label: t('tabs.sales') },
-          { key: 'inventory', icon: Warehouse, label: t('tabs.inventory') },
-          { key: 'settings', icon: SettingsIcon, label: t('tabs.settings') },
-        ].map((tab) => {
-          const IconComp = tab.icon;
-          return (
-            <TouchableOpacity key={tab.key} style={styles.navTab} onPress={() => router.replace(`/(tabs)/${tab.key}` as any)} activeOpacity={0.7}>
-              <IconComp size={22} color={colors.textSecondary} />
-              <Text style={[styles.navLabel, { color: colors.textSecondary }]}>{tab.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
     </SafeAreaView>
   );
 }
@@ -619,29 +598,8 @@ const ReportCard = ({ title, description, icon: Icon, iconColor, stats, onExport
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scrollContent: { paddingHorizontal: 25, paddingBottom: 120 },
+  scrollContent: { paddingHorizontal: 25, paddingBottom: 40 },
   bgWash: { position: 'absolute', width: 300, height: 300, borderRadius: 150 },
-  bottomNav: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    paddingTop: 8,
-    paddingBottom: Platform.OS === 'ios' ? 25 : 8,
-    borderTopWidth: 1,
-    zIndex: 100,
-  },
-  navTab: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 3,
-  },
-  navLabel: {
-    fontSize: 10,
-    fontFamily: Fonts.medium,
-  },
   // ── Dashboard-matching header ──
   integratedHeader: {
     flexDirection: 'row',

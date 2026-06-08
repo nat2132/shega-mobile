@@ -74,6 +74,21 @@ export const DashboardAlerts: React.FC = () => {
             index={idx}
             onPress={() => setSelected(n)}
             onResolve={async () => {
+              // Forward the user to the right screen (e.g. collect-payment
+              // for an outstanding customer) so they can act on the alert
+              // immediately, then mark it as resolved. Mirrors the intent
+              // dispatch that NotificationDetailSheet.onView does, but
+              // triggered by the inline "Resolve" button.
+              if (n.deepLink) {
+                const intentKind = (n.data as any)?.intent;
+                if (intentKind === 'collect_payments') {
+                  const customerName = (n.data as any)?.customerName;
+                  publishIntent({ kind: 'collect_payments', customerName, at: Date.now() });
+                } else if (intentKind === 'subscription') {
+                  publishIntent({ kind: 'subscription', at: Date.now() });
+                }
+                router.replace(n.deepLink as any);
+              }
               await resolve(n.id);
             }}
             onDismiss={async () => {

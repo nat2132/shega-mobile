@@ -18,7 +18,7 @@ import {
     processIndividualPayment
 } from '@/database/db';
 import { useNotifications } from '@/hooks/useNotifications';
-import { formatShortDate, getDayName, getEthiopianMonthNames, toEthiopianDate, formatHourLabel, toEthiopianHour, formatTime } from '@/utils/date-utils';
+import { formatShortDate, getDayName, getDayNameFull, getEthiopianMonthNames, toEthiopianDate, formatHourLabel, toEthiopianHour, formatTime } from '@/utils/date-utils';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
@@ -139,10 +139,11 @@ const SalesDashboard = () => {
 
     const dbChartData = getSalesChartData(activeTab as 'W' | 'M' | 'Y', periodOffset);
     if (dbChartData && dbChartData.length > 0) {
-      setChartDataState({
-        labels: dbChartData.map(d => d.label),
-        values: dbChartData.map(d => d.value)
-      });
+      const baseLabels = dbChartData.map(d => d.label);
+      const baseValues = dbChartData.map(d => d.value);
+      const labels = activeTab === 'Y' && calendarType === 'ethiopian' ? [...baseLabels, '13'] : baseLabels;
+      const values = activeTab === 'Y' && calendarType === 'ethiopian' ? [...baseValues, 0] : baseValues;
+      setChartDataState({ labels, values });
     } else {
       setChartDataState({ labels: [], values: [] });
     }
@@ -209,6 +210,7 @@ const SalesDashboard = () => {
 
   const chartData = useMemo(() => sanitizedValues.map((val, i) => {
     let label = chartDataState.labels[i];
+    let fullLabel = label;
     if (activeTab === 'W' && label !== 'None') {
       const dayIdx = parseInt(label);
       if (!isNaN(dayIdx)) {
@@ -217,21 +219,26 @@ const SalesDashboard = () => {
         weekStart.setDate(d.getDate() - d.getDay() + dayIdx);
         weekStart.setDate(weekStart.getDate() + (periodOffset * 7));
         label = getDayName(weekStart, calendarType, language).substring(0, 3);
+        fullLabel = getDayNameFull(weekStart, calendarType, language);
       }
     } else if (activeTab === 'M') {
       const weekNum = parseInt(label);
       if (!isNaN(weekNum)) {
         label = t('sales.week_chart_label', { num: String(weekNum) });
+        fullLabel = label;
       }
     } else if (activeTab === 'Y') {
       const monthNum = parseInt(label);
       if (!isNaN(monthNum)) {
+        const localeMap: Record<string, string> = { en: 'en-US', am: 'am-ET', om: 'en-US', ti: 'en-US' };
         if (calendarType === 'ethiopian') {
-          label = getEthiopianMonthNames(language)[monthNum - 1].substring(0, 3);
+          const name = getEthiopianMonthNames(language)[monthNum - 1];
+          label = name.substring(0, 3);
+          fullLabel = name;
         } else {
           const d = new Date(2024, monthNum - 1, 1);
-          const localeMap: Record<string, string> = { en: 'en-US', am: 'am-ET', om: 'en-US', ti: 'en-US' };
           label = d.toLocaleDateString(localeMap[language] || 'en-US', { month: 'short' });
+          fullLabel = d.toLocaleDateString(localeMap[language] || 'en-US', { month: 'long' });
         }
       }
     }
@@ -248,7 +255,9 @@ const SalesDashboard = () => {
       isCurrent = i === (currentWeek - 1) && periodOffset === 0;
     } else if (activeTab === 'Y') {
       const now = new Date();
-      const currentMonth = now.getMonth(); // 0-11
+      const currentMonth = calendarType === 'ethiopian'
+        ? toEthiopianDate(now).month - 1
+        : now.getMonth();
       isCurrent = i === currentMonth && periodOffset === 0;
     }
 
@@ -271,6 +280,7 @@ const SalesDashboard = () => {
     return {
       value: val,
       label: label !== 'None' ? label : '',
+      fullLabel: fullLabel !== 'None' ? fullLabel : '',
       frontColor: barColor,
       gradientColor,
       isCurrent,
@@ -359,10 +369,25 @@ const SalesDashboard = () => {
     }
   }, [activeTab, periodOffset, calendarType, language]);
 
-  const salesKPIs = useMemo(() => [
-    { title: t('sales.peak_hour'), value: summary?.peakHour ? formatHourLabel(parseInt(summary.peakHour), timeSystem, language) : '--', icon: Clock, color: '#FF9500', onPress: () => handleShowPeakHours() },
-    { title: t('sales.methods'), value: `${summary?.payments?.length || 0} ${t('sales.types')}`, icon: Wallet, color: '#FF3B30', onPress: () => handleShowPaymentMethods() },
-  ], [t, summary]);
+  const salesKPIs = useMemo(() => {
+    const tapHint = t('sales.tap_to_view');
+    const topPayment = (summary?.payments ?? [])
+      .slice()
+      .sort((a: any, b: any) => (Number(b.total) || 0) - (Number(a.total) || 0))[0];
+    const topPaymentName = topPayment?.paymentMethod
+      ? String(topPayment.paymentMethod).trim()
+      : '';
+    const methodsCount = summary?.payments?.length || 0;
+    const methodsValue = topPaymentName && methodsCount > 0
+      ? `${topPaymentName} · ${methodsCount}`
+      : methodsCount > 0
+        ? `${methodsCount} ${t('sales.types')}`
+        : tapHint;
+    return [
+      { title: t('sales.peak_hour'), value: tapHint, isHint: true, icon: Clock, color: '#FF9500', onPress: () => handleShowPeakHours() },
+      { title: t('sales.methods'), value: methodsValue, icon: Wallet, color: '#FF3B30', onPress: () => handleShowPaymentMethods() },
+    ];
+  }, [t, summary]);
 
   const handleShowPeakHours = () => {
     const data = getPeakSalesHoursByItem();
@@ -468,6 +493,251 @@ const SalesDashboard = () => {
     return d.toLocaleDateString(localeMap[language] || 'en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
+  const customerKeyExtractor = useCallback((item: any, idx: number) => item.customerName + idx, []);
+  const renderCustomerItem = useCallback(({ item }: { item: any }) => {
+    const isOverdue = item.earliestDue && new Date(item.earliestDue) < new Date();
+    return (
+      <TouchableOpacity
+        style={[styles.cpCustomerRow, {
+          backgroundColor: colors.card,
+          borderColor: isOverdue ? '#FF3B3040' : colors.border,
+          borderLeftColor: isOverdue ? '#FF3B30' : colors.border,
+          borderLeftWidth: isOverdue ? 3 : 1,
+        }]}
+        onPress={() => handleSelectCustomer(item)}
+        activeOpacity={0.75}
+      >
+        <View style={[styles.cpAvatar, { backgroundColor: isOverdue ? '#FF3B3015' : colors.primary + '15' }]}>
+          <User size={17} color={isOverdue ? '#FF3B30' : colors.primary} />
+        </View>
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <AppText variant="body" weight="bold" style={[styles.cpCustomerName, { color: colors.text }]} numberOfLines={1}>
+            {item.customerName}
+          </AppText>
+          <AppText variant="caption" weight="medium" style={[styles.cpDueText, { color: isOverdue ? '#FF3B30' : colors.textSecondary }]} numberOfLines={1}>
+            {item.earliestDue
+              ? (isOverdue ? t('sales.overdue_label', { date: formatDueDate(item.earliestDue) }) : t('sales.due_label', { date: formatDueDate(item.earliestDue) }))
+              : t('sales.no_due_date')}
+          </AppText>
+        </View>
+        <AppText variant="body" weight="bold" shrink={false} style={[styles.cpAmount, { color: isOverdue ? '#FF3B30' : '#FF9500' }]} numberOfLines={1}>
+          {item.oweAmount.toLocaleString()} {t('common.etb')}
+        </AppText>
+      </TouchableOpacity>
+    );
+  }, [colors, t, formatDueDate, handleSelectCustomer]);
+
+  const debtItemKeyExtractor = useCallback((item: any) => item.id.toString(), []);
+  const renderDebtItem = useCallback(({ item }: { item: any }) => {
+    const paid = item.paidAmount || 0;
+    const remaining = item.totalPrice - paid;
+    const isItemOverdue = item.dueDate && new Date(item.dueDate) < new Date();
+    const isSelected = selectedDebtItems.includes(item.id);
+    const maxQty = item.quantity;
+    const currentQtyStr = partialQtyMap[item.id] ?? String(maxQty);
+    const currentQty = Math.min(Math.max(1, parseInt(currentQtyStr) || 1), maxQty);
+    const unitPrice = maxQty > 0 ? item.totalPrice / maxQty : 0;
+    const payAmt = Math.min(unitPrice * currentQty, remaining);
+    return (
+      <View style={[styles.cpItemCard, {
+        backgroundColor: colors.card,
+        borderColor: isSelected ? colors.primary : (isItemOverdue ? '#FF3B3030' : colors.border),
+        borderWidth: isSelected ? 1.5 : 1,
+      }]}>
+        <TouchableOpacity
+          style={styles.cpItemTop}
+          onPress={() => setSelectedDebtItems(prev =>
+            prev.includes(item.id) ? prev.filter(id => id !== item.id) : [...prev, item.id]
+          )}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.cpCheckbox, {
+            backgroundColor: isSelected ? colors.primary : 'transparent',
+            borderColor: isSelected ? colors.primary : colors.border,
+          }]}>
+            {isSelected && <Check size={10} color="#FFF" strokeWidth={3} />}
+          </View>
+          <AppText variant="body" weight="bold" style={[styles.cpItemName, { color: colors.text }]} numberOfLines={1}>
+            {item.itemName}
+          </AppText>
+          <View style={[styles.cpStatusBadge, {
+            backgroundColor: item.paymentStatus === 'Paid' ? '#34C75915' : paid > 0 ? '#FF950015' : '#FF3B3015'
+          }]}>
+            <AppText variant="micro" weight="bold" shrink={false} style={[styles.cpStatusText, {
+              color: item.paymentStatus === 'Paid' ? '#34C759' : paid > 0 ? '#FF9500' : '#FF3B30'
+            }]} numberOfLines={1}>
+              {item.paymentStatus === 'Paid' ? t('sales.status_paid') : paid > 0 ? t('sales.status_partial') : t('sales.status_unpaid')}
+            </AppText>
+          </View>
+        </TouchableOpacity>
+        <View style={[styles.cpItemStats, { borderTopColor: colors.border }]}>
+          <View style={styles.cpStat}>
+            <AppText variant="micro" weight="medium" style={[styles.cpStatLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('sales.stat_qty')}</AppText>
+            <AppText variant="body" weight="bold" shrink={false} style={[styles.cpStatValue, { color: colors.text }]} numberOfLines={1}>{item.quantity} {item.unit}</AppText>
+          </View>
+          <View style={styles.cpStat}>
+            <AppText variant="micro" weight="medium" style={[styles.cpStatLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('sales.stat_total')}</AppText>
+            <AppText variant="body" weight="bold" shrink={false} style={[styles.cpStatValue, { color: colors.text }]} numberOfLines={1}>{item.totalPrice.toLocaleString()}</AppText>
+          </View>
+          <View style={styles.cpStat}>
+            <AppText variant="micro" weight="medium" style={[styles.cpStatLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('sales.stat_paid')}</AppText>
+            <AppText variant="body" weight="bold" shrink={false} style={[styles.cpStatValue, { color: '#34C759' }]} numberOfLines={1}>{paid.toLocaleString()}</AppText>
+          </View>
+          <View style={styles.cpStat}>
+            <AppText variant="micro" weight="medium" style={[styles.cpStatLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('sales.stat_left')}</AppText>
+            <AppText variant="body" weight="bold" shrink={false} style={[styles.cpStatValue, { color: '#FF9500' }]} numberOfLines={1}>{remaining.toLocaleString()}</AppText>
+          </View>
+        </View>
+        {isSelected && (
+          <View style={[styles.cpQtyRow, { borderTopColor: colors.border }]}>
+            <AppText variant="caption" weight="medium" style={[styles.cpQtyLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('sales.pay_qty')}</AppText>
+            <View style={styles.cpQtyStepper}>
+              <TouchableOpacity
+                style={[styles.cpStepBtn, { backgroundColor: colors.border }]}
+                onPress={() => setPartialQtyMap(prev => ({ ...prev, [item.id]: String(Math.max(1, currentQty - 1)) }))}
+              >
+                <AppText variant="title" weight="bold" shrink={false} style={[styles.cpStepBtnText, { color: colors.text }]} numberOfLines={1}>−</AppText>
+              </TouchableOpacity>
+              <TextInput
+                style={[styles.cpQtyInput, { color: colors.text, borderColor: colors.border }]}
+                value={currentQtyStr}
+                onChangeText={v => {
+                  const n = parseInt(v);
+                  setPartialQtyMap(prev => ({
+                    ...prev,
+                    [item.id]: isNaN(n) ? v : String(Math.min(Math.max(1, n), maxQty))
+                  }));
+                }}
+                keyboardType="numeric"
+                selectTextOnFocus
+              />
+              <TouchableOpacity
+                style={[styles.cpStepBtn, { backgroundColor: colors.border }]}
+                onPress={() => setPartialQtyMap(prev => ({ ...prev, [item.id]: String(Math.min(maxQty, currentQty + 1)) }))}
+              >
+                <AppText variant="title" weight="bold" style={[styles.cpStepBtnText, { color: colors.text }]} numberOfLines={1}>+</AppText>
+              </TouchableOpacity>
+              <AppText variant="caption" weight="medium" style={[styles.cpQtyOf, { color: colors.textSecondary }]} numberOfLines={1}>/ {maxQty}</AppText>
+            </View>
+            <AppText variant="body" weight="bold" style={[styles.cpPayAmt, { color: colors.primary }]} numberOfLines={1}>
+              {payAmt.toLocaleString()} {t('common.etb')}
+            </AppText>
+          </View>
+        )}
+      </View>
+    );
+  }, [colors, t, selectedDebtItems, partialQtyMap]);
+
+  const activityKeyExtractor = useCallback((item: any, idx: number) => (item.id || 0).toString() + idx, []);
+  const renderActivityItem = useCallback(({ item, index }: { item: any, index: number }) => {
+    const isFP    = item.activityType === 'full_payment';
+    const isPP    = item.activityType === 'partial_payment';
+    const isPurch = item.activityType === 'purchase';
+
+    const dotColor = isFP ? '#34C759' : isPP ? '#FF9500' : colors.primary;
+
+    const typeLabel = isFP    ? t('sales.activity_full')
+                    : isPP    ? t('sales.activity_partial')
+                    : t('sales.activity_credit');
+    const typeEmoji = isFP ? '💳' : isPP ? '💵' : '🛒';
+
+    const timeStr = item.createdAt
+      ? (() => {
+          const cd = new Date(item.createdAt);
+          const datePart = formatShortDate(cd, calendarType, language);
+          const isoLike = (typeof item.createdAt === 'string' && !item.createdAt.includes('T') && !item.createdAt.includes('Z'))
+            ? `${item.createdAt.replace(' ', 'T')}Z`
+            : item.createdAt;
+          const timePart = formatTime(isoLike, timeSystem, language);
+          return `${datePart}, ${timePart}`;
+        })()
+      : '';
+
+    const paid      = Number(item.paidSoFar ?? item.paidAmount ?? 0);
+    const remaining = Number(item.remainingBalance ?? (item.totalPrice - paid));
+
+    return (
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 }}>
+        <View style={{ alignItems: 'center', marginRight: 12, paddingTop: 4 }}>
+          <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: dotColor }} />
+          {index < customerActivity.length - 1 && (
+            <View style={{ width: 2, flex: 1, minHeight: 30, backgroundColor: colors.border, marginTop: 4 }} />
+          )}
+        </View>
+
+        <View style={{
+          flex: 1, borderRadius: 14, borderWidth: 1,
+          padding: 12, marginBottom: 2,
+          backgroundColor: colors.card,
+          borderColor: colors.border,
+        }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: dotColor + '18' }}>
+              <AppText variant="caption" weight="bold" style={{ fontSize: 11, fontFamily: Fonts.bold, color: dotColor }} numberOfLines={1}>
+                {typeEmoji} {typeLabel}
+              </AppText>
+            </View>
+            <AppText variant="micro" weight="medium" style={{ fontSize: 10, fontFamily: Fonts.medium, color: colors.textSecondary }} numberOfLines={1}>
+              {timeStr}
+            </AppText>
+          </View>
+
+          <AppText variant="body" weight="bold" style={{ fontSize: 14, fontFamily: Fonts.bold, color: colors.text, marginBottom: 8 }} numberOfLines={1}>
+            {item.itemName || '—'}
+            <AppText variant="caption" weight="medium" style={{ fontSize: 12, fontFamily: Fonts.medium, color: colors.textSecondary }} numberOfLines={1}>
+              {'  '}×{item.quantity} {item.unit}
+            </AppText>
+          </AppText>
+
+          <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+            <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: colors.primary + '12' }}>
+              <AppText variant="micro" weight="bold" transform="uppercase" style={{ fontSize: 9, fontFamily: Fonts.bold, color: colors.textSecondary }} numberOfLines={1}>{t('sales.stat_total')}</AppText>
+              <AppText variant="caption" weight="bold" style={{ fontSize: 12, fontFamily: Fonts.bold, color: colors.text }} numberOfLines={1}>
+                {Number(item.totalPrice).toLocaleString()} {t('common.etb')}
+              </AppText>
+            </View>
+
+            {(isFP || isPP) && paid > 0 && (
+              <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: '#34C75912' }}>
+                <AppText variant="micro" weight="bold" transform="uppercase" style={{ fontSize: 9, fontFamily: Fonts.bold, color: colors.textSecondary }} numberOfLines={1}>{t('sales.stat_paid')}</AppText>
+                <AppText variant="caption" weight="bold" style={{ fontSize: 12, fontFamily: Fonts.bold, color: '#34C759' }} numberOfLines={1}>
+                  {(isFP ? Number(item.totalPrice) : paid).toLocaleString()} {t('common.etb')}
+                </AppText>
+              </View>
+            )}
+
+            {isPP && remaining > 0 && (
+              <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: '#FF950012' }}>
+                <AppText variant="micro" weight="bold" transform="uppercase" style={{ fontSize: 9, fontFamily: Fonts.bold, color: colors.textSecondary }} numberOfLines={1}>{t('sales.stat_left')}</AppText>
+                <AppText variant="caption" weight="bold" style={{ fontSize: 12, fontFamily: Fonts.bold, color: '#FF9500' }} numberOfLines={1}>
+                  {remaining.toLocaleString()} {t('common.etb')}
+                </AppText>
+              </View>
+            )}
+
+            {isPurch && remaining > 0 && (
+              <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: '#FF3B3012' }}>
+                <AppText variant="micro" weight="bold" transform="uppercase" style={{ fontSize: 9, fontFamily: Fonts.bold, color: colors.textSecondary }} numberOfLines={1}>{t('sales.stat_owed')}</AppText>
+                <AppText variant="caption" weight="bold" style={{ fontSize: 12, fontFamily: Fonts.bold, color: '#FF3B30' }} numberOfLines={1}>
+                  {remaining.toLocaleString()} {t('common.etb')}
+                </AppText>
+              </View>
+            )}
+
+            {item.paymentMethod && (
+              <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: colors.border + '60' }}>
+                <AppText variant="micro" weight="bold" transform="uppercase" style={{ fontSize: 9, fontFamily: Fonts.bold, color: colors.textSecondary }} numberOfLines={1}>{t('sales.stat_method')}</AppText>
+                <AppText variant="caption" weight="bold" style={{ fontSize: 12, fontFamily: Fonts.bold, color: colors.text }} numberOfLines={1}>
+                  {item.paymentMethod}
+                </AppText>
+              </View>
+            )}
+          </View>
+        </View>
+      </View>
+    );
+  }, [colors, t, calendarType, language, timeSystem, customerActivity]);
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Background Ambience */}
@@ -520,7 +790,7 @@ const SalesDashboard = () => {
               <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.revenueRangeLabel, { color: colors.textSecondary }]} numberOfLines={2}>
                 {activeTab === 'W' ? t('sales.weekly_revenue') : activeTab === 'M' ? t('sales.monthly_revenue') : t('sales.yearly_revenue')}
               </AppText>
-              <AppText variant="display" weight="extrabold" shrink={false} style={[styles.totalRevenueVal, { color: colors.text, fontSize: totalRevenue >= 10000000 ? 36 : totalRevenue >= 1000000 ? 40 : totalRevenue >= 100000 ? 44 : 52 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+              <AppText variant="display-lg" weight="black" shrink={false} style={[styles.totalRevenueVal, { color: colors.text, fontFamily: Fonts.black, fontSize: totalRevenue >= 10000000 ? 36 : totalRevenue >= 1000000 ? 40 : totalRevenue >= 100000 ? 44 : 52 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                 {totalRevenue.toLocaleString()}<AppText variant="body" weight="medium" style={styles.currency} numberOfLines={1}> {t('common.etb')}</AppText>
               </AppText>
               <AppText variant="caption" weight="medium" style={[styles.dateRangeSubLabel, { color: colors.textSecondary }]} numberOfLines={2}>
@@ -532,7 +802,7 @@ const SalesDashboard = () => {
             {selectedIdx !== null && selectedIdx >= 0 && selectedIdx < sanitizedValues.length && (
               <Animated.View entering={FadeIn.duration(200)} style={[styles.selectedBarDetail, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '30' }]}>
                 <AppText variant="caption" weight="medium" style={[styles.selectedBarLabel, { color: colors.textSecondary }]} numberOfLines={2}>
-                  {chartData[selectedIdx]?.label || (chartDataState.labels[selectedIdx] !== 'None' ? chartDataState.labels[selectedIdx] : '—')}
+                  {chartData[selectedIdx]?.fullLabel || chartData[selectedIdx]?.label || (chartDataState.labels[selectedIdx] !== 'None' ? chartDataState.labels[selectedIdx] : '—')}
                 </AppText>
                 <AppText variant="body-lg" weight="bold" shrink={false} style={[styles.selectedBarValue, { color: colors.primary }]} numberOfLines={1}>
                   {sanitizedValues[selectedIdx].toLocaleString()} {t('common.etb')}
@@ -612,7 +882,7 @@ const SalesDashboard = () => {
                       <View style={[styles.bentoIconArea, { backgroundColor: kpi.color + '15' }]}>
                         <KpiIcon size={18} color={kpi.color} />
                       </View>
-            <AppText variant="title" weight="bold" shrink={false} style={[styles.bentoValue, { color: colors.text, fontSize: kpi.value.length > 10 ? 16 : 18 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{kpi.value}</AppText>
+            <AppText variant={kpi.isHint ? 'body-sm' : 'title'} weight={kpi.isHint ? 'medium' : 'bold'} shrink={false} style={[styles.bentoValue, { color: kpi.isHint ? colors.textSecondary : colors.text, fontSize: kpi.isHint ? 14 : (kpi.value.length > 10 ? 16 : 18) }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{kpi.value}</AppText>
             <AppText variant="caption" weight="medium" style={[styles.bentoLabel, { color: colors.textSecondary }]} numberOfLines={2}>{kpi.title}</AppText>
                     </Animated.View>
                   </TouchableOpacity>
@@ -891,40 +1161,9 @@ const SalesDashboard = () => {
                 </View>
                 <FlatList
                   data={filteredDebtCustomers}
-                  keyExtractor={(item, idx) => item.customerName + idx}
+                  keyExtractor={customerKeyExtractor}
                   showsVerticalScrollIndicator={false}
-                  renderItem={({ item }) => {
-                    const isOverdue = item.earliestDue && new Date(item.earliestDue) < new Date();
-                    return (
-                      <TouchableOpacity
-                        style={[styles.cpCustomerRow, {
-                          backgroundColor: colors.card,
-                          borderColor: isOverdue ? '#FF3B3040' : colors.border,
-                          borderLeftColor: isOverdue ? '#FF3B30' : colors.border,
-                          borderLeftWidth: isOverdue ? 3 : 1,
-                        }]}
-                        onPress={() => handleSelectCustomer(item)}
-                        activeOpacity={0.75}
-                      >
-                        <View style={[styles.cpAvatar, { backgroundColor: isOverdue ? '#FF3B3015' : colors.primary + '15' }]}>
-                          <User size={17} color={isOverdue ? '#FF3B30' : colors.primary} />
-                        </View>
-                        <View style={{ flex: 1, marginLeft: 12 }}>
-                          <AppText variant="body" weight="bold" style={[styles.cpCustomerName, { color: colors.text }]} numberOfLines={1}>
-                            {item.customerName}
-                          </AppText>
-                          <AppText variant="caption" weight="medium" style={[styles.cpDueText, { color: isOverdue ? '#FF3B30' : colors.textSecondary }]} numberOfLines={1}>
-                            {item.earliestDue
-                              ? (isOverdue ? t('sales.overdue_label', { date: formatDueDate(item.earliestDue) }) : t('sales.due_label', { date: formatDueDate(item.earliestDue) }))
-                              : t('sales.no_due_date')}
-                          </AppText>
-                        </View>
-                        <AppText variant="body" weight="bold" shrink={false} style={[styles.cpAmount, { color: isOverdue ? '#FF3B30' : '#FF9500' }]} numberOfLines={1}>
-                          {item.oweAmount.toLocaleString()} {t('common.etb')}
-                        </AppText>
-                      </TouchableOpacity>
-                    );
-                  }}
+                  renderItem={renderCustomerItem}
                   ListEmptyComponent={
                     <AppText variant="body" weight="medium" style={[styles.emptyText, { color: colors.textSecondary, textAlign: 'center', marginTop: 50 }]} numberOfLines={3}>
                       {t('sales.no_outstanding')}
@@ -997,108 +1236,10 @@ const SalesDashboard = () => {
                   <View style={{ flex: 1 }}>
                     <FlatList
                       data={customerDebts}
-                      keyExtractor={(item) => item.id.toString()}
+                      keyExtractor={debtItemKeyExtractor}
                       showsVerticalScrollIndicator={false}
                       contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6 }}
-                      renderItem={({ item }) => {
-                        const paid = item.paidAmount || 0;
-                        const remaining = item.totalPrice - paid;
-                        const isItemOverdue = item.dueDate && new Date(item.dueDate) < new Date();
-                        const isSelected = selectedDebtItems.includes(item.id);
-                        const maxQty = item.quantity;
-                        const currentQtyStr = partialQtyMap[item.id] ?? String(maxQty);
-                        const currentQty = Math.min(Math.max(1, parseInt(currentQtyStr) || 1), maxQty);
-                        const unitPrice = maxQty > 0 ? item.totalPrice / maxQty : 0;
-                        const payAmt = Math.min(unitPrice * currentQty, remaining);
-                        return (
-                          <View style={[styles.cpItemCard, {
-                            backgroundColor: colors.card,
-                            borderColor: isSelected ? colors.primary : (isItemOverdue ? '#FF3B3030' : colors.border),
-                            borderWidth: isSelected ? 1.5 : 1,
-                          }]}>
-                            <TouchableOpacity
-                              style={styles.cpItemTop}
-                              onPress={() => setSelectedDebtItems(prev =>
-                                prev.includes(item.id) ? prev.filter(id => id !== item.id) : [...prev, item.id]
-                              )}
-                              activeOpacity={0.8}
-                            >
-                              <View style={[styles.cpCheckbox, {
-                                backgroundColor: isSelected ? colors.primary : 'transparent',
-                                borderColor: isSelected ? colors.primary : colors.border,
-                              }]}>
-                                {isSelected && <Check size={10} color="#FFF" strokeWidth={3} />}
-                              </View>
-                              <AppText variant="body" weight="bold" style={[styles.cpItemName, { color: colors.text }]} numberOfLines={1}>
-                                {item.itemName}
-                              </AppText>
-                              <View style={[styles.cpStatusBadge, {
-                                backgroundColor: item.paymentStatus === 'Paid' ? '#34C75915' : paid > 0 ? '#FF950015' : '#FF3B3015'
-                              }]}>
-                                <AppText variant="micro" weight="bold" shrink={false} style={[styles.cpStatusText, {
-                                  color: item.paymentStatus === 'Paid' ? '#34C759' : paid > 0 ? '#FF9500' : '#FF3B30'
-                                }]} numberOfLines={1}>
-                                  {item.paymentStatus === 'Paid' ? t('sales.status_paid') : paid > 0 ? t('sales.status_partial') : t('sales.status_unpaid')}
-                                </AppText>
-                              </View>
-                            </TouchableOpacity>
-                            <View style={[styles.cpItemStats, { borderTopColor: colors.border }]}>
-                              <View style={styles.cpStat}>
-                                <AppText variant="micro" weight="medium" style={[styles.cpStatLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('sales.stat_qty')}</AppText>
-                                <AppText variant="body" weight="bold" shrink={false} style={[styles.cpStatValue, { color: colors.text }]} numberOfLines={1}>{item.quantity} {item.unit}</AppText>
-                              </View>
-                              <View style={styles.cpStat}>
-                                <AppText variant="micro" weight="medium" style={[styles.cpStatLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('sales.stat_total')}</AppText>
-                                <AppText variant="body" weight="bold" shrink={false} style={[styles.cpStatValue, { color: colors.text }]} numberOfLines={1}>{item.totalPrice.toLocaleString()}</AppText>
-                              </View>
-                              <View style={styles.cpStat}>
-                                <AppText variant="micro" weight="medium" style={[styles.cpStatLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('sales.stat_paid')}</AppText>
-                                <AppText variant="body" weight="bold" shrink={false} style={[styles.cpStatValue, { color: '#34C759' }]} numberOfLines={1}>{paid.toLocaleString()}</AppText>
-                              </View>
-                              <View style={styles.cpStat}>
-                                <AppText variant="micro" weight="medium" style={[styles.cpStatLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('sales.stat_left')}</AppText>
-                                <AppText variant="body" weight="bold" shrink={false} style={[styles.cpStatValue, { color: '#FF9500' }]} numberOfLines={1}>{remaining.toLocaleString()}</AppText>
-                              </View>
-                            </View>
-                            {isSelected && (
-                              <View style={[styles.cpQtyRow, { borderTopColor: colors.border }]}>
-                                <AppText variant="caption" weight="medium" style={[styles.cpQtyLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('sales.pay_qty')}</AppText>
-                                <View style={styles.cpQtyStepper}>
-                                  <TouchableOpacity
-                                    style={[styles.cpStepBtn, { backgroundColor: colors.border }]}
-                                    onPress={() => setPartialQtyMap(prev => ({ ...prev, [item.id]: String(Math.max(1, currentQty - 1)) }))}
-                                  >
-                                    <AppText variant="title" weight="bold" shrink={false} style={[styles.cpStepBtnText, { color: colors.text }]} numberOfLines={1}>−</AppText>
-                                  </TouchableOpacity>
-                                  <TextInput
-                                    style={[styles.cpQtyInput, { color: colors.text, borderColor: colors.border }]}
-                                    value={currentQtyStr}
-                                    onChangeText={v => {
-                                      const n = parseInt(v);
-                                      setPartialQtyMap(prev => ({
-                                        ...prev,
-                                        [item.id]: isNaN(n) ? v : String(Math.min(Math.max(1, n), maxQty))
-                                      }));
-                                    }}
-                                    keyboardType="numeric"
-                                    selectTextOnFocus
-                                  />
-                                  <TouchableOpacity
-                                    style={[styles.cpStepBtn, { backgroundColor: colors.border }]}
-                                    onPress={() => setPartialQtyMap(prev => ({ ...prev, [item.id]: String(Math.min(maxQty, currentQty + 1)) }))}
-                                  >
-                                    <AppText variant="title" weight="bold" style={[styles.cpStepBtnText, { color: colors.text }]} numberOfLines={1}>+</AppText>
-                                  </TouchableOpacity>
-                                  <AppText variant="caption" weight="medium" style={[styles.cpQtyOf, { color: colors.textSecondary }]} numberOfLines={1}>/ {maxQty}</AppText>
-                                </View>
-                                <AppText variant="body" weight="bold" style={[styles.cpPayAmt, { color: colors.primary }]} numberOfLines={1}>
-                                  {payAmt.toLocaleString()} {t('common.etb')}
-                                </AppText>
-                              </View>
-                            )}
-                          </View>
-                        );
-                      }}
+                      renderItem={renderDebtItem}
                     />
 
                     {/* Sticky footer */}
@@ -1171,7 +1312,7 @@ const SalesDashboard = () => {
                   /* ── Activity Tab ── */
                   <FlatList
                     data={customerActivity}
-                    keyExtractor={(item, idx) => (item.id || 0).toString() + idx}
+                    keyExtractor={activityKeyExtractor}
                     showsVerticalScrollIndicator={false}
                     contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 40 }}
                     ListEmptyComponent={
@@ -1185,130 +1326,7 @@ const SalesDashboard = () => {
                         </AppText>
                       </View>
                     }
-                    renderItem={({ item, index }) => {
-                      const isFP    = item.activityType === 'full_payment';
-                      const isPP    = item.activityType === 'partial_payment';
-                      const isPurch = item.activityType === 'purchase';
-
-                      const dotColor = isFP ? '#34C759' : isPP ? '#FF9500' : colors.primary;
-
-                      const typeLabel = isFP    ? t('sales.activity_full')
-                                      : isPP    ? t('sales.activity_partial')
-                                      : t('sales.activity_credit');
-                      const typeEmoji = isFP ? '💳' : isPP ? '💵' : '🛒';
-
-                      const timeStr = item.createdAt
-                        ? (() => {
-                            const cd = new Date(item.createdAt);
-                            const datePart = formatShortDate(cd, calendarType, language);
-                            // Time portion respects the selected time
-                            // system (device vs. Ethiopian). The full
-                            // ISO is reconstructed because SQLite
-                            // returns `YYYY-MM-DD HH:MM:SS` which
-                            // some JS engines parse as local time
-                            // and others as UTC.
-                            const isoLike = (typeof item.createdAt === 'string' && !item.createdAt.includes('T') && !item.createdAt.includes('Z'))
-                              ? `${item.createdAt.replace(' ', 'T')}Z`
-                              : item.createdAt;
-                            const timePart = formatTime(isoLike, timeSystem, language);
-                            return `${datePart}, ${timePart}`;
-                          })()
-                        : '';
-
-                      const paid      = Number(item.paidSoFar ?? item.paidAmount ?? 0);
-                      const remaining = Number(item.remainingBalance ?? (item.totalPrice - paid));
-
-                      return (
-                        <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 }}>
-                          {/* Timeline spine */}
-                          <View style={{ alignItems: 'center', marginRight: 12, paddingTop: 4 }}>
-                            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: dotColor }} />
-                            {index < customerActivity.length - 1 && (
-                              <View style={{ width: 2, flex: 1, minHeight: 30, backgroundColor: colors.border, marginTop: 4 }} />
-                            )}
-                          </View>
-
-                          {/* Card */}
-                          <View style={{
-                            flex: 1, borderRadius: 14, borderWidth: 1,
-                            padding: 12, marginBottom: 2,
-                            backgroundColor: colors.card,
-                            borderColor: colors.border,
-                          }}>
-                            {/* Header: type badge + time */}
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                              <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: dotColor + '18' }}>
-                                <AppText variant="caption" weight="bold" style={{ fontSize: 11, fontFamily: Fonts.bold, color: dotColor }} numberOfLines={1}>
-                                  {typeEmoji} {typeLabel}
-                                </AppText>
-                              </View>
-                              <AppText variant="micro" weight="medium" style={{ fontSize: 10, fontFamily: Fonts.medium, color: colors.textSecondary }} numberOfLines={1}>
-                                {timeStr}
-                              </AppText>
-                            </View>
-
-                            {/* Item name + qty */}
-                            <AppText variant="body" weight="bold" style={{ fontSize: 14, fontFamily: Fonts.bold, color: colors.text, marginBottom: 8 }} numberOfLines={1}>
-                              {item.itemName || '—'}
-                              <AppText variant="caption" weight="medium" style={{ fontSize: 12, fontFamily: Fonts.medium, color: colors.textSecondary }} numberOfLines={1}>
-                                {'  '}×{item.quantity} {item.unit}
-                              </AppText>
-                            </AppText>
-
-                            {/* Amount chips */}
-                            <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-                              {/* Total — always shown */}
-                              <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: colors.primary + '12' }}>
-                                <AppText variant="micro" weight="bold" transform="uppercase" style={{ fontSize: 9, fontFamily: Fonts.bold, color: colors.textSecondary }} numberOfLines={1}>{t('sales.stat_total')}</AppText>
-                                <AppText variant="caption" weight="bold" style={{ fontSize: 12, fontFamily: Fonts.bold, color: colors.text }} numberOfLines={1}>
-                                  {Number(item.totalPrice).toLocaleString()} {t('common.etb')}
-                                </AppText>
-                              </View>
-
-                              {/* Paid — for full or partial payments */}
-                              {(isFP || isPP) && paid > 0 && (
-                                <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: '#34C75912' }}>
-                                  <AppText variant="micro" weight="bold" transform="uppercase" style={{ fontSize: 9, fontFamily: Fonts.bold, color: colors.textSecondary }} numberOfLines={1}>{t('sales.stat_paid')}</AppText>
-                                  <AppText variant="caption" weight="bold" style={{ fontSize: 12, fontFamily: Fonts.bold, color: '#34C759' }} numberOfLines={1}>
-                                    {(isFP ? Number(item.totalPrice) : paid).toLocaleString()} {t('common.etb')}
-                                  </AppText>
-                                </View>
-                              )}
-
-                              {/* Remaining — only for partial with balance left */}
-                              {isPP && remaining > 0 && (
-                                <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: '#FF950012' }}>
-                                  <AppText variant="micro" weight="bold" transform="uppercase" style={{ fontSize: 9, fontFamily: Fonts.bold, color: colors.textSecondary }} numberOfLines={1}>{t('sales.stat_left')}</AppText>
-                                  <AppText variant="caption" weight="bold" style={{ fontSize: 12, fontFamily: Fonts.bold, color: '#FF9500' }} numberOfLines={1}>
-                                    {remaining.toLocaleString()} {t('common.etb')}
-                                  </AppText>
-                                </View>
-                              )}
-
-                              {/* On credit purchase — show outstanding */}
-                              {isPurch && remaining > 0 && (
-                                <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: '#FF3B3012' }}>
-                                  <AppText variant="micro" weight="bold" transform="uppercase" style={{ fontSize: 9, fontFamily: Fonts.bold, color: colors.textSecondary }} numberOfLines={1}>{t('sales.stat_owed')}</AppText>
-                                  <AppText variant="caption" weight="bold" style={{ fontSize: 12, fontFamily: Fonts.bold, color: '#FF3B30' }} numberOfLines={1}>
-                                    {remaining.toLocaleString()} {t('common.etb')}
-                                  </AppText>
-                                </View>
-                              )}
-
-                              {/* Payment method */}
-                              {item.paymentMethod && (
-                                <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: colors.border + '60' }}>
-                                  <AppText variant="micro" weight="bold" transform="uppercase" style={{ fontSize: 9, fontFamily: Fonts.bold, color: colors.textSecondary }} numberOfLines={1}>{t('sales.stat_method')}</AppText>
-                                  <AppText variant="caption" weight="bold" style={{ fontSize: 12, fontFamily: Fonts.bold, color: colors.text }} numberOfLines={1}>
-                                    {item.paymentMethod}
-                                  </AppText>
-                                </View>
-                              )}
-                            </View>
-                          </View>
-                        </View>
-                      );
-                    }}
+                    renderItem={renderActivityItem}
                   />
                 )}
               </View>

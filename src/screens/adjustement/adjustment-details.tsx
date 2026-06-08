@@ -125,6 +125,13 @@ const AdjustmentAllScreen = ({ onClose, onSelectItem }: { onClose: () => void; o
 
   React.useEffect(() => { loadData(); }, [typeFilter, periodFilter, search]);
 
+  const keyExtractor = useCallback((item: any, i: number) => item?.id?.toString() ?? i.toString(), []);
+  const renderItem = useCallback(({ item, index }: { item: any; index: number }) => (
+    <Animated.View entering={FadeInDown.delay(index * 30).duration(300)}>
+      <AdjustmentListItem item={item} onPress={() => onSelectItem(item)} />
+    </Animated.View>
+  ), [onSelectItem]);
+
   return (
     <View style={[listStyles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
@@ -204,14 +211,10 @@ const AdjustmentAllScreen = ({ onClose, onSelectItem }: { onClose: () => void; o
       {/* List */}
       <FlatList
         data={data}
-        keyExtractor={(item, i) => item?.id?.toString() ?? i.toString()}
+        keyExtractor={keyExtractor}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 40 }}
-        renderItem={({ item, index }) => (
-          <Animated.View entering={FadeInDown.delay(index * 30).duration(300)}>
-            <AdjustmentListItem item={item} onPress={() => onSelectItem(item)} />
-          </Animated.View>
-        )}
+        renderItem={renderItem}
         ListEmptyComponent={
           <View style={listStyles.empty}>
             <AlertTriangle size={48} color={colors.border} />

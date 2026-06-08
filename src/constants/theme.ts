@@ -25,6 +25,10 @@ export const Typography = {
     fontFamily: 'Inter_800ExtraBold',
     fontWeight: '800',
   } as TextStyle,
+  black: {
+    fontFamily: 'Inter_900Black',
+    fontWeight: '900',
+  } as TextStyle,
 };
 
 export const Fonts = {
@@ -33,6 +37,7 @@ export const Fonts = {
   semibold: 'Inter_600SemiBold',
   bold: 'Inter_700Bold',
   extrabold: 'Inter_800ExtraBold',
+  black: 'Inter_900Black',
   light: 'Inter_400Regular',
   sans: 'Inter_400Regular',
 };

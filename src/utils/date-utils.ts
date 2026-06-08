@@ -187,6 +187,21 @@ export const getDayName = (
   }
 };
 /**
+ * Returns the full (non-abbreviated) day name, e.g. "Monday" or "ሰኞ"
+ */
+export const getDayNameFull = (
+  date: Date,
+  calendarType: 'ethiopian' | 'gregorian',
+  language: string = 'en'
+) => {
+  const dayIndex = date.getDay();
+  if (calendarType === 'gregorian') {
+    return date.toLocaleDateString(getLocale(language), { weekday: 'long' });
+  } else {
+    return getEthiopianDayNames(language)[dayIndex];
+  }
+};
+/**
  * Returns a friendly date string (Today, Yesterday, or short format)
  */
 export const getFriendlyDate = (

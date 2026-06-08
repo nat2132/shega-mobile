@@ -140,6 +140,7 @@ const BillsAndTransactions = () => {
     }, null);
   }, [upcoming]);
 
+  const keyExtractor = useCallback((item: any) => item.id.toString(), []);
   const renderExpenseCard = useCallback(({ item, index }: { item: any; index: number }) => (
     <ExpenseCardRow
       item={item}
@@ -281,7 +282,7 @@ ExpenseCardRow.displayName = 'ExpenseCardRow';
       {/* Ledger List */}
       <FlatList
         data={filteredData}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={keyExtractor}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         renderItem={renderExpenseCard}

@@ -7,13 +7,16 @@ import {
     getInventoryComparisonStats,
     getInventoryStats,
     getInventorySummary,
+    getItems,
     getLowStockItems,
     getMovingItemsWithFilters,
     getRecentItems,
+    getReorderSuggestions,
     getSlowMovingItems,
     getTopHighestValueItems,
     getTopSellingItems,
     getWarehouses,
+    transferStock,
     updateItem,
     ItemData
 } from '@/database/db';
@@ -48,6 +51,7 @@ import {
     FlatList,
     Image,
     Modal,
+    Platform,
     RefreshControl,
     ScrollView,
     StyleSheet,
@@ -73,6 +77,7 @@ import { SparklineSkeleton, CategoryBarSkeleton } from '@/components/ChartSkelet
 import { ChartEmpty } from '@/components/ChartStateView';
 import { AppText, AppListItem, AppCard, AppButton, AppRow } from '@/components/ui';
 import { BorderRadius, Spacing } from '@/constants/theme';
+import { generateProductListPDF } from '@/utils/pdf-utils';
 const SparklineChart = React.memo(({ data, loading }: { data?: number[]; loading?: boolean } = {}) => {
   const { colors } = useSettings();
   // If we have real numeric data, derive an SVG path from it.
@@ -187,7 +192,7 @@ InventoryLedgerItem.displayName = 'InventoryLedgerItem';
 
 const InventoryDashboard = () => {
   const { openSidebar } = useSidebar();
-  const { userProfile, colors, t, theme } = useSettings();
+  const { userProfile, colors, t, theme, language } = useSettings();
   const { notifCount } = useNotifications();
   const dialog = useDialog();
   const [showInventoryRecord, setShowInventoryRecord] = useState(false);
@@ -224,6 +229,14 @@ const InventoryDashboard = () => {
   const [showWarehouseModal, setShowWarehouseModal] = useState(false);
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [showHealthModal, setShowHealthModal] = useState(false);
+  const [reorderSuggestions, setReorderSuggestions] = useState<any[]>([]);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferSource, setTransferSource] = useState<number | null>(null);
+  const [transferDest, setTransferDest] = useState<number | null>(null);
+  const [transferItems, setTransferItems] = useState<any[]>([]);
+  const [transferQty, setTransferQty] = useState<Record<string, number>>({});
+  const [showTransferConfirm, setShowTransferConfirm] = useState(false);
+  const [catalogGenerating, setCatalogGenerating] = useState(false);
 
   const loadAllData = useCallback(() => {
     loadRecentItems();
@@ -250,6 +263,9 @@ const InventoryDashboard = () => {
 
     const whs = getWarehouses();
     setWarehouses(whs);
+
+    const reorder = getReorderSuggestions();
+    setReorderSuggestions(reorder);
   }, [selectedWarehouseId]);
 
   const { width } = Dimensions.get('window');
@@ -289,6 +305,32 @@ const loadRecentItems = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setHideMetrics(!hideMetrics);
   };
+
+  const keyExtractor = useCallback((item: any) => `lowstock-${item.id}`, []);
+
+  const renderLowStockItem = useCallback(({ item }: { item: any }) => (
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, borderRadius: 12, backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, marginBottom: 8 }}>
+      <View style={{ flex: 1, marginRight: 12 }}>
+        <AppText variant="body" weight="bold" style={{ fontSize: 14, fontFamily: Fonts.bold, color: colors.text }} numberOfLines={1}>
+          {item.name}
+        </AppText>
+        <AppText variant="caption" weight="medium" style={{ fontSize: 12, fontFamily: Fonts.medium, color: colors.primary, marginTop: 2 }} numberOfLines={1}>
+          {t('inv.current_qty', { count: String(item.totalBaseQuantity || 0) })}
+        </AppText>
+      </View>
+      <TouchableOpacity
+        style={{ backgroundColor: colors.text, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}
+        onPress={() => {
+          const newQty = (item.totalBaseQuantity || 0) + 50;
+          updateItem(item.id, { totalBaseQuantity: newQty });
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          loadAllData();
+        }}
+      >
+        <AppText variant="caption" weight="bold" style={{ color: colors.background, fontSize: 12, fontFamily: Fonts.bold }} numberOfLines={1}>{t('inv.restock_btn')}</AppText>
+      </TouchableOpacity>
+    </View>
+  ), [colors, t, updateItem, loadAllData]);
 
   return (
     <View style={[styles.screenWrapper, { backgroundColor: colors.background }]}>
@@ -364,20 +406,49 @@ const loadRecentItems = () => {
 
           {/* Vault Hero Section */}
           <View style={styles.heroSection}>
-            <View style={styles.vaultCard}>
+              <View style={styles.vaultCard}>
               <View style={styles.vaultTop}>
-                <View style={{ flex: 1 }}>
+                <View>
                    <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.vaultLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('inv.portfolio_valuation')}</AppText>
-<TouchableOpacity onPress={toggleMetrics} style={styles.valueRow}>
-                     <AppText variant="display-lg" weight="extrabold" shrink={false} style={[styles.vaultValue, { color: colors.text, fontSize: summary?.totalValue ? (summary.totalValue >= 10000000 ? 24 : summary.totalValue >= 1000000 ? 28 : summary.totalValue >= 100000 ? 32 : 36) : 36 }]} numberOfLines={1}>
-                       {hideMetrics ? '••••••' : `${summary?.totalValue.toLocaleString() || '0'} ${t('common.etb')}`}
-                     </AppText>
-                     {hideMetrics ? <Eye size={16} color={colors.textSecondary} /> : <EyeOff size={16} color={colors.textSecondary} />}
-                   </TouchableOpacity>
+<View style={styles.valueRow}>
+                     <TouchableOpacity
+                       activeOpacity={0.7}
+                       onPress={() => {
+                         if (!hideMetrics && summary?.totalValue) {
+                           dialog.alert({
+                             title: t('inv.portfolio_valuation'),
+                             message: `${summary.totalValue.toLocaleString()} ${t('common.etb')}`,
+                             confirmText: t('common.ok'),
+                           });
+                         }
+                       }}
+                       style={{ flexShrink: 1 }}
+                     >
+                      <AppText
+                       variant="display-lg"
+                       weight="black"
+                       shrink={false}
+                       style={[styles.vaultValue, { color: colors.text, fontFamily: Fonts.black }]}
+                       numberOfLines={1}
+                      >
+                        {hideMetrics ? '••••••' : (summary?.totalValue.toLocaleString() || '0')}
+                      </AppText>
+                     </TouchableOpacity>
+                      <AppText variant="heading" weight="bold" style={[{ color: colors.textSecondary, fontFamily: Fonts.bold, flexShrink: 0 }]} numberOfLines={1}>
+                        {hideMetrics ? '' : t('common.etb')}
+                      </AppText>
+                      <TouchableOpacity
+                        onPress={toggleMetrics}
+                        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                        style={[styles.vaultEyeBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                      >
+                        {hideMetrics ? <Eye size={18} color={colors.text} strokeWidth={2.25} /> : <EyeOff size={18} color={colors.text} strokeWidth={2.25} />}
+                      </TouchableOpacity>
+                     </View>
                 </View>
                 <TouchableOpacity 
                   onPress={() => setShowHealthModal(true)}
-                  style={[styles.healthBadge, { backgroundColor: (summary?.stockHealth || 100) > 80 ? (colors.success + '15') : (colors.primary + '15') }]}
+                  style={[styles.healthBadge, { marginTop: 12, backgroundColor: (summary?.stockHealth || 100) > 80 ? (colors.success + '15') : (colors.primary + '15') }]}
                 >
                   <ShieldCheck size={12} color={(summary?.stockHealth || 100) > 80 ? (colors.success) : (colors.primary)} />
                   <AppText variant="caption" weight="bold" numberOfLines={1} style={[styles.healthText, { color: (summary?.stockHealth || 100) > 80 ? (colors.success) : (colors.primary), maxWidth: 80 }]}>
@@ -470,8 +541,69 @@ const loadRecentItems = () => {
                    >
                     <ShoppingBag size={20} color={colors.primary} style={{ marginBottom: 8 }} />
                     <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.bentoLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('inventory.product_order')}</AppText>
-                    <AppText variant="body" weight="bold" style={[styles.bentoMainVal, { color: colors.text, fontSize: (summary?.lowStockCount || 0) >= 1000 ? 16 : 18 }]} numberOfLines={1}>{summary?.lowStockCount || 0}</AppText>
-                  </TouchableOpacity>
+                     <AppText variant="body" weight="bold" style={[styles.bentoMainVal, { color: colors.text, fontSize: (summary?.lowStockCount || 0) >= 1000 ? 16 : 18 }]} numberOfLines={1}>{summary?.lowStockCount || 0}</AppText>
+                   </TouchableOpacity>
+                </View>
+
+               {/* Reorder Suggestions Card */}
+               <View style={styles.bentoRow}>
+                 <TouchableOpacity
+                   style={[styles.smallBento, { backgroundColor: colors.card, borderColor: colors.border }]}
+                   activeOpacity={0.9}
+                   onPress={() => {
+                     const reorder = getReorderSuggestions();
+                     setReorderSuggestions(reorder);
+                     if (reorder.length > 0) {
+                       const items = reorder.map((r: any) => ({ ...r, orderQty: r.suggestedQty, name: r.name, id: r.id }));
+                       setOrderItems(items);
+                       setShowOrderModal(true);
+                     } else {
+                       dialog.alert({ title: t('inv.reorder_title'), message: t('inv.reorder_none'), confirmText: t('common.ok') });
+                     }
+                   }}
+                 >
+                   <ShoppingBag size={20} color={colors.primary} style={{ marginBottom: 8 }} />
+                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.bentoLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('inv.reorder_title')}</AppText>
+                   <AppText variant="body" weight="bold" style={[styles.bentoMainVal, { color: colors.text, fontSize: reorderSuggestions.length >= 100 ? 16 : 18 }]} numberOfLines={1}>{reorderSuggestions.length}</AppText>
+                 </TouchableOpacity>
+               </View>
+
+               {/* Stock Transfer + Share Catalog Row */}
+               <View style={styles.bentoRow}>
+                 <TouchableOpacity
+                   style={[styles.smallBento, { backgroundColor: colors.card, borderColor: colors.border }]}
+                   activeOpacity={0.9}
+                   onPress={() => {
+                     setTransferSource(null);
+                     setTransferDest(null);
+                     setTransferItems([]);
+                     setTransferQty({});
+                     setShowTransferModal(true);
+                   }}
+                 >
+                   <Warehouse size={20} color={colors.primary} style={{ marginBottom: 8 }} />
+                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.bentoLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('inv.transfer_stock')}</AppText>
+                 </TouchableOpacity>
+                 <View style={{ width: 12 }} />
+                 <TouchableOpacity
+                   style={[styles.smallBento, { backgroundColor: colors.card, borderColor: colors.border }]}
+                   activeOpacity={0.9}
+                   onPress={async () => {
+                     if (catalogGenerating) return;
+                     setCatalogGenerating(true);
+                     try {
+                       const allItems = getItems();
+                       const business = { businessName: userProfile.businessName || '' };
+                       await generateProductListPDF(allItems, business as any, language, 'share');
+                     } catch (e) {
+                       console.error('Catalog error:', e);
+                     }
+                     setCatalogGenerating(false);
+                   }}
+                 >
+                   <Download size={20} color={colors.primary} style={{ marginBottom: 8 }} />
+                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.bentoLabel, { color: colors.textSecondary }]} numberOfLines={1}>{catalogGenerating ? t('common.loading') : t('inv.share_catalog')}</AppText>
+                 </TouchableOpacity>
                </View>
 
                {/* Category Distribution - Fixed percentages */}
@@ -1243,7 +1375,7 @@ const loadRecentItems = () => {
 
               <FlatList
                 data={lowStockItems}
-                keyExtractor={(item) => `lowstock-${item.id}`}
+                keyExtractor={keyExtractor}
                 style={{ flex: 1, marginBottom: 20 }}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 8 }}
@@ -1251,29 +1383,7 @@ const loadRecentItems = () => {
                 maxToRenderPerBatch={6}
                 windowSize={5}
                 removeClippedSubviews={true}
-                renderItem={({ item }) => (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, borderRadius: 12, backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, marginBottom: 8 }}>
-                    <View style={{ flex: 1, marginRight: 12 }}>
-                      <AppText variant="body" weight="bold" style={{ fontSize: 14, fontFamily: Fonts.bold, color: colors.text }} numberOfLines={1}>
-                        {item.name}
-                      </AppText>
-                      <AppText variant="caption" weight="medium" style={{ fontSize: 12, fontFamily: Fonts.medium, color: colors.primary, marginTop: 2 }} numberOfLines={1}>
-                        {t('inv.current_qty', { count: String(item.totalBaseQuantity || 0) })}
-                      </AppText>
-                    </View>
-                    <TouchableOpacity
-                      style={{ backgroundColor: colors.text, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}
-                      onPress={() => {
-                        const newQty = (item.totalBaseQuantity || 0) + 50;
-                        updateItem(item.id, { totalBaseQuantity: newQty });
-                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                        loadAllData();
-                      }}
-                    >
-                      <AppText variant="caption" weight="bold" style={{ color: colors.background, fontSize: 12, fontFamily: Fonts.bold }} numberOfLines={1}>{t('inv.restock_btn')}</AppText>
-                    </TouchableOpacity>
-                  </View>
-                )}
+                renderItem={renderLowStockItem}
                 ListEmptyComponent={
                   <View style={{ alignItems: 'center', paddingVertical: 40 }}>
                     <ShieldCheck size={48} color={colors.success} />
@@ -1296,6 +1406,123 @@ const loadRecentItems = () => {
           setShowWarehouseModal(false);
         }}
       />
+
+      {/* Stock Transfer Modal */}
+      <Modal visible={showTransferModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowTransferModal(false)}>
+        <View style={[styles.transferModal, { backgroundColor: colors.background }]}>
+          <View style={styles.transferHeader}>
+            <TouchableOpacity onPress={() => setShowTransferModal(false)}>
+              <X size={24} color={colors.textSecondary} />
+            </TouchableOpacity>
+            <AppText variant="heading" weight="bold" style={{ color: colors.text }} numberOfLines={1}>{t('inv.transfer_title')}</AppText>
+            <View style={{ width: 24 }} />
+          </View>
+
+          {!transferSource ? (
+            <View style={styles.transferStep}>
+              <AppText variant="body" weight="medium" style={{ color: colors.textSecondary, marginBottom: 16 }}>{t('inv.transfer_select_source')}</AppText>
+              {warehouses.filter(w => !transferDest || w.id !== transferDest).map(w => (
+                <TouchableOpacity
+                  key={w.id}
+                  style={[styles.transferWarehouseItem, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  onPress={() => setTransferSource(w.id)}
+                >
+                  <Warehouse size={20} color={colors.primary} />
+                  <AppText variant="body" weight="bold" style={{ color: colors.text, flex: 1 }} numberOfLines={1}>{w.name}</AppText>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : !transferDest ? (
+            <View style={styles.transferStep}>
+              <View style={styles.transferBackRow}>
+                <TouchableOpacity onPress={() => setTransferSource(null)}>
+                  <AppText variant="body" weight="bold" style={{ color: colors.primary }}>{t('common.back')}</AppText>
+                </TouchableOpacity>
+              </View>
+              <AppText variant="body" weight="medium" style={{ color: colors.textSecondary, marginVertical: 16 }}>{t('inv.transfer_select_dest')}</AppText>
+              {warehouses.filter(w => w.id !== transferSource).map(w => (
+                <TouchableOpacity
+                  key={w.id}
+                  style={[styles.transferWarehouseItem, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  onPress={() => setTransferDest(w.id)}
+                >
+                  <Warehouse size={20} color={colors.primary} />
+                  <AppText variant="body" weight="bold" style={{ color: colors.text, flex: 1 }} numberOfLines={1}>{w.name}</AppText>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.transferStep}>
+              <View style={styles.transferBackRow}>
+                <TouchableOpacity onPress={() => setTransferDest(null)}>
+                  <AppText variant="body" weight="bold" style={{ color: colors.primary }}>{t('common.back')}</AppText>
+                </TouchableOpacity>
+              </View>
+              <AppText variant="body" weight="bold" style={{ color: colors.text, marginBottom: 4 }}>{t('inv.transfer_select_items')}</AppText>
+              <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary, marginBottom: 16 }}>
+                {warehouses.find(w => w.id === transferSource)?.name} → {warehouses.find(w => w.id === transferDest)?.name}
+              </AppText>
+              <ScrollView style={{ flex: 1 }}>
+                {getItems().filter((i: any) => i.warehouseId === transferSource && i.totalBaseQuantity > 0).map((item: any) => (
+                  <View key={item.id} style={[styles.transferItemRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    <View style={{ flex: 1 }}>
+                      <AppText variant="body" weight="bold" style={{ color: colors.text }} numberOfLines={1}>{item.name}</AppText>
+                      <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }} numberOfLines={1}>{t('inv.current_stock')}: {item.totalBaseQuantity} {item.baseUnit}</AppText>
+                    </View>
+                    <View style={styles.qtyControl}>
+                      <TouchableOpacity
+                        style={[styles.qtyBtn, { backgroundColor: colors.surface }]}
+                        onPress={() => setTransferQty(p => ({ ...p, [String(item.id)]: Math.max(0, (p[String(item.id)] || 0) - 1) }))}
+                      >
+                        <AppText variant="body" weight="bold" style={{ color: colors.text, fontSize: 18 }} numberOfLines={1}>-</AppText>
+                      </TouchableOpacity>
+                      <AppText variant="body" weight="bold" style={[styles.qtyVal, { color: colors.text }]} numberOfLines={1}>{transferQty[String(item.id)] || 0}</AppText>
+                      <TouchableOpacity
+                        style={[styles.qtyBtn, { backgroundColor: colors.surface }]}
+                        onPress={() => setTransferQty(p => ({ ...p, [String(item.id)]: Math.min(item.totalBaseQuantity, (p[String(item.id)] || 0) + 1) }))}
+                      >
+                        <AppText variant="body" weight="bold" style={{ color: colors.text, fontSize: 18 }} numberOfLines={1}>+</AppText>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+              <TouchableOpacity
+                style={[styles.transferSubmitBtn, { backgroundColor: colors.primary, opacity: Object.keys(transferQty).some(k => transferQty[k] > 0) ? 1 : 0.5 }]}
+                disabled={!Object.keys(transferQty).some(k => transferQty[k] > 0)}
+                onPress={async () => {
+                  const transfers = Object.entries(transferQty)
+                    .filter(([_, qty]) => qty > 0)
+                    .map(([itemId, qty]) => ({ itemId: Number(itemId), quantity: qty }));
+                  if (transfers.length === 0) return;
+                  const ok = await dialog.confirm({
+                    title: t('inv.transfer_confirm_title'),
+                    message: t('inv.transfer_confirm_msg', {
+                      count: transfers.length.toString(),
+                      from: warehouses.find(w => w.id === transferSource)?.name || '',
+                      to: warehouses.find(w => w.id === transferDest)?.name || '',
+                    }),
+                    confirmText: t('common.proceed'),
+                    cancelText: t('common.cancel'),
+                  });
+                  if (ok) {
+                    const success = transferStock(transferSource!, transferDest!, transfers);
+                    if (success) {
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                      setShowTransferModal(false);
+                      loadAllData();
+                    } else {
+                      dialog.alert({ title: t('common.error'), message: t('inv.transfer_failed'), iconType: 'danger', confirmText: t('common.ok') });
+                    }
+                  }
+                }}
+              >
+                <AppText variant="body" weight="bold" style={{ color: '#FFF' }}>{t('inv.transfer_execute', { count: Object.keys(transferQty).filter(k => transferQty[k] > 0).length.toString() })}</AppText>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -1398,9 +1625,6 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0,0,0,0.05)',
   },
   vaultTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
     marginBottom: 25,
   },
   vaultLabel: {
@@ -1418,6 +1642,15 @@ const styles = StyleSheet.create({
   vaultValue: {
     fontFamily: Fonts.extrabold,
     letterSpacing: -0.5,
+    flexShrink: 1,
+  },
+  vaultEyeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
   },
   healthBadge: {
     flexDirection: 'row',
@@ -1765,6 +1998,49 @@ const styles = StyleSheet.create({
   },
   filterChipText: {
     fontFamily: Fonts.bold,
+  },
+  transferModal: {
+    flex: 1,
+    paddingTop: Platform.OS === 'ios' ? 60 : 45,
+  },
+  transferHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingBottom: 16,
+  },
+  transferStep: {
+    flex: 1,
+    paddingHorizontal: 24,
+  },
+  transferBackRow: {
+    marginBottom: 8,
+  },
+  transferWarehouseItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 10,
+    gap: 12,
+  },
+  transferItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 8,
+    gap: 10,
+  },
+  transferSubmitBtn: {
+    height: 52,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginVertical: 16,
   },
 });
 

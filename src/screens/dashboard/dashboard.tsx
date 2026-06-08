@@ -535,7 +535,7 @@ SparklineChart.displayName = 'SparklineChart';
                       <AppText variant="caption" weight="medium" style={[styles.metricLabel, { color: colors.textSecondary }]} numberOfLines={2}>
                         {METRICS_DATA[currentMetric].label}
                       </AppText>
-                      <AppText variant="display" weight="extrabold" shrink={false} style={[styles.metricValue, { color: colors.text, fontSize: METRICS_DATA[currentMetric].value.length > 12 ? 22 : 28 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                      <AppText variant="display-lg" weight="black" shrink={false} style={[styles.metricValue, { color: colors.text, fontFamily: Fonts.black, fontSize: METRICS_DATA[currentMetric].value.length > 12 ? 22 : 28 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                         {isPrivate ? '••••••' : METRICS_DATA[currentMetric].value}
                       </AppText>
                     </View>
@@ -725,11 +725,11 @@ SparklineChart.displayName = 'SparklineChart';
             <AppText variant="heading" weight="bold" style={[styles.sheetTitle, { color: colors.text }]} numberOfLines={2}>
               {activeModal === 'lowStock' ? t('dashboard.low_stock') : activeModal === 'onCreditCustomers' ? t('dashboard.credit_customers') : t('dashboard.credit_items')}
             </AppText>
-            <ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={false}>
+            <View style={{ maxHeight: 400 }}>
               {activeModal === 'lowStock' && <LowStockItemsScreen />}
               {activeModal === 'onCreditCustomers' && <OnCreditCustomersScreen />}
               {activeModal === 'onCreditItems' && <OnCreditItemsScreen />}
-            </ScrollView>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1063,7 +1063,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   metricValue: {
-    fontFamily: Fonts.bold,
+    fontFamily: Fonts.extrabold,
+    letterSpacing: -0.5,
   },
   metricSecondary: {
     fontFamily: Fonts.medium,

@@ -64,6 +64,7 @@ const migrateItemsTable = (database: SQLite.SQLiteDatabase) => {
 export const initDB = () => {
   try {
     const database = getDB();
+    database.execSync('PRAGMA foreign_keys = ON');
     console.log('Database version:', database.getFirstSync('PRAGMA user_version'));
     
     database.execSync(`
@@ -340,6 +341,13 @@ export const initDB = () => {
   database.execSync(`CREATE INDEX IF NOT EXISTS idx_notif_category ON notifications(category);`);
   database.execSync(`CREATE INDEX IF NOT EXISTS idx_notif_groupkey ON notifications(groupKey);`);
   database.execSync(`CREATE INDEX IF NOT EXISTS idx_notif_created ON notifications(createdAt DESC);`);
+  database.execSync(`CREATE INDEX IF NOT EXISTS idx_sales_created ON sales(createdAt);`);
+  database.execSync(`CREATE INDEX IF NOT EXISTS idx_sales_payment ON sales(paymentStatus);`);
+  database.execSync(`CREATE INDEX IF NOT EXISTS idx_sales_customer ON sales(customerName);`);
+  database.execSync(`CREATE INDEX IF NOT EXISTS idx_items_quantity ON items(totalBaseQuantity);`);
+  database.execSync(`CREATE INDEX IF NOT EXISTS idx_items_warehouse ON items(warehouseId);`);
+  database.execSync(`CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);`);
+  database.execSync(`CREATE INDEX IF NOT EXISTS idx_adjustments_created ON adjustments(createdAt);`);
 
   } catch (error) {
     console.error('Database initialization error:', error);
@@ -638,8 +646,9 @@ export const insertSale = (saleData: {
   customerPhone?: string;
   packId?: number;
 }) => {
+  const database = getDB();
   try {
-    const database = getDB();
+    database.execSync('BEGIN TRANSACTION');
     
     // Insert the sale record
     const statement = database.prepareSync(`
@@ -655,7 +664,9 @@ export const insertSale = (saleData: {
     ]);
 
     // Update inventory quantities
-    const item = database.getFirstSync<{ unitsPerPack: number }>('SELECT unitsPerPack FROM items WHERE id = ?', [saleData.itemId]);
+    const item = database.getFirstSync<{ unitsPerPack: number, totalBaseQuantity: number }>('SELECT unitsPerPack, totalBaseQuantity FROM items WHERE id = ?', [saleData.itemId]);
+    if (!item) { database.execSync('ROLLBACK'); return null; }
+
     let baseQty = saleData.quantity;
     let packQty = 0;
     
@@ -664,16 +675,20 @@ export const insertSale = (saleData: {
       packQty = saleData.quantity;
     }
 
-    database.execSync(`
-      UPDATE items 
-      SET totalBaseQuantity = totalBaseQuantity - ${baseQty},
-          totalPackQuantity = totalPackQuantity - ${packQty}
-      WHERE id = ${saleData.itemId}
-    `);
+    if ((item.totalBaseQuantity || 0) < baseQty) { database.execSync('ROLLBACK'); return null; }
 
+    database.runSync(`
+      UPDATE items 
+      SET totalBaseQuantity = totalBaseQuantity - ?,
+          totalPackQuantity = totalPackQuantity - ?
+      WHERE id = ?
+    `, [baseQty, packQty, saleData.itemId]);
+
+    database.execSync('COMMIT');
     return result.lastInsertRowId;
   } catch (error) {
     console.error('Insert sale error:', error);
+    try { database?.execSync('ROLLBACK'); } catch (_) {}
     return null;
   }
 };
@@ -754,8 +769,9 @@ export const getFilteredSales = (options: FilterOptions) => {
 };
 
 export const insertAdjustment = (adj: any) => {
+  const database = getDB();
   try {
-    const database = getDB();
+    database.execSync('BEGIN TRANSACTION');
     
     // 1. Log the adjustment
     const statement = database.prepareSync(`
@@ -768,20 +784,20 @@ export const insertAdjustment = (adj: any) => {
 
     // 2. Update the item based on adjustment type
     if (adj.type === 'price_up' || adj.type === 'price_down') {
-      database.execSync(`
+      database.runSync(`
         UPDATE items 
-        SET baseSellingPrice = ${adj.newValue} 
-        WHERE id = ${adj.itemId}
-      `);
+        SET baseSellingPrice = ? 
+        WHERE id = ?
+      `, [adj.newValue, adj.itemId]);
       
       // Also update pack price proportionally if unitsPerPack exists
       const item = database.getFirstSync('SELECT * FROM items WHERE id = ?', [adj.itemId]) as any;
       if (item && item.unitsPerPack) {
         const newPackPrice = adj.newValue * item.unitsPerPack;
-        database.execSync(`UPDATE items SET packSellingPrice = ${newPackPrice} WHERE id = ${adj.itemId}`);
+        database.runSync(`UPDATE items SET packSellingPrice = ? WHERE id = ?`, [newPackPrice, adj.itemId]);
       }
     } else if (adj.type === 'damaged') {
-      const item = database.getFirstSync('SELECT * FROM items WHERE id = ?', [adj.itemId]) as any;
+      const item = database.getFirstSync('SELECT totalBaseQuantity, unitsPerPack FROM items WHERE id = ?', [adj.itemId]) as any;
       if (item) {
         let baseDeduction = adj.quantity;
         let packDeduction = 0;
@@ -793,18 +809,22 @@ export const insertAdjustment = (adj: any) => {
           packDeduction = adj.quantity / (item.unitsPerPack || 1);
         }
 
-        database.execSync(`
+        if ((item.totalBaseQuantity || 0) < baseDeduction) { database.execSync('ROLLBACK'); return null; }
+
+        database.runSync(`
           UPDATE items 
-          SET totalBaseQuantity = totalBaseQuantity - ${baseDeduction},
-              totalPackQuantity = totalPackQuantity - ${packDeduction}
-          WHERE id = ${adj.itemId}
-        `);
+          SET totalBaseQuantity = totalBaseQuantity - ?,
+              totalPackQuantity = totalPackQuantity - ?
+          WHERE id = ?
+        `, [baseDeduction, packDeduction, adj.itemId]);
       }
     }
 
+    database.execSync('COMMIT');
     return result.lastInsertRowId;
   } catch (error) {
     console.error('Insert adjustment error:', error);
+    try { database?.execSync('ROLLBACK'); } catch (_) {}
     return null;
   }
 };
@@ -885,10 +905,11 @@ export const getFilteredAdjustments = (filters: { type?: string; period?: string
 };
 
 export const deleteAdjustment = (id: number) => {
+  const database = getDB();
   try {
-    const database = getDB();
+    database.execSync('BEGIN TRANSACTION');
     const adj = database.getFirstSync('SELECT * FROM adjustments WHERE id = ?', [id]) as any;
-    if (!adj) return false;
+    if (!adj) { database.execSync('ROLLBACK'); return false; }
 
     // Only restore items quantity if it was damaged
     if (adj.type === 'damaged') {
@@ -902,29 +923,32 @@ export const deleteAdjustment = (id: number) => {
         } else {
           packRefund = adj.quantity / (item.unitsPerPack || 1);
         }
-        database.execSync(`
+        database.runSync(`
           UPDATE items 
-          SET totalBaseQuantity = totalBaseQuantity + ${baseRefund},
-              totalPackQuantity = totalPackQuantity + ${packRefund}
-          WHERE id = ${adj.itemId}
-        `);
+          SET totalBaseQuantity = totalBaseQuantity + ?,
+              totalPackQuantity = totalPackQuantity + ?
+          WHERE id = ?
+        `, [baseRefund, packRefund, adj.itemId]);
       }
     }
     
     // For price_up/price_down, reverting price is risky if new adjustments exist, so we only delete the log.
     database.runSync('DELETE FROM adjustments WHERE id = ?', id);
+    database.execSync('COMMIT');
     return true;
   } catch (error) {
     console.error('Delete adjustment error:', error);
+    try { database?.execSync('ROLLBACK'); } catch (_) {}
     return false;
   }
 };
 
 export const updateAdjustment = (adjId: number, data: { quantity?: number, newValue?: number, reason?: string }) => {
+  const database = getDB();
   try {
-    const database = getDB();
+    database.execSync('BEGIN TRANSACTION');
     const existing = database.getFirstSync('SELECT * FROM adjustments WHERE id = ?', [adjId]) as any;
-    if (!existing) return false;
+    if (!existing) { database.execSync('ROLLBACK'); return false; }
 
     // Update the record
     const updates = [];
@@ -946,12 +970,12 @@ export const updateAdjustment = (adjId: number, data: { quantity?: number, newVa
             } else {
               packDiff = diff / (item.unitsPerPack || 1);
             }
-            database.execSync(`
+            database.runSync(`
               UPDATE items 
-              SET totalBaseQuantity = totalBaseQuantity - ${baseDiff},
-                  totalPackQuantity = totalPackQuantity - ${packDiff}
-              WHERE id = ${existing.itemId}
-            `);
+              SET totalBaseQuantity = totalBaseQuantity - ?,
+                  totalPackQuantity = totalPackQuantity - ?
+              WHERE id = ?
+            `, [baseDiff, packDiff, existing.itemId]);
           }
         }
       }
@@ -963,11 +987,11 @@ export const updateAdjustment = (adjId: number, data: { quantity?: number, newVa
       
       // Affect the current price
       if (existing.type === 'price_up' || existing.type === 'price_down') {
-         database.execSync(`UPDATE items SET baseSellingPrice = ${data.newValue} WHERE id = ${existing.itemId}`);
+         database.runSync(`UPDATE items SET baseSellingPrice = ? WHERE id = ?`, [data.newValue, existing.itemId]);
          const item = database.getFirstSync('SELECT * FROM items WHERE id = ?', [existing.itemId]) as any;
          if (item && item.unitsPerPack) {
            const newPackPrice = data.newValue * item.unitsPerPack;
-           database.execSync(`UPDATE items SET packSellingPrice = ${newPackPrice} WHERE id = ${existing.itemId}`);
+           database.runSync(`UPDATE items SET packSellingPrice = ? WHERE id = ?`, [newPackPrice, existing.itemId]);
          }
       }
     }
@@ -981,9 +1005,11 @@ export const updateAdjustment = (adjId: number, data: { quantity?: number, newVa
       params.push(adjId);
       database.runSync(`UPDATE adjustments SET ${updates.join(', ')} WHERE id = ?`, ...params);
     }
+    database.execSync('COMMIT');
     return true;
   } catch (error) {
     console.error('Update adjustment error:', error);
+    try { database?.execSync('ROLLBACK'); } catch (_) {}
     return false;
   }
 };
@@ -993,50 +1019,43 @@ export const getActivityFeed = (options: { search?: string, date?: string, limit
     const database = getDB();
     const limit = options.limit || 50;
 
-    // Build date condition
-    const dateWhere = options.date ? "WHERE date(createdAt) = '" + options.date + "'" : '';
-    const saleDateWhere = options.date ? "WHERE date(s.createdAt) = '" + options.date + "'" : '';
-    const adjDateWhere = options.date ? "WHERE date(a.createdAt) = '" + options.date + "'" : '';
-    const expDateWhere = options.date ? "WHERE date(e.date) = '" + options.date + "'" : '';
-    const invDateWhere = options.date ? "WHERE date(i.createdAt) = '" + options.date + "'" : '';
-
     // Sales
     const sales = database.getAllSync(`
       SELECT 'sale' as type, 'sale' as category, s.id, s.totalPrice as value, s.quantity, s.paymentMethod, s.paymentStatus, i.name as label, s.createdAt, s.discount, s.vat
       FROM sales s
       JOIN items i ON s.itemId = i.id
-      ${saleDateWhere}
+      ${options.date ? 'WHERE date(s.createdAt) = ?' : ''}
       ORDER BY s.createdAt DESC
-      LIMIT ${limit}
-    `);
+      LIMIT ?
+    `, options.date ? [options.date, limit] : [limit]);
 
     // Adjustments with type info
     const adjustments = database.getAllSync(`
       SELECT 'adjustment' as type, 'adjustment' as category, a.id, a.newValue as value, a.quantity, a.type as adjType, a.oldValue, COALESCE(i.name, 'Item') as label, a.createdAt, i.basePurchasePrice
       FROM adjustments a
       LEFT JOIN items i ON a.itemId = i.id
-      ${adjDateWhere}
+      ${options.date ? 'WHERE date(a.createdAt) = ?' : ''}
       ORDER BY a.createdAt DESC
-      LIMIT ${limit}
-    `);
+      LIMIT ?
+    `, options.date ? [options.date, limit] : [limit]);
 
     // Expenses
     const expenses = database.getAllSync(`
       SELECT 'expense' as type, 'expense' as category, e.id, e.amount as value, NULL as quantity, e.name as label, e.date as createdAt, e.category as expenseCategory, e.isRecurring
       FROM expenses e
-      ${expDateWhere}
+      ${options.date ? 'WHERE date(e.date) = ?' : ''}
       ORDER BY e.date DESC
-      LIMIT ${limit}
-    `);
+      LIMIT ?
+    `, options.date ? [options.date, limit] : [limit]);
 
     // Inventory additions
     const inventory = database.getAllSync(`
       SELECT 'inventory' as type, 'inventory' as category, i.id, (i.totalBaseQuantity * i.basePurchasePrice) as value, i.totalBaseQuantity as quantity, i.name as label, i.createdAt, i.companyName
       FROM items i
-      ${invDateWhere}
+      ${options.date ? 'WHERE date(i.createdAt) = ?' : ''}
       ORDER BY i.createdAt DESC
-      LIMIT ${limit}
-    `);
+      LIMIT ?
+    `, options.date ? [options.date, limit] : [limit]);
 
     // Merge and sort by date
     const combined = [...sales, ...adjustments, ...expenses, ...inventory]
@@ -1748,8 +1767,9 @@ export const processDebtPayment = (
   type: 'full' | 'partial',
   options?: { customerPhone?: string; saleId?: number; note?: string },
 ) => {
+  const database = getDB();
   try {
-    const database = getDB();
+    database.execSync('BEGIN TRANSACTION');
     if (type === 'full') {
       database.runSync(
         "UPDATE sales SET paymentStatus = 'Paid', paidAmount = totalPrice WHERE customerName = ? AND paymentStatus = 'Debt'",
@@ -1778,31 +1798,30 @@ export const processDebtPayment = (
       }
     }
     // Record this payment in the history table
-    try {
-      database.runSync(
-        'INSERT INTO debt_payments (saleId, customerName, customerPhone, amount, type, note) VALUES (?, ?, ?, ?, ?, ?)',
-        [
-          options?.saleId ?? null,
-          customerName,
-          options?.customerPhone ?? null,
-          amount,
-          type,
-          options?.note ?? null,
-        ],
-      );
-    } catch (e) {
-      console.error('Record debt payment history error:', e);
-    }
+    database.runSync(
+      'INSERT INTO debt_payments (saleId, customerName, customerPhone, amount, type, note) VALUES (?, ?, ?, ?, ?, ?)',
+      [
+        options?.saleId ?? null,
+        customerName,
+        options?.customerPhone ?? null,
+        amount,
+        type,
+        options?.note ?? null,
+      ],
+    );
+    database.execSync('COMMIT');
     return true;
   } catch (error) {
     console.error('Process debt payment error:', error);
+    try { database?.execSync('ROLLBACK'); } catch (_) {}
     return false;
   }
 };
 
 export const markDebtAsLoss = (customerName: string, options?: { customerPhone?: string; note?: string }) => {
+  const database = getDB();
   try {
-    const database = getDB();
+    database.execSync('BEGIN TRANSACTION');
     const sales = database.getAllSync<{ id: number; totalPrice: number; paidAmount: number }>(
       "SELECT id, totalPrice, paidAmount FROM sales WHERE customerName = ? AND paymentStatus = 'Debt'",
       [customerName],
@@ -1816,25 +1835,23 @@ export const markDebtAsLoss = (customerName: string, options?: { customerPhone?:
       [customerName]
     );
     // Record write-off as a history entry (negative direction, type='loss')
-    try {
-      if (outstanding > 0) {
-        database.runSync(
-          'INSERT INTO debt_payments (customerName, customerPhone, amount, type, note) VALUES (?, ?, ?, ?, ?)',
-          [
-            customerName,
-            options?.customerPhone ?? null,
-            outstanding,
-            'loss',
-            options?.note ?? null,
-          ],
-        );
-      }
-    } catch (e) {
-      console.error('Record debt loss history error:', e);
+    if (outstanding > 0) {
+      database.runSync(
+        'INSERT INTO debt_payments (customerName, customerPhone, amount, type, note) VALUES (?, ?, ?, ?, ?)',
+        [
+          customerName,
+          options?.customerPhone ?? null,
+          outstanding,
+          'loss',
+          options?.note ?? null,
+        ],
+      );
     }
+    database.execSync('COMMIT');
     return true;
   } catch (error) {
     console.error('Mark debt as loss error:', error);
+    try { database?.execSync('ROLLBACK'); } catch (_) {}
     return false;
   }
 };
@@ -2156,8 +2173,9 @@ export const deleteItem = (id: number) => {
 };
 
 export const deleteSale = (id: number) => {
+  const database = getDB();
   try {
-    const database = getDB();
+    database.execSync('BEGIN TRANSACTION');
     const sale = database.getFirstSync<{ itemId: number, quantity: number, unitType: string }>('SELECT * FROM sales WHERE id = ?', [id]);
     
     if (sale) {
@@ -2173,18 +2191,20 @@ export const deleteSale = (id: number) => {
         packRefund = sale.quantity / item.unitsPerPack;
       }
 
-      database.execSync(`
+      database.runSync(`
         UPDATE items 
-        SET totalBaseQuantity = totalBaseQuantity + ${baseRefund},
-            totalPackQuantity = totalPackQuantity + ${packRefund}
-        WHERE id = ${sale.itemId}
-      `);
+        SET totalBaseQuantity = totalBaseQuantity + ?,
+            totalPackQuantity = totalPackQuantity + ?
+        WHERE id = ?
+      `, [baseRefund, packRefund, sale.itemId]);
     }
 
-    database.execSync(`DELETE FROM sales WHERE id = ${id}`);
+    database.runSync('DELETE FROM sales WHERE id = ?', [id]);
+    database.execSync('COMMIT');
     return true;
   } catch (error) {
     console.error('Delete sale error:', error);
+    try { database?.execSync('ROLLBACK'); } catch (_) {}
     return false;
   }
 };
@@ -2428,19 +2448,27 @@ export const updateExpense = (id: number, updates: any) => {
 };
 
 export const clearDatabase = () => {
+  const database = getDB();
   try {
-    const database = getDB();
+    database.execSync('BEGIN TRANSACTION');
     database.execSync('DELETE FROM adjustments;');
     database.execSync('DELETE FROM sales;');
+    database.execSync('DELETE FROM returns;');
+    database.execSync('DELETE FROM debt_payments;');
+    database.execSync('DELETE FROM notifications;');
     database.execSync('DELETE FROM item_packs;');
     database.execSync('DELETE FROM items;');
     database.execSync('DELETE FROM expenses;');
     database.execSync('DELETE FROM categories;');
-    database.execSync("DELETE FROM sqlite_sequence WHERE name IN ('adjustments','sales','item_packs','items','expenses','categories');");
+    database.execSync('DELETE FROM contacts;');
+    database.execSync('DELETE FROM warehouses;');
+    database.execSync("DELETE FROM sqlite_sequence WHERE name IN ('adjustments','sales','returns','debt_payments','notifications','item_packs','items','expenses','categories','contacts','warehouses');");
+    database.execSync('COMMIT');
     console.log('Database cleared successfully.');
     return true;
   } catch (error) {
     console.error('Clear database error:', error);
+    try { database?.execSync('ROLLBACK'); } catch (_) {}
     return false;
   }
 };
@@ -3651,17 +3679,40 @@ export const insertPack = (data: { itemId: number; packNumber: number; quantity:
 };;
 
 export const insertReturn = (data: { saleId: number; itemId: number; quantity: number; unit: string; unitType: string; totalRefund: number; reason: string; createdAt: string }) => {
+  const database = getDB();
   try {
-    const database = getDB();
-    return database.prepareSync(`
+    database.execSync('BEGIN TRANSACTION');
+    const item = database.getFirstSync<{ unitsPerPack: number }>('SELECT unitsPerPack FROM items WHERE id = ?', [data.itemId]);
+
+    let baseRefund = data.quantity;
+    let packRefund = 0;
+
+    if (data.unitType === 'pack' && item?.unitsPerPack) {
+      baseRefund = data.quantity * item.unitsPerPack;
+      packRefund = data.quantity;
+    } else if (item?.unitsPerPack) {
+      packRefund = data.quantity / item.unitsPerPack;
+    }
+
+    database.runSync(`
+      UPDATE items
+      SET totalBaseQuantity = totalBaseQuantity + ?,
+          totalPackQuantity = totalPackQuantity + ?
+      WHERE id = ?
+    `, [baseRefund, packRefund, data.itemId]);
+
+    const result = database.prepareSync(`
       INSERT INTO returns (saleId, itemId, quantity, unit, unitType, totalRefund, reason, createdAt)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).executeSync([data.saleId, data.itemId, data.quantity, data.unit, data.unitType, data.totalRefund, data.reason, data.createdAt]) as any;
+    `).executeSync([data.saleId, data.itemId, data.quantity, data.unit, data.unitType, data.totalRefund, data.reason, data.createdAt]);
+    database.execSync('COMMIT');
+    return result.lastInsertRowId;
   } catch (error) {
     console.error('Insert return error:', error);
+    try { database?.execSync('ROLLBACK'); } catch (_) {}
     return null;
   }
-};;
+};
 
 export const getAdjustmentById = (id: number) => {
   try {
@@ -3757,5 +3808,94 @@ export const getLatestItemsByPeriod = (period: 'today' | 'yesterday' | 'date' | 
   } catch (error) {
     console.error('Get latest items by period error:', error);
     return [];
+  }
+};
+
+export const getReorderSuggestions = () => {
+  try {
+    const database = getDB();
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
+    return database.getAllSync(`
+      SELECT
+        i.id, i.name, i.totalBaseQuantity, i.baseUnit, i.baseSellingPrice,
+        i.packSellingPrice, i.warehouseId, i.unitsPerPack,
+        COALESCE(s.sales30d, 0) as sales30d,
+        CASE
+          WHEN COALESCE(s.sales30d, 0) > 0
+          THEN MAX(10, CAST(ROUND(COALESCE(s.sales30d, 0) * 2 - i.totalBaseQuantity) AS INTEGER))
+          ELSE MAX(10, CAST(ROUND(10 - i.totalBaseQuantity) AS INTEGER))
+        END as suggestedQty
+      FROM items i
+      LEFT JOIN (
+        SELECT s.itemId,
+          SUM(CASE WHEN s.unitType = 'pack' THEN s.quantity * COALESCE(i2.unitsPerPack, 1) ELSE s.quantity END) as sales30d
+        FROM sales s
+        LEFT JOIN items i2 ON s.itemId = i2.id
+        WHERE s.createdAt >= ?
+        GROUP BY s.itemId
+      ) s ON i.id = s.itemId
+      WHERE i.totalBaseQuantity < 10
+         OR (COALESCE(s.sales30d, 0) > 0 AND i.totalBaseQuantity < COALESCE(s.sales30d, 0) * 0.5)
+      ORDER BY i.totalBaseQuantity ASC, s.sales30d DESC
+    `, [thirtyDaysAgo]);
+  } catch (error) {
+    console.error('Get reorder suggestions error:', error);
+    return [];
+  }
+};
+
+export const transferStock = (
+  fromWarehouseId: number,
+  toWarehouseId: number,
+  transfers: { itemId: number; quantity: number }[]
+) => {
+  const database = getDB();
+  try {
+    database.execSync('BEGIN TRANSACTION');
+    for (const t of transfers) {
+      const source = database.getFirstSync<{
+        name: string; totalBaseQuantity: number; totalPackQuantity: number;
+        unitsPerPack: number; baseUnit: string; purchaseUnit: string;
+        basePurchasePrice: number; packPurchasePrice: number;
+        baseSellingPrice: number; packSellingPrice: number;
+        categoryId: number | null; companyName: string;
+        expiryDate: string | null; qualityGrade: string; notes: string;
+        isCredit: number; supplierPhone: string | null; supplierAccount: string | null;
+        allowSellByBaseUnit: number; allowSellByPackUnit: number
+      }>(
+        'SELECT * FROM items WHERE id = ? AND warehouseId = ?', [t.itemId, fromWarehouseId]
+      );
+      if (!source) { database.execSync('ROLLBACK'); return false; }
+      if (source.totalBaseQuantity < t.quantity) { database.execSync('ROLLBACK'); return false; }
+
+      const packQty = source.unitsPerPack > 0 ? t.quantity / source.unitsPerPack : 0;
+      database.runSync(
+        'UPDATE items SET totalBaseQuantity = totalBaseQuantity - ?, totalPackQuantity = MAX(0, totalPackQuantity - ?) WHERE id = ?',
+        [t.quantity, packQty, t.itemId]
+      );
+
+      const dest = database.getFirstSync<{ id: number }>(
+        'SELECT id FROM items WHERE name = ? AND warehouseId = ?', [source.name, toWarehouseId]
+      );
+
+      if (dest) {
+        database.runSync(
+          'UPDATE items SET totalBaseQuantity = totalBaseQuantity + ?, totalPackQuantity = totalPackQuantity + ? WHERE id = ?',
+          [t.quantity, packQty, dest.id]
+        );
+      } else {
+        database.runSync(
+          `INSERT INTO items (name, categoryId, companyName, purchaseUnit, baseUnit, unitsPerPack, totalPackQuantity, totalBaseQuantity, packPurchasePrice, basePurchasePrice, baseSellingPrice, packSellingPrice, allowSellByBaseUnit, allowSellByPackUnit, expiryDate, qualityGrade, notes, isCredit, supplierPhone, supplierAccount, warehouseId)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [source.name, source.categoryId, source.companyName, source.purchaseUnit, source.baseUnit, source.unitsPerPack, packQty, t.quantity, source.packPurchasePrice, source.basePurchasePrice, source.baseSellingPrice, source.packSellingPrice, source.allowSellByBaseUnit, source.allowSellByPackUnit, source.expiryDate, source.qualityGrade, source.notes, source.isCredit, source.supplierPhone, source.supplierAccount, toWarehouseId]
+        );
+      }
+    }
+    database.execSync('COMMIT');
+    return true;
+  } catch (error) {
+    console.error('Transfer stock error:', error);
+    try { database?.execSync('ROLLBACK'); } catch (_) {}
+    return false;
   }
 };

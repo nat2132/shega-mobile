@@ -41,7 +41,7 @@ export type FontSizeVariant =
   | 'display-lg'   // 32 — hero titles
   | 'hero';        // 40 — onboarding / marketing
 
-type Weight = 'regular' | 'medium' | 'semibold' | 'bold' | 'extrabold';
+type Weight = 'regular' | 'medium' | 'semibold' | 'bold' | 'extrabold' | 'black';
 
 export type { Weight };
 
@@ -63,6 +63,7 @@ const TOKENS: Record<FontSizeVariant, Record<Weight, FontToken>> = {
     semibold:   { fontSize: 10, lineHeight: 14, fontFamily: Fonts.semibold,  fontWeight: '600' },
     bold:       { fontSize: 10, lineHeight: 14, fontFamily: Fonts.bold,      fontWeight: '700' },
     extrabold:  { fontSize: 10, lineHeight: 14, fontFamily: Fonts.extrabold, fontWeight: '800' },
+    black:      { fontSize: 10, lineHeight: 14, fontFamily: Fonts.black,     fontWeight: '900' },
   },
   caption: {
     regular:    { fontSize: 12, lineHeight: 16, fontFamily: Fonts.regular,   fontWeight: '400' },
@@ -70,6 +71,7 @@ const TOKENS: Record<FontSizeVariant, Record<Weight, FontToken>> = {
     semibold:   { fontSize: 12, lineHeight: 16, fontFamily: Fonts.semibold,  fontWeight: '600' },
     bold:       { fontSize: 12, lineHeight: 16, fontFamily: Fonts.bold,      fontWeight: '700' },
     extrabold:  { fontSize: 12, lineHeight: 16, fontFamily: Fonts.extrabold, fontWeight: '800' },
+    black:      { fontSize: 12, lineHeight: 16, fontFamily: Fonts.black,     fontWeight: '900' },
   },
   'body-sm': {
     regular:    { fontSize: 13, lineHeight: 18, fontFamily: Fonts.regular,   fontWeight: '400' },
@@ -77,6 +79,7 @@ const TOKENS: Record<FontSizeVariant, Record<Weight, FontToken>> = {
     semibold:   { fontSize: 13, lineHeight: 18, fontFamily: Fonts.semibold,  fontWeight: '600' },
     bold:       { fontSize: 13, lineHeight: 18, fontFamily: Fonts.bold,      fontWeight: '700' },
     extrabold:  { fontSize: 13, lineHeight: 18, fontFamily: Fonts.extrabold, fontWeight: '800' },
+    black:      { fontSize: 13, lineHeight: 18, fontFamily: Fonts.black,     fontWeight: '900' },
   },
   body: {
     regular:    { fontSize: 14, lineHeight: 20, fontFamily: Fonts.regular,   fontWeight: '400' },
@@ -84,6 +87,7 @@ const TOKENS: Record<FontSizeVariant, Record<Weight, FontToken>> = {
     semibold:   { fontSize: 14, lineHeight: 20, fontFamily: Fonts.semibold,  fontWeight: '600' },
     bold:       { fontSize: 14, lineHeight: 20, fontFamily: Fonts.bold,      fontWeight: '700' },
     extrabold:  { fontSize: 14, lineHeight: 20, fontFamily: Fonts.extrabold, fontWeight: '800' },
+    black:      { fontSize: 14, lineHeight: 20, fontFamily: Fonts.black,     fontWeight: '900' },
   },
   'body-lg': {
     regular:    { fontSize: 15, lineHeight: 22, fontFamily: Fonts.regular,   fontWeight: '400' },
@@ -91,6 +95,7 @@ const TOKENS: Record<FontSizeVariant, Record<Weight, FontToken>> = {
     semibold:   { fontSize: 15, lineHeight: 22, fontFamily: Fonts.semibold,  fontWeight: '600' },
     bold:       { fontSize: 15, lineHeight: 22, fontFamily: Fonts.bold,      fontWeight: '700' },
     extrabold:  { fontSize: 15, lineHeight: 22, fontFamily: Fonts.extrabold, fontWeight: '800' },
+    black:      { fontSize: 15, lineHeight: 22, fontFamily: Fonts.black,     fontWeight: '900' },
   },
   label: {
     regular:    { fontSize: 14, lineHeight: 20, fontFamily: Fonts.regular,   fontWeight: '400' },
@@ -98,6 +103,7 @@ const TOKENS: Record<FontSizeVariant, Record<Weight, FontToken>> = {
     semibold:   { fontSize: 14, lineHeight: 20, fontFamily: Fonts.semibold,  fontWeight: '600' },
     bold:       { fontSize: 14, lineHeight: 20, fontFamily: Fonts.bold,      fontWeight: '700' },
     extrabold:  { fontSize: 14, lineHeight: 20, fontFamily: Fonts.extrabold, fontWeight: '800' },
+    black:      { fontSize: 14, lineHeight: 20, fontFamily: Fonts.black,     fontWeight: '900' },
   },
   subtitle: {
     regular:    { fontSize: 16, lineHeight: 24, fontFamily: Fonts.regular,   fontWeight: '400' },
@@ -105,6 +111,7 @@ const TOKENS: Record<FontSizeVariant, Record<Weight, FontToken>> = {
     semibold:   { fontSize: 16, lineHeight: 24, fontFamily: Fonts.semibold,  fontWeight: '600' },
     bold:       { fontSize: 16, lineHeight: 24, fontFamily: Fonts.bold,      fontWeight: '700' },
     extrabold:  { fontSize: 16, lineHeight: 24, fontFamily: Fonts.extrabold, fontWeight: '800' },
+    black:      { fontSize: 16, lineHeight: 24, fontFamily: Fonts.black,     fontWeight: '900' },
   },
   'title-sm': {
     regular:    { fontSize: 16, lineHeight: 22, fontFamily: Fonts.regular,   fontWeight: '400' },
@@ -112,6 +119,7 @@ const TOKENS: Record<FontSizeVariant, Record<Weight, FontToken>> = {
     semibold:   { fontSize: 16, lineHeight: 22, fontFamily: Fonts.semibold,  fontWeight: '600' },
     bold:       { fontSize: 16, lineHeight: 22, fontFamily: Fonts.bold,      fontWeight: '700' },
     extrabold:  { fontSize: 16, lineHeight: 22, fontFamily: Fonts.extrabold, fontWeight: '800' },
+    black:      { fontSize: 16, lineHeight: 22, fontFamily: Fonts.black,     fontWeight: '900' },
   },
   title: {
     regular:    { fontSize: 18, lineHeight: 24, fontFamily: Fonts.regular,   fontWeight: '400' },
@@ -119,6 +127,7 @@ const TOKENS: Record<FontSizeVariant, Record<Weight, FontToken>> = {
     semibold:   { fontSize: 18, lineHeight: 24, fontFamily: Fonts.semibold,  fontWeight: '600' },
     bold:       { fontSize: 18, lineHeight: 24, fontFamily: Fonts.bold,      fontWeight: '700' },
     extrabold:  { fontSize: 18, lineHeight: 24, fontFamily: Fonts.extrabold, fontWeight: '800' },
+    black:      { fontSize: 18, lineHeight: 24, fontFamily: Fonts.black,     fontWeight: '900' },
   },
   heading: {
     regular:    { fontSize: 20, lineHeight: 28, fontFamily: Fonts.regular,   fontWeight: '400' },
@@ -126,6 +135,7 @@ const TOKENS: Record<FontSizeVariant, Record<Weight, FontToken>> = {
     semibold:   { fontSize: 20, lineHeight: 28, fontFamily: Fonts.semibold,  fontWeight: '600' },
     bold:       { fontSize: 20, lineHeight: 28, fontFamily: Fonts.bold,      fontWeight: '700' },
     extrabold:  { fontSize: 20, lineHeight: 28, fontFamily: Fonts.extrabold, fontWeight: '800' },
+    black:      { fontSize: 20, lineHeight: 28, fontFamily: Fonts.black,     fontWeight: '900' },
   },
   'heading-lg': {
     regular:    { fontSize: 24, lineHeight: 30, fontFamily: Fonts.regular,   fontWeight: '400' },
@@ -133,6 +143,7 @@ const TOKENS: Record<FontSizeVariant, Record<Weight, FontToken>> = {
     semibold:   { fontSize: 24, lineHeight: 30, fontFamily: Fonts.semibold,  fontWeight: '600' },
     bold:       { fontSize: 24, lineHeight: 30, fontFamily: Fonts.bold,      fontWeight: '700' },
     extrabold:  { fontSize: 24, lineHeight: 30, fontFamily: Fonts.extrabold, fontWeight: '800' },
+    black:      { fontSize: 24, lineHeight: 30, fontFamily: Fonts.black,     fontWeight: '900' },
   },
   display: {
     regular:    { fontSize: 28, lineHeight: 34, fontFamily: Fonts.regular,   fontWeight: '400' },
@@ -140,6 +151,7 @@ const TOKENS: Record<FontSizeVariant, Record<Weight, FontToken>> = {
     semibold:   { fontSize: 28, lineHeight: 34, fontFamily: Fonts.semibold,  fontWeight: '600' },
     bold:       { fontSize: 28, lineHeight: 34, fontFamily: Fonts.bold,      fontWeight: '700' },
     extrabold:  { fontSize: 28, lineHeight: 34, fontFamily: Fonts.extrabold, fontWeight: '800' },
+    black:      { fontSize: 28, lineHeight: 34, fontFamily: Fonts.black,     fontWeight: '900' },
   },
   'display-lg': {
     regular:    { fontSize: 32, lineHeight: 38, fontFamily: Fonts.regular,   fontWeight: '400' },
@@ -147,6 +159,7 @@ const TOKENS: Record<FontSizeVariant, Record<Weight, FontToken>> = {
     semibold:   { fontSize: 32, lineHeight: 38, fontFamily: Fonts.semibold,  fontWeight: '600' },
     bold:       { fontSize: 32, lineHeight: 38, fontFamily: Fonts.bold,      fontWeight: '700' },
     extrabold:  { fontSize: 32, lineHeight: 38, fontFamily: Fonts.extrabold, fontWeight: '800' },
+    black:      { fontSize: 32, lineHeight: 38, fontFamily: Fonts.black,     fontWeight: '900' },
   },
   hero: {
     regular:    { fontSize: 40, lineHeight: 46, fontFamily: Fonts.regular,   fontWeight: '400' },
@@ -154,6 +167,7 @@ const TOKENS: Record<FontSizeVariant, Record<Weight, FontToken>> = {
     semibold:   { fontSize: 40, lineHeight: 46, fontFamily: Fonts.semibold,  fontWeight: '600' },
     bold:       { fontSize: 40, lineHeight: 46, fontFamily: Fonts.bold,      fontWeight: '700' },
     extrabold:  { fontSize: 40, lineHeight: 46, fontFamily: Fonts.extrabold, fontWeight: '800' },
+    black:      { fontSize: 40, lineHeight: 46, fontFamily: Fonts.black,     fontWeight: '900' },
   },
 };
 

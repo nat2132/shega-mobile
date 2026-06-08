@@ -193,6 +193,18 @@ const DebtManagementScreen: React.FC = () => {
     return sorted;
   }, [customers, search, filter, sort]);
 
+  const debtKeyExtractor = useCallback((item: DebtCustomer) => `${item.customerName}-${item.customerPhone || ''}`, []);
+  const debtRenderItem = useCallback(({ item, index }: { item: DebtCustomer; index: number }) => (
+    <DebtCustomerRow
+      item={item}
+      index={index}
+      onPress={(c) => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        setSelected(c);
+      }}
+    />
+  ), []);
+
   // ── Render ──
 
   if (selected) {
@@ -319,17 +331,8 @@ const DebtManagementScreen: React.FC = () => {
       ) : (
         <SafeFlatList
           data={visible}
-          keyExtractor={(item) => `${item.customerName}-${item.customerPhone || ''}`}
-          renderItem={({ item, index }) => (
-            <DebtCustomerRow
-              item={item}
-              index={index}
-              onPress={(c) => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setSelected(c);
-              }}
-            />
-          )}
+          keyExtractor={debtKeyExtractor}
+          renderItem={debtRenderItem}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           initialNumToRender={12}
@@ -460,7 +463,7 @@ const DebtCustomerRow: React.FC<{
   index: number;
   onPress: (c: DebtCustomer) => void;
 }> = React.memo(({ item, index, onPress }) => {
-  const { colors, t } = useSettings();
+  const { colors, t, calendarType, language } = useSettings();
   const daysToDue = daysBetween(item.earliestDue);
   const isOverdue = daysToDue !== null && daysToDue < 0;
   const accent = isOverdue ? '#FF3B30' : colors.primary;
@@ -480,7 +483,7 @@ const DebtCustomerRow: React.FC<{
           isOverdue
             ? t('debt.days_overdue', { days: String(Math.abs(daysToDue || 0)) })
             : item.earliestDue
-              ? t('debt.due_on', { date: formatDateSafe(item.earliestDue, undefined as any, '') })
+              ? t('debt.due_on', { date: formatDateSafe(item.earliestDue, calendarType, language) })
               : t('debt.open_balance')
         }
         titleMaxLines={2}

@@ -86,10 +86,16 @@ const BudgetRing = React.memo(({ progress }: { progress: number | undefined | nu
   const { colors } = useSettings();
   const radius = 35;
   const circumference = 2 * Math.PI * radius;
-  const safeProgress = Math.max(0, Math.min(100, Number(progress) || 0));
-  const strokeDashoffset = circumference - (safeProgress / 100) * circumference;
+  const numericProgress = Number(progress) || 0;
+  // Visual cap at 100% — a ring can only fill once. We still display
+  // the real percentage (e.g. 150%) and switch to red so an over-budget
+  // state is visible.
+  const isOver = numericProgress > 100;
+  const visualProgress = Math.max(0, Math.min(100, numericProgress));
+  const strokeDashoffset = circumference - (visualProgress / 100) * circumference;
+  const strokeColor = isOver ? '#FF3B30' : colors.primary;
 
-  if (progress == null || Number.isNaN(Number(progress))) {
+  if (progress == null || Number.isNaN(numericProgress)) {
     return <RingSkeleton size={100} />;
   }
 
@@ -98,12 +104,12 @@ const BudgetRing = React.memo(({ progress }: { progress: number | undefined | nu
       <Circle cx="50" cy="50" r={radius} stroke={colors.border} strokeWidth="8" fill="none" opacity={0.3} />
       <Circle
         cx="50" cy="50" r={radius}
-        stroke={colors.primary} strokeWidth="8" fill="none"
+        stroke={strokeColor} strokeWidth="8" fill="none"
         strokeDasharray={circumference} strokeDashoffset={strokeDashoffset}
         strokeLinecap="round" transform="rotate(-90 50 50)"
       />
       <View style={styles.ringLabelContainer}>
-        <AppText variant="heading" weight="bold" shrink={false} style={[styles.ringPercent, { color: colors.text }]} numberOfLines={1}>{Math.round(safeProgress)}%</AppText>
+        <AppText variant="heading" weight="bold" shrink={false} style={[styles.ringPercent, { color: isOver ? '#FF3B30' : colors.text }]} numberOfLines={1}>{Math.round(numericProgress)}%</AppText>
       </View>
     </Svg>
   );
@@ -151,7 +157,7 @@ ExpenseLedgerItem.displayName = 'ExpenseLedgerItem';
  * colours via context here so the component stays in sync with the
  * active theme.
  */
-const PointerLabel = React.memo((items: any) => {
+const PointerLabel = (items: any) => {
   const { colors } = useSettings();
   const { t } = useSettings();
   const itemsArr = Array.isArray(items) ? items : [items];
@@ -163,8 +169,7 @@ const PointerLabel = React.memo((items: any) => {
       </AppText>
     </View>
   );
-});
-PointerLabel.displayName = 'PointerLabel';
+};
 
 const CapitalHub = () => {
   const { openSidebar } = useSidebar();
@@ -370,7 +375,7 @@ const CapitalHub = () => {
               <View>
                 <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.heroLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('expense.total_disbursement')}</AppText>
                 <View style={styles.valueRow}>
-                  <AppText variant="display" weight="bold" style={[styles.heroValue, { color: colors.text }]} numberOfLines={1}>
+                  <AppText variant="display-lg" weight="black" shrink={false} style={[styles.heroValue, { color: colors.text, fontFamily: Fonts.black }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                     {hideMetrics ? '••••••' : `${summary?.monthlyDisbursement?.toLocaleString() || 0}`}
                   </AppText>
                   <AppText variant="heading" weight="medium" shrink={false} style={[styles.heroCurrency, { color: colors.textSecondary }]} numberOfLines={1}>{t('common.etb')}</AppText>
@@ -398,16 +403,31 @@ const CapitalHub = () => {
                   </TouchableOpacity>
                 </View>
               </View>
-              <TouchableOpacity 
+              <TouchableOpacity
                 onPress={() => setShowHealthModal(true)}
                 style={styles.budgetStat}
               >
                 <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('expense.status')}</AppText>
-                <View style={[styles.statusBadge, { backgroundColor: ((expenseHealthData?.expenseHealth || 100) < 100 ? '#FF3B3015' : colors.success + '15') }]}>
-                  <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.statusText, { color: ((expenseHealthData?.expenseHealth || 100) < 100 ? '#FF3B30' : colors.success) }]} numberOfLines={1}>
-                    {expenseHealthData?.expenseHealth || 100}%
-                  </AppText>
-                </View>
+                {(() => {
+                  // When the user is over the monthly budget, surface that
+                  // here instead of the (always 0–100) expense health
+                  // percentage — otherwise the badge lies about a 150%
+                  // burn by saying "100%".
+                  const disbursed = summary?.monthlyDisbursement || 0;
+                  const budget = summary?.budget || 0;
+                  const actualBudgetPct = budget > 0 ? (disbursed / budget) * 100 : 0;
+                  const isOverBudget = actualBudgetPct > 100;
+                  const expenseHealth = expenseHealthData?.expenseHealth ?? 100;
+                  const value = isOverBudget ? Math.round(actualBudgetPct) : expenseHealth;
+                  const isRed = isOverBudget || expenseHealth < 100;
+                  return (
+                    <View style={[styles.statusBadge, { backgroundColor: isRed ? '#FF3B3015' : colors.success + '15' }]}>
+                      <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.statusText, { color: isRed ? '#FF3B30' : colors.success }]} numberOfLines={1}>
+                        {value}%
+                      </AppText>
+                    </View>
+                  );
+                })()}
               </TouchableOpacity>
             </View>
           </View>

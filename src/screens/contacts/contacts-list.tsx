@@ -88,13 +88,13 @@ const ContactRow = React.memo(({
   onEdit: (c: any) => void;
 }) => {
   const { colors, t } = useSettings();
+  const meta = CATEGORY_MAP[contact.category] || CATEGORY_MAP.other;
   const info = React.useMemo(() => {
-    const meta = CATEGORY_MAP[contact.category] || CATEGORY_MAP.other;
     return { label: t(meta.labelKey), color: meta.color };
   }, [contact.category, t]);
   const label = React.useMemo(
-    () => (contact.subCategory ? t('contacts.sub_' + subCatKey(contact.subCategory)) : t('contacts.cat_' + contact.category)),
-    [contact.subCategory, contact.category, t],
+    () => (contact.subCategory ? t('contacts.sub_' + subCatKey(contact.subCategory)) : t(meta.labelKey)),
+    [contact.subCategory, contact.category, t, meta],
   );
 
   return (

@@ -86,7 +86,7 @@ const VerifyPinScreen: React.FC<VerifyPinScreenProps> = ({ onSuccess }) => {
 
   const verify = async (inputPin: string) => {
     try {
-      const storedPin = await SecureStore.getItemAsync('user_pin');
+      const storedPin = await SecureStore.getItemAsync('settings_pin');
       if (inputPin === storedPin) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         onSuccess();

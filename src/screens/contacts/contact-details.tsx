@@ -17,11 +17,21 @@ import { deleteContact } from '@/database/db';
 import { AppText, AppListItem, AppRow, AppCard } from '@/components/ui';
 const { width } = Dimensions.get('window');
 
-const CATEGORY_ICONS: Record<string, { color: string }> = {
-  supplier: { color: '#34C759' },
-  worker: { color: '#FF9500' },
-  service_provider: { color: '#FF3B30' },
-  other: { color: '#AF52DE' },
+const CATEGORY_ICONS: Record<string, { labelKey: string; color: string }> = {
+  supplier:         { labelKey: 'contacts.cat_supplier',  color: '#34C759' },
+  worker:           { labelKey: 'contacts.cat_worker',    color: '#FF9500' },
+  service_provider: { labelKey: 'contacts.cat_service',   color: '#FF3B30' },
+  other:            { labelKey: 'contacts.cat_other',     color: '#AF52DE' },
+};
+
+// Same mapping as contacts-list.tsx / contact-form.tsx — turns the
+// stored subCategory string into the i18n key suffix used in the
+// `contacts.sub_*` translations.
+const subCatKey = (s: string) => {
+  const map: Record<string, string> = {
+    'Plumber / Pipe Worker': 'plumber',
+  };
+  return map[s] || s.toLowerCase().replace(/[\s\/]+/g, '_');
 };
 
 interface ContactDetailsProps {
@@ -80,10 +90,10 @@ export default function ContactDetails({ contact, onClose, onEdit, onDeleted }: 
           </View>
           <AppText variant="heading" weight="bold" align="center" style={[styles.nameText, { color: colors.text }]} numberOfLines={2}>{contact.fullName}</AppText>
           <View style={[styles.categoryBadge, { backgroundColor: catInfo.color + '20', borderColor: catInfo.color }]}>
-            <AppText variant="caption" weight="bold" shrink={false} style={[styles.categoryBadgeText, { color: catInfo.color }]} numberOfLines={1}>{t('contacts.cat_' + contact.category)}</AppText>
+            <AppText variant="caption" weight="bold" shrink={false} style={[styles.categoryBadgeText, { color: catInfo.color }]} numberOfLines={1}>{t(catInfo.labelKey)}</AppText>
           </View>
           {contact.subCategory && (
-            <AppText variant="body" weight="medium" align="center" style={[styles.subText, { color: colors.textSecondary }]} numberOfLines={2}>{contact.subCategory}</AppText>
+            <AppText variant="body" weight="medium" align="center" style={[styles.subText, { color: colors.textSecondary }]} numberOfLines={2}>{t('contacts.sub_' + subCatKey(contact.subCategory))}</AppText>
           )}
         </View>
 
