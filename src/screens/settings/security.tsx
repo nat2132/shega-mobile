@@ -86,7 +86,7 @@ const SecuritySettings = () => {
           style={[styles.input, { color: colors.text }]}
           value={value}
           onChangeText={onChange}
-          placeholder="● ● ● ●"
+          placeholder="* * * *"
           secureTextEntry={!show}
           keyboardType="number-pad"
           maxLength={4}

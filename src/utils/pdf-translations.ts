@@ -33,6 +33,7 @@ export interface PDFTranslations {
     customer: string;
     phone: string;
     date: string;
+    boughtDate: string;
     status: string;
     unpaid: string;
     item: string;
@@ -73,6 +74,43 @@ export interface PDFTranslations {
     amount: string;
     total: string;
     powered: string;
+    totalOrders: string;
+    volumeSold: string;
+    itemName: string;
+    quantity: string;
+    payment: string;
+    stockLevel: string;
+    id: string;
+    productName: string;
+    manufacturer: string;
+    purchaseCost: string;
+    totalQty: string;
+    frequency: string;
+    recurring: string;
+    oneTime: string;
+    optimal: string;
+    activeTracking: string;
+    grossSalesInflow: string;
+    directCost: string;
+    operationalExpenses: string;
+    brandCompany: string;
+  };
+  common: {
+    day: string;
+    night: string;
+    am: string;
+    pm: string;
+    nA: string;
+    walkInCustomer: string;
+    cash: string;
+    general: string;
+    pcs: string;
+    shegaStore: string;
+    mainBranch: string;
+    multipleSuppliers: string;
+    yes: string;
+    no: string;
+    etb: string;
   };
 }
 
@@ -112,6 +150,7 @@ export const pdfTranslations: Record<'en' | 'am' | 'om' | 'ti', PDFTranslations>
       customer: "Customer Name",
       phone: "Phone",
       date: "Date Generated",
+      boughtDate: "Bought Date",
       status: "Payment Status",
       unpaid: "UNPAID / OUTSTANDING",
       item: "Purchased Item",
@@ -151,7 +190,44 @@ export const pdfTranslations: Record<'en' | 'am' | 'om' | 'ti', PDFTranslations>
       description: "Description",
       amount: "Amount",
       total: "Grand Total",
-      powered: "Orchestrated via Shega Mobile"
+      powered: "Orchestrated via Shega Mobile",
+      totalOrders: "Total Orders",
+      volumeSold: "Volume Sold",
+      itemName: "Item Name",
+      quantity: "Quantity",
+      payment: "Payment",
+      stockLevel: "Stock Level",
+      id: "ID",
+      productName: "Product Name",
+      manufacturer: "Manufacturer",
+      purchaseCost: "Purchase Cost",
+      totalQty: "Total Qty",
+      frequency: "Frequency",
+      recurring: "Recurring",
+      oneTime: "One-time",
+      optimal: "Optimal",
+      activeTracking: "Active sales tracking",
+      grossSalesInflow: "Gross Sales Inflow",
+      directCost: "Direct Cost of Inventory Sold",
+      operationalExpenses: "Operational & Recurring Expenses",
+      brandCompany: "Brand / Company"
+    },
+    common: {
+      day: "Day",
+      night: "Night",
+      am: "AM",
+      pm: "PM",
+      nA: "N/A",
+      walkInCustomer: "Walk-in Customer",
+      cash: "Cash",
+      general: "General",
+      pcs: "pcs",
+      shegaStore: "Shega Store",
+      mainBranch: "Main Branch",
+      multipleSuppliers: "Multiple Restock Suppliers",
+      yes: "Yes",
+      no: "No",
+      etb: "ETB"
     }
   },
   am: {
@@ -189,6 +265,7 @@ export const pdfTranslations: Record<'en' | 'am' | 'om' | 'ti', PDFTranslations>
       customer: "የደንበኛ ስም",
       phone: "ስልክ ቁጥር",
       date: "የወጣበት ቀን",
+      boughtDate: "የተገዛበት ቀን",
       status: "የክፍያ ሁኔታ",
       unpaid: "ያልተከፈለ ዕዳ",
       item: "የተገዛ ዕቃ",
@@ -228,7 +305,44 @@ export const pdfTranslations: Record<'en' | 'am' | 'om' | 'ti', PDFTranslations>
       description: "ማብራሪያ",
       amount: "የገንዘብ መጠን",
       total: "አጠቃላይ ድምር",
-      powered: "በሸጋ ሞባይል የተቀናበረ"
+      powered: "በሸጋ ሞባይል የተቀናበረ",
+      totalOrders: "ጠቅላላ ትዕዛዞች",
+      volumeSold: "የተሸጠ መጠን",
+      itemName: "የዕቃ ስም",
+      quantity: "ብዛት",
+      payment: "ክፍያ",
+      stockLevel: "የክምችት ደረጃ",
+      id: "መለያ",
+      productName: "የምርት ስም",
+      manufacturer: "አምራች",
+      purchaseCost: "የግዢ ዋጋ",
+      totalQty: "ጠቅላላ ብዛት",
+      frequency: "ድግግሞሽ",
+      recurring: "ደጋሚ",
+      oneTime: "አንድ ጊዜ",
+      optimal: "ምርጥ",
+      activeTracking: "ንቁ ሽያጭ ተከታታይ",
+      grossSalesInflow: "ጠቅላላ የሽያጭ ገቢ",
+      directCost: "የተሸጠ ክምችት ቀጥታ ዋጋ",
+      operationalExpenses: "የአሠራር እና ደጋሚ ወጪዎች",
+      brandCompany: "ብራንድ / ኩባንያ"
+    },
+    common: {
+      day: "ቀን",
+      night: "ምሽት",
+      am: "ጠዋት",
+      pm: "ከሰዓት",
+      nA: "የለም",
+      walkInCustomer: "መግቢያ ደንበኛ",
+      cash: "ጥሬ ገንዘብ",
+      general: "አጠቃላይ",
+      pcs: "ቁጥር",
+      shegaStore: "ሸጋ ሱቅ",
+      mainBranch: "ዋና ቅርንጫፍ",
+      multipleSuppliers: "ተጨማሪ አቅራቢያዎች",
+      yes: "አዎ",
+      no: "አይደለም",
+      etb: "ብር"
     }
   },
   om: {
@@ -266,6 +380,7 @@ export const pdfTranslations: Record<'en' | 'am' | 'om' | 'ti', PDFTranslations>
       customer: "Maqaa Maamilaa",
       phone: "Bilbila",
       date: "Guyyaa Qophaa'e",
+      boughtDate: "Guyyaa Bitame",
       status: "Haala Kafaltii",
       unpaid: "KAN HIN KAFALAMNE",
       item: "Meeshaalee Bitame",
@@ -305,7 +420,44 @@ export const pdfTranslations: Record<'en' | 'am' | 'om' | 'ti', PDFTranslations>
       description: "Ibsa Baasii",
       amount: "Maallaqa",
       total: "Dimshaash Waliigalaa",
-      powered: "Shega Mobile kanaan kan qophaaye"
+      powered: "Shega Mobile kanaan kan qophaaye",
+      totalOrders: "Ajajawwan Waliigalaa",
+      volumeSold: "Baay'ina Gurgurame",
+      itemName: "Maqaa Meeshaalee",
+      quantity: "Baay'ina",
+      payment: "Kafaltii",
+      stockLevel: "Sadarkaa Kuusaa",
+      id: "Abbooxxuu",
+      productName: "Maqaa Oomishaa",
+      manufacturer: "Oomishaa Qophaayyuu",
+      purchaseCost: "Gatii Bitaa",
+      totalQty: "Baay'ina Waliigalaa",
+      frequency: "Yeroo Dhuunfaa",
+      recurring: "Yeroo Dhuunfaa",
+      oneTime: "Yeroo Tokko",
+      optimal: "Milkaa'ina",
+      activeTracking: "Gurgurtaan nagaan guyyaa",
+      grossSalesInflow: "Gali Gurgurtaa Guutuu",
+      directCost: "Gatii Kuusaa Bitame Dachaa",
+      operationalExpenses: "Baasii Hojii fi Baasii Dhuunfaa",
+      brandCompany: "Biraandii / Kampanii"
+    },
+    common: {
+      day: "Guyyaa",
+      night: "Halkan",
+      am: "WD",
+      pm: "WB",
+      nA: "Tuu hin jiru",
+      walkInCustomer: "Maamila Seeraa",
+      cash: "Maallaqa Caafaa",
+      general: "Waliigalaa",
+      pcs: "kubbaa",
+      shegaStore: "Dukaan Shega",
+      mainBranch: "Cita Haadhaa",
+      multipleSuppliers: "Dhiyeessoota hedduu",
+      yes: "Eeyyee",
+      no: "Lakki",
+      etb: "Birr"
     }
   },
   ti: {
@@ -343,6 +495,7 @@ export const pdfTranslations: Record<'en' | 'am' | 'om' | 'ti', PDFTranslations>
       customer: "ስም ዓሚል",
       phone: "ስልኪ ቁፅሪ",
       date: "ዝወፀሉ ዕለት",
+      boughtDate: "ዝተገዛሉ ዕለት",
       status: "ኩነታት ክፍሊት",
       unpaid: "ዘይተኸፈለ ዕዳ",
       item: "ዝተዓደገ ዕቃ",
@@ -382,7 +535,44 @@ export const pdfTranslations: Record<'en' | 'am' | 'om' | 'ti', PDFTranslations>
       description: "መብራህረሂ",
       amount: "መጠንን ገንዘብ",
       total: "ሓፈሻዊ ድምር",
-      powered: "ብሸጋ ሞባይል ዝተዳለወ"
+      powered: "ብሸጋ ሞባይል ዝተዳለወ",
+      totalOrders: "ጠቕላላ ትእዛዛት",
+      volumeSold: "ዝተሸጠ ብዝሒ",
+      itemName: "ስም ዕቃ",
+      quantity: "ብዝሒ",
+      payment: "ክፍሊት",
+      stockLevel: "ደረጃ ክምችት",
+      id: "መለለዪ",
+      productName: "ስም ፍርያት",
+      manufacturer: "ምስልቃነን",
+      purchaseCost: "ናይ ግዝ游戏代 cost",
+      totalQty: "ጠቕላላ ብዝሒ",
+      frequency: "ድግስ ዘይኮይኖ",
+      recurring: "ዝቕልል",
+      oneTime: "ንሓንሳው",
+      optimal: "ምርጡ",
+      activeTracking: "ንቁ መሻይጥ ተከታይ",
+      grossSalesInflow: "ሓፈሻዊ እቶት መሻይጥ",
+      directCost: "ናይ ዝተወሰኸ ክምችት ቀጥታ ዋጋ",
+      operationalExpenses: "ናይ ስራሕ ወፃኢን ዝቕልል ወፃኢታትን",
+      brandCompany: "ብራንድ / ኩባንያ"
+    },
+    common: {
+      day: "ደይ",
+      night: "ምሽቲ",
+      am: "ንጋት",
+      pm: "ከiensatz",
+      nA: "ኣይተገኘን",
+      walkInCustomer: "ddenan Khidma",
+      cash: "ከASH",
+      general: "ሓፈሻዊ",
+      pcs: "ቕርጺ",
+      shegaStore: "ሸጋ ሱቅ",
+      mainBranch: "ዋና ቅርጻ",
+      multipleSuppliers: "ተወሳኺ ኣቕራቢታት",
+      yes: "ኣዎ",
+      no: "ኣይኮንን",
+      etb: "ብር"
     }
   }
 };

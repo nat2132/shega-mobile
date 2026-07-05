@@ -1,11 +1,11 @@
-﻿import React from 'react';
+import React from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Bell } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useSettings } from '@/context/SettingsContext';
 import { useNotificationCenter } from '@/context/NotificationContext';
 import { Fonts } from '@/constants/theme';
-import { AppText } from '@/components/ui';
+import { AppText, AppNumber } from '@/components/ui';
 import * as Haptics from 'expo-haptics';
 interface NotificationBellProps {
   size?: number;
@@ -46,9 +46,11 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
             { backgroundColor: colors.error || '#FF3B30', borderColor: colors.background },
           ]}
         >
-          <AppText variant="micro" weight="bold" shrink={false} style={[styles.badgeText, { color: '#FFF' }]} numberOfLines={1}>
-            {unreadCount > 99 ? '99+' : String(unreadCount)}
-          </AppText>
+          {unreadCount > 99 ? (
+            <AppText variant="micro" weight="bold" shrink={false} style={[styles.badgeText, { color: '#FFF' }]} numberOfLines={1}>99+</AppText>
+          ) : (
+            <AppNumber value={unreadCount} size="micro" style={[styles.badgeText, { color: '#FFF' }]} />
+          )}
         </View>
       )}
     </TouchableOpacity>

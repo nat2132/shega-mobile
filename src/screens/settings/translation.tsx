@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React, { useMemo } from 'react';
 import { 
   View, 
   StyleSheet, 
@@ -14,98 +14,22 @@ import {
 } from 'lucide-react-native';
 import { Fonts } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
-import { AppText, AppCard, AppButton, AppListItem, AppRow } from '@/components/ui';
+import { AppText} from '@/components/ui';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { getSettingsGlass } from './glass-settings';
 type LangId = 'en' | 'am' | 'om' | 'ti';
 
-const LANGUAGES: { id: LangId; title: string; script: string; preview: string }[] = [
-  { id: 'en', title: 'English', script: 'PRIMARY SYSTEM DEFAULT', preview: 'Inventory Management' },
-  { id: 'am', title: 'Amharic', script: 'ETHIOPIC SCRIPT', preview: 'የፈንጂ አስተዳደር' },
-  { id: 'om', title: 'Afaan Oromo', script: 'LATIN SCRIPT VARIANT', preview: 'Bulchiinsa Kuusaa' },
-  { id: 'ti', title: 'Tigrinya', script: 'ETHIOPIC SCRIPT', preview: 'ምምሕዳር ዕቃ' },
+const LANGUAGES: { id: LangId; title: string; scriptKey: string; preview: string }[] = [
+  { id: 'en', title: 'English', scriptKey: 'settings.script_primary', preview: 'Inventory Management' },
+  { id: 'am', title: 'Amharic', scriptKey: 'settings.script_ethiopic', preview: 'Inventory Management' },
+  { id: 'om', title: 'Afaan Oromo', scriptKey: 'settings.script_latin', preview: 'Bulchiinsa Kuusaa' },
+  { id: 'ti', title: 'Tigrinya', scriptKey: 'settings.script_ethiopic', preview: 'Inventory Management' },
 ];
 
 const TranslationSettings = () => {
    const { language, setLanguage, colors, t } = useSettings();
-
-  const handleSelect = (id: LangId) => {
-    setLanguage(id);
-  };
-
-  const currentPreview = LANGUAGES.find(l => l.id === language)?.preview ?? 'Inventory Management';
-
-  return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        <Animated.View entering={FadeIn.duration(600)}>
-          <View style={styles.headerNode}>
-            <AppText variant="body" weight="medium" style={[styles.headerSub, { color: colors.textSecondary }]} numberOfLines={2}>{t('translation.localization')}</AppText>
-            <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: colors.text }]} numberOfLines={2}>{t('translation.global_hub')}</AppText>
-          </View>
-
-          {/* Intelligence Preview Node */}
-          <View style={[styles.previewBlueprint, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.blueprintHead}>
-              <View style={[styles.iconTag, { backgroundColor: colors.text + '08' }]}>
-                 <Languages size={22} color={colors.text} />
-              </View>
-              <AppText variant="caption" weight="bold" style={[styles.blueprintLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('translation.preview_label')}</AppText>
-            </View>
-            <View style={styles.blueprintBody}>
-               <AppText variant="title" weight="bold" style={[styles.previewDisplay, { color: colors.text }]} numberOfLines={2}>{currentPreview}</AppText>
-               <View style={[styles.blueprintLine, { backgroundColor: colors.primary }]} />
-            </View>
-            <View style={styles.blueprintFooter}>
-               <AppText variant="body-sm" weight="medium" style={[styles.footerText, { color: colors.textSecondary }]} numberOfLines={2}>{t('translation.preview_desc')}</AppText>
-               <Sparkles size={16} color={colors.primary} />
-            </View>
-          </View>
-
-          <AppText variant="caption" weight="bold" style={[styles.selectionHeading, { color: colors.textSecondary }]} numberOfLines={1}>{t('translation.selection_heading')}</AppText>
-
-          {LANGUAGES.map((lang, index) => {
-            const isSelected = language === lang.id;
-            return (
-              <Animated.View key={lang.id} entering={FadeInDown.delay(index * 100).duration(500)}>
-                <TouchableOpacity
-                  style={[
-                    styles.langNode, 
-                    { backgroundColor: colors.card, borderColor: colors.border },
-                    isSelected && { borderColor: colors.primary, borderWidth: 2 }
-                  ]}
-                  onPress={() => handleSelect(lang.id)}
-                  activeOpacity={0.8}
-                >
-                  <View style={[styles.langIconBox, { backgroundColor: isSelected ? colors.primary + '10' : colors.text + '05' }]}>
-                    <Globe size={20} color={isSelected ? colors.primary : colors.textSecondary} />
-                  </View>
-                  
-                  <View style={styles.langInfoArea}>
-                    <AppText variant="body" weight="bold" style={[styles.langTitle, { color: colors.text }]} numberOfLines={1}>{lang.title}</AppText>
-                    <AppText variant="body-sm" weight="medium" style={[styles.langScript, { color: colors.textSecondary }]} numberOfLines={1}>{lang.script}</AppText>
-                  </View>
-
-                  <View style={[styles.radioBase, { borderColor: colors.border }, isSelected && { backgroundColor: colors.primary, borderColor: colors.primary }]}>
-                    {isSelected && <Check size={12} color="#FFF" strokeWidth={4} />}
-                  </View>
-                </TouchableOpacity>
-              </Animated.View>
-            );
-          })}
-
-          <View style={[styles.infoNode, { backgroundColor: colors.text + '05' }]}>
-             <Zap size={18} color={colors.textSecondary} />
-             <AppText variant="body-sm" weight="medium" style={[styles.noticeText, { color: colors.textSecondary }]} numberOfLines={3}>
-               {t('translation.schema_notice')}
-             </AppText>
-          </View>
-        </Animated.View>
-      </ScrollView>
-    </View>
-  );
-};
-
-const styles = StyleSheet.create({
+  const G = getSettingsGlass(colors);
+  const styles = useMemo(() => StyleSheet.create({
   container: { flex: 1 },
   scrollContent: {
     paddingHorizontal: 25,
@@ -166,7 +90,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 15,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.05)',
+    borderTopColor: G.border,
   },
   footerText: {
     fontFamily: Fonts.medium,
@@ -185,6 +109,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 12,
     gap: 16,
+    overflow: 'hidden',
   },
   langIconBox: {
     width: 48,
@@ -219,12 +144,96 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginTop: 15,
     gap: 12,
+    overflow: 'hidden',
   },
   noticeText: {
     flex: 1,
     lineHeight: 18,
     fontFamily: Fonts.medium,
   },
-});
+  glowWash: { position: 'absolute' },
+}), [G]);
+
+  const handleSelect = (id: LangId) => {
+    setLanguage(id);
+  };
+
+  const currentPreview = LANGUAGES.find(l => l.id === language)?.preview ?? t('inventory.header');
+
+  return (
+    <View style={[styles.container, { backgroundColor: G.bg }]}>
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <View style={[styles.glowWash, { backgroundColor: G.mutedLight, top: -80, left: -60, width: 200, height: 200, borderRadius: 100 }]} />
+        <View style={[styles.glowWash, { backgroundColor: G.mutedLight, bottom: -40, right: -30, width: 160, height: 160, borderRadius: 80 }]} />
+        <View style={[styles.glowWash, { backgroundColor: G.mutedLight, top: '40%', right: -50, width: 140, height: 140, borderRadius: 70 }]} />
+      </View>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        <Animated.View entering={FadeIn.duration(600)}>
+          <View style={styles.headerNode}>
+            <AppText variant="body" weight="medium" style={[styles.headerSub, { color: G.fgSecondary }]} numberOfLines={2}>{t('translation.localization')}</AppText>
+            <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{t('translation.global_hub')}</AppText>
+          </View>
+
+          {/* Intelligence Preview Node */}
+          <View style={[styles.previewBlueprint, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+            <View style={styles.blueprintHead}>
+              <View style={[styles.iconTag, { backgroundColor: G.fg + '08' }]}>
+                 <Languages size={22} color={G.fg} />
+              </View>
+              <AppText variant="caption" weight="bold" style={[styles.blueprintLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('translation.preview_label')}</AppText>
+            </View>
+            <View style={styles.blueprintBody}>
+               <AppText variant="title" weight="bold" style={[styles.previewDisplay, { color: G.fg }]} numberOfLines={2}>{currentPreview}</AppText>
+               <View style={[styles.blueprintLine, { backgroundColor: colors.primary }]} />
+            </View>
+            <View style={styles.blueprintFooter}>
+               <AppText variant="body-sm" weight="medium" style={[styles.footerText, { color: G.fgSecondary }]} numberOfLines={2}>{t('translation.preview_desc')}</AppText>
+               <Sparkles size={16} color={colors.primary} />
+            </View>
+          </View>
+
+          <AppText variant="caption" weight="bold" style={[styles.selectionHeading, { color: G.fgSecondary }]} numberOfLines={1}>{t('translation.selection_heading')}</AppText>
+
+          {LANGUAGES.map((lang, index) => {
+            const isSelected = language === lang.id;
+            return (
+              <Animated.View key={lang.id} entering={FadeInDown.delay(index * 100).duration(500)}>
+                <TouchableOpacity
+                  style={[
+                    styles.langNode, 
+                    { backgroundColor: G.bgCard, borderColor: G.border },
+                    isSelected && { borderColor: colors.primary, borderWidth: 2 }
+                  ]}
+                  onPress={() => handleSelect(lang.id)}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.langIconBox, { backgroundColor: isSelected ? colors.primary + '10' : G.fg + '05' }]}>
+                    <Globe size={20} color={isSelected ? colors.primary : G.fgSecondary} />
+                  </View>
+                  
+                  <View style={styles.langInfoArea}>
+                    <AppText variant="body" weight="bold" style={[styles.langTitle, { color: G.fg }]} numberOfLines={1}>{lang.title}</AppText>
+                    <AppText variant="body-sm" weight="medium" style={[styles.langScript, { color: G.fgSecondary }]} numberOfLines={1}>{t(lang.scriptKey)}</AppText>
+                  </View>
+
+                  <View style={[styles.radioBase, { borderColor: G.border }, isSelected && { backgroundColor: colors.primary, borderColor: colors.primary }]}>
+                    {isSelected && <Check size={12} color={G.fg} strokeWidth={4} />}
+                  </View>
+                </TouchableOpacity>
+              </Animated.View>
+            );
+          })}
+
+          <View style={[styles.infoNode, { backgroundColor: G.fg + '05' }]}>
+             <Zap size={18} color={G.fgSecondary} />
+             <AppText variant="body-sm" weight="medium" style={[styles.noticeText, { color: G.fgSecondary }]} numberOfLines={3}>
+               {t('translation.schema_notice')}
+             </AppText>
+          </View>
+        </Animated.View>
+      </ScrollView>
+    </View>
+  );
+};
 
 export default TranslationSettings;

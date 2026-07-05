@@ -1,4 +1,4 @@
-﻿// ChartStateView — empty / error placeholders for charts. Replaces
+// ChartStateView — empty / error placeholders for charts. Replaces
 // the old "show a single icon + 'no data' text" inline pattern with a
 // consistent, theme-aware component that matches the dimensions of
 // the real chart (so swapping in a chart later doesn't shift layout).
@@ -72,7 +72,7 @@ export const ChartError: React.FC<ChartErrorProps> = React.memo(({
         style,
       ]}
     >
-      <AlertCircle size={26} color="#FF3B30" strokeWidth={1.5} />
+      <AlertCircle size={26} color={colors.error} strokeWidth={1.5} />
       <AppText variant="body-sm" weight="medium" style={[styles.text, { color: colors.textSecondary }]} numberOfLines={3}>
         {message ?? t('common.error')}
       </AppText>

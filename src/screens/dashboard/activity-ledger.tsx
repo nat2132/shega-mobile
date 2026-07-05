@@ -1,11 +1,13 @@
-﻿import { CustomDatePicker } from '@/components/CustomDatePicker';
-import { Fonts } from '@/constants/theme';
+import { CustomDatePicker } from '@/components/CustomDatePicker';
+import { Fonts , BorderRadius, Spacing } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
-import { getActivityFeed, getAdjustmentById, getExpenseById, getSaleById } from '@/database/db';
+import { getActivityFeed, getAdjustmentById, getExpenseById, getSaleWithItemsById } from '@/database/db';
 import { formatDate, formatEthiopianTime, formatTime } from '@/utils/date-utils';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import {
+    AlertTriangle,
+    Banknote,
     Calendar,
     ChevronLeft,
     History,
@@ -15,7 +17,7 @@ import {
     TrendingDown,
     TrendingUp
 } from 'lucide-react-native';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
     Dimensions,
     FlatList,
@@ -26,22 +28,24 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import { AppText, AppListItem, AppRow, AppCard, AppButton } from '@/components/ui';
-import { BorderRadius, Spacing } from '@/constants/theme';
+import { AppNumber, AppText, AppListItem} from '@/components/ui';
+
 import Animated, {
     FadeInDown
 } from 'react-native-reanimated';
 import AdjustmentDetailsScreen from '../adjustement/adjustment-details';
 import ExpenseDetailsScreen from '../expense/expense-details';
 import SaleDetailsScreen from '../sales/sales-details';
-const { width } = Dimensions.get('window');
+import { getDashGlass } from './glass-dashboard';
 
 interface ActivityLedgerProps {
   onClose?: () => void;
 }
 
 const ActivityLedgerScreen: React.FC<ActivityLedgerProps> = ({ onClose }) => {
-  const { colors, calendarType, language, timeSystem, t, theme } = useSettings();
+  const { colors, calendarType, language, timeSystem, t } = useSettings();
+  const G = getDashGlass(colors);
+  const styles = useMemo(() => createStyles(G), [G]);
   const [dateModalVisible, setDateModalVisible] = useState(false);
   
   const [activities, setActivities] = useState<any[]>([]);
@@ -99,7 +103,7 @@ data.forEach((item: any) => {
     });
 
     setActivities(grouped);
-  }, [searchQuery, selectedDate]);
+  }, [searchQuery, selectedDate, t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -115,8 +119,8 @@ data.forEach((item: any) => {
   const renderActivityItem = React.useCallback(({ item }: { item: any }) => {
     if (item.type === 'header') {
       return (
-        <View style={[styles.dateHeader, { backgroundColor: colors.background }]}>
-          <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.dateHeaderText, { color: colors.textSecondary }]} numberOfLines={1}>
+        <View style={[styles.dateHeader, { backgroundColor: G.bg }]}>
+          <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.dateHeaderText, { color: G.fgSecondary }]} numberOfLines={1}>
             {formatDate(new Date(item.date), calendarType, language)}
           </AppText>
         </View>
@@ -130,37 +134,57 @@ data.forEach((item: any) => {
     let Icon = TrendingUp;
     let iconBg = colors.primary;
     let label = '';
-    let amountColor = colors.text;
+    let amountColor = G.fg;
     let prefix = '';
 
     if (isSale) {
-      Icon = ShoppingBag;
-      iconBg = colors.primary;
-      label = `${item.quantity || 0} ${item.unitType || ''} ${t('dashboard.activity.sold')}`;
-      amountColor = colors.success || '#34C759';
-      prefix = '+';
+      const paymentStatus = item.paymentStatus || 'Paid';
+      const isOrder = paymentStatus === 'Order';
+      const isDebt = paymentStatus === 'Debt';
+      const isCancelled = paymentStatus === 'Cancelled';
+      const isPayment = (typeof item.value === 'number' && item.value < 0) || (item.batchId && String(item.batchId).startsWith('PAY_'));
+      if (isPayment) {
+        Icon = Banknote;
+        iconBg = colors.success;
+        label = t('dashboard.activity.debt_collected');
+        amountColor = colors.success;
+        prefix = '+';
+      } else {
+        Icon = isCancelled ? AlertTriangle : ShoppingBag;
+        iconBg = isCancelled ? colors.error : (isOrder ? colors.primary : (isDebt ? colors.warning : colors.success));
+        const statusLabel = isCancelled ? t('sale.cancelled') : (isOrder ? 'Order' : (isDebt ? t('sale.credit') : t('dashboard.activity.sold')));
+        label = `${item.quantity || 0} ${item.unitType || ''} ${statusLabel}`;
+        amountColor = isCancelled ? colors.error : (isOrder ? colors.primary : (isDebt ? colors.warning : colors.success));
+        prefix = isCancelled ? '' : '+';
+      }
     } else if (isExpense) {
       Icon = TrendingDown;
-      iconBg = '#FF3B30';
+      iconBg = colors.error;
       if (item.isRecurring && item.nextBillingDate) {
         const nextDate = new Date(item.nextBillingDate);
         label = `${t('expense.recurring_next')}: ${nextDate.toLocaleDateString()}`;
       } else {
         label = t('expense.not_recurring');
       }
-      amountColor = '#FF3B30';
+      amountColor = colors.error;
       prefix = '-';
     } else if (isAdjustment) {
       Icon = RefreshCw;
-      iconBg = '#FF9500';
+      iconBg = colors.warning;
       label = item.type === 'price_up' ? t('adjustment.price_increased') : 
               item.type === 'price_down' ? t('adjustment.price_decreased') : t('dashboard.activity.damaged');
     }
     
-    // Item name: try name, label, then fallback
-    const itemName = item.name || item.label || (isSale ? t('inventory.header') : (isExpense ? t('expense.header') : t('adjustment.header')));
+    // Item name: use customerName for sales, fallback to item label
+    const itemName = isSale
+      ? (item.customerName || t('sales.walk_in_customer'))
+      : (item.name || item.label || (isExpense ? t('expense.header') : t('adjustment.header')));
     // Amount: try amount, value
-    const displayAmount = typeof item.amount === 'number' ? item.amount : (typeof item.value === 'number' ? item.value : null);
+    let displayAmount = typeof item.amount === 'number' ? item.amount : (typeof item.value === 'number' ? item.value : null);
+    // Payment records have negative value — show as positive
+    if (isSale && displayAmount !== null && displayAmount < 0) {
+      displayAmount = Math.abs(displayAmount);
+    }
     
     // Safely format time. Respects the user's selected time
     // system: in Ethiopian mode we use the 12-hour ETH clock with
@@ -196,12 +220,17 @@ data.forEach((item: any) => {
         right={
           <View style={{ alignItems: 'flex-end' }}>
             {displayAmount !== null && !isNaN(displayAmount) ? (
-              <AppText variant="body" weight="bold" color={amountColor} numberOfLines={1}>
-                {prefix}{displayAmount.toLocaleString()} <AppText variant="caption" weight="medium" color={amountColor}> {t('common.etb')}</AppText>
-              </AppText>
+              <AppNumber
+                value={prefix === '-' ? -displayAmount : displayAmount}
+                size="body"
+                suffix={" " + t('common.etb')}
+                showSign={prefix === '+'}
+                color={amountColor}
+                numberOfLines={1}
+              />
             ) : null}
             {timeDisplay ? (
-              <AppText variant="caption" weight="medium" color={colors.textSecondary} numberOfLines={1}>
+              <AppText variant="caption" weight="medium" color={G.fgSecondary} numberOfLines={1}>
                 {timeDisplay}
               </AppText>
             ) : null}
@@ -210,7 +239,7 @@ data.forEach((item: any) => {
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           if (isSale) {
-            const sale = getSaleById(item.id);
+            const sale = getSaleWithItemsById(item.id);
             if (sale) setSelectedSale(sale);
           } else if (isExpense) {
             const expense = getExpenseById(item.id);
@@ -222,39 +251,42 @@ data.forEach((item: any) => {
         }}
         padding={Spacing.md}
         style={{
-          backgroundColor: colors.card,
+          backgroundColor: G.bgCard,
           borderWidth: 1,
-          borderColor: colors.border,
+          borderColor: G.border,
           borderRadius: BorderRadius.lg,
           marginBottom: Spacing.sm,
+          overflow: 'hidden',
         }}
       />
     );
-  }, [colors, calendarType, language, t, setSelectedSale, setSelectedExpense, setSelectedAdjustment]);
+  }, [colors, calendarType, language, timeSystem, t, G, styles, setSelectedSale, setSelectedExpense, setSelectedAdjustment]);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: G.bg }]}>
+      <View style={{ position: 'absolute', top: -80, left: -40, width: 200, height: 200, borderRadius: 100, backgroundColor: G.mutedLight, opacity: 0.3 }} />
+      <View style={{ position: 'absolute', bottom: -60, right: -30, width: 180, height: 180, borderRadius: 90, backgroundColor: G.mutedLight, opacity: 0.2 }} />
       <View style={styles.header}>
         <View style={styles.headerTop}>
-          <TouchableOpacity onPress={onClose} style={[styles.backBtn, { backgroundColor: colors.surface }]}>
-            <ChevronLeft size={24} color={colors.text} />
+          <TouchableOpacity onPress={onClose} style={[styles.backBtn, { backgroundColor: G.bgCard }]}>
+            <ChevronLeft size={24} color={G.fg} />
           </TouchableOpacity>
           <View style={styles.headerTitleGroup}>
-            <AppText variant="heading" weight="bold" style={[styles.headerTitle, { color: colors.text }]} numberOfLines={2}>{t('dashboard.recent_activity')}</AppText>
+            <AppText variant="heading" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{t('dashboard.recent_activity')}</AppText>
             <View style={styles.liveIndicator}>
               <View style={[styles.liveDot, { backgroundColor: colors.success }]} />
-              <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.liveText, { color: colors.textSecondary }]} numberOfLines={1}>{t('common.live_audit')}</AppText>
+              <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.liveText, { color: G.fgSecondary }]} numberOfLines={1}>{t('common.live_audit')}</AppText>
             </View>
           </View>
         </View>
 
         <View style={styles.searchContainer}>
-          <View style={[styles.searchBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Search size={20} color={colors.textSecondary} />
+          <View style={[styles.searchBar, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+            <Search size={20} color={G.fgSecondary} />
 <RNTextInput
-               style={[styles.searchInput, { color: colors.text }]}
+               style={[styles.searchInput, { color: G.fg }]}
                placeholder={t('dashboard.search_activity')}
-               placeholderTextColor={colors.textSecondary + '80'}
+               placeholderTextColor={G.fgSecondary + '80'}
                value={searchQuery}
                onChangeText={(text) => {
                  const sanitized = sanitizeSearchQuery(text);
@@ -264,14 +296,14 @@ data.forEach((item: any) => {
                maxLength={100}
              />
             {searchError && (
-              <AppText variant="caption" weight="medium" style={styles.searchErrorText} numberOfLines={2}>{searchError}</AppText>
+              <AppText variant="caption" weight="medium" style={[styles.searchErrorText, { color: colors.error }]} numberOfLines={2}>{searchError}</AppText>
             )}
           </View>
           <TouchableOpacity 
             onPress={() => setDateModalVisible(true)}
-            style={[styles.filterBtn, { backgroundColor: colors.card, borderColor: colors.border }, selectedDate && { borderColor: colors.primary }]}
+            style={[styles.filterBtn, { backgroundColor: G.bgCard, borderColor: G.border }, selectedDate && { borderColor: colors.primary }]}
           >
-            <Calendar size={20} color={selectedDate ? colors.primary : colors.textSecondary} />
+            <Calendar size={20} color={selectedDate ? colors.primary : G.fgSecondary} />
           </TouchableOpacity>
         </View>
       </View>
@@ -288,8 +320,8 @@ data.forEach((item: any) => {
         removeClippedSubviews={true}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <History size={64} color={colors.border} />
-            <AppText variant="body" weight="medium" style={[styles.emptyText, { color: colors.textSecondary }]} numberOfLines={2}>{t('dashboard.no_activity')}</AppText>
+            <History size={64} color={G.border} />
+            <AppText variant="body" weight="medium" style={[styles.emptyText, { color: G.fgSecondary }]} numberOfLines={2}>{t('dashboard.no_activity')}</AppText>
           </View>
         }
       />
@@ -308,8 +340,8 @@ data.forEach((item: any) => {
       <Modal visible={!!selectedSale} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setSelectedSale(null)} />
-          <Animated.View entering={FadeInDown} style={[styles.bottomSheetContainer, { backgroundColor: colors.background, height: Dimensions.get('window').height * 0.85 }]}>
-             <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
+          <Animated.View entering={FadeInDown} style={[styles.bottomSheetContainer, { backgroundColor: G.bg, height: Dimensions.get('window').height * 0.90 }]}>
+             <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: G.border }]} /></View>
              {selectedSale && <SaleDetailsScreen sale={selectedSale} onClose={() => { setSelectedSale(null); loadData(); }} />}
           </Animated.View>
         </View>
@@ -318,8 +350,8 @@ data.forEach((item: any) => {
       <Modal visible={!!selectedExpense} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setSelectedExpense(null)} />
-          <Animated.View entering={FadeInDown} style={[styles.bottomSheetContainer, { backgroundColor: colors.background, height: Dimensions.get('window').height * 0.85 }]}>
-             <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
+          <Animated.View entering={FadeInDown} style={[styles.bottomSheetContainer, { backgroundColor: G.bg, height: Dimensions.get('window').height * 0.90 }]}>
+             <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: G.border }]} /></View>
              {selectedExpense && <ExpenseDetailsScreen expense={selectedExpense} onClose={() => { setSelectedExpense(null); loadData(); }} />}
           </Animated.View>
         </View>
@@ -328,8 +360,8 @@ data.forEach((item: any) => {
       <Modal visible={!!selectedAdjustment} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setSelectedAdjustment(null)} />
-          <Animated.View entering={FadeInDown} style={[styles.bottomSheetContainer, { backgroundColor: colors.background, height: Dimensions.get('window').height * 0.85 }]}>
-             <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
+          <Animated.View entering={FadeInDown} style={[styles.bottomSheetContainer, { backgroundColor: G.bg, height: Dimensions.get('window').height * 0.90 }]}>
+             <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: G.border }]} /></View>
              {selectedAdjustment && <AdjustmentDetailsScreen adjustment={selectedAdjustment} onClose={() => setSelectedAdjustment(null)} onRefresh={() => { setSelectedAdjustment(null); loadData(); }} />}
           </Animated.View>
         </View>
@@ -339,7 +371,7 @@ data.forEach((item: any) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (G: any) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -445,7 +477,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     paddingBottom: 40,
-    overflow: 'hidden',
   },
   modalHeader: {
     alignItems: 'center',
@@ -458,7 +489,6 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   searchErrorText: {
-    color: '#FF3B30',
     marginTop: 4,
     marginLeft: 35,
   },

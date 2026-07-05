@@ -34,6 +34,7 @@ import {
 import { formatDate } from '@/utils/date-utils';
 import { Feather, FontAwesome5 } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { playNice, playBad } from '@/services/soundService';
 import { useRouter } from 'expo-router';
 import {
   Alert,
@@ -46,10 +47,12 @@ import {
   View,
 } from 'react-native';
 import Animated, { FadeIn, FadeInDown, Layout } from 'react-native-reanimated';
+import { AppNumber } from '@/components/ui';
 import { AppText } from '@/components/AppText';
 import { AppListItem } from '@/components/AppListItem';
 import { SafeFlatList } from '@/components/SafeFlatList';
 import { SkeletonList } from '@/components/Skeleton';
+import { getDashGlass } from './glass-dashboard';
 
 type FilterMode = 'all' | 'overdue' | 'active';
 type SortMode = 'amount_desc' | 'amount_asc' | 'oldest';
@@ -125,6 +128,8 @@ const daysBetween = (target: string | null | undefined): number | null => {
 
 const DebtManagementScreen: React.FC = () => {
   const { colors, t, calendarType, language } = useSettings();
+  const G = getDashGlass(colors);
+  const styles = useMemo(() => createStyles(G), [G]);
   const router = useRouter();
 
   const [summary, setSummary] = useState<DebtSummary | null>(null);
@@ -220,26 +225,28 @@ const DebtManagementScreen: React.FC = () => {
   }
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
+    <View style={[styles.root, { backgroundColor: G.bg }]}>
+      <View style={{ position: 'absolute', top: -60, left: -20, width: 180, height: 180, borderRadius: 90, backgroundColor: G.mutedLight, opacity: 0.3 }} />
+      <View style={{ position: 'absolute', bottom: -40, right: -40, width: 200, height: 200, borderRadius: 100, backgroundColor: G.mutedLight, opacity: 0.2 }} />
       {/* Header */}
       <View style={styles.headerWrap}>
         <TouchableOpacity
           onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/dashboard'))}
-          style={[styles.backBtn, { backgroundColor: colors.text + '10' }]}
+          style={[styles.backBtn, { backgroundColor: G.fg + '10' }]}
           hitSlop={10}
         >
-          <Feather name="chevron-left" size={24} color={colors.text} />
+          <Feather name="chevron-left" size={24} color={G.fg} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <AppText
             variant="micro" weight="bold" transform="uppercase"
-            style={[styles.eyebrow, { color: colors.textSecondary }]} numberOfLines={1}
+            style={[styles.eyebrow, { color: G.fgSecondary }]} numberOfLines={1}
           >
             {t('debt.eyebrow')}
           </AppText>
           <AppText
             variant="display" weight="extrabold"
-            style={[styles.title, { color: colors.text }]} numberOfLines={2}
+            style={[styles.title, { color: G.fg }]} numberOfLines={2}
           >
             {t('debt.title')}
           </AppText>
@@ -257,23 +264,23 @@ const DebtManagementScreen: React.FC = () => {
 
       {/* Search + sort/filter row */}
       <View style={styles.searchRow}>
-        <View style={[styles.searchBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Feather name="search" size={16} color={colors.textSecondary} />
+        <View style={[styles.searchBox, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+          <Feather name="search" size={16} color={G.fgSecondary} />
           <TextInput
-            style={[styles.searchInput, { color: colors.text }]}
+            style={[styles.searchInput, { color: G.fg }]}
             value={search}
             onChangeText={setSearch}
             placeholder={t('debt.search_placeholder')}
-            placeholderTextColor={colors.textSecondary + '80'}
+            placeholderTextColor={G.fgSecondary + '80'}
           />
           {search.length > 0 && (
             <TouchableOpacity onPress={() => setSearch('')} hitSlop={6}>
-              <Feather name="x" size={16} color={colors.textSecondary} />
+              <Feather name="x" size={16} color={G.fgSecondary} />
             </TouchableOpacity>
           )}
         </View>
         <TouchableOpacity
-          style={[styles.sortBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+          style={[styles.sortBtn, { backgroundColor: G.bgCard, borderColor: G.border }]}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             setSort((s) =>
@@ -282,7 +289,7 @@ const DebtManagementScreen: React.FC = () => {
           }}
           activeOpacity={0.7}
         >
-          <Feather name="sliders" size={16} color={colors.text} />
+          <Feather name="sliders" size={16} color={G.fg} />
         </TouchableOpacity>
       </View>
 
@@ -299,7 +306,7 @@ const DebtManagementScreen: React.FC = () => {
               key={f}
               style={[
                 styles.chip,
-                { backgroundColor: active ? colors.text : colors.card, borderColor: active ? colors.text : colors.border },
+                { backgroundColor: active ? G.fg : G.bgCard, borderColor: active ? G.fg : G.border },
               ]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -309,7 +316,7 @@ const DebtManagementScreen: React.FC = () => {
             >
               <AppText
                 variant="caption" weight="bold" shrink={false}
-                style={{ color: active ? colors.background : colors.text }} numberOfLines={1}
+                style={{ color: active ? G.bg : G.fg }} numberOfLines={1}
               >
                 {t(`debt.filter.${f}`)} ({count})
               </AppText>
@@ -319,7 +326,7 @@ const DebtManagementScreen: React.FC = () => {
         <View style={{ flex: 1 }} />
         <AppText
           variant="caption" weight="medium" shrink={false}
-          style={{ color: colors.textSecondary }} numberOfLines={1}
+          style={{ color: G.fgSecondary }} numberOfLines={1}
         >
           {t('debt.sort_label', { mode: t(`debt.sort.${sort}`) })}
         </AppText>
@@ -340,17 +347,17 @@ const DebtManagementScreen: React.FC = () => {
           windowSize={7}
           removeClippedSubviews
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.text} />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={G.fg} />
           }
           ListEmptyComponent={
             <Animated.View entering={FadeIn.duration(500)} style={styles.emptyWrap}>
               <View style={[styles.emptyIconCircle, { backgroundColor: colors.success + '15' }]}>
                 <Feather name="check-circle" size={36} color={colors.success} />
               </View>
-              <AppText variant="title" weight="bold" align="center" style={{ color: colors.text, marginTop: 16 }} numberOfLines={2}>
+              <AppText variant="title" weight="bold" align="center" style={{ color: G.fg, marginTop: 16 }} numberOfLines={2}>
                 {t('debt.empty_title')}
               </AppText>
-              <AppText variant="body" weight="medium" align="center" style={{ color: colors.textSecondary, marginTop: 8 }} numberOfLines={3}>
+              <AppText variant="body" weight="medium" align="center" style={{ color: G.fgSecondary, marginTop: 8 }} numberOfLines={3}>
                 {t('debt.empty_sub')}
               </AppText>
             </Animated.View>
@@ -367,92 +374,83 @@ const DebtManagementScreen: React.FC = () => {
 
 const DebtSummaryHeader: React.FC<{ summary: DebtSummary }> = ({ summary }) => {
   const { colors, t } = useSettings();
+  const G = getDashGlass(colors);
+  const styles = useMemo(() => createStyles(G), [G]);
   return (
     <Animated.View
       entering={FadeInDown.duration(500)}
       style={[
         styles.summaryCard,
-        { backgroundColor: colors.card, borderColor: colors.border },
+        { backgroundColor: G.bgCard, borderColor: G.border },
       ]}
     >
       <View style={styles.summaryTopRow}>
         <View>
           <AppText
             variant="micro" weight="bold" transform="uppercase"
-            style={{ color: colors.textSecondary }} numberOfLines={1}
+            style={{ color: G.fgSecondary }} numberOfLines={1}
           >
             {t('debt.summary.total_owed')}
           </AppText>
-          <AppText
-            variant="display-lg" weight="extrabold" shrink={false}
-            style={{ color: colors.text, marginTop: 2 }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}
-          >
-            {summary.totalOwed.toLocaleString()} {t('common.etb')}
-          </AppText>
+          <AppNumber value={summary.totalOwed} size="heading-lg" prefix="ETB " numberOfLines={1} />
         </View>
         <View style={[styles.summaryIconBox, { backgroundColor: colors.primary + '18' }]}>
           <FontAwesome5 name="hand-holding-usd" size={22} color={colors.primary} />
         </View>
       </View>
 
-      <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
+      <View style={[styles.summaryDivider, { backgroundColor: G.border }]} />
 
       <View style={styles.summaryBottomRow}>
         <View style={styles.summaryStat}>
-          <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }} numberOfLines={1}>
+          <AppText variant="caption" weight="medium" style={{ color: G.fgSecondary }} numberOfLines={1}>
             {t('debt.summary.debtors')}
           </AppText>
-          <AppText variant="title-sm" weight="bold" shrink={false} style={{ color: colors.text }} numberOfLines={1}>
-            {summary.debtorCount}
-          </AppText>
+          <AppNumber value={summary.debtorCount} size="title-sm" color={G.fg} numberOfLines={1} />
         </View>
-        <View style={[styles.summaryStatDivider, { backgroundColor: colors.border }]} />
+        <View style={[styles.summaryStatDivider, { backgroundColor: G.border }]} />
         <View style={styles.summaryStat}>
-          <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }} numberOfLines={1}>
+          <AppText variant="caption" weight="medium" style={{ color: G.fgSecondary }} numberOfLines={1}>
             {t('debt.summary.overdue_count')}
           </AppText>
-          <AppText variant="title-sm" weight="bold" shrink={false} style={{ color: summary.overdueCount > 0 ? '#FF3B30' : colors.text }} numberOfLines={1}>
-            {summary.overdueCount}
-          </AppText>
+          <AppNumber value={summary.overdueCount} size="title-sm" color={summary.overdueCount > 0 ? colors.error : G.fg} numberOfLines={1} />
         </View>
-        <View style={[styles.summaryStatDivider, { backgroundColor: colors.border }]} />
+        <View style={[styles.summaryStatDivider, { backgroundColor: G.border }]} />
         <View style={styles.summaryStat}>
-          <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }} numberOfLines={1}>
+          <AppText variant="caption" weight="medium" style={{ color: G.fgSecondary }} numberOfLines={1}>
             {t('debt.summary.overdue_amount')}
           </AppText>
-          <AppText
-            variant="title-sm" weight="bold" shrink={false}
-            style={{ color: summary.overdueAmount > 0 ? '#FF3B30' : colors.text }} numberOfLines={1}
-            adjustsFontSizeToFit minimumFontScale={0.7}
-          >
-            {summary.overdueAmount.toLocaleString()}
-          </AppText>
+          <AppNumber value={summary.overdueAmount} size="title-sm" color={summary.overdueAmount > 0 ? colors.error : G.fg} numberOfLines={1} />
         </View>
       </View>
     </Animated.View>
   );
 };
 
-const SummarySkeleton: React.FC<{ colors: any }> = ({ colors }) => (
-  <View style={[styles.summaryCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-    <View style={[styles.summaryTopRow]}>
+const SummarySkeleton: React.FC<{ colors: any }> = ({ colors }) => {
+  const G = getDashGlass(colors);
+  const styles = useMemo(() => createStyles(G), [G]);
+  return (
+    <View style={[styles.summaryCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+      <View style={styles.summaryTopRow}>
       <View style={{ flex: 1 }}>
-        <View style={{ width: 90, height: 12, borderRadius: 4, backgroundColor: colors.text + '10' }} />
-        <View style={{ width: 140, height: 28, borderRadius: 6, backgroundColor: colors.text + '10', marginTop: 8 }} />
+        <View style={{ width: 90, height: 12, borderRadius: 4, backgroundColor: G.fg + '10' }} />
+        <View style={{ width: 140, height: 28, borderRadius: 6, backgroundColor: G.fg + '10', marginTop: 8 }} />
       </View>
-      <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: colors.text + '10' }} />
+      <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: G.fg + '10' }} />
     </View>
-    <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
+    <View style={[styles.summaryDivider, { backgroundColor: G.border }]} />
     <View style={styles.summaryBottomRow}>
       {[0, 1, 2].map((i) => (
         <View key={i} style={{ flex: 1, gap: 6 }}>
-          <View style={{ width: 60, height: 10, borderRadius: 3, backgroundColor: colors.text + '10' }} />
-          <View style={{ width: 40, height: 16, borderRadius: 4, backgroundColor: colors.text + '10' }} />
+          <View style={{ width: 60, height: 10, borderRadius: 3, backgroundColor: G.fg + '10' }} />
+          <View style={{ width: 40, height: 16, borderRadius: 4, backgroundColor: G.fg + '10' }} />
         </View>
       ))}
     </View>
   </View>
-);
+  );
+};
 
 // ─────────────────────────────────────────────────────────────────────
 // Customer row
@@ -464,9 +462,11 @@ const DebtCustomerRow: React.FC<{
   onPress: (c: DebtCustomer) => void;
 }> = React.memo(({ item, index, onPress }) => {
   const { colors, t, calendarType, language } = useSettings();
+  const G = getDashGlass(colors);
+  const styles = useMemo(() => createStyles(G), [G]);
   const daysToDue = daysBetween(item.earliestDue);
   const isOverdue = daysToDue !== null && daysToDue < 0;
-  const accent = isOverdue ? '#FF3B30' : colors.primary;
+  const accent = isOverdue ? colors.error : colors.primary;
   return (
     <Animated.View
       entering={FadeInDown.delay(Math.min(index, 8) * 35).duration(400)}
@@ -488,17 +488,19 @@ const DebtCustomerRow: React.FC<{
         }
         titleMaxLines={2}
         subtitleMaxLines={1}
-        rightText={`${item.oweAmount.toLocaleString()} ${t('common.etb')}`}
-        rightColor={isOverdue ? '#FF3B30' : colors.text}
+        right={
+          <AppNumber value={item.oweAmount} size="body" prefix="ETB " color={isOverdue ? colors.error : G.fg} numberOfLines={1} />
+        }
         onPress={() => onPress(item)}
-        background={colors.card}
+        background={G.bgCard}
         style={{
-          borderColor: isOverdue ? '#FF3B3040' : colors.border,
+          borderColor: isOverdue ? colors.error + '40' : G.border,
           borderWidth: 1,
           borderLeftWidth: 4,
           borderLeftColor: accent,
           borderRadius: BorderRadius.lg,
           marginBottom: 10,
+          overflow: 'hidden',
         }}
       />
     </Animated.View>
@@ -518,6 +520,8 @@ const DebtDetailScreen: React.FC<{
   language: string;
 }> = ({ customer, onBack, onChanged, calendarType, language }) => {
   const { colors, t } = useSettings();
+  const G = getDashGlass(colors);
+  const styles = useMemo(() => createStyles(G), [G]);
   const [tab, setTab] = useState<DetailTab>('items');
   const [items, setItems] = useState<DebtSale[]>([]);
   const [history, setHistory] = useState<PaymentEvent[]>([]);
@@ -573,6 +577,7 @@ const DebtDetailScreen: React.FC<{
               customerPhone: customer.customerPhone ?? undefined,
             });
             if (ok) {
+              playNice();
               await refreshAfterChange();
             }
           },
@@ -612,6 +617,7 @@ const DebtDetailScreen: React.FC<{
                 });
               }
             }
+            playNice();
             await refreshAfterChange();
           },
         },
@@ -638,6 +644,7 @@ const DebtDetailScreen: React.FC<{
               customerPhone: customer.customerPhone ?? undefined,
             });
             if (ok) {
+              playBad();
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
               await refreshAfterChange();
             }
@@ -666,37 +673,39 @@ const DebtDetailScreen: React.FC<{
 
   // Render
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
+    <View style={[styles.root, { backgroundColor: G.bg }]}>
+      <View style={{ position: 'absolute', top: -80, left: -30, width: 200, height: 200, borderRadius: 100, backgroundColor: G.mutedLight, opacity: 0.25 }} />
+      <View style={{ position: 'absolute', bottom: -60, right: -20, width: 180, height: 180, borderRadius: 90, backgroundColor: G.mutedLight, opacity: 0.15 }} />
       {/* Top header */}
       <View style={styles.detailHeader}>
         <TouchableOpacity
           onPress={onBack}
-          style={[styles.backBtn, { backgroundColor: colors.text + '10' }]}
+          style={[styles.backBtn, { backgroundColor: G.fg + '10' }]}
           hitSlop={10}
         >
-          <Feather name="chevron-left" size={24} color={colors.text} />
+          <Feather name="chevron-left" size={24} color={G.fg} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <AppText
             variant="micro" weight="bold" transform="uppercase"
-            style={{ color: colors.textSecondary }} numberOfLines={1}
+            style={{ color: G.fgSecondary }} numberOfLines={1}
           >
             {t('debt.detail.eyebrow')}
           </AppText>
           <AppText
             variant="title" weight="bold"
-            style={{ color: colors.text }} numberOfLines={1}
+            style={{ color: G.fg }} numberOfLines={1}
           >
             {customer.customerName}
           </AppText>
         </View>
         {customer.customerPhone ? (
           <TouchableOpacity
-            style={[styles.callBtn, { backgroundColor: '#34C75918' }]}
+            style={[styles.callBtn, { backgroundColor: colors.success + '18' }]}
             onPress={handleCall}
             hitSlop={6}
           >
-            <Feather name="phone" size={18} color="#34C759" />
+            <Feather name="phone" size={18} color={colors.success} />
           </TouchableOpacity>
         ) : null}
       </View>
@@ -708,63 +717,48 @@ const DebtDetailScreen: React.FC<{
           <RefreshControl
             refreshing={loading}
             onRefresh={loadDetail}
-            tintColor={colors.text}
+            tintColor={G.fg}
           />
         }
       >
         {/* Customer summary card */}
         <Animated.View
           entering={FadeInDown.duration(500)}
-          style={[styles.detailCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+          style={[styles.detailCard, { backgroundColor: G.bgCard, borderColor: G.border }]}
         >
           <View style={styles.detailStatRow}>
             <View style={styles.detailStat}>
-              <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }} numberOfLines={1}>
+              <AppText variant="caption" weight="medium" style={{ color: G.fgSecondary }} numberOfLines={1}>
                 {t('debt.detail.outstanding')}
               </AppText>
-              <AppText
-                variant="display" weight="extrabold" shrink={false}
-                style={{ color: '#FF3B30', marginTop: 2 }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}
-              >
-                {customer.oweAmount.toLocaleString()} {t('common.etb')}
-              </AppText>
+              <AppNumber value={customer.oweAmount} size="heading-lg" prefix="ETB " color={colors.error} numberOfLines={1} />
             </View>
             <View style={styles.detailStatDivider} />
             <View style={styles.detailStat}>
-              <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }} numberOfLines={1}>
+              <AppText variant="caption" weight="medium" style={{ color: G.fgSecondary }} numberOfLines={1}>
                 {t('debt.detail.lifetime_paid')}
               </AppText>
-              <AppText
-                variant="title-sm" weight="bold" shrink={false}
-                style={{ color: '#34C759', marginTop: 4 }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}
-              >
-                {totalPaid.toLocaleString()} {t('common.etb')}
-              </AppText>
+              <AppNumber value={totalPaid} size="title-sm" prefix="ETB " color={colors.success} numberOfLines={1} />
             </View>
             <View style={styles.detailStatDivider} />
             <View style={styles.detailStat}>
-              <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }} numberOfLines={1}>
+              <AppText variant="caption" weight="medium" style={{ color: G.fgSecondary }} numberOfLines={1}>
                 {t('debt.detail.sales_count')}
               </AppText>
-              <AppText
-                variant="title-sm" weight="bold" shrink={false}
-                style={{ color: colors.text, marginTop: 4 }} numberOfLines={1}
-              >
-                {customer.totalDebts}
-              </AppText>
+              <AppNumber value={customer.totalDebts} size="title-sm" color={G.fg} numberOfLines={1} />
             </View>
           </View>
 
           <View style={styles.detailActionsRow}>
             <TouchableOpacity
-              style={[styles.primaryBtn, { backgroundColor: colors.text }]}
+              style={[styles.primaryBtn, { backgroundColor: G.fg }]}
               onPress={handlePayAll}
               activeOpacity={0.85}
             >
-              <Feather name="check-circle" size={16} color={colors.background} />
+              <Feather name="check-circle" size={16} color={G.bg} />
               <AppText
                 variant="body-sm" weight="bold" shrink={false}
-                style={{ color: colors.background }} numberOfLines={1}
+                style={{ color: G.bg }} numberOfLines={1}
               >
                 {t('debt.action.pay_all')}
               </AppText>
@@ -773,18 +767,18 @@ const DebtDetailScreen: React.FC<{
               style={[
                 styles.secondaryBtn,
                 {
-                  backgroundColor: selectedSaleIds.length > 0 ? '#FF9500' : colors.text + '10',
-                  borderColor: selectedSaleIds.length > 0 ? '#FF9500' : colors.border,
+                  backgroundColor: selectedSaleIds.length > 0 ? colors.warning : G.fg + '10',
+                  borderColor: selectedSaleIds.length > 0 ? colors.warning : G.border,
                 },
               ]}
               onPress={handlePaySelected}
               disabled={selectedSaleIds.length === 0}
               activeOpacity={0.85}
             >
-              <Feather name="check-square" size={16} color={selectedSaleIds.length > 0 ? '#FFF' : colors.text} />
+              <Feather name="check-square" size={16} color={selectedSaleIds.length > 0 ? G.fg : G.fg} />
               <AppText
                 variant="body-sm" weight="bold" shrink={false}
-                style={{ color: selectedSaleIds.length > 0 ? '#FFF' : colors.text }} numberOfLines={1}
+                style={{ color: selectedSaleIds.length > 0 ? G.fg : G.fg }} numberOfLines={1}
               >
                 {selectedSaleIds.length > 0
                   ? t('debt.action.pay_selected', { count: String(selectedSaleIds.length) })
@@ -793,14 +787,14 @@ const DebtDetailScreen: React.FC<{
             </TouchableOpacity>
           </View>
           <TouchableOpacity
-            style={[styles.lossBtn, { borderColor: '#FF3B3050' }]}
+            style={[styles.lossBtn, { backgroundColor: colors.error + '08', borderColor: colors.error + '50' }]}
             onPress={handleMarkLoss}
             activeOpacity={0.85}
           >
-            <Feather name="x-circle" size={14} color="#FF3B30" />
+            <Feather name="x-circle" size={14} color={colors.error} />
             <AppText
               variant="caption" weight="bold" shrink={false}
-              style={{ color: '#FF3B30' }} numberOfLines={1}
+              style={{ color: colors.error }} numberOfLines={1}
             >
               {t('debt.action.write_off')}
             </AppText>
@@ -808,7 +802,7 @@ const DebtDetailScreen: React.FC<{
         </Animated.View>
 
         {/* Tabs */}
-        <View style={[styles.tabsRow, { borderBottomColor: colors.border }]}>
+        <View style={[styles.tabsRow, { borderBottomColor: G.border }]}>
           {(['items', 'history'] as DetailTab[]).map((tabKey) => {
             const active = tab === tabKey;
             return (
@@ -816,7 +810,7 @@ const DebtDetailScreen: React.FC<{
                 key={tabKey}
                 style={[
                   styles.tabBtn,
-                  active && { borderBottomColor: colors.text, borderBottomWidth: 2 },
+                  active && { borderBottomColor: G.fg, borderBottomWidth: 2 },
                 ]}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -826,7 +820,7 @@ const DebtDetailScreen: React.FC<{
               >
                 <AppText
                   variant="body-sm" weight="bold" shrink={false}
-                  style={{ color: active ? colors.text : colors.textSecondary }} numberOfLines={1}
+                  style={{ color: active ? G.fg : G.fgSecondary }} numberOfLines={1}
                 >
                   {tabKey === 'items'
                     ? t('debt.tabs.items', { count: String(items.length) })
@@ -868,12 +862,12 @@ const DebtDetailScreen: React.FC<{
                       style={[
                         styles.saleCard,
                         {
-                          backgroundColor: colors.card,
-                          borderColor: isSelected
-                            ? '#FF9500'
-                            : isItemOverdue
-                              ? '#FF3B3050'
-                              : colors.border,
+                          backgroundColor: G.bgCard,
+                        borderColor: isSelected
+                          ? colors.warning
+                          : isItemOverdue
+                            ? colors.error + '50'
+                            : G.border,
                           borderWidth: isSelected ? 2 : 1,
                           opacity: isItemPaid ? 0.6 : 1,
                         },
@@ -885,31 +879,34 @@ const DebtDetailScreen: React.FC<{
                             style={[
                               styles.checkbox,
                               {
-                                backgroundColor: isSelected ? '#FF9500' : 'transparent',
-                                borderColor: isSelected ? '#FF9500' : colors.border,
+                                backgroundColor: isSelected ? colors.warning : 'transparent',
+                                borderColor: isSelected ? colors.warning : G.border,
                               },
                             ]}
                           >
-                            {isSelected && <Feather name="check" size={12} color="#FFF" />}
+                            {isSelected && <Feather name="check" size={12} color={G.fg} />}
                           </View>
                         )}
                         <View style={{ flex: 1 }}>
                           <AppText
                             variant="body" weight="bold"
-                            style={{ color: colors.text }} numberOfLines={2}
+                            style={{ color: G.fg }} numberOfLines={2}
                           >
                             {it.itemName || t('debt.detail.unnamed_item')}
                           </AppText>
                           <View style={styles.saleMetaRow}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                              <AppNumber value={it.quantity} size="caption" color={G.fgSecondary} numberOfLines={1} />
+                              <AppText
+                                variant="caption" weight="medium" shrink={false}
+                                style={{ color: G.fgSecondary }} numberOfLines={1}
+                              >
+                                {it.unit || ''}
+                              </AppText>
+                            </View>
                             <AppText
                               variant="caption" weight="medium" shrink={false}
-                              style={{ color: colors.textSecondary }} numberOfLines={1}
-                            >
-                              {it.quantity} {it.unit || ''}
-                            </AppText>
-                            <AppText
-                              variant="caption" weight="medium" shrink={false}
-                              style={{ color: colors.textSecondary }} numberOfLines={1}
+                              style={{ color: G.fgSecondary }} numberOfLines={1}
                             >
                               {t('debt.detail.sale_date', { date: formatDateSafe(it.createdAt, calendarType, language) })}
                             </AppText>
@@ -919,16 +916,16 @@ const DebtDetailScreen: React.FC<{
                           styles.statusPill,
                           {
                             backgroundColor: isItemPaid
-                              ? '#34C75915'
+                              ? colors.success + '15'
                               : isItemOverdue
-                                ? '#FF3B3015'
-                                : '#FF950015',
+                                ? colors.error + '15'
+                                : colors.warning + '15',
                           },
                         ]}>
                           <AppText
                             variant="micro" weight="bold" shrink={false}
                             style={{
-                              color: isItemPaid ? '#34C759' : isItemOverdue ? '#FF3B30' : '#FF9500',
+                              color: isItemPaid ? colors.success : isItemOverdue ? colors.error : colors.warning,
                             }} numberOfLines={1}
                           >
                             {isItemPaid
@@ -940,61 +937,46 @@ const DebtDetailScreen: React.FC<{
                         </View>
                       </View>
 
-                      <View style={[styles.saleDivider, { backgroundColor: colors.border }]} />
+                      <View style={[styles.saleDivider, { backgroundColor: G.border }]} />
 
                       <View style={styles.saleStatRow}>
                         <View style={styles.saleStat}>
                           <AppText
                             variant="micro" weight="medium"
-                            style={{ color: colors.textSecondary }} numberOfLines={1}
+                            style={{ color: G.fgSecondary }} numberOfLines={1}
                           >
                             {t('debt.detail.total')}
                           </AppText>
-                          <AppText
-                            variant="body-sm" weight="bold" shrink={false}
-                            style={{ color: colors.text }} numberOfLines={1}
-                          >
-                            {it.totalPrice.toLocaleString()}
-                          </AppText>
+                          <AppNumber value={it.totalPrice} size="body-sm" prefix="ETB " numberOfLines={1} />
                         </View>
                         <View style={styles.saleStat}>
                           <AppText
                             variant="micro" weight="medium"
-                            style={{ color: colors.textSecondary }} numberOfLines={1}
+                            style={{ color: G.fgSecondary }} numberOfLines={1}
                           >
                             {t('debt.detail.paid')}
                           </AppText>
-                          <AppText
-                            variant="body-sm" weight="bold" shrink={false}
-                            style={{ color: '#34C759' }} numberOfLines={1}
-                          >
-                            {paid.toLocaleString()}
-                          </AppText>
+                          <AppNumber value={paid} size="body-sm" prefix="ETB " color={colors.success} numberOfLines={1} />
                         </View>
                         <View style={styles.saleStat}>
                           <AppText
                             variant="micro" weight="medium"
-                            style={{ color: colors.textSecondary }} numberOfLines={1}
+                            style={{ color: G.fgSecondary }} numberOfLines={1}
                           >
                             {t('debt.detail.left')}
                           </AppText>
-                          <AppText
-                            variant="body-sm" weight="bold" shrink={false}
-                            style={{ color: isItemPaid ? colors.textSecondary : '#FF9500' }} numberOfLines={1}
-                          >
-                            {remaining.toLocaleString()}
-                          </AppText>
+                          <AppNumber value={remaining} size="body-sm" prefix="ETB " color={isItemPaid ? G.fgSecondary : colors.warning} numberOfLines={1} />
                         </View>
                         <View style={styles.saleStat}>
                           <AppText
                             variant="micro" weight="medium"
-                            style={{ color: colors.textSecondary }} numberOfLines={1}
+                            style={{ color: G.fgSecondary }} numberOfLines={1}
                           >
                             {t('debt.detail.due')}
                           </AppText>
                           <AppText
                             variant="body-sm" weight="medium" shrink={false}
-                            style={{ color: isItemOverdue ? '#FF3B30' : colors.text }} numberOfLines={1}
+                            style={{ color: isItemOverdue ? colors.error : G.fg }} numberOfLines={1}
                           >
                             {it.dueDate
                               ? formatDateSafe(it.dueDate, calendarType, language)
@@ -1031,22 +1013,22 @@ const DebtDetailScreen: React.FC<{
                   <View
                     style={[
                       styles.historyCard,
-                      { backgroundColor: colors.card, borderColor: colors.border },
+                      { backgroundColor: G.bgCard, borderColor: G.border },
                     ]}
                   >
                     <View style={styles.historyIconBox}>
                       {isLoss ? (
-                        <Feather name="x-circle" size={18} color="#FF3B30" />
+                        <Feather name="x-circle" size={18} color={colors.error} />
                       ) : isFull ? (
-                        <Feather name="check-circle" size={18} color="#34C759" />
+                        <Feather name="check-circle" size={18} color={colors.success} />
                       ) : (
-                        <Feather name="check-square" size={18} color="#FF9500" />
+                        <Feather name="check-square" size={18} color={colors.warning} />
                       )}
                     </View>
                     <View style={{ flex: 1 }}>
                       <AppText
                         variant="body-sm" weight="bold"
-                        style={{ color: colors.text }} numberOfLines={2}
+                        style={{ color: G.fg }} numberOfLines={2}
                       >
                         {isLoss
                           ? t('debt.history.write_off')
@@ -1056,17 +1038,12 @@ const DebtDetailScreen: React.FC<{
                       </AppText>
                       <AppText
                         variant="caption" weight="medium"
-                        style={{ color: colors.textSecondary, marginTop: 2 }} numberOfLines={1}
+                        style={{ color: G.fgSecondary, marginTop: 2 }} numberOfLines={1}
                       >
                         {formatDateSafe(evt.createdAt, calendarType, language)}
                       </AppText>
                     </View>
-                    <AppText
-                      variant="body" weight="bold" shrink={false}
-                      style={{ color: isLoss ? '#FF3B30' : '#34C759' }} numberOfLines={1}
-                    >
-                      {isLoss ? '−' : '+'}{evt.amount.toLocaleString()} {t('common.etb')}
-                    </AppText>
+                    <AppNumber value={isLoss ? -evt.amount : evt.amount} size="body" suffix={" " + t('common.etb')} showSign numberOfLines={1} />
                   </View>
                 </Animated.View>
               );
@@ -1088,15 +1065,17 @@ const EmptyDetail: React.FC<{ icon: 'package' | 'clock'; title: string; sub: str
   icon, title, sub,
 }) => {
   const { colors } = useSettings();
+  const G = getDashGlass(colors);
+  const styles = useMemo(() => createStyles(G), [G]);
   return (
     <Animated.View entering={FadeIn.duration(400)} style={styles.emptyWrap}>
-      <View style={[styles.emptyIconCircle, { backgroundColor: colors.text + '08' }]}>
-        <Feather name={icon} size={32} color={colors.textSecondary} />
+      <View style={[styles.emptyIconCircle, { backgroundColor: G.fg + '08' }]}>
+        <Feather name={icon} size={32} color={G.fgSecondary} />
       </View>
-      <AppText variant="title-sm" weight="bold" align="center" style={{ color: colors.text, marginTop: 12 }} numberOfLines={2}>
+      <AppText variant="title-sm" weight="bold" align="center" style={{ color: G.fg, marginTop: 12 }} numberOfLines={2}>
         {title}
       </AppText>
-      <AppText variant="body-sm" weight="medium" align="center" style={{ color: colors.textSecondary, marginTop: 6 }} numberOfLines={3}>
+      <AppText variant="body-sm" weight="medium" align="center" style={{ color: G.fgSecondary, marginTop: 6 }} numberOfLines={3}>
         {sub}
       </AppText>
     </Animated.View>
@@ -1107,7 +1086,7 @@ const EmptyDetail: React.FC<{ icon: 'package' | 'clock'; title: string; sub: str
 // Styles
 // ─────────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const createStyles = (G: any) => StyleSheet.create({
   root: { flex: 1 },
   headerWrap: {
     flexDirection: 'row',
@@ -1142,6 +1121,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 1,
     padding: 18,
+    overflow: 'hidden',
   },
   summaryTopRow: {
     flexDirection: 'row',
@@ -1265,6 +1245,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 18,
     marginBottom: 16,
+    overflow: 'hidden',
   },
   detailStatRow: {
     flexDirection: 'row',
@@ -1312,7 +1293,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     gap: 6,
-    backgroundColor: '#FF3B3008',
   },
 
   // Tabs
@@ -1332,6 +1312,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 14,
     marginBottom: 10,
+    overflow: 'hidden',
   },
   saleTopRow: {
     flexDirection: 'row',
@@ -1378,6 +1359,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 8,
     gap: 12,
+    overflow: 'hidden',
   },
   historyIconBox: {
     width: 36,
@@ -1385,7 +1367,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.04)',
+    backgroundColor: G.bgCard,
   },
 });
 

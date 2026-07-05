@@ -1,33 +1,33 @@
 import * as FileSystem from 'expo-file-system/legacy';
-import { EncodingType } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
+import { CSV_SPECS, exportToCSV as exportToCSVFromUtils } from './csv-utils';
 
-export const exportToCSV = async (data: any[], filename: string) => {
+export const exportToCSV = async (data: any[], filename: string, moduleKey?: string) => {
   if (!data || !data.length) {
-    alert("No data available to export.");
-    return false;
+    throw new Error('No data available to export');
   }
-  
+
   try {
+    if (moduleKey && CSV_SPECS[moduleKey]) {
+      return await exportToCSVFromUtils(data, moduleKey);
+    }
+
     const keys = Object.keys(data[0]);
-    const header = keys.join(',');
-    
     const rows = data.map(item => {
       return keys.map(key => {
         let val = item[key];
         if (typeof val === 'string') {
-          // Escape quotes and commas
           val = `"${val.replace(/"/g, '""')}"`;
         }
-        return val;
+        return val ?? '';
       }).join(',');
     });
-    
-    const csvContent = [header, ...rows].join('\n');
-    
+
+    const csvContent = [keys.join(','), ...rows].join('\n');
     const path = `${FileSystem.documentDirectory}${filename}.csv`;
-    await FileSystem.writeAsStringAsync(path, csvContent, { encoding: EncodingType.UTF8 });
-    
+
+    await FileSystem.writeAsStringAsync(path, csvContent, { encoding: FileSystem.EncodingType.UTF8 });
+
     if (await Sharing.isAvailableAsync()) {
       await Sharing.shareAsync(path, {
         mimeType: 'text/csv',
@@ -36,12 +36,10 @@ export const exportToCSV = async (data: any[], filename: string) => {
       });
       return true;
     } else {
-      alert("Sharing is not available on this device.");
-      return false;
+      throw new Error('Sharing is not available on this device');
     }
   } catch (error) {
     console.error('Export error:', error);
-    alert('Failed to export data.');
-    return false;
+    throw error;
   }
 };

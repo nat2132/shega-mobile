@@ -1,8 +1,8 @@
-﻿// Notification detail bottom sheet.
+// Notification detail bottom sheet.
 // Provides quick action buttons (view, resolve, remind later, etc).
 
 import React from 'react';
-import { StyleSheet, View, Linking, Alert } from 'react-native';
+import { StyleSheet, View} from 'react-native';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -20,7 +20,11 @@ import {
   Wallet,
   X,
   PhoneCall,
-  Phone,
+  TrendingUp,
+  Repeat,
+  Percent,
+  Receipt,
+  Megaphone,
 } from 'lucide-react-native';
 import { BottomSheet } from './BottomSheet';
 import { Fonts } from '@/constants/theme';
@@ -31,7 +35,7 @@ import {
   NotificationIcon,
 } from '@/database/notifications';
 
-import { AppCard, AppButton, AppText } from '@/components/ui';
+import { AppText } from '@/components/ui';
 import {
   resolveNotificationTitle,
   resolveNotificationMessage,
@@ -62,6 +66,12 @@ const iconFor = (name: NotificationIcon, color: string, size = 36) => {
     case 'shield': return <Shield size={size} color={color} />;
     case 'truck': return <Truck size={size} color={color} />;
     case 'calendar': return <Calendar size={size} color={color} />;
+    case 'trending-up': return <TrendingUp size={size} color={color} />;
+    case 'repeat': return <Repeat size={size} color={color} />;
+    case 'percent': return <Percent size={size} color={color} />;
+    case 'receipt': return <Receipt size={size} color={color} />;
+    case 'megaphone': return <Megaphone size={size} color={color} />;
+    case 'clock': return <Clock size={size} color={color} />;
     default: return <Info size={size} color={color} />;
   }
 };
@@ -93,12 +103,12 @@ export const NotificationDetailSheet: React.FC<NotificationDetailSheetProps> = (
     notification.priority === 'low' ? '#34C75915' :
     '#007AFF15';
 
-  const actions: Array<{
+  const actions: {
     label: string;
     onPress: () => void;
     variant?: 'primary' | 'secondary' | 'destructive';
     icon?: React.ReactNode;
-  }> = [];
+  }[] = [];
 
   if (onView) {
     actions.push({
@@ -121,6 +131,28 @@ export const NotificationDetailSheet: React.FC<NotificationDetailSheetProps> = (
           onCallSupplier(notification);
           onClose();
         },
+      });
+    }
+  }
+
+  // For budget notifications, expose a "View Budget" action
+  if (onView && (notification.category === 'budget' || notification.type?.startsWith('budget_'))) {
+    actions.unshift({
+      label: t('notif.view_budget'),
+      variant: 'primary',
+      icon: <Eye size={16} color={colors.background} />,
+      onPress: () => { onView(notification); onClose(); },
+    });
+  }
+
+  // For recurring expense due notifications, expose "Mark as Paid" action
+  if (notification.type === 'recurring_due' || notification.type === 'recurring_due_tomorrow') {
+    if (onResolve) {
+      actions.unshift({
+        label: t('notif.mark_paid'),
+        variant: 'primary',
+        icon: <CheckCircle2 size={16} color={colors.background} />,
+        onPress: () => { onResolve(notification); onClose(); },
       });
     }
   }

@@ -1,4 +1,4 @@
-﻿// AppText — the only Text component the app should use.
+// AppText — the only Text component the app should use.
 //
 // Why a wrapper, not just the RN Text?
 // ────────────────────────────────────

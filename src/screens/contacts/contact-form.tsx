@@ -11,8 +11,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { X, Check, User, Phone, Bookmark, FileText } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { playNice, playBad } from '@/services/soundService';
 import { useSettings } from '@/context/SettingsContext';
 import { useDialog } from '@/context/DialogContext';
+import { getContactsGlass } from './glass-contacts';
 import { Fonts } from '@/constants/theme';
 import { insertContact, updateContact } from '@/database/db';
 import { AppText } from '@/components/ui';
@@ -45,6 +47,7 @@ interface ContactFormProps {
 
 export default function ContactForm({ contact, onClose, onSaved }: ContactFormProps) {
   const { colors, t } = useSettings();
+  const G = getContactsGlass(colors);
   const dialog = useDialog();
   const isEditing = !!contact;
 
@@ -59,6 +62,7 @@ export default function ContactForm({ contact, onClose, onSaved }: ContactFormPr
 
   const handleSave = async () => {
     if (!fullName.trim()) {
+      playBad();
       await dialog.alert({ title: t('common.error'), message: t('contacts.form_name_required'), iconType: 'danger' });
       return;
     }
@@ -82,8 +86,10 @@ export default function ContactForm({ contact, onClose, onSaved }: ContactFormPr
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      playNice();
       onSaved();
-    } catch (error) {
+    } catch {
+      playBad();
       await dialog.alert({ title: t('common.error'), message: t('contacts.form_save_error'), iconType: 'danger' });
     } finally {
       setSaving(false);
@@ -93,12 +99,16 @@ export default function ContactForm({ contact, onClose, onSaved }: ContactFormPr
   const currentSubCategories = SUB_CATEGORIES[category] || [];
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: G.bg }]}>
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <View style={[styles.glowWash, { backgroundColor: G.mutedLight, top: -80, left: -60, width: 200, height: 200, borderRadius: 100 }]} />
+        <View style={[styles.glowWash, { backgroundColor: G.mutedLight, bottom: -40, right: -30, width: 160, height: 160, borderRadius: 80 }]} />
+      </View>
       <View style={styles.header}>
-        <TouchableOpacity onPress={onClose} style={[styles.headerBtn, { borderColor: colors.border }]}>
-          <X size={22} color={colors.text} />
+        <TouchableOpacity onPress={onClose} style={[styles.headerBtn, { borderColor: G.border }]}>
+          <X size={22} color={G.fg} />
         </TouchableOpacity>
-        <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: colors.text }]} numberOfLines={2}>
+        <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>
           {t(isEditing ? 'contacts.form_edit_title' : 'contacts.form_new_title')}
         </AppText>
         <TouchableOpacity
@@ -113,26 +123,27 @@ export default function ContactForm({ contact, onClose, onSaved }: ContactFormPr
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           {/* Full Name */}
           <View style={styles.fieldGroup}>
-            <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: colors.textSecondary }]} numberOfLines={2}>{t('contacts.form_full_name_label')}</AppText>
-            <View style={[styles.inputWrapper, { borderColor: colors.border, backgroundColor: colors.card }]}>
-              <User size={18} color={colors.textSecondary} />
+            <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary }]} numberOfLines={2}>{t('contacts.form_full_name_label')}</AppText>
+            <View style={[styles.inputWrapper, { borderColor: G.border, backgroundColor: G.bgCard }]}>
+              <User size={18} color={G.fgSecondary} />
               <TextInput
-                style={[styles.input, { color: colors.text }]}
+                style={[styles.input, { color: G.fg }]}
                 value={fullName}
                 onChangeText={setFullName}
                 placeholder={t('contacts.full_name_ph')}
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor={G.fgSecondary}
               />
             </View>
           </View>
 
           {/* Category */}
           <View style={styles.fieldGroup}>
-            <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: colors.textSecondary }]} numberOfLines={2}>{t('contacts.form_category_label')}</AppText>
+            <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary }]} numberOfLines={2}>{t('contacts.form_category_label')}</AppText>
             <View style={styles.categoryRow}>
               {CATEGORIES.map((cat) => (
                 <TouchableOpacity
@@ -144,15 +155,15 @@ export default function ContactForm({ contact, onClose, onSaved }: ContactFormPr
                   style={[
                     styles.categoryBtn,
                     {
-                      backgroundColor: category === cat.key ? colors.primary + '20' : colors.card,
-                      borderColor: category === cat.key ? colors.primary : colors.border,
+                      backgroundColor: category === cat.key ? colors.primary + '20' : G.bgCard,
+                      borderColor: category === cat.key ? colors.primary : G.border,
                     }
                   ]}
                 >
                   <AppText
                     style={[
                       styles.categoryBtnText,
-                      { color: category === cat.key ? colors.primary : colors.textSecondary }
+                      { color: category === cat.key ? colors.primary : G.fgSecondary }
                     ]}
                   >
                     {t('contacts.cat_' + cat.key)}
@@ -165,7 +176,7 @@ export default function ContactForm({ contact, onClose, onSaved }: ContactFormPr
           {/* Sub Category */}
           {currentSubCategories.length > 0 && (
             <View style={styles.fieldGroup}>
-              <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: colors.textSecondary }]} numberOfLines={2}>{t('contacts.form_sub_category_label')}</AppText>
+              <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary }]} numberOfLines={2}>{t('contacts.form_sub_category_label')}</AppText>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
                 {currentSubCategories.map((sub) => (
                   <TouchableOpacity
@@ -174,15 +185,15 @@ export default function ContactForm({ contact, onClose, onSaved }: ContactFormPr
                     style={[
                       styles.subChip,
                       {
-                        backgroundColor: subCategory === sub ? colors.primary + '20' : colors.card,
-                        borderColor: subCategory === sub ? colors.primary : colors.border,
+                        backgroundColor: subCategory === sub ? colors.primary + '20' : G.bgCard,
+                        borderColor: subCategory === sub ? colors.primary : G.border,
                       }
                     ]}
                   >
                     <AppText
                       style={[
                         styles.subChipText,
-                        { color: subCategory === sub ? colors.primary : colors.textSecondary }
+                        { color: subCategory === sub ? colors.primary : G.fgSecondary }
                       ]}
                     >
                       {t('contacts.sub_' + subCatKey(sub))}
@@ -195,15 +206,15 @@ export default function ContactForm({ contact, onClose, onSaved }: ContactFormPr
 
           {/* Phone */}
           <View style={styles.fieldGroup}>
-            <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: colors.textSecondary }]} numberOfLines={2}>{t('contacts.form_phone_label')}</AppText>
-            <View style={[styles.inputWrapper, { borderColor: colors.border, backgroundColor: colors.card }]}>
-              <Phone size={18} color={colors.textSecondary} />
+            <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary }]} numberOfLines={2}>{t('contacts.form_phone_label')}</AppText>
+            <View style={[styles.inputWrapper, { borderColor: G.border, backgroundColor: G.bgCard }]}>
+              <Phone size={18} color={G.fgSecondary} />
               <TextInput
-                style={[styles.input, { color: colors.text }]}
+                style={[styles.input, { color: G.fg }]}
                 value={phone}
                 onChangeText={setPhone}
                 placeholder={t('contacts.phone_ph')}
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor={G.fgSecondary}
                 keyboardType="phone-pad"
               />
             </View>
@@ -211,15 +222,15 @@ export default function ContactForm({ contact, onClose, onSaved }: ContactFormPr
 
           {/* Alternate Phone */}
           <View style={styles.fieldGroup}>
-            <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: colors.textSecondary }]} numberOfLines={2}>{t('contacts.form_alt_phone_label')}</AppText>
-            <View style={[styles.inputWrapper, { borderColor: colors.border, backgroundColor: colors.card }]}>
-              <Phone size={18} color={colors.textSecondary} />
+            <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary }]} numberOfLines={2}>{t('contacts.form_alt_phone_label')}</AppText>
+            <View style={[styles.inputWrapper, { borderColor: G.border, backgroundColor: G.bgCard }]}>
+              <Phone size={18} color={G.fgSecondary} />
               <TextInput
-                style={[styles.input, { color: colors.text }]}
+                style={[styles.input, { color: G.fg }]}
                 value={alternatePhone}
                 onChangeText={setAlternatePhone}
                 placeholder={t('contacts.alt_phone_ph')}
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor={G.fgSecondary}
                 keyboardType="phone-pad"
               />
             </View>
@@ -227,15 +238,15 @@ export default function ContactForm({ contact, onClose, onSaved }: ContactFormPr
 
           {/* Account Number */}
           <View style={styles.fieldGroup}>
-            <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: colors.textSecondary }]} numberOfLines={2}>{t('contacts.form_account_label')}</AppText>
-            <View style={[styles.inputWrapper, { borderColor: colors.border, backgroundColor: colors.card }]}>
-              <Bookmark size={18} color={colors.textSecondary} />
+            <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary }]} numberOfLines={2}>{t('contacts.form_account_label')}</AppText>
+            <View style={[styles.inputWrapper, { borderColor: G.border, backgroundColor: G.bgCard }]}>
+              <Bookmark size={18} color={G.fgSecondary} />
               <TextInput
-                style={[styles.input, { color: colors.text }]}
+                style={[styles.input, { color: G.fg }]}
                 value={accountNumber}
                 onChangeText={setAccountNumber}
                 placeholder={t('contacts.account_ph')}
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor={G.fgSecondary}
                 keyboardType="numeric"
               />
             </View>
@@ -243,15 +254,15 @@ export default function ContactForm({ contact, onClose, onSaved }: ContactFormPr
 
           {/* Notes */}
           <View style={styles.fieldGroup}>
-            <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: colors.textSecondary }]} numberOfLines={2}>{t('contacts.form_notes_label')}</AppText>
-            <View style={[styles.textAreaWrapper, { borderColor: colors.border, backgroundColor: colors.card }]}>
-              <FileText size={18} color={colors.textSecondary} />
+            <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary }]} numberOfLines={2}>{t('contacts.form_notes_label')}</AppText>
+            <View style={[styles.textAreaWrapper, { borderColor: G.border, backgroundColor: G.bgCard }]}>
+              <FileText size={18} color={G.fgSecondary} />
               <TextInput
-                style={[styles.textArea, { color: colors.text }]}
+                style={[styles.textArea, { color: G.fg }]}
                 value={notes}
                 onChangeText={setNotes}
                 placeholder={t('contacts.notes_ph')}
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor={G.fgSecondary}
                 multiline
                 numberOfLines={3}
                 textAlignVertical="top"
@@ -271,7 +282,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 25,
-    paddingVertical: 15,
+    paddingVertical: 10,
   },
   headerBtn: {
     width: 44,
@@ -282,27 +293,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: { fontSize: 18, fontFamily: Fonts.bold },
-  content: { padding: 25, gap: 22, paddingBottom: 100 },
-  fieldGroup: { gap: 8 },
+  content: { padding: 20, gap: 14, paddingBottom: 50 },
+  fieldGroup: { gap: 4 },
   fieldLabel: { fontSize: 12, fontFamily: Fonts.bold, textTransform: 'uppercase', letterSpacing: 0.5, marginLeft: 5 },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    height: 56,
+    height: 50,
     borderRadius: 16,
     borderWidth: 1,
     gap: 12,
+    overflow: 'hidden',
   },
   input: { flex: 1, fontSize: 16, fontFamily: Fonts.medium },
   textAreaWrapper: {
     flexDirection: 'row',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 10,
     borderRadius: 16,
     borderWidth: 1,
     gap: 12,
-    minHeight: 90,
+    minHeight: 72,
+    overflow: 'hidden',
   },
   textArea: { flex: 1, fontSize: 16, fontFamily: Fonts.medium },
   categoryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
@@ -320,4 +333,5 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   subChipText: { fontSize: 13, fontFamily: Fonts.medium },
+  glowWash: { position: 'absolute' },
 });

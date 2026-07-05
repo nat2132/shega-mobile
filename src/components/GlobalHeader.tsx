@@ -1,70 +1,56 @@
-﻿import React from 'react';
-import { 
-  View, 
-  StyleSheet, 
-  TouchableOpacity, 
-  Image, 
-  Dimensions, 
-  Platform 
+import React from 'react';
+import {
+  View,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { 
-  Bell, 
-  Languages, 
-  Moon, 
-  Sun 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  Bell,
+  Languages,
+  Moon,
+  Sun
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useSettings, PROFILE_IMAGES } from '@/context/SettingsContext';
 import { useSidebar } from '@/context/SidebarContext';
-import { Fonts } from '@/constants/theme';
 import { useNotifications } from '@/hooks/useNotifications';
 import { AppText } from '@/components/ui';
-import Animated, { 
-  FadeIn, 
-  useAnimatedStyle, 
-  withSpring 
-} from 'react-native-reanimated';
-
-const { width } = Dimensions.get('window');
 
 const GlobalHeader = () => {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { userProfile, theme, setTheme, colors, language } = useSettings();
+  const { userProfile, theme, setTheme, previousDarkTheme, colors } = useSettings();
   const { openSidebar } = useSidebar();
   const { notifCount } = useNotifications();
 
   const toggleTheme = () => {
-    setTheme(theme === 'light' ? 'dark' : 'light');
+    setTheme(theme === 'light' ? previousDarkTheme : 'light');
   };
 
   return (
     <View style={[styles.outerContainer, { top: 0, paddingTop: insets.top + 10 }]}>
-      <BlurView 
-        intensity={Platform.OS === 'ios' ? 80 : 100} 
-        tint={theme !== 'light' ? 'dark' : 'light'} 
+      <View
         style={[
-          styles.blurContainer, 
-          { 
-            paddingTop: Platform.OS === 'ios' ? 6 : 6,
-            backgroundColor: theme !== 'light' ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.7)',
-            borderColor: colors.border
-          }
+          styles.headerContainer,
+          {
+            backgroundColor: colors.header,
+            borderBottomColor: colors.border,
+          },
         ]}
       >
         <View style={styles.headerContent}>
           {/* Left: Avatar */}
-          <TouchableOpacity 
-            onPress={openSidebar} 
+          <TouchableOpacity
+            onPress={openSidebar}
             activeOpacity={0.7}
             style={styles.avatarTouch}
           >
             <View style={[styles.avatarBorder, { borderColor: colors.border }]}>
-               <Image 
-                 source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} 
-                 style={styles.avatarImage} 
+               <Image
+                 source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]}
+                 style={styles.avatarImage}
                />
             </View>
           </TouchableOpacity>
@@ -72,7 +58,7 @@ const GlobalHeader = () => {
           {/* Right: Actions */}
           <View style={styles.actionGroup}>
             {/* Translation */}
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => router.push('/translation')}
               style={[styles.iconBtn, { backgroundColor: colors.card }]}
             >
@@ -80,20 +66,20 @@ const GlobalHeader = () => {
             </TouchableOpacity>
 
             {/* Notifications */}
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => router.push('/notifications')}
               style={[styles.iconBtn, { backgroundColor: colors.card }]}
             >
               <Bell size={18} color={colors.text} />
               {notifCount > 0 && (
-                <View style={[styles.badge, { borderColor: theme === 'dark' ? '#000' : '#FFF' }]}>
+                <View style={[styles.badge, { borderColor: colors.header }]}>
                   <AppText variant="micro" weight="bold" style={styles.badgeText}>{notifCount}</AppText>
                 </View>
               )}
             </TouchableOpacity>
 
             {/* Theme Toggle */}
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={toggleTheme}
               style={[styles.iconBtn, { backgroundColor: colors.text }]}
             >
@@ -105,7 +91,7 @@ const GlobalHeader = () => {
             </TouchableOpacity>
           </View>
         </View>
-      </BlurView>
+      </View>
     </View>
   );
 };
@@ -118,15 +104,10 @@ const styles = StyleSheet.create({
     zIndex: 1000,
     paddingHorizontal: 20,
   },
-  blurContainer: {
+  headerContainer: {
     paddingBottom: 15,
-    borderRadius: 35,
-    overflow: 'hidden',
-    borderWidth: 1,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 10,
+    borderRadius: 24,
+    borderBottomWidth: 1,
   },
   headerContent: {
     flexDirection: 'row',
@@ -166,11 +147,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
   badge: {
     position: 'absolute',
@@ -183,11 +159,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#FFF',
   },
   badgeText: {
     color: '#FFF',
-    fontFamily: Fonts.bold,
     lineHeight: 12,
   },
 });

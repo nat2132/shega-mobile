@@ -5,7 +5,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
   AppNotification,
-  NotificationFilter,
   getNotifications,
   getUnreadCount,
   getUnresolvedCount,
@@ -115,7 +114,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
 
   const markAllRead = useCallback(async () => {
     markAllAsRead();
-    showToast('All notifications marked as read', 'success');
+    showToast({ title: 'Done!', message: 'All notifications marked as read', type: 'success' });
     await refresh();
   }, [refresh, showToast]);
 
@@ -126,31 +125,31 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
 
   const resolve = useCallback(async (id: number) => {
     markAsResolved(id);
-    showToast('Notification resolved', 'success');
+    showToast({ title: 'Resolved!', message: 'Notification marked as resolved', type: 'success' });
     await refresh();
   }, [refresh, showToast]);
 
   const clearAll = useCallback(async () => {
     clearAllNotifications();
-    showToast('All notifications cleared', 'info');
+    showToast({ title: 'Cleared', message: 'All notifications cleared', type: 'info' });
     await refresh();
   }, [refresh, showToast]);
 
   const snoozeReminderById = useCallback(async (id: number, minutes: number) => {
     snoozeReminder(id, minutes);
-    showToast(`Reminder snoozed for ${minutes} minutes`, 'info');
+    showToast({ title: 'Snoozed', message: `Reminder snoozed for ${minutes} minutes`, type: 'info' });
     await refresh();
   }, [refresh, showToast]);
 
   const completeReminder = useCallback(async (id: number) => {
     updateReminderStatus(id, 'completed');
-    showToast('Reminder completed', 'success');
+    showToast({ title: 'Completed!', message: 'Reminder marked as done', type: 'success' });
     await refresh();
   }, [refresh, showToast]);
 
   const removeReminder = useCallback(async (id: number) => {
     deleteReminder(id);
-    showToast('Reminder removed', 'info');
+    showToast({ title: 'Removed', message: 'Reminder deleted', type: 'info' });
     await refresh();
   }, [refresh, showToast]);
 

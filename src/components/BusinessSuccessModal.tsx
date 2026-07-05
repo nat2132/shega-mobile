@@ -1,4 +1,4 @@
-﻿import React, { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { 
   View, 
   StyleSheet, 
@@ -13,30 +13,25 @@ import Animated, {
   withDelay,
   withTiming,
   FadeInDown,
-  FadeIn
 } from 'react-native-reanimated';
 import { 
   Check, 
   ChevronRight,
-  TrendingUp,
-  TrendingDown,
-  Receipt,
-  AlertOctagon,
   Package,
   Activity
 } from 'lucide-react-native';
-import { BlurView } from 'expo-blur';
+
 import * as Haptics from 'expo-haptics';
 import { useSettings } from '@/context/SettingsContext';
 import { Fonts } from '@/constants/theme';
-import { AppText, AppCard, AppButton } from '@/components/ui';
+import { AppText} from '@/components/ui';
 const { width, height } = Dimensions.get('window');
 
 // Premium Confetti Particle
-const ConfettiParticle = ({ index }: { index: number }) => {
+const ConfettiParticle = ({ index, colors: themeColors }: { index: number; colors: any }) => {
   const size = Math.random() * 8 + 4;
-  const colors = ['#34C759', '#2F6FED', '#FFD700', '#FF3B30', '#AF52DE'];
-  const color = colors[index % colors.length];
+  const palette = [themeColors.success, themeColors.primary, '#FFD700', themeColors.error, '#AF52DE'];
+  const color = palette[index % palette.length];
   
   const progress = useSharedValue(0);
   const xOffset = useSharedValue((Math.random() - 0.5) * width * 0.8);
@@ -47,7 +42,7 @@ const ConfettiParticle = ({ index }: { index: number }) => {
       Math.random() * 1000,
       withTiming(1, { duration: 2500 + Math.random() * 1000 })
     );
-  }, []);
+  }, [progress]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
@@ -102,7 +97,7 @@ const BusinessSuccessModal: React.FC<BusinessSuccessModalProps> = ({ details, on
     ringScale.value = withSpring(1, { damping: 12, stiffness: 100 });
     glowScale.value = withDelay(200, withSpring(1, { damping: 10, stiffness: 80 }));
     checkScale.value = withDelay(400, withSpring(1, { damping: 8, stiffness: 120 }));
-  }, []);
+  }, [checkScale, glowScale, ringScale]);
 
   const animatedCheckStyle = useAnimatedStyle(() => ({
     transform: [{ scale: checkScale.value }]
@@ -120,9 +115,9 @@ const BusinessSuccessModal: React.FC<BusinessSuccessModalProps> = ({ details, on
 
   const getThemeColor = () => {
     switch (details.iconType) {
-      case 'price_up': return '#34C759';
-      case 'price_down': return '#FF3B30';
-      case 'damaged': return '#FF9500';
+      case 'price_up': return colors.success;
+      case 'price_down': return colors.error;
+      case 'damaged': return colors.warning;
       case 'expense': return '#AF52DE';
       default: return colors.primary;
     }
@@ -132,12 +127,12 @@ const BusinessSuccessModal: React.FC<BusinessSuccessModalProps> = ({ details, on
 
   return (
     <View style={[styles.overlay, { zIndex: 9999 }]}>
-      <BlurView intensity={theme === 'dark' ? 100 : 80} tint={theme === 'dark' ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
-      
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.50)' }]} />
+
       {/* Confetti Layer */}
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         {Array.from({ length: 40 }).map((_, i) => (
-          <ConfettiParticle key={i} index={i} />
+          <ConfettiParticle key={i} index={i} colors={colors} />
         ))}
       </View>
 
@@ -151,7 +146,7 @@ const BusinessSuccessModal: React.FC<BusinessSuccessModalProps> = ({ details, on
           <Animated.View style={[styles.glowAura, { backgroundColor: themeColor }, animatedGlowStyle]} />
           <Animated.View style={[styles.successRing, { borderColor: themeColor + '40' }, animatedRingStyle]} />
           <Animated.View style={[styles.iconCircle, { backgroundColor: themeColor }, animatedCheckStyle]}>
-            <Check size={48} color="#FFF" strokeWidth={3} />
+            <Check size={48} color={colors.background} strokeWidth={3} />
           </Animated.View>
         </View>
 
@@ -255,11 +250,7 @@ const styles = StyleSheet.create({
     borderRadius: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.2,
-    shadowRadius: 15,
+    elevation: 4,
   },
   content: {
     width: '100%',
@@ -283,11 +274,7 @@ const styles = StyleSheet.create({
     padding: 24,
     borderWidth: 1,
     marginBottom: 40,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
+    elevation: 1,
   },
   itemRow: {
     flexDirection: 'row',
@@ -352,11 +339,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.2,
-    shadowRadius: 15,
-    elevation: 5,
+    elevation: 2,
   },
   finishBtnText: {
     fontFamily: Fonts.bold,

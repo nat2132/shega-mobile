@@ -1,4 +1,4 @@
-﻿import { Fonts } from '@/constants/theme';
+import { Fonts } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
 import {
   fromEthiopianToDate,
@@ -30,7 +30,6 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
   const { colors, calendarType, language, t } = useSettings();
   const isEth = calendarType === 'ethiopian';
 
-  const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewState, setViewState] = useState({ month: 1, year: 2024 });
 
@@ -90,7 +89,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
         setViewState({ month: initDate.getMonth() + 1, year: initDate.getFullYear() });
       }
     }
-  }, [visible, initialDate, isEth, calendarType]);
+  }, [visible, initialDate, isEth]);
 
   // Derived properties for rendering
   const monthNames = isEth 
@@ -204,11 +203,11 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
                     styles.dayCircle,
                     isSelected && { 
                       backgroundColor: colors.text, 
-                      elevation: 4, 
-                      shadowColor: colors.text, 
-                      shadowOpacity: 0.3, 
-                      shadowRadius: 5, 
-                      shadowOffset: {width: 0, height: 2} 
+                      elevation: 2,
+                      shadowColor: colors.text,
+                      shadowOpacity: 0.08,
+                      shadowRadius: 4,
+                      shadowOffset: {width: 0, height: 2}
                     },
                     isToday && !isSelected && !isDisabled && { borderWidth: 2, borderColor: colors.primary, backgroundColor: colors.primary + '10' }
                 ]}

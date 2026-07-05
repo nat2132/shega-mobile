@@ -1,27 +1,27 @@
-﻿import React from 'react';
+import React from 'react';
 import {
   View,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Linking,
-  Dimensions
+  Linking
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { X, Phone, Edit2, Trash2, User, Bookmark, FileText, ChevronLeft } from 'lucide-react-native';
+import { X, Phone, Edit2, Trash2, User, Bookmark, FileText} from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { playNice } from '@/services/soundService';
 import { useSettings } from '@/context/SettingsContext';
 import { useDialog } from '@/context/DialogContext';
+import { getContactsGlass } from './glass-contacts';
 import { Fonts } from '@/constants/theme';
 import { deleteContact } from '@/database/db';
-import { AppText, AppListItem, AppRow, AppCard } from '@/components/ui';
-const { width } = Dimensions.get('window');
+import { AppText} from '@/components/ui';
 
-const CATEGORY_ICONS: Record<string, { labelKey: string; color: string }> = {
-  supplier:         { labelKey: 'contacts.cat_supplier',  color: '#34C759' },
-  worker:           { labelKey: 'contacts.cat_worker',    color: '#FF9500' },
-  service_provider: { labelKey: 'contacts.cat_service',   color: '#FF3B30' },
-  other:            { labelKey: 'contacts.cat_other',     color: '#AF52DE' },
+const CATEGORY_ICONS: Record<string, { labelKey: string }> = {
+  supplier:         { labelKey: 'contacts.cat_supplier' },
+  worker:           { labelKey: 'contacts.cat_worker' },
+  service_provider: { labelKey: 'contacts.cat_service' },
+  other:            { labelKey: 'contacts.cat_other' },
 };
 
 // Same mapping as contacts-list.tsx / contact-form.tsx — turns the
@@ -43,6 +43,7 @@ interface ContactDetailsProps {
 
 export default function ContactDetails({ contact, onClose, onEdit, onDeleted }: ContactDetailsProps) {
   const { colors, t } = useSettings();
+  const G = getContactsGlass(colors);
   const dialog = useDialog();
 
   const handleCall = (phone: string) => {
@@ -63,20 +64,34 @@ export default function ContactDetails({ contact, onClose, onEdit, onDeleted }: 
     if (ok) {
       deleteContact(contact.id);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      playNice();
       onDeleted();
     }
   };
 
   const catInfo = CATEGORY_ICONS[contact.category] || CATEGORY_ICONS.other;
+  const catColor = (() => {
+    switch (contact.category) {
+      case 'supplier': return colors.success;
+      case 'worker': return colors.warning;
+      case 'service_provider': return colors.error;
+      default: return colors.tint;
+    }
+  })();
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: G.bg }]}>
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <View style={[styles.glowWash, { backgroundColor: G.mutedLight, top: -80, left: -60, width: 200, height: 200, borderRadius: 100 }]} />
+        <View style={[styles.glowWash, { backgroundColor: G.mutedLight, bottom: -40, right: -30, width: 160, height: 160, borderRadius: 80 }]} />
+        <View style={[styles.glowWash, { backgroundColor: G.mutedLight, top: '40%', right: -50, width: 140, height: 140, borderRadius: 70 }]} />
+      </View>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={onClose} style={[styles.headerBtn, { borderColor: colors.border }]}>
-          <X size={22} color={colors.text} />
+        <TouchableOpacity onPress={onClose} style={[styles.headerBtn, { borderColor: G.border }]}>
+          <X size={22} color={G.fg} />
         </TouchableOpacity>
-        <AppText variant="title" weight="bold" style={[styles.headerTitle, { color: colors.text }]} numberOfLines={2}>{t('contacts.details_title')}</AppText>
+        <AppText variant="title" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{t('contacts.details_title')}</AppText>
         <TouchableOpacity onPress={onEdit} style={[styles.headerBtn, { backgroundColor: colors.primary }]}>
           <Edit2 size={18} color="#FFF" />
         </TouchableOpacity>
@@ -85,22 +100,22 @@ export default function ContactDetails({ contact, onClose, onEdit, onDeleted }: 
       <ScrollView contentContainerStyle={styles.content}>
         {/* Profile Section */}
         <View style={styles.profileSection}>
-          <View style={[styles.avatarLarge, { backgroundColor: catInfo.color + '20' }]}>
-            <User size={40} color={catInfo.color} />
+          <View style={[styles.avatarLarge, { backgroundColor: catColor + '20' }]}>
+            <User size={40} color={catColor} />
           </View>
-          <AppText variant="heading" weight="bold" align="center" style={[styles.nameText, { color: colors.text }]} numberOfLines={2}>{contact.fullName}</AppText>
-          <View style={[styles.categoryBadge, { backgroundColor: catInfo.color + '20', borderColor: catInfo.color }]}>
-            <AppText variant="caption" weight="bold" shrink={false} style={[styles.categoryBadgeText, { color: catInfo.color }]} numberOfLines={1}>{t(catInfo.labelKey)}</AppText>
+          <AppText variant="heading" weight="bold" align="center" style={[styles.nameText, { color: G.fg }]} numberOfLines={2}>{contact.fullName}</AppText>
+          <View style={[styles.categoryBadge, { backgroundColor: catColor + '20', borderColor: catColor }]}>
+            <AppText variant="caption" weight="bold" shrink={false} style={[styles.categoryBadgeText, { color: catColor }]} numberOfLines={1}>{t(catInfo.labelKey)}</AppText>
           </View>
           {contact.subCategory && (
-            <AppText variant="body" weight="medium" align="center" style={[styles.subText, { color: colors.textSecondary }]} numberOfLines={2}>{t('contacts.sub_' + subCatKey(contact.subCategory))}</AppText>
+            <AppText variant="body" weight="medium" align="center" style={[styles.subText, { color: G.fgSecondary }]} numberOfLines={2}>{t('contacts.sub_' + subCatKey(contact.subCategory))}</AppText>
           )}
         </View>
 
         {/* Action Buttons */}
         {contact.phone && (
           <TouchableOpacity
-            style={[styles.callBtn, { backgroundColor: '#34C759' }]}
+            style={[styles.callBtn, { backgroundColor: colors.success }]}
             onPress={() => handleCall(contact.phone)}
           >
             <Phone size={22} color="#FFF" />
@@ -109,43 +124,43 @@ export default function ContactDetails({ contact, onClose, onEdit, onDeleted }: 
         )}
 
         {/* Details Card */}
-        <View style={[styles.detailsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.detailsCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
           {contact.phone && (
             <View style={styles.detailRow}>
-              <Phone size={18} color={colors.textSecondary} />
+              <Phone size={18} color={G.fgSecondary} />
               <View style={styles.detailContent}>
-                <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.detailLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('contacts.details_phone')}</AppText>
-                <AppText variant="body" weight="medium" style={[styles.detailValue, { color: colors.text }]} numberOfLines={2}>{contact.phone}</AppText>
+                <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.detailLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('contacts.details_phone')}</AppText>
+                <AppText variant="body" weight="medium" style={[styles.detailValue, { color: G.fg }]} numberOfLines={2}>{contact.phone}</AppText>
               </View>
             </View>
           )}
 
           {contact.alternatePhone && (
             <View style={styles.detailRow}>
-              <Phone size={18} color={colors.textSecondary} />
+              <Phone size={18} color={G.fgSecondary} />
               <View style={styles.detailContent}>
-                <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.detailLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('contacts.details_alt_phone')}</AppText>
-                <AppText variant="body" weight="medium" style={[styles.detailValue, { color: colors.text }]} numberOfLines={2}>{contact.alternatePhone}</AppText>
+                <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.detailLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('contacts.details_alt_phone')}</AppText>
+                <AppText variant="body" weight="medium" style={[styles.detailValue, { color: G.fg }]} numberOfLines={2}>{contact.alternatePhone}</AppText>
               </View>
             </View>
           )}
 
           {contact.accountNumber && (
             <View style={styles.detailRow}>
-              <Bookmark size={18} color={colors.textSecondary} />
+              <Bookmark size={18} color={G.fgSecondary} />
               <View style={styles.detailContent}>
-                <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.detailLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('contacts.details_account')}</AppText>
-                <AppText variant="body" weight="medium" style={[styles.detailValue, { color: colors.text }]} numberOfLines={2}>{contact.accountNumber}</AppText>
+                <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.detailLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('contacts.details_account')}</AppText>
+                <AppText variant="body" weight="medium" style={[styles.detailValue, { color: G.fg }]} numberOfLines={2}>{contact.accountNumber}</AppText>
               </View>
             </View>
           )}
 
           {contact.notes && (
             <View style={styles.detailRow}>
-              <FileText size={18} color={colors.textSecondary} />
+              <FileText size={18} color={G.fgSecondary} />
               <View style={styles.detailContent}>
-                <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.detailLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('contacts.details_notes')}</AppText>
-                <AppText variant="body" weight="medium" style={[styles.detailValue, { color: colors.text }]} numberOfLines={6}>{contact.notes}</AppText>
+                <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.detailLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('contacts.details_notes')}</AppText>
+                <AppText variant="body" weight="medium" style={[styles.detailValue, { color: G.fg }]} numberOfLines={6}>{contact.notes}</AppText>
               </View>
             </View>
           )}
@@ -153,11 +168,11 @@ export default function ContactDetails({ contact, onClose, onEdit, onDeleted }: 
 
         {/* Delete Button */}
         <TouchableOpacity
-          style={[styles.deleteBtn, { backgroundColor: '#FF3B3020', borderColor: '#FF3B30' }]}
+          style={[styles.deleteBtn, { backgroundColor: colors.error + '20', borderColor: colors.error }]}
           onPress={handleDelete}
         >
-          <Trash2 size={20} color="#FF3B30" />
-          <AppText variant="body" weight="bold" shrink={false} style={[styles.deleteBtnText, { color: '#FF3B30' }]} numberOfLines={1}>{t('contacts.details_delete_btn')}</AppText>
+          <Trash2 size={20} color={colors.error} />
+          <AppText variant="body" weight="bold" shrink={false} style={[styles.deleteBtnText, { color: colors.error }]} numberOfLines={1}>{t('contacts.details_delete_btn')}</AppText>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -218,6 +233,7 @@ const styles = StyleSheet.create({
     padding: 20,
     gap: 20,
     marginBottom: 25,
+    overflow: 'hidden',
   },
   detailRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
   detailContent: { flex: 1 },
@@ -233,4 +249,5 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   deleteBtnText: { fontSize: 16, fontFamily: Fonts.bold },
+  glowWash: { position: 'absolute' },
 });

@@ -1,4 +1,5 @@
 import * as SQLite from 'expo-sqlite';
+import { toEthiopianDate, fromEthiopianToDate, getEthiopianDaysInMonth } from '@/utils/date-utils';
 
 let db: SQLite.SQLiteDatabase | null = null;
 
@@ -27,7 +28,7 @@ const migrateItemsTable = (database: SQLite.SQLiteDatabase) => {
     try {
       database.execSync(`ALTER TABLE items ADD COLUMN ${col.name} ${col.type}${col.default ? ` DEFAULT ${col.default}` : ''};`);
       console.log(`Successfully migrated items column: ${col.name}`);
-    } catch (e) {
+    } catch {
       // Column probably already exists, which is fine
     }
   }
@@ -36,35 +37,45 @@ const migrateItemsTable = (database: SQLite.SQLiteDatabase) => {
   try {
     database.execSync(`ALTER TABLE sales ADD COLUMN unitType TEXT DEFAULT 'base';`);
     console.log('Successfully migrated sales table: Added unitType');
-  } catch (e) {}
+  } catch {}
 
   try {
     database.execSync(`ALTER TABLE sales ADD COLUMN dueDate TEXT;`);
     database.execSync(`ALTER TABLE sales ADD COLUMN paidAmount REAL DEFAULT 0;`);
     console.log('Successfully migrated sales table: Added dueDate and paidAmount');
-  } catch (e) {}
+  } catch {}
+
+  try {
+    database.execSync(`ALTER TABLE sales ADD COLUMN taxType TEXT DEFAULT 'VAT';`);
+    console.log('Successfully migrated sales table: Added taxType');
+  } catch {}
 
   // Migration for items table
   try {
     database.execSync(`ALTER TABLE items ADD COLUMN dueDate TEXT;`);
     console.log('Successfully migrated items table: Added dueDate');
-  } catch (e) {}
+  } catch {}
 
   // Migration: supplier call toggle + last price-change tracking for weekly supplier check
   try {
     database.execSync(`ALTER TABLE items ADD COLUMN supplierCallEnabled INTEGER DEFAULT 0;`);
     console.log('Successfully migrated items table: Added supplierCallEnabled');
-  } catch (e) {}
+  } catch {}
   try {
     database.execSync(`ALTER TABLE items ADD COLUMN lastPriceCheckAt TEXT;`);
     console.log('Successfully migrated items table: Added lastPriceCheckAt');
-  } catch (e) {}
+  } catch {}
+
+  // Migration for batchId on sales table
+  try {
+    database.execSync(`ALTER TABLE sales ADD COLUMN batchId TEXT;`);
+    console.log('Successfully migrated sales table: Added batchId');
+  } catch {}
 };
 
 export const initDB = () => {
   try {
     const database = getDB();
-    database.execSync('PRAGMA foreign_keys = ON');
     console.log('Database version:', database.getFirstSync('PRAGMA user_version'));
     
     database.execSync(`
@@ -216,31 +227,52 @@ export const initDB = () => {
     try {
       database.execSync(`ALTER TABLE items ADD COLUMN supplierId INTEGER REFERENCES contacts(id);`);
       console.log('Successfully migrated items table: Added supplierId');
-    } catch (e) {}
+    } catch {}
 
   // Migration: Add warehouseId to items table
   try {
     database.execSync(`ALTER TABLE items ADD COLUMN warehouseId INTEGER REFERENCES warehouses(id);`);
     console.log('Successfully migrated items table: Added warehouseId');
-  } catch (e) {}
+  } catch {}
+
+  // Migration: Add orderNumber to sales table (for orders feature)
+  try {
+    database.execSync(`ALTER TABLE sales ADD COLUMN orderNumber TEXT;`);
+    console.log('Successfully migrated sales table: Added orderNumber');
+  } catch {}
+
+  try {
+    database.execSync(`ALTER TABLE sales ADD COLUMN notes TEXT;`);
+    console.log('Successfully migrated sales table: Added notes');
+  } catch {}
+
+  try {
+    database.execSync(`ALTER TABLE sales ADD COLUMN convertedAt TEXT;`);
+    console.log('Successfully migrated sales table: Added convertedAt');
+  } catch {}
+
+  try {
+    database.execSync(`ALTER TABLE sales ADD COLUMN cancelledAt TEXT;`);
+    console.log('Successfully migrated sales table: Added cancelledAt');
+  } catch {}
 
   // Migration: Add recurring expense tracking columns
   try {
     database.execSync(`ALTER TABLE expenses ADD COLUMN isOverdue INTEGER DEFAULT 0;`);
     console.log('Successfully migrated expenses table: Added isOverdue');
-  } catch (e) {}
+  } catch {}
   try {
     database.execSync(`ALTER TABLE expenses ADD COLUMN overdueDays INTEGER DEFAULT 0;`);
     console.log('Successfully migrated expenses table: Added overdueDays');
-  } catch (e) {}
+  } catch {}
   try {
     database.execSync(`ALTER TABLE expenses ADD COLUMN lastNotified TEXT;`);
     console.log('Successfully migrated expenses table: Added lastNotified');
-  } catch (e) {}
+  } catch {}
   try {
     database.execSync(`ALTER TABLE expenses ADD COLUMN paymentStatus TEXT DEFAULT 'pending';`);
     console.log('Successfully migrated expenses table: Added paymentStatus');
-  } catch (e) {}
+  } catch {}
 
   // Create warehouses table
   database.execSync(`
@@ -341,13 +373,107 @@ export const initDB = () => {
   database.execSync(`CREATE INDEX IF NOT EXISTS idx_notif_category ON notifications(category);`);
   database.execSync(`CREATE INDEX IF NOT EXISTS idx_notif_groupkey ON notifications(groupKey);`);
   database.execSync(`CREATE INDEX IF NOT EXISTS idx_notif_created ON notifications(createdAt DESC);`);
-  database.execSync(`CREATE INDEX IF NOT EXISTS idx_sales_created ON sales(createdAt);`);
-  database.execSync(`CREATE INDEX IF NOT EXISTS idx_sales_payment ON sales(paymentStatus);`);
-  database.execSync(`CREATE INDEX IF NOT EXISTS idx_sales_customer ON sales(customerName);`);
-  database.execSync(`CREATE INDEX IF NOT EXISTS idx_items_quantity ON items(totalBaseQuantity);`);
-  database.execSync(`CREATE INDEX IF NOT EXISTS idx_items_warehouse ON items(warehouseId);`);
-  database.execSync(`CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);`);
-  database.execSync(`CREATE INDEX IF NOT EXISTS idx_adjustments_created ON adjustments(createdAt);`);
+
+  // →→ Budget tables →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS budgets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'business' CHECK(type IN ('business','department','project','branch')),
+      period TEXT NOT NULL DEFAULT 'monthly' CHECK(period IN ('monthly','quarterly','yearly')),
+      year INTEGER NOT NULL,
+      month INTEGER,
+      quarter INTEGER,
+      notes TEXT,
+      status TEXT DEFAULT 'active' CHECK(status IN ('active','archived','closed')),
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  // Widen period CHECK to include daily/weekly (safe migration for existing tables)
+  try { database.execSync(`ALTER TABLE budgets DROP CONSTRAINT IF EXISTS check_period`); } catch {}
+  try { database.execSync(`ALTER TABLE budgets ADD CONSTRAINT check_period CHECK(period IN ('daily','weekly','monthly','quarterly','yearly'))`); } catch {}
+  // SQLite workaround: recreate with looser constraint
+  try {
+    database.execSync(`PRAGMA foreign_keys=OFF`);
+    database.execSync(`CREATE TABLE budgets_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'business',
+      period TEXT NOT NULL DEFAULT 'monthly',
+      year INTEGER NOT NULL,
+      month INTEGER,
+      quarter INTEGER,
+      notes TEXT,
+      status TEXT DEFAULT 'active',
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
+    )`);
+    database.execSync(`INSERT INTO budgets_new SELECT * FROM budgets`);
+    database.execSync(`DROP TABLE budgets`);
+    database.execSync(`ALTER TABLE budgets_new RENAME TO budgets`);
+    database.execSync(`PRAGMA foreign_keys=ON`);
+  } catch { /* table already has wider constraint or first creation */ }
+  console.log('Table "budgets" checked/created.');
+
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS budget_categories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      budgetId INTEGER NOT NULL,
+      category TEXT NOT NULL,
+      plannedAmount REAL NOT NULL DEFAULT 0,
+      notes TEXT,
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (budgetId) REFERENCES budgets(id) ON DELETE CASCADE
+    );
+  `);
+  console.log('Table "budget_categories" checked/created.');
+
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS budget_adjustments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      budgetCategoryId INTEGER NOT NULL,
+      previousAmount REAL NOT NULL,
+      newAmount REAL NOT NULL,
+      reason TEXT NOT NULL,
+      approvedBy TEXT,
+      status TEXT DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected')),
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (budgetCategoryId) REFERENCES budget_categories(id) ON DELETE CASCADE
+    );
+  `);
+  console.log('Table "budget_adjustments" checked/created.');
+
+  // Budget indexes
+  database.execSync(`CREATE INDEX IF NOT EXISTS idx_budgets_type ON budgets(type);`);
+  database.execSync(`CREATE INDEX IF NOT EXISTS idx_budgets_period ON budgets(year, month);`);
+  database.execSync(`CREATE INDEX IF NOT EXISTS idx_budget_cat_budget ON budget_categories(budgetId);`);
+
+  // Migration: Add budgetCategoryId to expenses table
+  try {
+    database.execSync(`ALTER TABLE expenses ADD COLUMN budgetCategoryId INTEGER REFERENCES budget_categories(id);`);
+    console.log('Successfully migrated expenses table: Added budgetCategoryId');
+  } catch {}
+
+  // Create recurring_expense_templates table
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS recurring_expense_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      category TEXT NOT NULL,
+      amount REAL NOT NULL,
+      frequency TEXT NOT NULL CHECK(frequency IN ('Daily','Weekly','Monthly','Quarterly','Yearly')),
+      startDate TEXT NOT NULL,
+      endDate TEXT,
+      budgetCategoryId INTEGER,
+      isActive INTEGER DEFAULT 1,
+      lastIncurred TEXT,
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (budgetCategoryId) REFERENCES budget_categories(id) ON DELETE SET NULL
+    );
+  `);
+  console.log('Table "recurring_expense_templates" checked/created.');
 
   } catch (error) {
     console.error('Database initialization error:', error);
@@ -372,6 +498,16 @@ export const getCategories = () => {
     return database.getAllSync('SELECT * FROM categories');
   } catch (error) {
     console.error('Get categories error:', error);
+    return [];
+  }
+};
+
+export const getUserCategories = () => {
+  try {
+    const database = getDB();
+    return database.getAllSync('SELECT * FROM categories WHERE isCustom = 1');
+  } catch (error) {
+    console.error('Get user categories error:', error);
     return [];
   }
 };
@@ -581,6 +717,131 @@ export const getSaleById = (id: number) => {
   }
 };
 
+export const getSaleWithItemsById = (id: number | string) => {
+  try {
+    const database = getDB();
+
+    // If id is a string, it could be a batchId or a numeric ID cast to string
+    if (typeof id === 'string') {
+      // Try batchId first
+      const items = database.getAllSync(`
+        SELECT s.*, i.name as itemName, i.baseUnit
+        FROM sales s
+        LEFT JOIN items i ON s.itemId = i.id
+        WHERE s.batchId = ?
+        ORDER BY s.id ASC
+      `, [id]);
+      if (items.length > 0) {
+        const first = items[0] as any;
+        return {
+          isBatch: true,
+          batchId: id,
+          id: first.id,
+          totalPrice: items.reduce((sum: number, it: any) => sum + (it.totalPrice || 0), 0),
+          quantity: items.length,
+          itemName: items.length > 1
+            ? (items[0] as any)?.itemName + ' +' + (items.length - 1) + ' more'
+            : (items[0] as any)?.itemName,
+          customerName: first.customerName,
+          customerPhone: first.customerPhone,
+          paymentMethod: first.paymentMethod,
+          paymentStatus: first.paymentStatus,
+          discount: first.discount,
+          vat: first.vat,
+          createdAt: first.createdAt,
+          dueDate: first.dueDate,
+          items,
+        };
+      }
+      // Fallback: try as numeric ID
+      const numId = parseInt(id, 10);
+      if (!isNaN(numId)) {
+        const single = database.getFirstSync(`
+          SELECT sales.*, items.name as itemName, items.baseUnit
+          FROM sales
+          LEFT JOIN items ON sales.itemId = items.id
+          WHERE sales.id = ?
+        `, [numId]);
+        if (!single) return null;
+        const bId = (single as any).batchId;
+        if (!bId) return { ...single, isBatch: false };
+        const batchItems = database.getAllSync(`
+          SELECT s.*, i.name as itemName, i.baseUnit
+          FROM sales s
+          LEFT JOIN items i ON s.itemId = i.id
+          WHERE s.batchId = ?
+          ORDER BY s.id ASC
+        `, [bId]);
+        return {
+          isBatch: true,
+          batchId: bId,
+          id: (single as any).id,
+          totalPrice: batchItems.reduce((sum: number, it: any) => sum + (it.totalPrice || 0), 0),
+          quantity: batchItems.length,
+          itemName: batchItems.length > 1
+            ? (batchItems[0] as any)?.itemName + ' +' + (batchItems.length - 1) + ' more'
+            : (batchItems[0] as any)?.itemName,
+          customerName: (single as any).customerName,
+          customerPhone: (single as any).customerPhone,
+          paymentMethod: (single as any).paymentMethod,
+          paymentStatus: (single as any).paymentStatus,
+          discount: (single as any).discount,
+          vat: (single as any).vat,
+          createdAt: (single as any).createdAt,
+          dueDate: (single as any).dueDate,
+          items: batchItems,
+        };
+      }
+      return null;
+    }
+
+    // Numeric ID path
+    const first = database.getFirstSync(`
+      SELECT sales.*, items.name as itemName, items.baseUnit 
+      FROM sales 
+      LEFT JOIN items ON sales.itemId = items.id 
+      WHERE sales.id = ?
+    `, [id]);
+    if (!first) return null;
+
+    const bId = (first as any).batchId;
+    if (!bId) {
+      return { ...first, isBatch: false };
+    }
+
+    const items = database.getAllSync(`
+      SELECT s.*, i.name as itemName, i.baseUnit
+      FROM sales s
+      LEFT JOIN items i ON s.itemId = i.id
+      WHERE s.batchId = ?
+      ORDER BY s.id ASC
+    `, [bId]);
+
+    return {
+      isBatch: true,
+      batchId: bId,
+      id: (first as any).id,
+      totalPrice: items.reduce((sum: number, it: any) => sum + (it.totalPrice || 0), 0),
+      quantity: items.length,
+      itemName: items.length > 1
+        ? (items[0] as any)?.itemName + ' +' + (items.length - 1) + ' more'
+        : (items[0] as any)?.itemName,
+      customerName: (first as any).customerName,
+      customerPhone: (first as any).customerPhone,
+      paymentMethod: (first as any).paymentMethod,
+      paymentStatus: (first as any).paymentStatus,
+      discount: (first as any).discount,
+      vat: (first as any).vat,
+      createdAt: (first as any).createdAt,
+      dueDate: (first as any).dueDate,
+      items,
+    };
+  } catch (error) {
+    console.error('Get sale with items by ID error:', error);
+    return null;
+  }
+};
+
 export interface FilterOptions {
   search?: string;
   category?: string;
@@ -640,33 +901,32 @@ export const insertSale = (saleData: {
   totalPrice: number;
   discount?: number;
   vat?: number;
+  taxType?: string;
   paymentMethod?: string;
   paymentStatus?: string;
   customerName?: string;
   customerPhone?: string;
   packId?: number;
+  batchId?: string;
 }) => {
-  const database = getDB();
   try {
-    database.execSync('BEGIN TRANSACTION');
+    const database = getDB();
     
     // Insert the sale record
     const statement = database.prepareSync(`
-      INSERT INTO sales (itemId, quantity, unit, unitType, discount, vat, totalPrice, paymentMethod, paymentStatus, customerName, customerPhone, packId)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO sales (itemId, quantity, unit, unitType, discount, vat, taxType, totalPrice, paymentMethod, paymentStatus, customerName, customerPhone, packId, batchId)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const result = statement.executeSync([
       saleData.itemId, saleData.quantity, saleData.unit, saleData.unitType,
-      saleData.discount || 0, saleData.vat || 0, saleData.totalPrice,
+      saleData.discount || 0, saleData.vat || 0, saleData.taxType || 'VAT', saleData.totalPrice,
       saleData.paymentMethod || null, saleData.paymentStatus || 'Paid',
       saleData.customerName || null, saleData.customerPhone || null,
-      saleData.packId || null
+      saleData.packId || null, saleData.batchId || null
     ]);
 
     // Update inventory quantities
-    const item = database.getFirstSync<{ unitsPerPack: number, totalBaseQuantity: number }>('SELECT unitsPerPack, totalBaseQuantity FROM items WHERE id = ?', [saleData.itemId]);
-    if (!item) { database.execSync('ROLLBACK'); return null; }
-
+    const item = database.getFirstSync<{ unitsPerPack: number }>('SELECT unitsPerPack FROM items WHERE id = ?', [saleData.itemId]);
     let baseQty = saleData.quantity;
     let packQty = 0;
     
@@ -675,20 +935,16 @@ export const insertSale = (saleData: {
       packQty = saleData.quantity;
     }
 
-    if ((item.totalBaseQuantity || 0) < baseQty) { database.execSync('ROLLBACK'); return null; }
-
-    database.runSync(`
+    database.execSync(`
       UPDATE items 
-      SET totalBaseQuantity = totalBaseQuantity - ?,
-          totalPackQuantity = totalPackQuantity - ?
-      WHERE id = ?
-    `, [baseQty, packQty, saleData.itemId]);
+      SET totalBaseQuantity = totalBaseQuantity - ${baseQty},
+          totalPackQuantity = totalPackQuantity - ${packQty}
+      WHERE id = ${saleData.itemId}
+    `);
 
-    database.execSync('COMMIT');
     return result.lastInsertRowId;
   } catch (error) {
     console.error('Insert sale error:', error);
-    try { database?.execSync('ROLLBACK'); } catch (_) {}
     return null;
   }
 };
@@ -700,6 +956,7 @@ export const getSales = () => {
       SELECT sales.*, items.name as itemName, items.baseUnit 
       FROM sales 
       LEFT JOIN items ON sales.itemId = items.id 
+      WHERE paymentStatus != 'Order'
       ORDER BY sales.id DESC
     `);
   } catch (error) {
@@ -715,7 +972,7 @@ export const getSalesByDateRange = (startDate: string, endDate: string) => {
       SELECT sales.*, items.name as itemName, items.baseUnit 
       FROM sales 
       LEFT JOIN items ON sales.itemId = items.id 
-      WHERE date(sales.createdAt) >= ? AND date(sales.createdAt) <= ?
+      WHERE date(sales.createdAt) >= ? AND date(sales.createdAt) <= ? AND paymentStatus != 'Order'
       ORDER BY sales.createdAt DESC
     `, [startDate, endDate]);
   } catch (error) {
@@ -746,6 +1003,8 @@ export const getFilteredSales = (options: FilterOptions) => {
       params.push(options.date);
     }
 
+    conditions.push("paymentStatus != 'Order'");
+
     if (conditions.length > 0) {
       query += ' WHERE ' + conditions.join(' AND ');
     }
@@ -769,9 +1028,8 @@ export const getFilteredSales = (options: FilterOptions) => {
 };
 
 export const insertAdjustment = (adj: any) => {
-  const database = getDB();
   try {
-    database.execSync('BEGIN TRANSACTION');
+    const database = getDB();
     
     // 1. Log the adjustment
     const statement = database.prepareSync(`
@@ -784,20 +1042,20 @@ export const insertAdjustment = (adj: any) => {
 
     // 2. Update the item based on adjustment type
     if (adj.type === 'price_up' || adj.type === 'price_down') {
-      database.runSync(`
+      database.execSync(`
         UPDATE items 
-        SET baseSellingPrice = ? 
-        WHERE id = ?
-      `, [adj.newValue, adj.itemId]);
+        SET baseSellingPrice = ${adj.newValue} 
+        WHERE id = ${adj.itemId}
+      `);
       
       // Also update pack price proportionally if unitsPerPack exists
       const item = database.getFirstSync('SELECT * FROM items WHERE id = ?', [adj.itemId]) as any;
       if (item && item.unitsPerPack) {
         const newPackPrice = adj.newValue * item.unitsPerPack;
-        database.runSync(`UPDATE items SET packSellingPrice = ? WHERE id = ?`, [newPackPrice, adj.itemId]);
+        database.execSync(`UPDATE items SET packSellingPrice = ${newPackPrice} WHERE id = ${adj.itemId}`);
       }
     } else if (adj.type === 'damaged') {
-      const item = database.getFirstSync('SELECT totalBaseQuantity, unitsPerPack FROM items WHERE id = ?', [adj.itemId]) as any;
+      const item = database.getFirstSync('SELECT * FROM items WHERE id = ?', [adj.itemId]) as any;
       if (item) {
         let baseDeduction = adj.quantity;
         let packDeduction = 0;
@@ -809,22 +1067,18 @@ export const insertAdjustment = (adj: any) => {
           packDeduction = adj.quantity / (item.unitsPerPack || 1);
         }
 
-        if ((item.totalBaseQuantity || 0) < baseDeduction) { database.execSync('ROLLBACK'); return null; }
-
-        database.runSync(`
+        database.execSync(`
           UPDATE items 
-          SET totalBaseQuantity = totalBaseQuantity - ?,
-              totalPackQuantity = totalPackQuantity - ?
-          WHERE id = ?
-        `, [baseDeduction, packDeduction, adj.itemId]);
+          SET totalBaseQuantity = totalBaseQuantity - ${baseDeduction},
+              totalPackQuantity = totalPackQuantity - ${packDeduction}
+          WHERE id = ${adj.itemId}
+        `);
       }
     }
 
-    database.execSync('COMMIT');
     return result.lastInsertRowId;
   } catch (error) {
     console.error('Insert adjustment error:', error);
-    try { database?.execSync('ROLLBACK'); } catch (_) {}
     return null;
   }
 };
@@ -905,11 +1159,10 @@ export const getFilteredAdjustments = (filters: { type?: string; period?: string
 };
 
 export const deleteAdjustment = (id: number) => {
-  const database = getDB();
   try {
-    database.execSync('BEGIN TRANSACTION');
+    const database = getDB();
     const adj = database.getFirstSync('SELECT * FROM adjustments WHERE id = ?', [id]) as any;
-    if (!adj) { database.execSync('ROLLBACK'); return false; }
+    if (!adj) return false;
 
     // Only restore items quantity if it was damaged
     if (adj.type === 'damaged') {
@@ -923,32 +1176,29 @@ export const deleteAdjustment = (id: number) => {
         } else {
           packRefund = adj.quantity / (item.unitsPerPack || 1);
         }
-        database.runSync(`
+        database.execSync(`
           UPDATE items 
-          SET totalBaseQuantity = totalBaseQuantity + ?,
-              totalPackQuantity = totalPackQuantity + ?
-          WHERE id = ?
-        `, [baseRefund, packRefund, adj.itemId]);
+          SET totalBaseQuantity = totalBaseQuantity + ${baseRefund},
+              totalPackQuantity = totalPackQuantity + ${packRefund}
+          WHERE id = ${adj.itemId}
+        `);
       }
     }
     
     // For price_up/price_down, reverting price is risky if new adjustments exist, so we only delete the log.
     database.runSync('DELETE FROM adjustments WHERE id = ?', id);
-    database.execSync('COMMIT');
     return true;
   } catch (error) {
     console.error('Delete adjustment error:', error);
-    try { database?.execSync('ROLLBACK'); } catch (_) {}
     return false;
   }
 };
 
 export const updateAdjustment = (adjId: number, data: { quantity?: number, newValue?: number, reason?: string }) => {
-  const database = getDB();
   try {
-    database.execSync('BEGIN TRANSACTION');
+    const database = getDB();
     const existing = database.getFirstSync('SELECT * FROM adjustments WHERE id = ?', [adjId]) as any;
-    if (!existing) { database.execSync('ROLLBACK'); return false; }
+    if (!existing) return false;
 
     // Update the record
     const updates = [];
@@ -970,12 +1220,12 @@ export const updateAdjustment = (adjId: number, data: { quantity?: number, newVa
             } else {
               packDiff = diff / (item.unitsPerPack || 1);
             }
-            database.runSync(`
+            database.execSync(`
               UPDATE items 
-              SET totalBaseQuantity = totalBaseQuantity - ?,
-                  totalPackQuantity = totalPackQuantity - ?
-              WHERE id = ?
-            `, [baseDiff, packDiff, existing.itemId]);
+              SET totalBaseQuantity = totalBaseQuantity - ${baseDiff},
+                  totalPackQuantity = totalPackQuantity - ${packDiff}
+              WHERE id = ${existing.itemId}
+            `);
           }
         }
       }
@@ -987,11 +1237,11 @@ export const updateAdjustment = (adjId: number, data: { quantity?: number, newVa
       
       // Affect the current price
       if (existing.type === 'price_up' || existing.type === 'price_down') {
-         database.runSync(`UPDATE items SET baseSellingPrice = ? WHERE id = ?`, [data.newValue, existing.itemId]);
+         database.execSync(`UPDATE items SET baseSellingPrice = ${data.newValue} WHERE id = ${existing.itemId}`);
          const item = database.getFirstSync('SELECT * FROM items WHERE id = ?', [existing.itemId]) as any;
          if (item && item.unitsPerPack) {
            const newPackPrice = data.newValue * item.unitsPerPack;
-           database.runSync(`UPDATE items SET packSellingPrice = ? WHERE id = ?`, [newPackPrice, existing.itemId]);
+           database.execSync(`UPDATE items SET packSellingPrice = ${newPackPrice} WHERE id = ${existing.itemId}`);
          }
       }
     }
@@ -1005,11 +1255,9 @@ export const updateAdjustment = (adjId: number, data: { quantity?: number, newVa
       params.push(adjId);
       database.runSync(`UPDATE adjustments SET ${updates.join(', ')} WHERE id = ?`, ...params);
     }
-    database.execSync('COMMIT');
     return true;
   } catch (error) {
     console.error('Update adjustment error:', error);
-    try { database?.execSync('ROLLBACK'); } catch (_) {}
     return false;
   }
 };
@@ -1019,43 +1267,89 @@ export const getActivityFeed = (options: { search?: string, date?: string, limit
     const database = getDB();
     const limit = options.limit || 50;
 
-    // Sales
+    // Build date condition
+    const saleDateWhere = options.date ? "WHERE date(s.createdAt) = '" + options.date + "'" : '';
+    const adjDateWhere = options.date ? "WHERE date(a.createdAt) = '" + options.date + "'" : '';
+    const expDateWhere = options.date ? "WHERE date(e.date) = '" + options.date + "'" : '';
+    const invDateWhere = options.date ? "WHERE date(i.createdAt) = '" + options.date + "'" : '';
+
+    // Sales (grouped by batchId)
     const sales = database.getAllSync(`
-      SELECT 'sale' as type, 'sale' as category, s.id, s.totalPrice as value, s.quantity, s.paymentMethod, s.paymentStatus, i.name as label, s.createdAt, s.discount, s.vat
+      SELECT 
+        CASE 
+          WHEN s.batchId IS NOT NULL THEN 'batch_sale' 
+          ELSE 'sale' 
+        END as type,
+        'sale' as category,
+        COALESCE(s.batchId, CAST(s.id AS TEXT)) as id,
+        CASE 
+          WHEN s.batchId IS NOT NULL THEN (
+            SELECT SUM(sub.totalPrice) FROM sales sub WHERE sub.batchId = s.batchId
+          )
+          ELSE s.totalPrice 
+        END as value,
+        CASE 
+          WHEN s.batchId IS NOT NULL THEN (
+            SELECT COUNT(*) FROM sales sub WHERE sub.batchId = s.batchId
+          )
+          ELSE s.quantity 
+        END as quantity,
+        s.paymentMethod,
+        s.customerName,
+        s.paymentStatus,
+        CASE 
+          WHEN s.batchId IS NOT NULL THEN (
+            SELECT GROUP_CONCAT(i2.name, ', ')
+            FROM sales sub2
+            JOIN items i2 ON sub2.itemId = i2.id
+            WHERE sub2.batchId = s.batchId
+          )
+          ELSE i.name 
+        END as label,
+        CASE 
+          WHEN s.batchId IS NOT NULL THEN (
+            SELECT MIN(sub3.createdAt) FROM sales sub3 WHERE sub3.batchId = s.batchId
+          )
+          ELSE s.createdAt 
+        END as createdAt,
+        s.discount,
+        s.vat,
+        s.batchId
       FROM sales s
       JOIN items i ON s.itemId = i.id
-      ${options.date ? 'WHERE date(s.createdAt) = ?' : ''}
-      ORDER BY s.createdAt DESC
-      LIMIT ?
-    `, options.date ? [options.date, limit] : [limit]);
+      ${saleDateWhere}
+      GROUP BY COALESCE(s.batchId, CAST(s.id AS TEXT))
+      ORDER BY createdAt DESC
+      LIMIT ${limit}
+    `);
 
     // Adjustments with type info
     const adjustments = database.getAllSync(`
       SELECT 'adjustment' as type, 'adjustment' as category, a.id, a.newValue as value, a.quantity, a.type as adjType, a.oldValue, COALESCE(i.name, 'Item') as label, a.createdAt, i.basePurchasePrice
       FROM adjustments a
       LEFT JOIN items i ON a.itemId = i.id
-      ${options.date ? 'WHERE date(a.createdAt) = ?' : ''}
+      ${adjDateWhere}
       ORDER BY a.createdAt DESC
-      LIMIT ?
-    `, options.date ? [options.date, limit] : [limit]);
+      LIMIT ${limit}
+    `);
 
     // Expenses
     const expenses = database.getAllSync(`
       SELECT 'expense' as type, 'expense' as category, e.id, e.amount as value, NULL as quantity, e.name as label, e.date as createdAt, e.category as expenseCategory, e.isRecurring
       FROM expenses e
-      ${options.date ? 'WHERE date(e.date) = ?' : ''}
+      ${expDateWhere}
       ORDER BY e.date DESC
-      LIMIT ?
-    `, options.date ? [options.date, limit] : [limit]);
+      LIMIT ${limit}
+    `);
 
     // Inventory additions
     const inventory = database.getAllSync(`
       SELECT 'inventory' as type, 'inventory' as category, i.id, (i.totalBaseQuantity * i.basePurchasePrice) as value, i.totalBaseQuantity as quantity, i.name as label, i.createdAt, i.companyName
       FROM items i
-      ${options.date ? 'WHERE date(i.createdAt) = ?' : ''}
+      ${invDateWhere}
       ORDER BY i.createdAt DESC
-      LIMIT ?
-    `, options.date ? [options.date, limit] : [limit]);
+      LIMIT ${limit}
+    `);
 
     // Merge and sort by date
     const combined = [...sales, ...adjustments, ...expenses, ...inventory]
@@ -1078,17 +1372,18 @@ export const getActivityFeed = (options: { search?: string, date?: string, limit
 
 // --- Expense Functions ---
 
-export const insertExpense = (expense: { name: string; amount: number; category: string; date?: string; isRecurring?: boolean; frequency?: string; nextBillingDate?: string }) => {
+export const insertExpense = (expense: { name: string; amount: number; category: string; date?: string; isRecurring?: boolean; frequency?: string; nextBillingDate?: string; budgetCategoryId?: number }) => {
   try {
     const database = getDB();
     const today = new Date().toISOString().split('T')[0];
     const statement = database.prepareSync(`
-      INSERT INTO expenses (name, amount, category, date, isRecurring, frequency, nextBillingDate, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
+      INSERT INTO expenses (name, amount, category, date, isRecurring, frequency, nextBillingDate, budgetCategoryId, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
     `);
     const result = statement.executeSync([
       expense.name, expense.amount, expense.category || 'General', expense.date || today,
-      expense.isRecurring ? 1 : 0, expense.frequency || null, expense.nextBillingDate || null, null
+      expense.isRecurring ? 1 : 0, expense.frequency || null, expense.nextBillingDate || null,
+      expense.budgetCategoryId || null, null
     ]);
     return result.lastInsertRowId;
   } catch (error) {
@@ -1182,7 +1477,7 @@ export const getUpcomingExpenses = () => {
   }
 };
 
-// ── Recurring Expense Reminder Functions ──────────────────────────────────────
+// →→ Recurring Expense Reminder Functions →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
 
 export const getRecurringExpensesDueToday = () => {
   try {
@@ -1240,10 +1535,29 @@ export const getRecurringExpensesForDashboard = () => {
   }
 };
 
+export const getRecurringExpensesDueTomorrow = () => {
+  try {
+    const database = getDB();
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    const todayStr = new Date().toISOString().split('T')[0];
+    return database.getAllSync(`
+      SELECT * FROM expenses
+      WHERE isRecurring = 1
+        AND nextBillingDate > ? AND nextBillingDate <= ?
+        AND paymentStatus != 'paid'
+      ORDER BY nextBillingDate ASC
+    `, [todayStr, tomorrowStr]);
+  } catch (error) {
+    console.error('getRecurringExpensesDueTomorrow error:', error);
+    return [];
+  }
+};
+
 export const getUpcomingRecurringExpenses = (limit: number = 5) => {
   try {
     const database = getDB();
-    const today = new Date().toISOString().split('T')[0];
     return database.getAllSync(`
       SELECT * FROM expenses 
       WHERE isRecurring = 1 
@@ -1387,18 +1701,19 @@ export const getSalesSummary = () => {
     
     // Average sale value today
     const avgSale = database.getFirstSync<{ avg: number }>(`
-      SELECT AVG(totalPrice) as avg FROM sales WHERE date(createdAt) = ?
+      SELECT AVG(totalPrice) as avg FROM sales WHERE date(createdAt) = ? AND paymentStatus != 'Order'
     `, [today]);
 
     // Total volume (units) today
     const totalUnits = database.getFirstSync<{ volume: number }>(`
-      SELECT SUM(quantity) as volume FROM sales WHERE date(createdAt) = ?
+      SELECT SUM(quantity) as volume FROM sales WHERE date(createdAt) = ? AND paymentStatus != 'Order'
     `, [today]);
 
     // Best hour of the day
     const bestHour = database.getFirstSync<{ hour: string }>(`
-      SELECT strftime('%H', createdAt) as hour, COUNT(*) as count 
+      SELECT strftime('%H', datetime(createdAt, 'localtime')) as hour, COUNT(*) as count 
       FROM sales 
+      WHERE paymentStatus != 'Order'
       GROUP BY hour 
       ORDER BY count DESC 
       LIMIT 1
@@ -1408,6 +1723,7 @@ export const getSalesSummary = () => {
     const paymentDist = database.getAllSync<{ method: string, count: number }>(`
       SELECT paymentMethod as method, COUNT(*) as count 
       FROM sales 
+      WHERE paymentStatus != 'Order'
       GROUP BY method
     `);
 
@@ -1432,7 +1748,7 @@ export const getTopSellingItems = (limit: number = 5) => {
       FROM sales 
       JOIN items ON sales.itemId = items.id
       LEFT JOIN categories ON items.categoryId = categories.id
-      WHERE date(sales.createdAt) = ?
+      WHERE date(sales.createdAt) = ? AND paymentStatus != 'Order'
       GROUP BY items.id
       ORDER BY totalQty DESC
       LIMIT ?
@@ -1492,7 +1808,7 @@ export const getDashboardStats = (targetDate?: string) => {
 
     // Today's Stats
     const todaySales = database.getFirstSync<{ revenue: number, count: number }>(`
-      SELECT SUM(totalPrice) as revenue, COUNT(*) as count FROM sales WHERE date(createdAt) = ?
+      SELECT SUM(totalPrice) as revenue, COUNT(*) as count FROM sales WHERE date(createdAt) = ? AND paymentStatus != 'Order'
     `, [today]);
 
     const todayExpenses = database.getFirstSync<{ total: number }>(`
@@ -1500,12 +1816,12 @@ export const getDashboardStats = (targetDate?: string) => {
     `, [today]);
 
     const todayDebt = database.getFirstSync<{ total: number }>(`
-      SELECT SUM(totalPrice) as total FROM sales WHERE date(createdAt) = ? AND paymentStatus = 'Debt'
+      SELECT SUM(totalPrice) as total FROM sales WHERE date(createdAt) = ? AND paymentStatus = 'Debt' AND paymentStatus != 'Order'
     `, [today]);
 
     // Yesterday's Stats for comparison
     const yesterdaySales = database.getFirstSync<{ revenue: number, count: number }>(`
-      SELECT SUM(totalPrice) as revenue, COUNT(*) as count FROM sales WHERE date(createdAt) = ?
+      SELECT SUM(totalPrice) as revenue, COUNT(*) as count FROM sales WHERE date(createdAt) = ? AND paymentStatus != 'Order'
     `, [yesterday]);
 
     const yesterdayExpenses = database.getFirstSync<{ total: number }>(`
@@ -1516,7 +1832,7 @@ export const getDashboardStats = (targetDate?: string) => {
       SELECT SUM(s.totalPrice - (s.quantity * (CASE WHEN s.unitType = 'pack' THEN i.packPurchasePrice ELSE i.basePurchasePrice END))) as gross
       FROM sales s
       JOIN items i ON s.itemId = i.id
-      WHERE date(s.createdAt) = ?
+      WHERE date(s.createdAt) = ? AND paymentStatus != 'Order'
     `, [yesterday]);
 
     // Profit Calculation (Today) - EXCLUDING debt (not realized until paid)
@@ -1524,7 +1840,7 @@ export const getDashboardStats = (targetDate?: string) => {
       SELECT SUM(s.totalPrice - (s.quantity * (CASE WHEN s.unitType = 'pack' THEN i.packPurchasePrice ELSE i.basePurchasePrice END))) as gross
       FROM sales s
       JOIN items i ON s.itemId = i.id
-      WHERE date(s.createdAt) = ? AND s.paymentStatus != 'Debt'
+      WHERE date(s.createdAt) = ? AND s.paymentStatus != 'Debt' AND s.paymentStatus != 'Order'
     `, [today]);
 
     return {
@@ -1765,16 +2081,23 @@ export const processDebtPayment = (
   customerName: string,
   amount: number,
   type: 'full' | 'partial',
-  options?: { customerPhone?: string; saleId?: number; note?: string },
+  options?: { customerPhone?: string; saleId?: number; note?: string; paymentMethod?: string },
 ) => {
-  const database = getDB();
   try {
-    database.execSync('BEGIN TRANSACTION');
+    const database = getDB();
+    const method = options?.paymentMethod || null;
     if (type === 'full') {
-      database.runSync(
-        "UPDATE sales SET paymentStatus = 'Paid', paidAmount = totalPrice WHERE customerName = ? AND paymentStatus = 'Debt'",
-        [customerName]
-      );
+      if (method) {
+        database.runSync(
+          "UPDATE sales SET paymentStatus = 'Paid', paidAmount = totalPrice, paymentMethod = ? WHERE customerName = ? AND paymentStatus = 'Debt'",
+          [method, customerName]
+        );
+      } else {
+        database.runSync(
+          "UPDATE sales SET paymentStatus = 'Paid', paidAmount = totalPrice WHERE customerName = ? AND paymentStatus = 'Debt'",
+          [customerName]
+        );
+      }
     } else {
       // Partial payment logic: distribute across sales
       const sales = database.getAllSync<{id: number, totalPrice: number, paidAmount: number}>(
@@ -1798,30 +2121,57 @@ export const processDebtPayment = (
       }
     }
     // Record this payment in the history table
-    database.runSync(
-      'INSERT INTO debt_payments (saleId, customerName, customerPhone, amount, type, note) VALUES (?, ?, ?, ?, ?, ?)',
-      [
-        options?.saleId ?? null,
-        customerName,
-        options?.customerPhone ?? null,
-        amount,
-        type,
-        options?.note ?? null,
-      ],
-    );
-    database.execSync('COMMIT');
+    try {
+      database.runSync(
+        'INSERT INTO debt_payments (saleId, customerName, customerPhone, amount, type, note) VALUES (?, ?, ?, ?, ?, ?)',
+        [
+          options?.saleId ?? null,
+          customerName,
+          options?.customerPhone ?? null,
+          amount,
+          type,
+          options?.note ?? null,
+        ],
+      );
+    } catch (e) {
+      console.error('Record debt payment history error:', e);
+    }
+
+    // Create a payment record in sales so it appears in activity feed
+    try {
+      const batchId = 'PAY_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+      const firstDebt = database.getFirstSync<any>(
+        "SELECT itemId, unit, unitType FROM sales WHERE customerName = ? AND paymentStatus = 'Paid' ORDER BY id DESC LIMIT 1",
+        [customerName]
+      );
+      database.runSync(
+        `INSERT INTO sales (itemId, quantity, unit, unitType, discount, vat, totalPrice, paymentMethod, paymentStatus, customerName, customerPhone, batchId, createdAt)
+         VALUES (?, 1, ?, ?, 0, 0, ?, ?, 'Paid', ?, ?, ?, ?)`,
+        [
+          firstDebt?.itemId ?? 1,
+          firstDebt?.unit || 'pcs',
+          firstDebt?.unitType || 'base',
+          -Math.abs(amount),
+          method || 'Cash',
+          customerName,
+          options?.customerPhone ?? null,
+          batchId,
+          new Date().toISOString(),
+        ]
+      );
+    } catch (e) {
+      console.error('Create payment record error:', e);
+    }
     return true;
   } catch (error) {
     console.error('Process debt payment error:', error);
-    try { database?.execSync('ROLLBACK'); } catch (_) {}
     return false;
   }
 };
 
 export const markDebtAsLoss = (customerName: string, options?: { customerPhone?: string; note?: string }) => {
-  const database = getDB();
   try {
-    database.execSync('BEGIN TRANSACTION');
+    const database = getDB();
     const sales = database.getAllSync<{ id: number; totalPrice: number; paidAmount: number }>(
       "SELECT id, totalPrice, paidAmount FROM sales WHERE customerName = ? AND paymentStatus = 'Debt'",
       [customerName],
@@ -1835,23 +2185,25 @@ export const markDebtAsLoss = (customerName: string, options?: { customerPhone?:
       [customerName]
     );
     // Record write-off as a history entry (negative direction, type='loss')
-    if (outstanding > 0) {
-      database.runSync(
-        'INSERT INTO debt_payments (customerName, customerPhone, amount, type, note) VALUES (?, ?, ?, ?, ?)',
-        [
-          customerName,
-          options?.customerPhone ?? null,
-          outstanding,
-          'loss',
-          options?.note ?? null,
-        ],
-      );
+    try {
+      if (outstanding > 0) {
+        database.runSync(
+          'INSERT INTO debt_payments (customerName, customerPhone, amount, type, note) VALUES (?, ?, ?, ?, ?)',
+          [
+            customerName,
+            options?.customerPhone ?? null,
+            outstanding,
+            'loss',
+            options?.note ?? null,
+          ],
+        );
+      }
+    } catch (e) {
+      console.error('Record debt loss history error:', e);
     }
-    database.execSync('COMMIT');
     return true;
   } catch (error) {
     console.error('Mark debt as loss error:', error);
-    try { database?.execSync('ROLLBACK'); } catch (_) {}
     return false;
   }
 };
@@ -1949,7 +2301,7 @@ export const getOnCreditItems = () => {
   }
 };
 
-export const getSalesChartData = (period: 'W' | 'M' | 'Y', offset: number = 0) => {
+export const getSalesChartData = (period: 'W' | 'M' | 'Y', offset: number = 0, calendarType?: string) => {
   try {
     const database = getDB();
     const now = new Date();
@@ -1969,7 +2321,7 @@ export const getSalesChartData = (period: 'W' | 'M' | 'Y', offset: number = 0) =
           strftime('%w', createdAt) as label,
           SUM(totalPrice) as value
         FROM sales 
-        WHERE date(createdAt) >= ? AND date(createdAt) <= ?
+        WHERE date(createdAt) >= ? AND date(createdAt) <= ? AND paymentStatus != 'Order'
         GROUP BY label
         ORDER BY label
       `, [startStr, endStr]);
@@ -1983,6 +2335,46 @@ export const getSalesChartData = (period: 'W' | 'M' | 'Y', offset: number = 0) =
       }
       return fullWeek;
     } else if (period === 'M') {
+      if (calendarType === 'ethiopian') {
+        const current = toEthiopianDate(now);
+        let ethYear = current.year;
+        let ethMonth = current.month + offset;
+        if (ethMonth < 1) { ethMonth += 13; ethYear--; }
+        if (ethMonth > 13) { ethMonth -= 13; ethYear++; }
+
+        const daysInMonth = ethMonth === 13 ? getEthiopianDaysInMonth(ethYear, ethMonth) : 30;
+        const startDate = fromEthiopianToDate(ethYear, ethMonth, 1);
+        const endDate = fromEthiopianToDate(ethYear, ethMonth, daysInMonth);
+        endDate.setDate(endDate.getDate() + 1);
+
+        const startStr = startDate.toISOString().split('T')[0];
+        const endStr = endDate.toISOString().split('T')[0];
+
+        const allSales = database.getAllSync<{ createdAt: string, totalPrice: number }>(`
+          SELECT createdAt, totalPrice FROM sales
+          WHERE date(createdAt) >= ? AND date(createdAt) < ? AND paymentStatus != 'Order'
+        `, [startStr, endStr]);
+
+        const weekMap: Record<number, number> = {};
+        allSales.forEach(sale => {
+          const d = new Date(sale.createdAt);
+          if (!isNaN(d.getTime())) {
+            const ethDate = toEthiopianDate(d);
+            let weekNum = Math.floor((ethDate.day - 1) / 7) + 1;
+            if (ethMonth === 13) weekNum = 1;
+            else if (weekNum > 5) weekNum = 5;
+            weekMap[weekNum] = (weekMap[weekNum] || 0) + sale.totalPrice;
+          }
+        });
+
+        const numWeeks = ethMonth === 13 ? 1 : 5;
+        const fullMonth: { label: string, value: number }[] = [];
+        for (let i = 1; i <= numWeeks; i++) {
+          fullMonth.push({ label: String(i), value: weekMap[i] || 0 });
+        }
+        return fullMonth;
+      }
+
       const monthDate = new Date(now.getFullYear(), now.getMonth() + offset, 1);
       const y = monthDate.getFullYear();
       const m = String(monthDate.getMonth() + 1).padStart(2, '0');
@@ -1990,14 +2382,12 @@ export const getSalesChartData = (period: 'W' | 'M' | 'Y', offset: number = 0) =
       results = database.getAllSync<{ label: string, value: number }>(`
         SELECT ((CAST(strftime('%d', createdAt) AS INTEGER) - 1) / 7 + 1) as label, SUM(totalPrice) as value
         FROM sales
-        WHERE strftime('%Y-%m', createdAt) = ?
+        WHERE strftime('%Y-%m', createdAt) = ? AND paymentStatus != 'Order'
         GROUP BY label
         ORDER BY label
       `, [`${y}-${m}`]);
 
-      // Fill in missing weeks with 0 (up to 5 weeks in a month)
       const fullMonth: { label: string, value: number }[] = [];
-      // Determine how many weeks in this month
       const lastDay = new Date(y, monthDate.getMonth() + 1, 0).getDate();
       const numWeeks = Math.ceil(lastDay / 7);
       for (let i = 1; i <= numWeeks; i++) {
@@ -2007,10 +2397,47 @@ export const getSalesChartData = (period: 'W' | 'M' | 'Y', offset: number = 0) =
       return fullMonth;
     } else {
       const yr = now.getFullYear() + offset;
+      const isEthiopian = calendarType === 'ethiopian';
+
+      if (isEthiopian) {
+        // For Ethiopian calendar: fetch all sales, convert to Ethiopian month, aggregate
+        const allSales = database.getAllSync<{ createdAt: string, totalPrice: number }>(`
+          SELECT createdAt, totalPrice FROM sales
+          WHERE strftime('%Y', createdAt) = ? AND paymentStatus != 'Order'
+        `, [String(yr)]);
+
+        const ethMonthMap: Record<number, number> = {};
+        allSales.forEach(sale => {
+          const d = new Date(sale.createdAt);
+          if (!isNaN(d.getTime())) {
+            const day = d.getDate();
+            const month = d.getMonth() + 1;
+            const year = d.getFullYear();
+            // Simple conversion: Ethiopian month roughly = ((Gregorian month + 8) % 12) + 1
+            // Refined: use actual Ethiopian calendar date
+            const a = Math.floor((14 - month) / 12);
+            const y = year + 4800 - a;
+            const m = month + 12 * a - 3;
+            const jdn = day + Math.floor((153 * m + 2) / 5) + 365 * y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) - 32045;
+            const ethiopicEpoch = 1723856;
+            const r = (jdn - ethiopicEpoch) % 1461;
+            const n = (r % 365) + 365 * Math.floor(r / 1460);
+            const ethMonth = Math.floor(n / 30) + 1;
+            ethMonthMap[ethMonth] = (ethMonthMap[ethMonth] || 0) + sale.totalPrice;
+          }
+        });
+
+        const fullYear: { label: string, value: number }[] = [];
+        for (let i = 1; i <= 13; i++) {
+          fullYear.push({ label: String(i), value: ethMonthMap[i] || 0 });
+        }
+        return fullYear;
+      }
+
       results = database.getAllSync<{ label: string, value: number }>(`
         SELECT CAST(strftime('%m', createdAt) AS INTEGER) as label, SUM(totalPrice) as value
         FROM sales
-        WHERE strftime('%Y', createdAt) = ?
+        WHERE strftime('%Y', createdAt) = ? AND paymentStatus != 'Order'
         GROUP BY label
         ORDER BY label
       `, [String(yr)]);
@@ -2032,17 +2459,17 @@ export const getSalesChartData = (period: 'W' | 'M' | 'Y', offset: number = 0) =
 
 const CHART_LABELS: Record<string, string[]> = {
   en_days: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
-  am_days: ['እሁድ', 'ሰኞ', 'ማክሰኞ', 'ረቡዕ', 'ሐሙስ', 'አርብ', 'ቅዳሜ'],
+  am_days: ['áŠ¥áˆá‹µ', 'áˆ°áŠž', 'áˆ›áŠ­áˆ°áŠž', 'áˆ¨á‰¡á‹•', 'áˆáˆ™áˆµ', 'áŠ áˆ­á‰¥', 'á‰…á‹³áˆœ'],
   om_days: ['Dil', 'Wii', 'Qib', 'Roob', 'Kam', 'Jum', 'San'],
-  ti_days: ['ሰንበት', 'ሰኑይ', 'ሰሉስ', 'ረቡዕ', 'ሓሙስ', 'ዓርቢ', 'ቀዳም'],
+  ti_days: ['áˆ°áŠ•á‰ á‰µ', 'áˆ°áŠ‘á‹­', 'áˆ°áˆ‰áˆµ', 'áˆ¨á‰¡á‹•', 'áˆ“áˆ™áˆµ', 'á‹“áˆ­á‰¢', 'á‰€á‹³áˆ'],
   en_months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
-  am_months: ['ጥር', 'ለካ', 'መጋ', 'ሚያ', 'ግን', 'ሰነ', 'ሐም', 'ነሐ', 'ጥቅ', 'ህዳ', 'ታህ', 'አርብ'],
+  am_months: ['áŒ¥áˆ­', 'áˆˆáŠ«', 'áˆ˜áŒ‹', 'áˆšá‹«', 'áŒáŠ•', 'áˆ°áŠ', 'áˆáˆ', 'áŠáˆ', 'áŒ¥á‰…', 'áˆ…á‹³', 'á‰³áˆ…', 'áŠ áˆ­á‰¥'],
   om_months: ['Ama', 'Gur', 'Bit', 'Ebl', 'Caa', 'Wax', 'Ado', 'Hag', 'Ful', 'Onk', 'Sad', 'Mud'],
-  ti_months: ['ጥሪ', 'ለካ', 'መጋ', 'ሚያ', 'ግን', 'ሰነ', 'ሓም', 'ነሓ', 'ጥቅ', 'ሕዳ', 'ታሕ', 'አርብ'],
+  ti_months: ['áŒ¥áˆª', 'áˆˆáŠ«', 'áˆ˜áŒ‹', 'áˆšá‹«', 'áŒáŠ•', 'áˆ°áŠ', 'áˆ“áˆ', 'áŠáˆ“', 'áŒ¥á‰…', 'áˆ•á‹³', 'á‰³áˆ•', 'áŠ áˆ­á‰¥'],
   en_hours: ['3 AM', '6 AM', '9 AM', '12 PM', '3 PM'],
-  am_hours: ['3:00 ቀን', '6:00 ቀን', '9:00 ቀን', '12:00 ማታ', '3:00 ማታ'],
+  am_hours: ['3:00 á‰€áŠ•', '6:00 á‰€áŠ•', '9:00 á‰€áŠ•', '12:00 áˆ›á‰³', '3:00 áˆ›á‰³'],
   om_hours: ['3 AA', '6 AA', '9 AA', '12 WB', '3 WB'],
-  ti_hours: ['3:00 ንጉሆ', '6:00 ንጉሆ', '9:00 ንጉሆ', '12:00 ምሸት', '3:00 ምሸት'],
+  ti_hours: ['3:00 áŠ•áŒ‰áˆ†', '6:00 áŠ•áŒ‰áˆ†', '9:00 áŠ•áŒ‰áˆ†', '12:00 áˆáˆ¸á‰µ', '3:00 áˆáˆ¸á‰µ'],
 };
 
 export const getExpenseChartData = (period: string, language: string = 'en', targetDate?: string, timeSystem: 'device' | 'ethiopian' = 'device') => {
@@ -2068,10 +2495,10 @@ export const getExpenseChartData = (period: string, language: string = 'en', tar
         const sum = results.reduce((acc, r) => {
           const hrRaw = parseInt(r.hour);
           if (!Number.isFinite(hrRaw)) return acc;
-          // Shift to Ethiopian clock (hr − 6) when the user has
+          // Shift to Ethiopian clock (hr âˆ’ 6) when the user has
           // selected the Ethiopian time system. This re-buckets
           // expenses into Ethiopian hours so the chart shows
-          // "9:00 ቀን" instead of "3:00 AM" etc.
+          // "9:00 á‰€áŠ•" instead of "3:00 AM" etc.
           const hr = timeSystem === 'ethiopian' ? ((hrRaw - 6) % 24 + 24) % 24 : hrRaw;
           if (h === '09' && hr < 10) return acc + r.value;
           if (h === '12' && hr >= 10 && hr < 13) return acc + r.value;
@@ -2117,7 +2544,7 @@ export const getExpenseChartData = (period: string, language: string = 'en', tar
         GROUP BY week_num
       `, [startStr, endStr]);
 
-      const weekPrefix: Record<string, string> = { en: 'Week', am: 'ሳምንት', om: 'Torban', ti: 'ሰሙን' };
+      const weekPrefix: Record<string, string> = { en: 'Week', am: 'áˆ³áˆáŠ•á‰µ', om: 'Torban', ti: 'áˆ°áˆ™áŠ•' };
       const prefix = weekPrefix[language] || 'Week';
       const numWeeks = Math.ceil(monthEnd.getDate() / 7);
       const weeks: { label: string, value: number }[] = [];
@@ -2173,9 +2600,8 @@ export const deleteItem = (id: number) => {
 };
 
 export const deleteSale = (id: number) => {
-  const database = getDB();
   try {
-    database.execSync('BEGIN TRANSACTION');
+    const database = getDB();
     const sale = database.getFirstSync<{ itemId: number, quantity: number, unitType: string }>('SELECT * FROM sales WHERE id = ?', [id]);
     
     if (sale) {
@@ -2191,20 +2617,49 @@ export const deleteSale = (id: number) => {
         packRefund = sale.quantity / item.unitsPerPack;
       }
 
-      database.runSync(`
+      database.execSync(`
         UPDATE items 
-        SET totalBaseQuantity = totalBaseQuantity + ?,
-            totalPackQuantity = totalPackQuantity + ?
-        WHERE id = ?
-      `, [baseRefund, packRefund, sale.itemId]);
+        SET totalBaseQuantity = totalBaseQuantity + ${baseRefund},
+            totalPackQuantity = totalPackQuantity + ${packRefund}
+        WHERE id = ${sale.itemId}
+      `);
     }
 
-    database.runSync('DELETE FROM sales WHERE id = ?', [id]);
-    database.execSync('COMMIT');
+    database.execSync(`DELETE FROM sales WHERE id = ${id}`);
     return true;
   } catch (error) {
     console.error('Delete sale error:', error);
-    try { database?.execSync('ROLLBACK'); } catch (_) {}
+    return false;
+  }
+};
+
+export const deleteSalesByBatchId = (batchId: string) => {
+  try {
+    const database = getDB();
+    const batchSales = database.getAllSync<{ id: number, itemId: number, quantity: number, unitType: string }>(
+      'SELECT * FROM sales WHERE batchId = ?', [batchId]
+    );
+    for (const sale of batchSales) {
+      const item = database.getFirstSync<{ unitsPerPack: number }>('SELECT unitsPerPack FROM items WHERE id = ?', [sale.itemId]);
+      let baseRefund = sale.quantity;
+      let packRefund = 0;
+      if (sale.unitType === 'pack' && item?.unitsPerPack) {
+        baseRefund = sale.quantity * item.unitsPerPack;
+        packRefund = sale.quantity;
+      } else if (item?.unitsPerPack) {
+        packRefund = sale.quantity / item.unitsPerPack;
+      }
+      database.execSync(`
+        UPDATE items 
+        SET totalBaseQuantity = totalBaseQuantity + ${baseRefund},
+            totalPackQuantity = totalPackQuantity + ${packRefund}
+        WHERE id = ${sale.itemId}
+      `);
+    }
+    database.execSync(`DELETE FROM sales WHERE batchId = '${batchId}'`);
+    return true;
+  } catch (error) {
+    console.error('Delete sales by batchId error:', error);
     return false;
   }
 };
@@ -2324,18 +2779,31 @@ export const getCapitalSummary = (period: string = 'this_month', targetDate?: st
       ORDER BY total DESC
     `, [startStr, endStr]);
 
-    // 4. Budget from user_version
-    const userVersion = database.getFirstSync<{ user_version: number }>('PRAGMA user_version');
-    let monthlyBudget = userVersion?.user_version || 50000;
-    if (monthlyBudget <= 0) monthlyBudget = 50000;
-
-    let budget = monthlyBudget;
-    if (period === 'today' || period === 'yesterday') {
-      budget = Math.round(monthlyBudget / 30);
-    } else if (period === 'this_week') {
-      budget = Math.round(monthlyBudget / 4);
-    } else if (period === 'this_year') {
-      budget = monthlyBudget * 12;
+    // 4. Budget from budgets table
+    let budget = 50000;
+    const year = d.getFullYear();
+    const month = d.getMonth() + 1;
+    const activeBudget = database.getFirstSync<any>(
+      `SELECT b.*, COALESCE(SUM(bc.plannedAmount), 0) as totalPlanned
+       FROM budgets b
+       LEFT JOIN budget_categories bc ON bc.budgetId = b.id
+       WHERE b.status = 'active'
+         AND (b.year = ? OR b.period = 'yearly')
+         AND (b.month = ? OR b.month IS NULL OR b.period != 'monthly')
+       GROUP BY b.id
+       ORDER BY b.year DESC, b.month DESC
+       LIMIT 1`,
+      [year, month]
+    );
+    if (activeBudget?.totalPlanned) {
+      budget = activeBudget.totalPlanned;
+      if (period === 'today' || period === 'yesterday') {
+        budget = Math.round(budget / 30);
+      } else if (period === 'this_week') {
+        budget = Math.round(budget / 4);
+      } else if (period === 'this_year') {
+        budget = budget * 12;
+      }
     }
 
     return {
@@ -2390,9 +2858,10 @@ export const updateSale = (id: number, updates: any) => {
   try {
     const database = getDB();
     const validColumns = [
-      'itemId', 'quantity', 'unit', 'unitType', 'discount', 'vat', 
+      'itemId', 'quantity', 'unit', 'unitType', 'discount', 'vat', 'taxType',
       'totalPrice', 'paymentMethod', 'paymentStatus', 
-      'customerName', 'customerPhone', 'packId', 'createdAt'
+      'customerName', 'customerPhone', 'packId', 'createdAt',
+      'batchId', 'orderNumber', 'notes', 'convertedAt', 'cancelledAt', 'dueDate'
     ];
     
     const filteredUpdates = Object.keys(updates)
@@ -2417,12 +2886,67 @@ export const updateSale = (id: number, updates: any) => {
   }
 };
 
+export const updateSaleItem = (id: number, updates: any) => {
+  try {
+    const database = getDB();
+    const old = database.getFirstSync<{ itemId: number, quantity: number, unitType: string }>('SELECT * FROM sales WHERE id = ?', [id]);
+    if (!old) return false;
+
+    const validColumns = [
+      'itemId', 'quantity', 'unit', 'unitType', 'discount', 'vat', 'taxType',
+      'totalPrice', 'paymentMethod', 'paymentStatus', 
+      'customerName', 'customerPhone', 'packId', 'createdAt',
+      'batchId', 'orderNumber', 'notes', 'convertedAt', 'cancelledAt', 'dueDate'
+    ];
+
+    const filteredUpdates = Object.keys(updates)
+      .filter(key => validColumns.includes(key) && updates[key] !== undefined)
+      .reduce((obj: any, key) => {
+        obj[key] = updates[key];
+        return obj;
+      }, {});
+
+    if (Object.keys(filteredUpdates).length === 0) return true;
+
+    // Adjust stock when quantity changes
+    const newQty = filteredUpdates.quantity !== undefined ? filteredUpdates.quantity : old.quantity;
+    if (newQty !== old.quantity) {
+      const diff = old.quantity - newQty; // positive = refund (return to stock), negative = more sold
+      const item = database.getFirstSync<{ unitsPerPack: number }>('SELECT unitsPerPack FROM items WHERE id = ?', [old.itemId]);
+      let baseQty = diff;
+      let packQty = 0;
+      if (old.unitType === 'pack' && item?.unitsPerPack) {
+        baseQty = diff * item.unitsPerPack;
+        packQty = diff;
+      } else if (item?.unitsPerPack) {
+        packQty = diff / item.unitsPerPack;
+      }
+      database.execSync(`
+        UPDATE items 
+        SET totalBaseQuantity = totalBaseQuantity + ${baseQty},
+            totalPackQuantity = totalPackQuantity + ${packQty}
+        WHERE id = ${old.itemId}
+      `);
+    }
+
+    const setQuery = Object.keys(filteredUpdates).map(k => `${k} = ?`).join(', ');
+    const values = Object.values(filteredUpdates);
+    const sql = `UPDATE sales SET ${setQuery} WHERE id = ?`;
+    database.runSync(sql, ...([...values, id] as any[]));
+    return true;
+  } catch (error) {
+    console.error('Update sale item error:', error);
+    return false;
+  }
+};
+
 export const updateExpense = (id: number, updates: any) => {
   try {
     const database = getDB();
     const validColumns = [
       'name', 'amount', 'category', 'date', 
-      'isRecurring', 'frequency', 'nextBillingDate', 'createdAt'
+      'isRecurring', 'frequency', 'nextBillingDate', 'createdAt',
+      'budgetCategoryId'
     ];
 
     const filteredUpdates = Object.keys(updates)
@@ -2448,27 +2972,32 @@ export const updateExpense = (id: number, updates: any) => {
 };
 
 export const clearDatabase = () => {
-  const database = getDB();
   try {
-    database.execSync('BEGIN TRANSACTION');
-    database.execSync('DELETE FROM adjustments;');
-    database.execSync('DELETE FROM sales;');
+    const database = getDB();
+    database.execSync('PRAGMA foreign_keys = OFF;');
+    database.execSync('DELETE FROM budget_adjustments;');
+    database.execSync('DELETE FROM budget_categories;');
+    database.execSync('DELETE FROM budgets;');
+    database.execSync('DELETE FROM recurring_expense_templates;');
+    database.execSync('DELETE FROM scheduled_reminders;');
+    database.execSync('DELETE FROM notifications;');
+    database.execSync('DELETE FROM notification_preferences;');
     database.execSync('DELETE FROM returns;');
     database.execSync('DELETE FROM debt_payments;');
-    database.execSync('DELETE FROM notifications;');
+    database.execSync('DELETE FROM adjustments;');
+    database.execSync('DELETE FROM sales;');
     database.execSync('DELETE FROM item_packs;');
     database.execSync('DELETE FROM items;');
     database.execSync('DELETE FROM expenses;');
     database.execSync('DELETE FROM categories;');
     database.execSync('DELETE FROM contacts;');
     database.execSync('DELETE FROM warehouses;');
-    database.execSync("DELETE FROM sqlite_sequence WHERE name IN ('adjustments','sales','returns','debt_payments','notifications','item_packs','items','expenses','categories','contacts','warehouses');");
-    database.execSync('COMMIT');
+    database.execSync("DELETE FROM sqlite_sequence;");
+    database.execSync('PRAGMA foreign_keys = ON;');
     console.log('Database cleared successfully.');
     return true;
   } catch (error) {
     console.error('Clear database error:', error);
-    try { database?.execSync('ROLLBACK'); } catch (_) {}
     return false;
   }
 };
@@ -2697,7 +3226,6 @@ export const getMovingItemsWithFilters = (
     const database = getDB();
     const now = new Date();
     let dateCondition = '';
-    const params: any[] = [];
 
     if (filter === 'today') {
       const todayStr = now.toISOString().split('T')[0];
@@ -2725,7 +3253,7 @@ export const getMovingItemsWithFilters = (
         FROM sales
         JOIN items ON sales.itemId = items.id
         LEFT JOIN categories ON items.categoryId = categories.id
-        WHERE 1=1 ${dateCondition}
+        WHERE 1=1 AND paymentStatus != 'Order' ${dateCondition}
         GROUP BY categories.name
         ORDER BY totalQty DESC
       `);
@@ -2747,7 +3275,7 @@ export const getMovingItemsWithFilters = (
       FROM items
       LEFT JOIN sales ON items.id = sales.itemId
       LEFT JOIN categories ON items.categoryId = categories.id
-      WHERE 1=1 ${dateCondition}
+      WHERE 1=1 AND paymentStatus != 'Order' ${dateCondition}
       GROUP BY items.id
       HAVING totalQty >= ? AND totalQty <= ?
       ${orderClause}
@@ -2869,13 +3397,13 @@ export const getSummaryMetricsByDateRange = (
     // Sales (Cash)
     const salesCash = database.getFirstSync<{ total: number }>(`
       SELECT COALESCE(SUM(totalPrice), 0) as total FROM sales 
-      WHERE date(createdAt) >= ? AND date(createdAt) <= ?
+      WHERE date(createdAt) >= ? AND date(createdAt) <= ? AND paymentStatus != 'Order'
     `, [startDate, endDate]);
 
     // Sales (Items count)
     const salesItems = database.getFirstSync<{ total: number }>(`
       SELECT COALESCE(SUM(quantity), 0) as total FROM sales 
-      WHERE date(createdAt) >= ? AND date(createdAt) <= ?
+      WHERE date(createdAt) >= ? AND date(createdAt) <= ? AND paymentStatus != 'Order'
     `, [startDate, endDate]);
 
     // Profit (Gross Profit = Revenue - COGS)
@@ -2883,7 +3411,7 @@ export const getSummaryMetricsByDateRange = (
       SELECT COALESCE(SUM(s.totalPrice - (s.quantity * (CASE WHEN s.unitType = 'pack' THEN i.packPurchasePrice ELSE i.basePurchasePrice END))), 0) as total
       FROM sales s
       JOIN items i ON s.itemId = i.id
-      WHERE date(s.createdAt) >= ? AND date(s.createdAt) <= ?
+      WHERE date(s.createdAt) >= ? AND date(s.createdAt) <= ? AND paymentStatus != 'Order'
     `, [startDate, endDate]);
 
     // Expenses
@@ -3081,6 +3609,54 @@ export const getRecentSales = (limit: number = 20) => {
   }
 };
 
+export const getRecentSalesGrouped = (limit: number = 20) => {
+  try {
+    const database = getDB();
+    const sales = database.getAllSync(`
+      SELECT sales.*, items.name as itemName, items.baseUnit 
+      FROM sales 
+      LEFT JOIN items ON sales.itemId = items.id 
+      ORDER BY sales.createdAt DESC 
+      LIMIT ?
+    `, [limit]);
+    
+    const groups = new Map<string, any[]>();
+    const standalone: any[] = [];
+    
+    for (const sale of sales as any[]) {
+      if (sale.batchId) {
+        if (!groups.has(sale.batchId)) groups.set(sale.batchId, []);
+        groups.get(sale.batchId)!.push(sale);
+      } else {
+        standalone.push(sale);
+      }
+    }
+    
+    const result: any[] = [];
+    for (const [batchId, items] of groups) {
+      result.push({
+        isBatch: true,
+        batchId,
+        items,
+        totalPrice: items.reduce((sum: number, s: any) => sum + (s.totalPrice || 0), 0),
+        itemCount: items.length,
+        paymentMethod: items[0]?.paymentMethod,
+        paymentStatus: items[0]?.paymentStatus,
+        customerName: items[0]?.customerName,
+        createdAt: items[0]?.createdAt,
+        firstItemName: items[0]?.itemName,
+      });
+    }
+    
+    return [...result, ...standalone]
+      .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, limit);
+  } catch (error) {
+    console.error('Get recent sales grouped error:', error);
+    return [];
+  }
+};
+
 export const getRecentItems = (limit: number = 10) => {
   try {
     const database = getDB();
@@ -3190,7 +3766,7 @@ export const getCustomerActivity = (customerName?: string) => {
         SUM(totalPrice) AS totalSpent,
         MAX(createdAt)  AS lastVisit
       FROM sales
-      WHERE customerName IS NOT NULL AND customerName != ''
+      WHERE customerName IS NOT NULL AND customerName != '' AND paymentStatus != 'Order'
       GROUP BY customerName
       ORDER BY lastVisit DESC
     `);
@@ -3216,6 +3792,8 @@ export const getPaymentMethodBreakdown = (startDate?: string, endDate?: string) 
       params.push(endDate);
     }
 
+    conditions.push("paymentStatus != 'Order'");
+
     if (conditions.length > 0) {
       query += ' WHERE ' + conditions.join(' AND ');
     }
@@ -3232,7 +3810,7 @@ export const getPeakSalesHoursByItem = (itemId?: number) => {
   try {
     const database = getDB();
     const today = new Date().toISOString().split('T')[0];
-    let query = `SELECT strftime('%H', createdAt) as hour, COUNT(*) as count, SUM(quantity) as totalQty FROM sales WHERE date(createdAt) = ?`;
+    let query = `SELECT strftime('%H', datetime(createdAt, 'localtime')) as hour, COUNT(*) as count, SUM(quantity) as totalQty FROM sales WHERE date(createdAt) = ? AND paymentStatus != 'Order'`;
     const params: any[] = [today];
     
     if (itemId) {
@@ -3341,21 +3919,51 @@ export const getWarehouseStats = (id: number) => {
   }
 };
 
-export const processIndividualPayment = (saleId: number, amount: number) => {
+export const processIndividualPayment = (saleId: number, amount: number, paymentMethod?: string) => {
   try {
     const database = getDB();
-    const sale = database.getFirstSync<{ totalPrice: number, paidAmount: number }>(
-      'SELECT totalPrice, paidAmount FROM sales WHERE id = ?', [saleId]
+    const sale = database.getFirstSync<{ totalPrice: number, paidAmount: number, itemId: number, unit: string, unitType: string, customerName: string, customerPhone: string }>(
+      'SELECT totalPrice, paidAmount, itemId, unit, unitType, customerName, customerPhone FROM sales WHERE id = ?', [saleId]
     );
     if (!sale) return false;
 
     const newPaid = (sale.paidAmount || 0) + amount;
     const newStatus = newPaid >= sale.totalPrice ? 'Paid' : 'Debt';
 
-    database.runSync(
-      'UPDATE sales SET paidAmount = ?, paymentStatus = ? WHERE id = ?',
-      [newPaid, newStatus, saleId]
-    );
+    if (paymentMethod) {
+      database.runSync(
+        'UPDATE sales SET paidAmount = ?, paymentStatus = ?, paymentMethod = ? WHERE id = ?',
+        [newPaid, newStatus, paymentMethod, saleId]
+      );
+    } else {
+      database.runSync(
+        'UPDATE sales SET paidAmount = ?, paymentStatus = ? WHERE id = ?',
+        [newPaid, newStatus, saleId]
+      );
+    }
+
+    // Create a payment record in sales so it appears in activity feed
+    try {
+      const batchId = 'PAY_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+      database.runSync(
+        `INSERT INTO sales (itemId, quantity, unit, unitType, discount, vat, totalPrice, paymentMethod, paymentStatus, customerName, customerPhone, batchId, createdAt)
+         VALUES (?, 1, ?, ?, 0, 0, ?, ?, 'Paid', ?, ?, ?, ?)`,
+        [
+          sale.itemId ?? 1,
+          sale.unit || 'pcs',
+          sale.unitType || 'base',
+          -Math.abs(amount),
+          paymentMethod || 'Cash',
+          sale.customerName,
+          sale.customerPhone ?? null,
+          batchId,
+          new Date().toISOString(),
+        ]
+      );
+    } catch (e) {
+      console.error('Create individual payment record error:', e);
+    }
+
     return true;
   } catch (error) {
     console.error('Process individual payment error:', error);
@@ -3538,9 +4146,7 @@ export const getSuppliers = () => {
   }
 };
 
-const getMovingItemsWithFiltersFix = getMovingItemsWithFilters;
-
-// ── getSalesGroupedByDateRange ──────────────────────────────────────────────
+// →→ getSalesGroupedByDateRange →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
 // Returns sales rows with extra computed columns used by SalesRecordScreen
 // to group them by day-of-week, week-number, or month-number.
 export const getSalesGroupedByDateRange = (
@@ -3578,7 +4184,7 @@ export const getSalesGroupedByDateRange = (
       whereClause = `WHERE strftime('%Y', s.createdAt) = '${yr}'`;
     }
 
-    return database.getAllSync(`
+    const rows = database.getAllSync(`
       SELECT
         s.*,
         i.name                                    AS itemName,
@@ -3592,13 +4198,54 @@ export const getSalesGroupedByDateRange = (
       ${whereClause}
       ORDER BY s.createdAt DESC
     `);
+
+    const groups = new Map<string, any[]>();
+    const standalone: any[] = [];
+
+    for (const row of rows as any[]) {
+      if (row.batchId) {
+        if (!groups.has(row.batchId)) groups.set(row.batchId, []);
+        groups.get(row.batchId)!.push(row);
+      } else {
+        standalone.push(row);
+      }
+    }
+
+    const result: any[] = [];
+    for (const [batchId, items] of groups) {
+      const first = items[0];
+      result.push({
+        isBatch: true,
+        batchId,
+        items,
+        totalPrice: items.reduce((sum, s) => sum + (s.totalPrice || 0), 0),
+        quantity: items.length,
+        itemName: items.length > 1
+          ? items[0]?.itemName + ' +' + (items.length - 1) + ' more'
+          : items[0]?.itemName,
+        customerName: first?.customerName,
+        paymentMethod: first?.paymentMethod,
+        paymentStatus: first?.paymentStatus,
+        discount: first?.discount,
+        vat: first?.vat,
+        taxType: first?.taxType,
+        createdAt: first?.createdAt,
+        timeStr: first?.timeStr,
+        dayOfWeek: first?.dayOfWeek,
+        weekNum: first?.weekNum,
+        monthNum: first?.monthNum,
+      });
+    }
+
+    return [...result, ...standalone]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   } catch (error) {
     console.error('getSalesGroupedByDateRange error:', error);
     return [];
   }
 };
 
-// ── getPaidOutstandingSummary ───────────────────────────────────────────────
+// →→ getPaidOutstandingSummary →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
 // Returns count + total for Paid vs Debt sales, filtered by period/date range.
 export const getPaidOutstandingSummary = (
   period: 'today' | 'yesterday' | 'date' | 'week' | 'month' | 'year' = 'today',
@@ -3679,40 +4326,17 @@ export const insertPack = (data: { itemId: number; packNumber: number; quantity:
 };;
 
 export const insertReturn = (data: { saleId: number; itemId: number; quantity: number; unit: string; unitType: string; totalRefund: number; reason: string; createdAt: string }) => {
-  const database = getDB();
   try {
-    database.execSync('BEGIN TRANSACTION');
-    const item = database.getFirstSync<{ unitsPerPack: number }>('SELECT unitsPerPack FROM items WHERE id = ?', [data.itemId]);
-
-    let baseRefund = data.quantity;
-    let packRefund = 0;
-
-    if (data.unitType === 'pack' && item?.unitsPerPack) {
-      baseRefund = data.quantity * item.unitsPerPack;
-      packRefund = data.quantity;
-    } else if (item?.unitsPerPack) {
-      packRefund = data.quantity / item.unitsPerPack;
-    }
-
-    database.runSync(`
-      UPDATE items
-      SET totalBaseQuantity = totalBaseQuantity + ?,
-          totalPackQuantity = totalPackQuantity + ?
-      WHERE id = ?
-    `, [baseRefund, packRefund, data.itemId]);
-
-    const result = database.prepareSync(`
+    const database = getDB();
+    return database.prepareSync(`
       INSERT INTO returns (saleId, itemId, quantity, unit, unitType, totalRefund, reason, createdAt)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).executeSync([data.saleId, data.itemId, data.quantity, data.unit, data.unitType, data.totalRefund, data.reason, data.createdAt]);
-    database.execSync('COMMIT');
-    return result.lastInsertRowId;
+    `).executeSync([data.saleId, data.itemId, data.quantity, data.unit, data.unitType, data.totalRefund, data.reason, data.createdAt]) as any;
   } catch (error) {
     console.error('Insert return error:', error);
-    try { database?.execSync('ROLLBACK'); } catch (_) {}
     return null;
   }
-};
+};;
 
 export const getAdjustmentById = (id: number) => {
   try {
@@ -3759,6 +4383,347 @@ export const searchInventory = (query: string) => {
     return [];
   }
 };
+
+// →→ Order Functions →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
+
+let _orderCounter = 0;
+const getNextOrderNumber = (): string => {
+  _orderCounter += 1;
+  const ts = Date.now().toString(36).toUpperCase().slice(-4);
+  return `ORD-${ts}-${String(_orderCounter).padStart(3, '0')}`;
+};
+
+export const insertOrder = (data: {
+  customerName?: string;
+  customerPhone?: string;
+  notes?: string;
+  items: { itemId?: number; itemName: string; quantity: number; unitType: string; unit?: string; price: number }[];
+}) => {
+  try {
+    const database = getDB();
+    const batchId = Date.now().toString() + '_' + Math.random().toString(36).substring(2, 8);
+    const orderNumber = getNextOrderNumber();
+    const now = new Date().toISOString();
+
+    for (const item of data.items) {
+      const totalPrice = item.price * item.quantity;
+      database.runSync(
+        `INSERT INTO sales (itemId, quantity, unit, unitType, discount, vat, totalPrice, paymentMethod, paymentStatus, customerName, customerPhone, batchId, orderNumber, notes, createdAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        item.itemId || null,
+        item.quantity,
+        item.unit || 'pcs',
+        item.unitType || 'base',
+        0, 0, totalPrice, null, 'Order',
+        data.customerName || null,
+        data.customerPhone || null,
+        batchId, orderNumber, data.notes || null, now
+      );
+    }
+    return batchId;
+  } catch (error) {
+    console.error('Insert order error:', error);
+    return null;
+  }
+};
+
+export const getOrders = (statusFilter?: string) => {
+  try {
+    const database = getDB();
+    let whereClause = `WHERE s.paymentStatus IN ('Order', 'Sale', 'Debt', 'Cancelled')`;
+    if (statusFilter) {
+      whereClause = `WHERE s.paymentStatus = '${statusFilter}'`;
+    }
+
+    const rows = database.getAllSync(`
+      SELECT
+        s.batchId,
+        s.orderNumber,
+        s.paymentStatus as status,
+        s.customerName,
+        s.customerPhone,
+        s.notes,
+        s.createdAt,
+        s.convertedAt,
+        s.cancelledAt,
+        COALESCE(SUM(s.totalPrice), 0) as totalPrice,
+        COUNT(*) as itemCount,
+        GROUP_CONCAT(s.id) as saleIds,
+        GROUP_CONCAT(COALESCE(i.name, 'Unknown')) as itemNames,
+        GROUP_CONCAT(s.quantity) as quantities,
+        GROUP_CONCAT(s.unit) as units,
+        MIN(s.id) as firstId
+      FROM sales s
+      LEFT JOIN items i ON s.itemId = i.id
+      ${whereClause}
+      GROUP BY s.batchId
+      ORDER BY MAX(s.createdAt) DESC
+    `);
+
+    return rows.map((r: any) => {
+      const saleIds = (r.saleIds || '').split(',').map(Number);
+      const names = (r.itemNames || '').split(',');
+      const qties = (r.quantities || '').split(',').map(Number);
+      const unitList = (r.units || '').split(',');
+
+      const items = saleIds.map((id: number, idx: number) => ({
+        id,
+        itemName: names[idx] || 'Unknown',
+        quantity: qties[idx] || 0,
+        unit: unitList[idx] || 'pcs',
+        price: 0,
+        totalPrice: 0,
+      }));
+
+      return {
+        id: r.firstId,
+        batchId: r.batchId,
+        orderNumber: r.orderNumber,
+        status: r.status,
+        customerName: r.customerName,
+        customerPhone: r.customerPhone,
+        notes: r.notes,
+        totalPrice: r.totalPrice,
+        itemCount: r.itemCount,
+        items,
+        createdAt: r.createdAt,
+        convertedAt: r.convertedAt,
+        cancelledAt: r.cancelledAt,
+      };
+    });
+  } catch (error) {
+    console.error('Get orders error:', error);
+    return [];
+  }
+};
+
+export const getOrderSummary = () => {
+  try {
+    const database = getDB();
+    const active = database.getFirstSync<{ count: number }>(
+      `SELECT COUNT(DISTINCT batchId) as count FROM sales WHERE paymentStatus = 'Order'`
+    );
+    const converted = database.getFirstSync<{ count: number }>(
+      `SELECT COUNT(DISTINCT batchId) as count FROM sales WHERE paymentStatus IN ('Sale', 'Debt')`
+    );
+    const cancelled = database.getFirstSync<{ count: number }>(
+      `SELECT COUNT(DISTINCT batchId) as count FROM sales WHERE paymentStatus = 'Cancelled'`
+    );
+    return {
+      active: active?.count || 0,
+      converted: converted?.count || 0,
+      cancelled: cancelled?.count || 0,
+    };
+  } catch (error) {
+    console.error('Get order summary error:', error);
+    return null;
+  }
+};
+
+export const getOrderById = (id: number) => {
+  try {
+    const database = getDB();
+    const first = database.getFirstSync(`
+      SELECT s.*, i.name as itemName
+      FROM sales s
+      LEFT JOIN items i ON s.itemId = i.id
+      WHERE s.id = ?
+    `, [id]);
+    if (!first) return null;
+
+    const bId = (first as any).batchId;
+    let items: any[];
+    if (bId) {
+      items = database.getAllSync(`
+        SELECT s.id, s.quantity, s.unit, s.unitType, s.totalPrice, s.discount, s.vat,
+               COALESCE(i.name, 'Unknown') as itemName
+        FROM sales s
+        LEFT JOIN items i ON s.itemId = i.id
+        WHERE s.batchId = ?
+        ORDER BY s.id ASC
+      `, [bId]);
+    } else {
+      items = [{
+        id: (first as any).id,
+        quantity: (first as any).quantity,
+        unit: (first as any).unit,
+        unitType: (first as any).unitType,
+        totalPrice: (first as any).totalPrice,
+        discount: (first as any).discount,
+        vat: (first as any).vat,
+        itemName: (first as any).itemName,
+      }];
+    }
+
+    return {
+      id: (first as any).id,
+      batchId: bId,
+      orderNumber: (first as any).orderNumber,
+      status: (first as any).paymentStatus,
+      customerName: (first as any).customerName,
+      customerPhone: (first as any).customerPhone,
+      notes: (first as any).notes,
+      totalPrice: items.reduce((sum: number, it: any) => sum + (it.totalPrice || 0), 0),
+      items: items.map((it: any) => ({
+        id: it.id,
+        itemName: it.itemName,
+        quantity: it.quantity,
+        unit: it.unit,
+        price: it.totalPrice / (it.quantity || 1),
+        totalPrice: it.totalPrice,
+      })),
+      createdAt: (first as any).createdAt,
+      convertedAt: (first as any).convertedAt,
+      cancelledAt: (first as any).cancelledAt,
+    };
+  } catch (error) {
+    console.error('Get order by ID error:', error);
+    return null;
+  }
+};
+
+export const convertOrderToSale = (idOrBatchId: number | string): { success: boolean; error?: string } => {
+  try {
+    const database = getDB();
+    let order: any;
+    let targetBatchId: string | null;
+
+    if (typeof idOrBatchId === 'string') {
+      targetBatchId = idOrBatchId;
+      order = database.getFirstSync<any>('SELECT * FROM sales WHERE batchId = ? AND paymentStatus = ? LIMIT 1', [targetBatchId, 'Order']);
+    } else {
+      order = database.getFirstSync<any>('SELECT * FROM sales WHERE id = ?', [idOrBatchId]);
+      targetBatchId = order?.batchId || null;
+    }
+    if (!order) return { success: false, error: 'Order not found' };
+    if (order.paymentStatus !== 'Order') return { success: false, error: 'Order is not active' };
+
+    const now = new Date().toISOString();
+    if (targetBatchId) {
+      database.runSync(
+        `UPDATE sales SET paymentStatus = 'Paid', convertedAt = ? WHERE batchId = ? AND paymentStatus = 'Order'`,
+        [now, targetBatchId]
+      );
+      const items = database.getAllSync<any>('SELECT * FROM sales WHERE batchId = ?', [targetBatchId]);
+      for (const item of items) {
+        const invItem = database.getFirstSync<any>('SELECT * FROM items WHERE id = ?', [item.itemId]);
+        if (invItem) {
+          let baseQty = item.quantity;
+          let packQty = 0;
+          if (item.unitType === 'pack' && invItem.unitsPerPack) {
+            baseQty = item.quantity * invItem.unitsPerPack;
+            packQty = item.quantity;
+          }
+          database.execSync(`
+            UPDATE items
+            SET totalBaseQuantity = totalBaseQuantity - ${baseQty},
+                totalPackQuantity = totalPackQuantity - ${packQty}
+            WHERE id = ${item.itemId}
+          `);
+        }
+      }
+    } else {
+      database.runSync(
+        `UPDATE sales SET paymentStatus = 'Paid', convertedAt = ? WHERE id = ?`,
+        [now, order.id]
+      );
+      const invItem = database.getFirstSync<any>('SELECT * FROM items WHERE id = ?', [order.itemId]);
+      if (invItem) {
+        let baseQty = order.quantity;
+        let packQty = 0;
+        if (order.unitType === 'pack' && invItem.unitsPerPack) {
+          baseQty = order.quantity * invItem.unitsPerPack;
+          packQty = order.quantity;
+        }
+        database.execSync(`
+          UPDATE items
+          SET totalBaseQuantity = totalBaseQuantity - ${baseQty},
+              totalPackQuantity = totalPackQuantity - ${packQty}
+          WHERE id = ${order.itemId}
+        `);
+      }
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Convert order to sale error:', error);
+    return { success: false, error: String(error) };
+  }
+};
+
+export const convertOrderToDebt = (idOrBatchId: number | string): { success: boolean; error?: string } => {
+  try {
+    const database = getDB();
+    let order: any;
+    let targetBatchId: string | null;
+
+    if (typeof idOrBatchId === 'string') {
+      targetBatchId = idOrBatchId;
+      order = database.getFirstSync<any>('SELECT * FROM sales WHERE batchId = ? AND paymentStatus = ? LIMIT 1', [targetBatchId, 'Order']);
+    } else {
+      order = database.getFirstSync<any>('SELECT * FROM sales WHERE id = ?', [idOrBatchId]);
+      targetBatchId = order?.batchId || null;
+    }
+    if (!order) return { success: false, error: 'Order not found' };
+    if (order.paymentStatus !== 'Order') return { success: false, error: 'Order is not active' };
+
+    const now = new Date().toISOString();
+    const dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    if (targetBatchId) {
+      database.runSync(
+        `UPDATE sales SET paymentStatus = 'Debt', convertedAt = ?, dueDate = ? WHERE batchId = ? AND paymentStatus = 'Order'`,
+        [now, dueDate, targetBatchId]
+      );
+    } else {
+      database.runSync(
+        `UPDATE sales SET paymentStatus = 'Debt', convertedAt = ?, dueDate = ? WHERE id = ?`,
+        [now, dueDate, order.id]
+      );
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Convert order to debt error:', error);
+    return { success: false, error: String(error) };
+  }
+};
+
+export const cancelOrder = (idOrBatchId: number | string): { success: boolean; error?: string } => {
+  try {
+    const database = getDB();
+    let order: any;
+    let targetBatchId: string | null;
+
+    if (typeof idOrBatchId === 'string') {
+      targetBatchId = idOrBatchId;
+      order = database.getFirstSync<any>('SELECT * FROM sales WHERE batchId = ? AND paymentStatus = ? LIMIT 1', [targetBatchId, 'Order']);
+    } else {
+      order = database.getFirstSync<any>('SELECT * FROM sales WHERE id = ?', [idOrBatchId]);
+      targetBatchId = order?.batchId || null;
+    }
+    if (!order) return { success: false, error: 'Order not found' };
+    if (order.paymentStatus !== 'Order') return { success: false, error: 'Order is not active' };
+
+    const now = new Date().toISOString();
+    if (targetBatchId) {
+      database.runSync(
+        `UPDATE sales SET paymentStatus = 'Cancelled', cancelledAt = ? WHERE batchId = ? AND paymentStatus = 'Order'`,
+        [now, targetBatchId]
+      );
+    } else {
+      database.runSync(
+        `UPDATE sales SET paymentStatus = 'Cancelled', cancelledAt = ? WHERE id = ?`,
+        [now, order.id]
+      );
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Cancel order error:', error);
+    return { success: false, error: String(error) };
+  }
+};
+
 export const getLatestItemsByPeriod = (period: 'today' | 'yesterday' | 'date' | 'week' | 'month' | 'year', targetDate?: string, offset?: number) => {
   try {
     const database = getDB();
@@ -3811,91 +4776,1035 @@ export const getLatestItemsByPeriod = (period: 'today' | 'yesterday' | 'date' | 
   }
 };
 
-export const getReorderSuggestions = () => {
+// →→ Budget Functions →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
+
+export const DEFAULT_BUDGET_CATEGORIES = [
+  'employee_salaries_labor',
+  'rent',
+  'utilities_electricity_water_internet',
+  'inventory_purchases',
+  'marketing_advertising',
+];
+
+export const insertBudget = (data: {
+  name: string;
+  type: 'business' | 'department' | 'project' | 'branch';
+  period: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+  year: number;
+  month?: number;
+  quarter?: number;
+  notes?: string;
+}) => {
   try {
     const database = getDB();
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
+    const result = database.runSync(
+      `INSERT INTO budgets (name, type, period, year, month, quarter, notes) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      data.name,
+      data.type,
+      data.period,
+      data.year,
+      data.month || null,
+      data.quarter || null,
+      data.notes || null
+    );
+    return result.lastInsertRowId;
+  } catch (error) {
+    console.error('Insert budget error:', error);
+    return null;
+  }
+};
+
+export const updateBudget = (id: number, data: {
+  name?: string;
+  notes?: string;
+  status?: 'active' | 'archived' | 'closed';
+}) => {
+  try {
+    const database = getDB();
+    const updates: string[] = [];
+    const params: any[] = [];
+    if (data.name !== undefined) { updates.push('name = ?'); params.push(data.name); }
+    if (data.notes !== undefined) { updates.push('notes = ?'); params.push(data.notes); }
+    if (data.status !== undefined) { updates.push('status = ?'); params.push(data.status); }
+    updates.push("updatedAt = datetime('now')");
+    params.push(id);
+    if (updates.length > 1) {
+      database.runSync(`UPDATE budgets SET ${updates.join(', ')} WHERE id = ?`, ...params);
+    }
+    return true;
+  } catch (error) {
+    console.error('Update budget error:', error);
+    return false;
+  }
+};
+
+export const getBudgets = (filters?: {
+  type?: string;
+  period?: string;
+  year?: number;
+  month?: number;
+  status?: string;
+}) => {
+  try {
+    const database = getDB();
+    const conditions: string[] = [];
+    const params: any[] = [];
+    if (filters?.type) { conditions.push('b.type = ?'); params.push(filters.type); }
+    if (filters?.period) { conditions.push('b.period = ?'); params.push(filters.period); }
+    if (filters?.year) { conditions.push('b.year = ?'); params.push(filters.year); }
+    if (filters?.month) { conditions.push('b.month = ?'); params.push(filters.month); }
+    if (filters?.status) { conditions.push('b.status = ?'); params.push(filters.status); }
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
     return database.getAllSync(`
       SELECT
-        i.id, i.name, i.totalBaseQuantity, i.baseUnit, i.baseSellingPrice,
-        i.packSellingPrice, i.warehouseId, i.unitsPerPack,
-        COALESCE(s.sales30d, 0) as sales30d,
-        CASE
-          WHEN COALESCE(s.sales30d, 0) > 0
-          THEN MAX(10, CAST(ROUND(COALESCE(s.sales30d, 0) * 2 - i.totalBaseQuantity) AS INTEGER))
-          ELSE MAX(10, CAST(ROUND(10 - i.totalBaseQuantity) AS INTEGER))
-        END as suggestedQty
-      FROM items i
-      LEFT JOIN (
-        SELECT s.itemId,
-          SUM(CASE WHEN s.unitType = 'pack' THEN s.quantity * COALESCE(i2.unitsPerPack, 1) ELSE s.quantity END) as sales30d
-        FROM sales s
-        LEFT JOIN items i2 ON s.itemId = i2.id
-        WHERE s.createdAt >= ?
-        GROUP BY s.itemId
-      ) s ON i.id = s.itemId
-      WHERE i.totalBaseQuantity < 10
-         OR (COALESCE(s.sales30d, 0) > 0 AND i.totalBaseQuantity < COALESCE(s.sales30d, 0) * 0.5)
-      ORDER BY i.totalBaseQuantity ASC, s.sales30d DESC
-    `, [thirtyDaysAgo]);
+        b.*,
+        COALESCE(SUM(bc.plannedAmount), 0) as totalPlanned,
+        COALESCE((
+          SELECT SUM(e.amount) FROM expenses e
+          JOIN budget_categories bc2 ON e.budgetCategoryId = bc2.id
+          WHERE bc2.budgetId = b.id AND e.date >= date('now', '-1 year')
+        ), 0) as totalActual
+      FROM budgets b
+      LEFT JOIN budget_categories bc ON bc.budgetId = b.id
+      ${where}
+      GROUP BY b.id
+      ORDER BY b.year DESC, COALESCE(b.month, 0) DESC, b.createdAt DESC
+    `, params);
   } catch (error) {
-    console.error('Get reorder suggestions error:', error);
+    console.error('Get budgets error:', error);
     return [];
   }
 };
 
-export const transferStock = (
-  fromWarehouseId: number,
-  toWarehouseId: number,
-  transfers: { itemId: number; quantity: number }[]
-) => {
-  const database = getDB();
+export const getBudgetById = (id: number) => {
   try {
-    database.execSync('BEGIN TRANSACTION');
-    for (const t of transfers) {
-      const source = database.getFirstSync<{
-        name: string; totalBaseQuantity: number; totalPackQuantity: number;
-        unitsPerPack: number; baseUnit: string; purchaseUnit: string;
-        basePurchasePrice: number; packPurchasePrice: number;
-        baseSellingPrice: number; packSellingPrice: number;
-        categoryId: number | null; companyName: string;
-        expiryDate: string | null; qualityGrade: string; notes: string;
-        isCredit: number; supplierPhone: string | null; supplierAccount: string | null;
-        allowSellByBaseUnit: number; allowSellByPackUnit: number
-      }>(
-        'SELECT * FROM items WHERE id = ? AND warehouseId = ?', [t.itemId, fromWarehouseId]
-      );
-      if (!source) { database.execSync('ROLLBACK'); return false; }
-      if (source.totalBaseQuantity < t.quantity) { database.execSync('ROLLBACK'); return false; }
+    const database = getDB();
+    const budget = database.getFirstSync<any>('SELECT * FROM budgets WHERE id = ?', [id]);
+    if (!budget) return null;
 
-      const packQty = source.unitsPerPack > 0 ? t.quantity / source.unitsPerPack : 0;
-      database.runSync(
-        'UPDATE items SET totalBaseQuantity = totalBaseQuantity - ?, totalPackQuantity = MAX(0, totalPackQuantity - ?) WHERE id = ?',
-        [t.quantity, packQty, t.itemId]
-      );
+    const categories = database.getAllSync(`
+      SELECT
+        bc.*,
+        COALESCE((
+          SELECT SUM(e.amount) FROM expenses e
+          WHERE e.budgetCategoryId = bc.id
+            AND e.date >= date('now', '-1 year')
+        ), 0) as actualAmount,
+        COALESCE((
+          SELECT COUNT(*) FROM budget_adjustments ba
+          WHERE ba.budgetCategoryId = bc.id
+        ), 0) as adjustmentCount
+      FROM budget_categories bc
+      WHERE bc.budgetId = ?
+      ORDER BY bc.category ASC
+    `, [id]);
 
-      const dest = database.getFirstSync<{ id: number }>(
-        'SELECT id FROM items WHERE name = ? AND warehouseId = ?', [source.name, toWarehouseId]
-      );
+    const totalPlanned = categories.reduce((s: number, c: any) => s + c.plannedAmount, 0);
+    const totalActual = categories.reduce((s: number, c: any) => s + c.actualAmount, 0);
 
-      if (dest) {
-        database.runSync(
-          'UPDATE items SET totalBaseQuantity = totalBaseQuantity + ?, totalPackQuantity = totalPackQuantity + ? WHERE id = ?',
-          [t.quantity, packQty, dest.id]
-        );
-      } else {
-        database.runSync(
-          `INSERT INTO items (name, categoryId, companyName, purchaseUnit, baseUnit, unitsPerPack, totalPackQuantity, totalBaseQuantity, packPurchasePrice, basePurchasePrice, baseSellingPrice, packSellingPrice, allowSellByBaseUnit, allowSellByPackUnit, expiryDate, qualityGrade, notes, isCredit, supplierPhone, supplierAccount, warehouseId)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [source.name, source.categoryId, source.companyName, source.purchaseUnit, source.baseUnit, source.unitsPerPack, packQty, t.quantity, source.packPurchasePrice, source.basePurchasePrice, source.baseSellingPrice, source.packSellingPrice, source.allowSellByBaseUnit, source.allowSellByPackUnit, source.expiryDate, source.qualityGrade, source.notes, source.isCredit, source.supplierPhone, source.supplierAccount, toWarehouseId]
-        );
-      }
+    return { ...budget, categories, totalPlanned, totalActual, remaining: totalPlanned - totalActual };
+  } catch (error) {
+    console.error('Get budget by ID error:', error);
+    return null;
+  }
+};
+
+export const deleteBudget = (id: number) => {
+  try {
+    const database = getDB();
+    const catIds = database.getAllSync<any>('SELECT id FROM budget_categories WHERE budgetId = ?', [id]);
+    const ids = catIds.map((c: any) => c.id);
+    if (ids.length > 0) {
+      const ph = ids.map(() => '?').join(',');
+      database.runSync(`UPDATE expenses SET budgetCategoryId = NULL WHERE budgetCategoryId IN (${ph})`, ...ids);
+      database.runSync(`UPDATE recurring_expense_templates SET budgetCategoryId = NULL WHERE budgetCategoryId IN (${ph})`, ...ids);
+      database.runSync(`DELETE FROM budget_adjustments WHERE budgetCategoryId IN (${ph})`, ...ids);
+      database.runSync(`DELETE FROM budget_categories WHERE id IN (${ph})`, ...ids);
     }
-    database.execSync('COMMIT');
+    database.runSync('DELETE FROM budgets WHERE id = ?', [id]);
     return true;
   } catch (error) {
-    console.error('Transfer stock error:', error);
-    try { database?.execSync('ROLLBACK'); } catch (_) {}
+    console.error('Delete budget error:', error);
     return false;
+  }
+};
+
+export const insertBudgetCategory = (budgetId: number, data: {
+  category: string;
+  plannedAmount: number;
+  notes?: string;
+}) => {
+  try {
+    const database = getDB();
+    const result = database.runSync(
+      `INSERT INTO budget_categories (budgetId, category, plannedAmount, notes) VALUES (?, ?, ?, ?)`,
+      budgetId, data.category, data.plannedAmount, data.notes || null
+    );
+    return result.lastInsertRowId;
+  } catch (error) {
+    console.error('Insert budget category error:', error);
+    return null;
+  }
+};
+
+export const updateBudgetCategory = (id: number, data: {
+  plannedAmount?: number;
+  notes?: string;
+}) => {
+  try {
+    const database = getDB();
+    const updates: string[] = [];
+    const params: any[] = [];
+    if (data.plannedAmount !== undefined) { updates.push('plannedAmount = ?'); params.push(data.plannedAmount); }
+    if (data.notes !== undefined) { updates.push('notes = ?'); params.push(data.notes); }
+    params.push(id);
+    if (updates.length > 0) {
+      database.runSync(`UPDATE budget_categories SET ${updates.join(', ')} WHERE id = ?`, ...params);
+    }
+    return true;
+  } catch (error) {
+    console.error('Update budget category error:', error);
+    return false;
+  }
+};
+
+export const deleteBudgetCategory = (id: number) => {
+  try {
+    const database = getDB();
+    database.runSync('DELETE FROM budget_categories WHERE id = ?', [id]);
+    return true;
+  } catch (error) {
+    console.error('Delete budget category error:', error);
+    return false;
+  }
+};
+
+export const getBudgetDashboard = () => {
+  try {
+    const database = getDB();
+    const activeBudgets = database.getAllSync<any>(`
+      SELECT b.*,
+        COALESCE(SUM(bc.plannedAmount), 0) as totalPlanned,
+        COALESCE((
+          SELECT SUM(e.amount) FROM expenses e
+          JOIN budget_categories bc3 ON e.budgetCategoryId = bc3.id
+          WHERE bc3.budgetId = b.id
+        ), 0) as totalActual
+      FROM budgets b
+      LEFT JOIN budget_categories bc ON bc.budgetId = b.id
+      WHERE b.status = 'active'
+      GROUP BY b.id
+      ORDER BY b.createdAt DESC
+    `);
+
+    const totalBudget = activeBudgets.reduce((s: number, b: any) => s + (b.totalPlanned || 0), 0);
+    const totalSpent = activeBudgets.reduce((s: number, b: any) => s + (b.totalActual || 0), 0);
+    const remaining = totalBudget - totalSpent;
+    const healthScore = totalBudget > 0 ? Math.max(0, Math.min(100, Math.round((1 - totalSpent / totalBudget) * 100))) : 100;
+
+    // Top spending categories across all active budgets
+    const topCategories = database.getAllSync(`
+      SELECT bc.category, SUM(e.amount) as spent, SUM(bc.plannedAmount) as planned
+      FROM expenses e
+      JOIN budget_categories bc ON e.budgetCategoryId = bc.id
+      JOIN budgets b ON bc.budgetId = b.id
+      WHERE b.status = 'active'
+      GROUP BY bc.category
+      ORDER BY spent DESC
+      LIMIT 5
+    `);
+
+    return { activeBudgets, totalBudget, totalSpent, remaining, healthScore, topCategories };
+  } catch (error) {
+    console.error('Get budget dashboard error:', error);
+    return null;
+  }
+};
+
+export const getBudgetCategorySpending = (budgetId: number) => {
+  try {
+    const database = getDB();
+    return database.getAllSync(`
+      SELECT
+        bc.id, bc.category, bc.plannedAmount,
+        COALESCE(SUM(e.amount), 0) as actualAmount,
+        COUNT(e.id) as expenseCount
+      FROM budget_categories bc
+      LEFT JOIN expenses e ON e.budgetCategoryId = bc.id
+      WHERE bc.budgetId = ?
+      GROUP BY bc.id
+      ORDER BY bc.category ASC
+    `, [budgetId]);
+  } catch (error) {
+    console.error('Get budget category spending error:', error);
+    return [];
+  }
+};
+
+export const getBudgetMonthlyTrends = (budgetId: number) => {
+  try {
+    const database = getDB();
+    return database.getAllSync(`
+      SELECT
+        strftime('%Y-%m', e.date) as month,
+        SUM(e.amount) as actual
+      FROM expenses e
+      JOIN budget_categories bc ON e.budgetCategoryId = bc.id
+      WHERE bc.budgetId = ?
+      GROUP BY strftime('%Y-%m', e.date)
+      ORDER BY month ASC
+    `, [budgetId]);
+  } catch (error) {
+    console.error('Get budget monthly trends error:', error);
+    return [];
+  }
+};
+
+export const duplicateBudget = (sourceId: number, month?: number, year?: number) => {
+  try {
+    const database = getDB();
+    const source = database.getFirstSync<any>('SELECT * FROM budgets WHERE id = ?', [sourceId]);
+    if (!source) return null;
+
+    const newMonth = month || source.month;
+    const newYear = year || source.year;
+
+    // Create new budget
+    const result = database.runSync(
+      `INSERT INTO budgets (name, type, period, year, month, quarter, notes) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      source.name, source.type, source.period, newYear, newMonth, source.quarter, source.notes
+    );
+    const newId = result.lastInsertRowId;
+
+    // Copy categories
+    const categories = database.getAllSync<any>(
+      'SELECT category, plannedAmount, notes FROM budget_categories WHERE budgetId = ?',
+      [sourceId]
+    );
+    for (const cat of categories) {
+      database.runSync(
+        `INSERT INTO budget_categories (budgetId, category, plannedAmount, notes) VALUES (?, ?, ?, ?)`,
+        newId, cat.category, cat.plannedAmount, cat.notes
+      );
+    }
+
+    return newId;
+  } catch (error) {
+    console.error('Duplicate budget error:', error);
+    return null;
+  }
+};
+
+export const adjustBudgetCategory = (
+  categoryId: number,
+  newAmount: number,
+  reason: string,
+  approvedBy?: string
+): { success: boolean; error?: string } => {
+  try {
+    const database = getDB();
+    const current = database.getFirstSync<any>('SELECT plannedAmount FROM budget_categories WHERE id = ?', [categoryId]);
+    if (!current) return { success: false, error: 'Category not found' };
+
+    const previousAmount = current.plannedAmount;
+
+    database.runSync(
+      `INSERT INTO budget_adjustments (budgetCategoryId, previousAmount, newAmount, reason, approvedBy, status) VALUES (?, ?, ?, ?, ?, 'approved')`,
+      categoryId, previousAmount, newAmount, reason, approvedBy || null
+    );
+    database.runSync('UPDATE budget_categories SET plannedAmount = ? WHERE id = ?', [newAmount, categoryId]);
+    // Touch parent budget updatedAt
+    const bc = database.getFirstSync<any>('SELECT budgetId FROM budget_categories WHERE id = ?', [categoryId]);
+    if (bc) database.runSync("UPDATE budgets SET updatedAt = datetime('now') WHERE id = ?", [bc.budgetId]);
+
+    return { success: true };
+  } catch (error) {
+    console.error('Adjust budget category error:', error);
+    return { success: false, error: String(error) };
+  }
+};
+
+export const getBudgetForecast = (budgetId: number) => {
+  try {
+    const database = getDB();
+    const categories = database.getAllSync<any>(
+      'SELECT id, category, plannedAmount FROM budget_categories WHERE budgetId = ?', [budgetId]
+    );
+
+    const forecast = categories.map((cat: any) => {
+      const history = database.getAllSync<any>(
+        `SELECT strftime('%Y-%m', e.date) as month, SUM(e.amount) as total
+         FROM expenses e WHERE e.budgetCategoryId = ?
+         GROUP BY strftime('%Y-%m', e.date)
+         ORDER BY month ASC`,
+        [cat.id]
+      );
+
+      const avgMonthly = history.length > 0
+        ? history.reduce((s: number, h: any) => s + h.total, 0) / history.length
+        : 0;
+
+      const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+      const today = new Date().getDate();
+      const projected = avgMonthly * (daysInMonth / Math.max(today, 1));
+
+      return {
+        id: cat.id,
+        category: cat.category,
+        planned: cat.plannedAmount,
+        averageMonthly: Math.round(avgMonthly),
+        projected: Math.round(projected),
+        remaining: cat.plannedAmount - projected,
+        status: projected > cat.plannedAmount ? 'over' : projected > cat.plannedAmount * 0.8 ? 'near' : 'within',
+      };
+    });
+
+    const totalPlanned = categories.reduce((s: number, c: any) => s + c.plannedAmount, 0);
+    const totalProjected = forecast.reduce((s: number, f: any) => s + f.projected, 0);
+
+    return { forecast, totalPlanned, totalProjected, totalRemaining: totalPlanned - totalProjected };
+  } catch (error) {
+    console.error('Get budget forecast error:', error);
+    return null;
+  }
+};
+
+export const getBudgetReportData = (budgetId: number) => {
+  try {
+    const budget = getBudgetById(budgetId);
+    if (!budget) return null;
+
+    const trends = getBudgetMonthlyTrends(budgetId);
+    const spending = getBudgetCategorySpending(budgetId);
+
+    return { budget, trends, spending };
+  } catch (error) {
+    console.error('Get budget report data error:', error);
+    return null;
+  }
+};
+
+export const getBudgetAlerts = (thresholdPercent: number = 80) => {
+  try {
+    const database = getDB();
+    const categories = database.getAllSync<any>(`
+      SELECT
+        bc.id, bc.category, bc.plannedAmount, bc.budgetId,
+        COALESCE(SUM(e.amount), 0) as spent,
+        b.name as budgetName
+      FROM budget_categories bc
+      JOIN budgets b ON bc.budgetId = b.id
+      LEFT JOIN expenses e ON e.budgetCategoryId = bc.id
+      WHERE b.status = 'active'
+      GROUP BY bc.id
+      HAVING bc.plannedAmount > 0
+        AND (spent >= bc.plannedAmount * (CAST(? AS REAL) / 100.0) OR spent > bc.plannedAmount)
+      ORDER BY (CAST(spent AS REAL) / bc.plannedAmount) DESC
+    `, [thresholdPercent]);
+
+    return categories.map((c: any) => {
+      const pct = c.plannedAmount > 0 ? Math.round((c.spent / c.plannedAmount) * 100) : 0;
+      return {
+        ...c,
+        percentUsed: pct,
+        isExceeded: c.spent >= c.plannedAmount,
+        level: c.spent >= c.plannedAmount ? 'exceeded' : pct >= thresholdPercent ? 'warning' : 'ok',
+      };
+    });
+  } catch (error) {
+    console.error('Get budget alerts error:', error);
+    return [];
+  }
+};
+
+export const connectExpenseToBudget = (expenseId: number, budgetCategoryId: number) => {
+  try {
+    const database = getDB();
+    database.runSync('UPDATE expenses SET budgetCategoryId = ? WHERE id = ?', [budgetCategoryId, expenseId]);
+    return true;
+  } catch (error) {
+    console.error('Connect expense to budget error:', error);
+    return false;
+  }
+};
+
+export const getUncategorizedExpenses = (budgetId: number) => {
+  try {
+    const database = getDB();
+    const categories = database.getAllSync<any>(
+      'SELECT category FROM budget_categories WHERE budgetId = ?', [budgetId]
+    );
+    const categoryNames = categories.map((c: any) => c.category);
+    if (categoryNames.length === 0) return [];
+
+    const placeholders = categoryNames.map(() => '?').join(',');
+    return database.getAllSync(
+      `SELECT * FROM expenses WHERE category NOT IN (${placeholders}) AND date >= date('now', '-1 year') ORDER BY date DESC LIMIT 50`,
+      categoryNames
+    );
+  } catch (error) {
+    console.error('Get uncategorized expenses error:', error);
+    return [];
+  }
+};
+
+// →→ Recurring Expense Templates →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
+
+export const insertRecurringTemplate = (data: {
+  name: string; category: string; amount: number;
+  frequency: 'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Yearly';
+  startDate: string; endDate?: string; budgetCategoryId?: number;
+}) => {
+  try {
+    const database = getDB();
+    const result = database.runSync(
+      `INSERT INTO recurring_expense_templates (name, category, amount, frequency, startDate, endDate, budgetCategoryId)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      data.name, data.category, data.amount, data.frequency, data.startDate,
+      data.endDate || null, data.budgetCategoryId || null
+    );
+    return result.lastInsertRowId;
+  } catch (error) {
+    console.error('Insert recurring template error:', error);
+    return null;
+  }
+};
+
+export const updateRecurringTemplate = (id: number, data: {
+  name?: string; category?: string; amount?: number;
+  frequency?: string; startDate?: string; endDate?: string;
+  budgetCategoryId?: number; isActive?: number;
+}) => {
+  try {
+    const database = getDB();
+    const updates: string[] = [];
+    const params: any[] = [];
+    for (const [k, v] of Object.entries(data)) {
+      if (v !== undefined) { updates.push(`${k} = ?`); params.push(v); }
+    }
+    if (updates.length === 0) return true;
+    params.push(id);
+    database.runSync(`UPDATE recurring_expense_templates SET ${updates.join(', ')} WHERE id = ?`, ...params);
+    return true;
+  } catch (error) {
+    console.error('Update recurring template error:', error);
+    return false;
+  }
+};
+
+export const getRecurringTemplates = (activeOnly?: boolean) => {
+  try {
+    const database = getDB();
+    const where = activeOnly ? 'WHERE isActive = 1' : '';
+    return database.getAllSync(
+      `SELECT rt.*, bc.category as budgetCategoryName, bc.plannedAmount as budgetPlanned
+       FROM recurring_expense_templates rt
+       LEFT JOIN budget_categories bc ON rt.budgetCategoryId = bc.id
+       ${where}
+       ORDER BY rt.name ASC`
+    );
+  } catch (error) {
+    console.error('Get recurring templates error:', error);
+    return [];
+  }
+};
+
+export const deleteRecurringTemplate = (id: number) => {
+  try {
+    const database = getDB();
+    database.runSync('DELETE FROM recurring_expense_templates WHERE id = ?', [id]);
+    return true;
+  } catch (error) {
+    console.error('Delete recurring template error:', error);
+    return false;
+  }
+};
+
+// →→ Budget-Expense Integration Helpers →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
+
+export const getCurrentMonthBudget = () => {
+  try {
+    const database = getDB();
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    const budget = database.getFirstSync<any>(
+      `SELECT b.*,
+        COALESCE(SUM(bc.plannedAmount), 0) as totalPlanned,
+        COALESCE(SUM(bc2.actualAmount), 0) as totalActual
+       FROM budgets b
+       LEFT JOIN budget_categories bc ON bc.budgetId = b.id
+       LEFT JOIN (
+         SELECT bc3.id as catId, SUM(e.amount) as actualAmount
+         FROM budget_categories bc3
+         LEFT JOIN expenses e ON e.budgetCategoryId = bc3.id
+           AND strftime('%Y-%m', e.date) = ?
+         GROUP BY bc3.id
+       ) bc2 ON bc2.catId = bc.id
+       WHERE b.year = ? AND (b.month = ? OR b.month IS NULL)
+         AND b.period = 'monthly' AND b.status = 'active'
+       GROUP BY b.id
+       ORDER BY b.month DESC
+       LIMIT 1`,
+      [`${year}-${String(month).padStart(2, '0')}`, year, month]
+    );
+    if (!budget) return null;
+    return { ...budget, remaining: budget.totalPlanned - budget.totalActual };
+  } catch (error) {
+    console.error('Get current month budget error:', error);
+    return null;
+  }
+};
+
+export const getCategoryBudgetStatus = (budgetId: number, categoryName: string) => {
+  try {
+    const database = getDB();
+    const cat = database.getFirstSync<any>(
+      `SELECT bc.*,
+        COALESCE(SUM(e.amount), 0) as spent
+       FROM budget_categories bc
+       LEFT JOIN expenses e ON e.budgetCategoryId = bc.id
+       WHERE bc.budgetId = ? AND bc.category = ?
+       GROUP BY bc.id`,
+      [budgetId, categoryName]
+    );
+    if (!cat) return null;
+    const pct = cat.plannedAmount > 0 ? Math.round((cat.spent / cat.plannedAmount) * 100) : 0;
+    return {
+      ...cat, spent: cat.spent, percentUsed: pct,
+      remaining: cat.plannedAmount - cat.spent,
+      status: pct >= 100 ? 'exceeded' : pct >= 90 ? 'critical' : pct >= 80 ? 'warning' : 'ok',
+    };
+  } catch (error) {
+    console.error('Get category budget status error:', error);
+    return null;
+  }
+};
+
+export const getBudgetExpensesForCategory = (budgetCategoryId: number, limit: number = 50) => {
+  try {
+    const database = getDB();
+    return database.getAllSync(
+      `SELECT * FROM expenses WHERE budgetCategoryId = ? ORDER BY date DESC LIMIT ?`,
+      [budgetCategoryId, limit]
+    );
+  } catch (error) {
+    console.error('Get budget expenses for category error:', error);
+    return [];
+  }
+};
+
+export const getBudgetWithCategoryProgress = (budgetId: number) => {
+  try {
+    const database = getDB();
+    const budget = database.getFirstSync<any>('SELECT * FROM budgets WHERE id = ?', [budgetId]);
+    if (!budget) return null;
+
+    const categories = database.getAllSync(`
+      SELECT bc.*,
+        COALESCE(SUM(e.amount), 0) as spent,
+        COUNT(e.id) as expenseCount
+      FROM budget_categories bc
+      LEFT JOIN expenses e ON e.budgetCategoryId = bc.id
+      WHERE bc.budgetId = ?
+      GROUP BY bc.id
+      ORDER BY bc.category ASC
+    `, [budgetId]);
+
+    const totalPlanned = categories.reduce((s: number, c: any) => s + c.plannedAmount, 0);
+    const totalSpent = categories.reduce((s: number, c: any) => s + (c.spent || 0), 0);
+
+    const categoriesWithStatus = categories.map((c: any) => {
+      const pct = c.plannedAmount > 0 ? Math.round((c.spent / c.plannedAmount) * 100) : 0;
+      return {
+        ...c,
+        percentUsed: pct,
+        remaining: c.plannedAmount - (c.spent || 0),
+        status: pct >= 100 ? 'exceeded' : pct >= 90 ? 'critical' : pct >= 80 ? 'warning' : 'ok',
+      };
+    });
+
+    return {
+      ...budget,
+      categories: categoriesWithStatus,
+      totalPlanned,
+      totalSpent,
+      remaining: totalPlanned - totalSpent,
+      percentUsed: totalPlanned > 0 ? Math.round((totalSpent / totalPlanned) * 100) : 0,
+    };
+  } catch (error) {
+    console.error('Get budget with category progress error:', error);
+    return null;
+  }
+};
+
+export const getMonthlyBudgetSummary = (year: number, month: number) => {
+  try {
+    const database = getDB();
+    const yymm = `${year}-${String(month).padStart(2, '0')}`;
+
+    const budget = database.getFirstSync<any>(
+      `SELECT b.*, COALESCE(SUM(bc.plannedAmount), 0) as totalPlanned
+       FROM budgets b
+       LEFT JOIN budget_categories bc ON bc.budgetId = b.id
+       WHERE b.year = ? AND b.month = ? AND b.status = 'active' AND b.period = 'monthly'
+       GROUP BY b.id
+       LIMIT 1`,
+      [year, month]
+    );
+
+    const totalSpent = database.getFirstSync<{ total: number }>(
+      `SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE strftime('%Y-%m', date) = ?`,
+      [yymm]
+    );
+
+    const byCategory = database.getAllSync(
+      `SELECT e.category as name, SUM(e.amount) as spent,
+        COALESCE(bc.plannedAmount, 0) as planned
+       FROM expenses e
+       LEFT JOIN budget_categories bc ON e.budgetCategoryId = bc.id
+       WHERE strftime('%Y-%m', e.date) = ?
+       GROUP BY e.category
+       ORDER BY spent DESC`,
+      [yymm]
+    );
+
+    const totalPlanned = budget?.totalPlanned || 0;
+    const actual = totalSpent?.total || 0;
+
+    const projection = getRecurringProjection();
+    const projectedTotal = actual + projection.monthlyTotal;
+
+    return {
+      hasBudget: !!budget,
+      budgetId: budget?.id,
+      budgetName: budget?.name,
+      totalPlanned,
+      totalSpent: actual,
+      remaining: totalPlanned - actual,
+      percentUsed: totalPlanned > 0 ? Math.round((actual / totalPlanned) * 100) : 0,
+      projectedRemaining: totalPlanned - projectedTotal,
+      projectedPercent: totalPlanned > 0 ? Math.round((projectedTotal / totalPlanned) * 100) : 0,
+      recurringMonthlyProjection: projection.monthlyTotal,
+      recurringTemplateCount: projection.templatesCount,
+      byCategory,
+    };
+  } catch (error) {
+    console.error('Get monthly budget summary error:', error);
+    return null;
+  }
+};
+
+export const getUpcomingRecurringExpensesTotal = () => {
+  try {
+    const database = getDB();
+    const result = database.getFirstSync<{ total: number }>(
+      `SELECT COALESCE(SUM(amount), 0) as total FROM recurring_expense_templates WHERE isActive = 1`
+    );
+    return result?.total || 0;
+  } catch (error) {
+    console.error('Get upcoming recurring expenses total error:', error);
+    return 0;
+  }
+};
+
+export const getRecurringProjection = () => {
+  try {
+    const database = getDB();
+    const templates = database.getAllSync<any>(
+      `SELECT * FROM recurring_expense_templates WHERE isActive = 1`
+    );
+
+    const now = new Date();
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    let monthlyTotal = 0;
+    const byCategory: Record<string, number> = {};
+
+    for (const tmpl of templates) {
+      let monthlyAmount = 0;
+      switch (tmpl.frequency) {
+        case 'Daily': monthlyAmount = tmpl.amount * daysInMonth; break;
+        case 'Weekly': monthlyAmount = tmpl.amount * (daysInMonth / 7); break;
+        case 'Monthly': monthlyAmount = tmpl.amount; break;
+        case 'Quarterly': monthlyAmount = tmpl.amount / 3; break;
+        case 'Yearly': monthlyAmount = tmpl.amount / 12; break;
+      }
+      monthlyTotal += monthlyAmount;
+      byCategory[tmpl.category] = (byCategory[tmpl.category] || 0) + monthlyAmount;
+    }
+
+    return {
+      templatesCount: templates.length,
+      monthlyTotal: Math.round(monthlyTotal),
+      byCategory,
+      dailyProjection: Math.round(templates.reduce((s: number, t: any) => {
+        if (t.frequency === 'Daily') return s + t.amount;
+        if (t.frequency === 'Weekly') return s + t.amount / 7;
+        if (t.frequency === 'Monthly') return s + t.amount / daysInMonth;
+        if (t.frequency === 'Quarterly') return s + t.amount / (daysInMonth * 3);
+        return s + t.amount / (daysInMonth * 12);
+      }, 0)),
+    };
+  } catch (error) {
+    console.error('Get recurring projection error:', error);
+    return { templatesCount: 0, monthlyTotal: 0, byCategory: {}, dailyProjection: 0 };
+  }
+};
+
+export const getRecommendedBudget = () => {
+  try {
+    const database = getDB();
+    const templates = database.getAllSync<any>(
+      `SELECT * FROM recurring_expense_templates WHERE isActive = 1`
+    );
+
+    const now = new Date();
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const categoryMap: Record<string, { amount: number; count: number; frequencies: string[] }> = {};
+
+    for (const tmpl of templates) {
+      let monthlyAmount = 0;
+      switch (tmpl.frequency) {
+        case 'Daily': monthlyAmount = tmpl.amount * daysInMonth; break;
+        case 'Weekly': monthlyAmount = tmpl.amount * (daysInMonth / 7); break;
+        case 'Monthly': monthlyAmount = tmpl.amount; break;
+        case 'Quarterly': monthlyAmount = tmpl.amount / 3; break;
+        case 'Yearly': monthlyAmount = tmpl.amount / 12; break;
+      }
+      if (!categoryMap[tmpl.category]) {
+        categoryMap[tmpl.category] = { amount: 0, count: 0, frequencies: [] };
+      }
+      categoryMap[tmpl.category].amount += monthlyAmount;
+      categoryMap[tmpl.category].count += 1;
+      if (!categoryMap[tmpl.category].frequencies.includes(tmpl.frequency)) {
+        categoryMap[tmpl.category].frequencies.push(tmpl.frequency);
+      }
+    }
+
+    const categories = Object.entries(categoryMap).map(([category, data]) => ({
+      category,
+      recommendedAmount: Math.round(data.amount * 1.1),
+      baseRecurringAmount: Math.round(data.amount),
+      templateCount: data.count,
+      frequencies: data.frequencies,
+      buffer: Math.round(data.amount * 0.1),
+    }));
+
+    const totalRecommended = categories.reduce((s, c) => s + c.recommendedAmount, 0);
+    const totalRecurring = categories.reduce((s, c) => s + c.baseRecurringAmount, 0);
+
+    return {
+      categories,
+      totalRecommended,
+      totalRecurring,
+      bufferTotal: totalRecommended - totalRecurring,
+      templateCount: templates.length,
+      generatedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    console.error('Get recommended budget error:', error);
+    return null;
+  }
+};
+
+export const getBudgetWithRecurringProjection = (budgetId: number) => {
+  try {
+    const database = getDB();
+    const budget = database.getFirstSync<any>('SELECT * FROM budgets WHERE id = ?', [budgetId]);
+    if (!budget) return null;
+
+    const categories = database.getAllSync<any>(
+      `SELECT bc.*,
+        COALESCE(SUM(e.amount), 0) as spent,
+        COUNT(e.id) as expenseCount
+       FROM budget_categories bc
+       LEFT JOIN expenses e ON e.budgetCategoryId = bc.id
+       WHERE bc.budgetId = ?
+       GROUP BY bc.id
+       ORDER BY bc.category ASC`,
+      [budgetId]
+    );
+
+    const projection = getRecurringProjection();
+    const totalPlanned = categories.reduce((s: number, c: any) => s + c.plannedAmount, 0);
+    const totalSpent = categories.reduce((s: number, c: any) => s + (c.spent || 0), 0);
+
+    const categoriesWithStatus = categories.map((c: any) => {
+      const pct = c.plannedAmount > 0 ? Math.round((c.spent / c.plannedAmount) * 100) : 0;
+      const recurringMonthly = projection.byCategory[c.category] || 0;
+      const projectedTotal = c.spent + recurringMonthly;
+      const projectedPct = c.plannedAmount > 0 ? Math.round((projectedTotal / c.plannedAmount) * 100) : 0;
+      return {
+        ...c,
+        percentUsed: pct,
+        remaining: c.plannedAmount - (c.spent || 0),
+        recurringProjection: Math.round(recurringMonthly),
+        projectedTotal: Math.round(projectedTotal),
+        projectedPercent: projectedPct,
+        status: pct >= 100 ? 'exceeded' : pct >= 90 ? 'critical' : pct >= 80 ? 'warning' : 'ok',
+      };
+    });
+
+    return {
+      ...budget,
+      categories: categoriesWithStatus,
+      totalPlanned,
+      totalSpent,
+      remaining: totalPlanned - totalSpent,
+      percentUsed: totalPlanned > 0 ? Math.round((totalSpent / totalPlanned) * 100) : 0,
+      recurringProjection: projection,
+      projectedTotal: totalSpent + projection.monthlyTotal,
+      projectedPercent: totalPlanned > 0 ? Math.round(((totalSpent + projection.monthlyTotal) / totalPlanned) * 100) : 0,
+    };
+  } catch (error) {
+    console.error('Get budget with recurring projection error:', error);
+    return null;
+  }
+};
+
+// →→ Auto Budget Linking →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
+
+export const autoLinkExpenseToBudget = (
+  category: string,
+  date: string,
+  budgetId?: number
+): { budgetCategoryId: number | null; ambiguousCategories?: any[] } => {
+  try {
+    const database = getDB();
+    const expenseDate = new Date(date);
+    const year = expenseDate.getFullYear();
+    const month = expenseDate.getMonth() + 1;
+
+    let budgetIds: number[];
+    if (budgetId) {
+      budgetIds = [budgetId];
+    } else {
+      const activeBudgets = database.getAllSync<any>(
+        `SELECT id, name, period FROM budgets 
+         WHERE status = 'active' AND year = ? AND (month = ? OR month IS NULL)`,
+        [year, month]
+      );
+      if (activeBudgets.length === 0) return { budgetCategoryId: null };
+      budgetIds = activeBudgets.map((b: any) => b.id);
+    }
+
+    const placeholders = budgetIds.map(() => '?').join(',');
+
+    const matchingCategories = database.getAllSync<any>(
+      `SELECT id, category, plannedAmount, budgetId FROM budget_categories 
+       WHERE budgetId IN (${placeholders}) AND LOWER(category) = LOWER(?)`,
+      [...budgetIds, category]
+    );
+
+    if (matchingCategories.length === 1) {
+      return { budgetCategoryId: matchingCategories[0].id };
+    }
+    if (matchingCategories.length > 1) {
+      return { budgetCategoryId: null, ambiguousCategories: matchingCategories };
+    }
+
+    const partialMatches = database.getAllSync<any>(
+      `SELECT bc.id, bc.category, bc.plannedAmount, b.name as budgetName
+       FROM budget_categories bc JOIN budgets b ON bc.budgetId = b.id
+       WHERE b.id IN (${placeholders})
+         AND (LOWER(bc.category) LIKE LOWER(?) OR LOWER(?) LIKE '%' || LOWER(bc.category) || '%')
+       LIMIT 5`,
+      [...budgetIds, `%${category}%`, category]
+    );
+
+    if (partialMatches.length === 1) {
+      return { budgetCategoryId: partialMatches[0].id };
+    }
+
+    return { budgetCategoryId: null };
+  } catch (error) {
+    console.error('Auto-link expense to budget error:', error);
+    return { budgetCategoryId: null };
+  }
+};
+
+export const getBudgetStatusForCategory = (
+  category: string,
+  date: string
+): {
+  budgetName: string; budgetCategoryId: number; planned: number;
+  spent: number; remaining: number; percentUsed: number; status: string
+} | null => {
+  try {
+    const database = getDB();
+    const expenseDate = new Date(date);
+    const year = expenseDate.getFullYear();
+    const month = expenseDate.getMonth() + 1;
+    const yymm = `${year}-${String(month).padStart(2, '0')}`;
+
+    const budget = database.getFirstSync<any>(
+      `SELECT b.id as budgetId, b.name as budgetName, bc.id as catId, bc.plannedAmount, bc.category
+       FROM budgets b JOIN budget_categories bc ON bc.budgetId = b.id
+       WHERE b.status = 'active' AND b.year = ? AND (b.month = ? OR b.month IS NULL)
+         AND LOWER(bc.category) = LOWER(?) LIMIT 1`,
+      [year, month, category]
+    );
+    if (!budget) return null;
+
+    const spent = database.getFirstSync<{ total: number }>(
+      `SELECT COALESCE(SUM(amount), 0) as total FROM expenses
+       WHERE budgetCategoryId = ? AND strftime('%Y-%m', date) = ?`,
+      [budget.catId, yymm]
+    );
+
+    const spentAmount = spent?.total || 0;
+    const pct = budget.plannedAmount > 0 ? Math.round((spentAmount / budget.plannedAmount) * 100) : 0;
+
+    return {
+      budgetName: budget.budgetName,
+      budgetCategoryId: budget.catId,
+      planned: budget.plannedAmount,
+      spent: spentAmount,
+      remaining: budget.plannedAmount - spentAmount,
+      percentUsed: pct,
+      status: pct >= 100 ? 'exceeded' : pct >= 90 ? 'critical' : pct >= 80 ? 'warning' : 'ok',
+    };
+  } catch (error) {
+    console.error('Get budget status for category error:', error);
+    return null;
+  }
+};
+
+export const getCategoryExpenses = (budgetCategoryId: number, limit: number = 100) => {
+  try {
+    const database = getDB();
+    return database.getAllSync(
+      'SELECT * FROM expenses WHERE budgetCategoryId = ? ORDER BY date DESC LIMIT ?',
+      [budgetCategoryId, limit]
+    );
+  } catch (error) {
+    console.error('Get category expenses error:', error);
+    return [];
+  }
+};
+
+export const getBudgetThresholdNotifications = (threshold: number = 80) => {
+  try {
+    const database = getDB();
+    const now = new Date();
+    const yymm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    return database.getAllSync<any>(
+      `SELECT bc.id, bc.category, bc.plannedAmount, b.name as budgetName,
+              COALESCE(SUM(e.amount), 0) as spent
+       FROM budget_categories bc
+       JOIN budgets b ON bc.budgetId = b.id
+       LEFT JOIN expenses e ON e.budgetCategoryId = bc.id
+         AND strftime('%Y-%m', e.date) = ?
+       WHERE b.status = 'active'
+         AND bc.plannedAmount > 0
+       GROUP BY bc.id
+       HAVING (CAST(SUM(e.amount) AS REAL) / bc.plannedAmount) >= CAST(? AS REAL) / 100.0`,
+      [yymm, threshold]
+    );
+  } catch (error) {
+    console.error('Get budget threshold notifications error:', error);
+    return [];
   }
 };

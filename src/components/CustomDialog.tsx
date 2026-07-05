@@ -53,26 +53,20 @@ export interface CustomDialogProps {
   onChoose: (choice: CustomDialogChoice) => void;
 }
 
-const ICON_BG: Record<CustomDialogIconType, string> = {
-  success: 'rgba(52, 199, 89, 0.12)',
-  danger: 'rgba(255, 59, 48, 0.12)',
-  warning: 'rgba(255, 149, 0, 0.14)',
-  info: 'rgba(47, 111, 237, 0.12)',
-};
-
-const ICON_COLOR: Record<CustomDialogIconType, string> = {
-  success: '#34C759',
-  danger: '#FF3B30',
-  warning: '#FF9500',
-  info: '#2F6FED',
-};
-
 const ICON_SIZE = 28;
 
-function DialogIcon({ type }: { type?: CustomDialogIconType }) {
+function DialogIcon({ type, colors }: { type?: CustomDialogIconType; colors: any }) {
   if (!type) return null;
-  const color = ICON_COLOR[type];
-  const bg = ICON_BG[type];
+  const color =
+    type === 'success' ? colors.success :
+    type === 'danger' ? colors.error :
+    type === 'warning' ? colors.warning :
+    colors.primary;
+  const bg =
+    type === 'success' ? colors.success + '1F' :
+    type === 'danger' ? colors.error + '1F' :
+    type === 'warning' ? colors.warning + '24' :
+    colors.primary + '1F';
   switch (type) {
     case 'success':
       return (
@@ -131,7 +125,7 @@ const CustomDialog: React.FC<CustomDialogProps> = ({
             { backgroundColor: colors.card, borderColor: colors.border },
           ]}
         >
-          <DialogIcon type={state.iconType} />
+          <DialogIcon type={state.iconType} colors={colors} />
 
           {state.title ? (
             <AppText

@@ -1,16 +1,16 @@
-import { ErrorBoundary } from '@/components/ErrorBoundary';
 import SidebarOverlay from '@/components/SidebarOverlay';
-import { SettingsProvider } from '@/context/SettingsContext';
+import { SettingsProvider , useSettings } from '@/context/SettingsContext';
 import { SidebarProvider } from '@/context/SidebarContext';
 import { NavigationIntentProvider } from '@/context/NavigationIntentContext';
+import { WarehouseProvider } from '@/context/WarehouseContext';
 import { initDB } from '@/database/db';
+import { playStart } from '@/services/soundService';
 import {
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
     Inter_800ExtraBold,
-    Inter_900Black,
     useFonts
 } from '@expo-google-fonts/inter';
 import { Stack } from 'expo-router';
@@ -18,7 +18,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
-import { useSettings } from '@/context/SettingsContext';
+
 import { ToastProvider } from '@/context/ToastContext';
 import { DialogProvider } from '@/context/DialogContext';
 import { InAppBannerProvider } from '@/components/InAppBanner';
@@ -34,9 +34,15 @@ SplashScreen.preventAutoHideAsync();
 // Separate component so useSettings is called inside the provider tree,
 // not as a sibling/child that Expo Router might render in isolation.
 function AppShell() {
-  const { theme, colors } = useSettings();
+  const { theme, colors, soundEnabled } = useSettings();
   usePushNotifications();
   useNotificationTriggers();
+
+  useEffect(() => {
+    if (soundEnabled) {
+      playStart();
+    }
+  }, [soundEnabled]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -62,7 +68,6 @@ export default function RootLayout() {
     Inter_600SemiBold,
     Inter_700Bold,
     Inter_800ExtraBold,
-    Inter_900Black,
   });
 
   useEffect(() => {
@@ -78,8 +83,8 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ErrorBoundary>
-        <SettingsProvider>
+      <SettingsProvider>
+        <WarehouseProvider>
           <ToastProvider>
             <DialogProvider>
               <InAppBannerProvider>
@@ -93,8 +98,8 @@ export default function RootLayout() {
               </InAppBannerProvider>
             </DialogProvider>
           </ToastProvider>
-        </SettingsProvider>
-      </ErrorBoundary>
+        </WarehouseProvider>
+      </SettingsProvider>
     </GestureHandlerRootView>
   );
 }

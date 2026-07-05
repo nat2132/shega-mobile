@@ -12,9 +12,7 @@
 import React, { forwardRef } from 'react';
 import { FlashList, FlashListProps, FlashListRef } from '@shopify/flash-list';
 
-export interface SafeFlashListProps<T> extends Omit<FlashListProps<T>, 'ref'> {
-  // no extra props today; kept as a stable extension point.
-}
+export type SafeFlashListProps<T> = Omit<FlashListProps<T>, 'ref'>;
 
 function SafeFlashListInner<T>(
   props: SafeFlashListProps<T>,

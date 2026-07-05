@@ -1,4 +1,4 @@
-﻿// Card used on the dashboard to surface unresolved business alerts.
+// Card used on the dashboard to surface unresolved business alerts.
 // Stays visible until the issue is resolved (mark as resolved, take action, etc).
 
 import React from 'react';

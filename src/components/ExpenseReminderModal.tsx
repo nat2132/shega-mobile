@@ -1,11 +1,11 @@
-﻿import React from 'react';
-import { View, StyleSheet, TouchableOpacity, Modal, Dimensions } from 'react-native';
+import React from 'react';
+import { View, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { Bell, Check, X, Clock } from 'lucide-react-native';
 import { Fonts } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
 import { markRecurringAsPaid, markRecurringAsOverdue } from '@/database/db';
-import { AppCard, AppButton, AppText } from '@/components/ui';
+import { AppNumber, AppText } from '@/components/ui';
 import * as Haptics from 'expo-haptics';
 interface ExpenseReminderModalProps {
   visible: boolean;
@@ -62,9 +62,7 @@ const ExpenseReminderModal: React.FC<ExpenseReminderModalProps> = ({
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
             <View style={styles.detailRow}>
               <AppText variant="caption" weight="bold" numberOfLines={1} style={[styles.detailLabel, { color: colors.textSecondary }]}>{t('expense.magnitude')}</AppText>
-              <AppText variant="body" weight="bold" numberOfLines={1} style={[styles.detailValue, { color: colors.text }]}>
-                {typeof expense.amount === 'number' ? expense.amount.toLocaleString() : 0} {t('common.etb')}
-              </AppText>
+              <AppNumber value={typeof expense.amount === 'number' ? expense.amount : Number(expense.amount) || 0} size="body" prefix="ETB " />
             </View>
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
             <View style={styles.detailRow}>
@@ -80,7 +78,7 @@ const ExpenseReminderModal: React.FC<ExpenseReminderModalProps> = ({
 
           {/* Action Buttons */}
           <TouchableOpacity
-            style={[styles.actionBtn, { backgroundColor: '#34C759' }]}
+            style={[styles.actionBtn, { backgroundColor: colors.success }]}
             onPress={handleMarkAsPaid}
             activeOpacity={0.8}
           >
@@ -89,7 +87,7 @@ const ExpenseReminderModal: React.FC<ExpenseReminderModalProps> = ({
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.actionBtn, { backgroundColor: '#FF3B30' }]}
+            style={[styles.actionBtn, { backgroundColor: colors.error }]}
             onPress={handleNotPaidYet}
             activeOpacity={0.8}
           >
@@ -108,8 +106,6 @@ const ExpenseReminderModal: React.FC<ExpenseReminderModalProps> = ({
   );
 };
 
-const { width } = Dimensions.get('window');
-
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -126,10 +122,10 @@ const styles = StyleSheet.create({
     padding: 28,
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 15,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
   iconCircle: {
     width: 68,

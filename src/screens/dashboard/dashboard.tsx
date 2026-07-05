@@ -1,15 +1,13 @@
-﻿import SaleSuccessModal from '@/components/SaleSuccessModal';
-import ExpenseReminderModal from '@/components/ExpenseReminderModal';
+import SaleSuccessModal from '@/components/SaleSuccessModal';
 import { NotificationBell } from '@/components/NotificationBell';
 import { DashboardAlerts } from '@/components/DashboardAlerts';
 import { Fonts } from '@/constants/theme';
-import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { router, useFocusEffect } from 'expo-router';
 import {
     AlertTriangle,
     ArrowUpRight,
-    Bell,
+    Banknote,
     ChevronLeft,
     ChevronRight,
     Clock,
@@ -21,12 +19,14 @@ import {
     ShoppingBag,
     TrendingDown,
     TrendingUp,
+    X,
     Zap
 } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     Dimensions,
     Image,
+    KeyboardAvoidingView,
     Modal,
     Platform,
     RefreshControl,
@@ -48,15 +48,15 @@ import OnCreditCustomersScreen from './debt-list';
 import LowStockItemsScreen from './low-stock-list';
 import OnCreditItemsScreen from './oncredit-list';
 
-const { width } = Dimensions.get('window');
-
 import { PROFILE_IMAGES, useSettings } from '@/context/SettingsContext';
 import { useDialog } from '@/context/DialogContext';
 import { useSidebar } from '@/context/SidebarContext';
-import { getActivityFeed, getAdjustmentById, getDashboardStats, getDebtCustomers, getExpenseById, getInventoryStats, getLowStockItems, getOnCreditItems, getRecentItems, getSaleById, ItemData } from '@/database/db';
+import { useWarehouse } from '@/context/WarehouseContext';
+import { getActivityFeed, getAdjustmentById, getDashboardStats, getDebtCustomers, getExpenseById, getInventoryStats, getLowStockItems, getOnCreditItems, getRecentItems, getSaleWithItemsById, ItemData } from '@/database/db';
 import { generateBulkTestData } from '@/database/generateTestData';
 import { useNotifications } from '@/hooks/useNotifications';
-import { formatDate, toEthiopianHour, isEthiopianDayHour } from '@/utils/date-utils';
+import { playBad } from '@/services/soundService';
+import { formatDate, toEthiopianHour} from '@/utils/date-utils';
 import {
     Gesture,
     GestureDetector
@@ -73,35 +73,30 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, Defs, LinearGradient, Path, Stop } from 'react-native-svg';
 import { SparklineSkeleton } from '@/components/ChartSkeleton';
-import { AppText } from '@/components/ui';
+import { AppText, AppNumber } from '@/components/ui';
+import { UniversalSearch } from '@/components/UniversalSearch';
+import { BusinessHealthCard } from '@/components/BusinessHealthCard';
+import { BusinessAssistant } from '@/components/BusinessAssistant';
+import { useBusinessHealthScore } from '@/hooks/useBusinessHealthScore';
+import { useBusinessAssistant } from '@/hooks/useBusinessAssistant';
+import { getDashGlass, DASH_SPACING, CARD_WIDTH, CARD_GAP } from './glass-dashboard';
+
+const { width } = Dimensions.get('window');
 const SparklineChart = React.memo(({ todayValue = 0, yesterdayValue = 0, color = '#2F6FED', loading = false }: {
   todayValue?: number;
   yesterdayValue?: number;
   color?: string;
   loading?: boolean;
 }) => {
+  const { t, colors } = useSettings();
   const widthSize = width - 80;
   const heightSize = 90;
 
-  // While data is still being fetched, render a skeleton. Otherwise
-  // the user briefly sees the default flat curve (todayValue === 0
-  // triggers the `isPositive` branch and a flat-line SVG) which is
-  // visually misleading.
-  if (loading || (todayValue === 0 && yesterdayValue === 0)) {
-    return <SparklineSkeleton width={widthSize} height={heightSize} />;
-  }
-
-  // Sanitise inputs (defensive — guards against NaN from upstream).
   const safeToday = Number.isFinite(todayValue) ? todayValue : 0;
   const safeYesterday = Number.isFinite(yesterdayValue) ? yesterdayValue : 0;
-
-  // Determine trend based on today vs yesterday comparison
   const isPositive = safeToday > safeYesterday;
   const isNegative = safeToday < safeYesterday;
 
-  // SVG path strings and dot Y-coordinate are derived from the
-  // current metric — memoised so the chart doesn't re-render when
-  // the parent (e.g., theme) changes for unrelated reasons.
   const { d, fillD, dotY } = useMemo(() => {
     let pathStr = `M 0 55 Q ${widthSize * 0.25} 25, ${widthSize * 0.5} 65 T ${widthSize} 35`;
     let dot = 35;
@@ -120,6 +115,20 @@ const SparklineChart = React.memo(({ todayValue = 0, yesterdayValue = 0, color =
       dotY: dot,
     };
   }, [isPositive, isNegative, widthSize, heightSize]);
+
+  if (loading) {
+    return <SparklineSkeleton width={widthSize} height={heightSize} />;
+  }
+
+  if (safeToday === 0 && safeYesterday === 0) {
+    return (
+      <View style={{ height: heightSize, width: '100%', justifyContent: 'center', alignItems: 'center', marginVertical: 15 }}>
+        <AppText variant="body-sm" weight="medium" style={{ color: colors.text, opacity: 0.5 }}>
+          No data
+        </AppText>
+      </View>
+    );
+  }
 
   return (
     <View style={{ height: heightSize, width: '100%', justifyContent: 'center', alignItems: 'center', marginVertical: 15 }}>
@@ -166,8 +175,10 @@ SparklineChart.displayName = 'SparklineChart';
 
   const DashboardScreen = () => {
     const { openSidebar } = useSidebar();
-    const { userProfile, colors, calendarType, language, timeSystem, theme, t } = useSettings();
-    const { notifCount } = useNotifications();
+    const { userProfile, colors, calendarType, language, timeSystem, t } = useSettings();
+    const G = getDashGlass(colors);
+    const styles = useMemo(() => createStyles(G), [G]);
+    useNotifications();
     const dialog = useDialog();
     const [isPrivate, setIsPrivate] = useState(false);
     const [activeModal, setActiveModal] = useState<string | null>(null);
@@ -183,16 +194,20 @@ SparklineChart.displayName = 'SparklineChart';
     const [showPending, setShowPending] = useState(false);
     const [showAddAsset, setShowAddAsset] = useState(false);
     const [recentActivities, setRecentActivities] = useState<any[]>([]);
-    const [recentInventoryItems, setRecentInventoryItems] = useState<ItemData[]>([]);
-    const [selectedItem, setSelectedItem] = useState<any>(null);
+    const [, setRecentInventoryItems] = useState<ItemData[]>([]);
+    const [, setSelectedItem] = useState<any>(null);
     const [pendingSales, setPendingSales] = useState<any[]>([]);
     const [metrics, setMetrics] = useState<any>(null);
-    const [invStats, setInvStats] = useState<any>(null);
+    const [, setInvStats] = useState<any>(null);
     const [debtCustomersCount, setDebtCustomersCount] = useState(0);
     const [creditItemsCount, setCreditItemsCount] = useState(0);
     const [lowStockCount, setLowStockCount] = useState(0);
     const [refreshing, setRefreshing] = useState(false);
     const [showActivityLedger, setShowActivityLedger] = useState(false);
+    const [showUniversalSearch, setShowUniversalSearch] = useState(false);
+
+  const { health: businessHealth, loading: healthLoading, refresh: refreshHealth } = useBusinessHealthScore();
+  const { insights: assistantInsights, loading: assistantLoading, refresh: refreshAssistant } = useBusinessAssistant();
 
   const expandedWidth = useSharedValue(56);
   useEffect(() => {
@@ -203,13 +218,9 @@ SparklineChart.displayName = 'SparklineChart';
     width: expandedWidth.value,
   }));
 
-  useFocusEffect(
-    useCallback(() => {
-      loadDashboardData();
-    }, [])
-  );
+  const { activeWarehouseId } = useWarehouse();
 
-  const loadDashboardData = async () => {
+  const loadDashboardData = React.useCallback(async () => {
     const items = getRecentItems(3) as ItemData[];
     setRecentInventoryItems(items);
     
@@ -222,7 +233,7 @@ SparklineChart.displayName = 'SparklineChart';
     const stats = getDashboardStats();
     if (stats) setMetrics(stats);
 
-    const inventoryStats = getInventoryStats();
+    const inventoryStats = getInventoryStats(activeWarehouseId);
     if (inventoryStats) setInvStats(inventoryStats);
 
     const debtCust = await getDebtCustomers();
@@ -233,13 +244,24 @@ SparklineChart.displayName = 'SparklineChart';
 
     const lowStock = await getLowStockItems();
     setLowStockCount(lowStock.length);
-  };
+    if (lowStock.length > 0) {
+      playBad();
+    }
+    refreshHealth();
+    refreshAssistant();
+  }, [activeWarehouseId, refreshHealth, refreshAssistant]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadDashboardData();
+    }, [loadDashboardData])
+  );
 
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
     await loadDashboardData();
     setTimeout(() => setRefreshing(false), 1000);
-  }, []);
+  }, [loadDashboardData]);
 
   const handleSeedData = async () => {
     await dialog.choose({
@@ -261,7 +283,7 @@ SparklineChart.displayName = 'SparklineChart';
     const elapsed = ((Date.now() - start) / 1000).toFixed(1);
     await dialog.alert({
       title: result.success ? t('dashboard.seed_success') : t('dashboard.seed_error'),
-      message: `${result.message}\n\n⏱️ ${elapsed}s`,
+      message: `${result.message}\n\nâ±ï¸ ${elapsed}s`,
       iconType: result.success ? 'success' : 'danger',
     });
     loadDashboardData();
@@ -277,74 +299,84 @@ SparklineChart.displayName = 'SparklineChart';
     let Icon = TrendingUp;
     let iconBg = colors.primary;
     let label = '';
-    let amountColor = colors.text;
     let prefix = '';
 
     if (isSale) {
-      Icon = ShoppingBag;
-      iconBg = colors.primary;
-      label = `${activity.quantity || 0} ${t('dashboard.activity.sold')}`;
-      amountColor = colors.success || '#34C759';
-      prefix = '+';
+      const paymentStatus = activity.paymentStatus || 'Paid';
+      const isOrder = paymentStatus === 'Order';
+      const isDebt = paymentStatus === 'Debt';
+      const isCancelled = paymentStatus === 'Cancelled';
+      const isPayment = (typeof activity.value === 'number' && activity.value < 0) || (activity.batchId && String(activity.batchId).startsWith('PAY_'));
+      if (isPayment) {
+        Icon = Banknote;
+        iconBg = colors.success;
+        label = t('dashboard.activity.debt_collected');
+        prefix = '+';
+      } else {
+        Icon = isCancelled ? AlertTriangle : ShoppingBag;
+        iconBg = isCancelled ? colors.error : (isOrder ? colors.primary : (isDebt ? colors.warning : colors.success));
+        const statusLabel = isCancelled ? t('sale.cancelled') : (isOrder ? t('dashboard.order') : (isDebt ? t('sale.credit') : t('dashboard.activity.sold')));
+        label = `${activity.quantity || 0} ${statusLabel}`;
+        prefix = isCancelled ? '' : '+';
+      }
     } else if (isExpense) {
       Icon = TrendingDown;
-      iconBg = '#FF3B30';
+      iconBg = colors.error;
       label = activity.expenseCategory || t('expense.not_recurring');
-      amountColor = '#FF3B30';
       prefix = '-';
     } else if (isAdjustment) {
       const adjType = activity.adjType || activity.type;
       if (adjType === 'price_up') {
         Icon = TrendingUp;
-        iconBg = '#34C759';
+        iconBg = colors.success;
         label = t('adjustment.price_increased');
-        amountColor = '#34C759';
         prefix = '+';
       } else if (adjType === 'price_down') {
         Icon = TrendingDown;
-        iconBg = '#FF3B30';
+        iconBg = colors.error;
         label = t('adjustment.price_decreased');
-        amountColor = '#FF3B30';
         prefix = '-';
       } else {
         Icon = AlertTriangle;
-        iconBg = '#FF9500';
+        iconBg = colors.warning;
         label = t('dashboard.activity.damaged');
-        // For damaged, show loss amount (quantity * purchase price)
-        amountColor = '#FF9500';
         prefix = '-';
       }
     } else if (isInventory) {
       Icon = Package;
       iconBg = colors.primary;
       label = `${activity.quantity || 0} ${t('dashboard.activity.added')}`;
-      amountColor = colors.success || '#34C759';
       prefix = '+';
     }
 
-    // Name
-    const activityName = activity.name || activity.label ||
-      (isSale ? t('inventory.header') : (isExpense ? t('expense.header') : (isAdjustment ? t('adjustment.header') : t('inventory.header'))));
+    // Name: use customerName for sales, fallback to item label
+    const activityName = isSale
+      ? (activity.customerName || t('sales.walk_in_customer'))
+      : (activity.name || activity.label || (isExpense ? t('expense.header') : (isAdjustment ? t('adjustment.header') : t('inventory.header'))));
     
     // Amount
     let displayAmt = typeof activity.amount === 'number' && !isNaN(activity.amount)
       ? activity.amount
       : (typeof activity.value === 'number' && !isNaN(activity.value) ? activity.value : null);
-    
+
     // For damaged items, compute loss as quantity * basePurchasePrice
     if (isAdjustment && activity.adjType === 'damaged' && activity.quantity && activity.basePurchasePrice) {
       displayAmt = activity.quantity * activity.basePurchasePrice;
+    }
+    // Payment records have negative value — show as positive
+    if (isSale && displayAmt !== null && displayAmt < 0) {
+      displayAmt = Math.abs(displayAmt);
     }
 
     return (
       <TouchableOpacity
         key={`${activity.category ?? activity.type}-${activity.id}`}
-        style={[styles.premiumActivityCard, { borderBottomColor: colors.border }]}
+        style={styles.activityCard}
         activeOpacity={0.7}
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           if (isSale) {
-            const sale = getSaleById(activity.id);
+            const sale = getSaleWithItemsById(activity.id);
             if (sale) setSelectedSale(sale);
           } else if (isExpense) {
             const expense = getExpenseById(activity.id);
@@ -355,29 +387,34 @@ SparklineChart.displayName = 'SparklineChart';
           }
         }}
       >
-        <View style={[styles.activityIconCircle, { backgroundColor: iconBg + '15' }]}>
-          <Icon size={20} color={iconBg} />
+        <View style={[styles.activityIconCircle, { backgroundColor: iconBg + '18' }]}>
+          <Icon size={18} color={iconBg} />
         </View>
 
         <View style={styles.activityInfo}>
           <AppText
-            style={[styles.activityName, { color: colors.text }]}
+            style={styles.activityName}
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={0.6}
           >
             {activityName}
           </AppText>
-          <AppText variant="title-sm" weight="medium" style={[styles.activityMeta, { color: colors.textSecondary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{label}</AppText>
+          <AppText variant="body-sm" weight="medium" style={styles.activityMeta} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{label}</AppText>
         </View>
 
         <View style={styles.activityRight}>
           {displayAmt !== null && (
-            <AppText variant="title-sm" weight="bold" shrink={false} style={[styles.activityAmount, { color: amountColor }]} numberOfLines={1}>
-              {prefix}{displayAmt.toLocaleString()} {t('common.etb')}
-            </AppText>
+            <AppNumber 
+              value={displayAmt} 
+              size="title-sm" 
+              weight="bold"
+              prefix={prefix}
+              suffix={' ' + t('common.etb')}
+              style={styles.activityAmount}
+            />
           )}
-          <AppText variant="caption" weight="medium" style={[styles.activityTime, { color: colors.textSecondary }]} numberOfLines={1}>
+          <AppText variant="caption" weight="medium" style={styles.activityTime} numberOfLines={1}>
             {activity.createdAt ? formatDate(new Date(activity.createdAt), calendarType, language) : t('dashboard.activity.just_now')}
           </AppText>
         </View>
@@ -390,37 +427,33 @@ SparklineChart.displayName = 'SparklineChart';
   const METRICS_DATA = metrics ? [
     { 
       label: t('dashboard.stats.gross_profit'), 
-      value: `${metrics.today.grossProfit.toLocaleString()} ${t('common.etb')}`, 
-      secondary: `${metrics.yesterday.grossProfit.toLocaleString()} ${t('common.etb')} ${t('dashboard.stats.yesterday')}`,
       todayValue: metrics.today.grossProfit,
       yesterdayValue: metrics.yesterday.grossProfit,
+      isCurrency: true,
     },
     { 
       label: t('dashboard.stats.revenue'), 
-      value: `${metrics.today.revenue.toLocaleString()} ${t('common.etb')}`, 
-      secondary: `${metrics.yesterday.revenue.toLocaleString()} ${t('common.etb')} ${t('dashboard.stats.yesterday')}`, 
       todayValue: metrics.today.revenue,
       yesterdayValue: metrics.yesterday.revenue,
+      isCurrency: true,
     },
     { 
       label: t('dashboard.stats.sales_count'), 
-      value: `${metrics.today.salesCount} ${t('common.items')}`, 
-      secondary: `${metrics.yesterday.salesCount} ${t('dashboard.stats.yesterday')}`, 
       todayValue: metrics.today.salesCount,
       yesterdayValue: metrics.yesterday.salesCount,
+      isCount: true,
     },
     { 
       label: t('dashboard.stats.expense'), 
-      value: `${metrics.today.expenses.toLocaleString()} ${t('common.etb')}`, 
-      secondary: `${metrics.yesterday.expenses.toLocaleString()} ${t('dashboard.stats.yesterday')}`, 
       todayValue: metrics.today.expenses,
       yesterdayValue: metrics.yesterday.expenses,
+      isCurrency: true,
     },
   ] : [
-    { label: t('dashboard.stats.gross_profit'), value: `0 ${t('common.etb')}`, secondary: `0 ${t('common.etb')}`, todayValue: 0, yesterdayValue: 0 },
-    { label: t('dashboard.stats.revenue'), value: `0 ${t('common.etb')}`, secondary: `0 ${t('common.etb')}`, todayValue: 0, yesterdayValue: 0 },
-    { label: t('dashboard.stats.sales_count'), value: `0 ${t('common.items')}`, secondary: `Target: 50 ${t('common.items')}`, todayValue: 0, yesterdayValue: 0 },
-    { label: t('dashboard.stats.expense'), value: `0 ${t('common.etb')}`, secondary: `0 ${t('common.etb')}`, todayValue: 0, yesterdayValue: 0 },
+    { label: t('dashboard.stats.gross_profit'), todayValue: 0, yesterdayValue: 0, isCurrency: true },
+    { label: t('dashboard.stats.revenue'), todayValue: 0, yesterdayValue: 0, isCurrency: true },
+    { label: t('dashboard.stats.sales_count'), todayValue: 0, yesterdayValue: 0, isCount: true },
+    { label: t('dashboard.stats.expense'), todayValue: 0, yesterdayValue: 0, isCurrency: true },
   ];
 
   const handleNextMetric = () => {
@@ -443,21 +476,15 @@ SparklineChart.displayName = 'SparklineChart';
     });
 
   const quickStats = [
-    { id: 1, title: t('dashboard.low_stock'), value: lowStockCount.toString(), icon: Package, color: '#FF9500' },
-    { id: 4, title: t('dashboard.credit_customers'), value: debtCustomersCount.toString(), icon: Handshake, color: '#34C759' },
-    { id: 5, title: t('dashboard.credit_items'), value: creditItemsCount.toString(), icon: Clock, color: '#FF3B30' },
+    { id: 1, title: t('dashboard.low_stock'), value: lowStockCount, icon: Package, color: colors.warning },
+    { id: 4, title: t('dashboard.credit_customers'), value: debtCustomersCount, icon: Handshake, color: colors.success },
+    { id: 5, title: t('dashboard.credit_items'), value: creditItemsCount, icon: Clock, color: colors.error },
   ];
 
   return (
     <>
-      <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <View style={{ flex: 1, backgroundColor: G.bg }}>
         
-        {/* Fixed Background Gradients for Premium Feel */}
-        <View style={StyleSheet.absoluteFill}>
-          <View style={[styles.bgGlow, { top: -100, left: -100, backgroundColor: colors.primary, opacity: 0.08 }]} />
-          <View style={[styles.bgGlow, { bottom: 100, right: -100, backgroundColor: colors.primary, opacity: 0.05 }]} />
-        </View>
-
         <ScrollView 
           showsVerticalScrollIndicator={false} 
           contentContainerStyle={[styles.container, { backgroundColor: 'transparent' }]}
@@ -470,133 +497,146 @@ SparklineChart.displayName = 'SparklineChart';
             />
           }
         >
-          {/* Custom Integrated Header */}
-          <View style={styles.integratedHeader}>
-            <View style={{ flex: 1 }}>
-              <AppText variant="body" weight="medium" style={[styles.greetingLabel, { color: colors.textSecondary }]} numberOfLines={2}>
-                {(() => {
-                  // Greeting respects the active time system. In
-                  // Ethiopian mode the user is greeted based on the
-                  // Ethiopian hour (12:00 ETH at 6 AM, etc.), so the
-                  // "morning" greeting fires earlier in the day.
-                  const localHour = new Date().getHours();
-                  const ethHour = toEthiopianHour(localHour);
-                  const activeHour = timeSystem === 'ethiopian' ? ethHour : localHour;
-                  if (activeHour < 6) return t('dashboard.greeting_evening');
-                  if (activeHour < 12) return t('dashboard.greeting_morning');
-                  if (activeHour < 18) return t('dashboard.greeting_afternoon');
-                  return t('dashboard.greeting_evening');
-                })()}
-              </AppText>
-              <AppText variant="heading-lg" weight="bold" style={[styles.businessNameHeading, { color: colors.text }]} numberOfLines={2}>{userProfile.name}</AppText>
-              <AppText variant="body-sm" weight="medium" style={[styles.dateLabel, { color: colors.textSecondary }]} numberOfLines={1}>
-                {formatDate(new Date(), calendarType, language)}
-              </AppText>
-            </View>
-            
-            <View style={styles.headerActions}>
-              <TouchableOpacity 
-                onPress={handleSeedData} 
-                style={[styles.headerIconBtn, { borderColor: colors.border }]}
-              >
-                <AppText variant="title" shrink={false} style={{ color: colors.text }}>🧪</AppText>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                onPress={() => router.push('/notifications')} 
-                style={[styles.headerIconBtn, { borderColor: colors.border }]}
-              >
-                  <NotificationBell size={24} />
-              </TouchableOpacity>
+          {/* Header */}
+          <View style={styles.glassHeader}>
+            <View style={styles.glassHeaderContent}>
+              <View style={{ flex: 1 }}>
+                <AppText variant="body" weight="medium" style={styles.greetingLabel} numberOfLines={2}>
+                  {(() => {
+                    const localHour = new Date().getHours();
+                    const ethHour = toEthiopianHour(localHour);
+                    const activeHour = timeSystem === 'ethiopian' ? ethHour : localHour;
+                    if (activeHour < 6) return t('dashboard.greeting_evening');
+                    if (activeHour < 12) return t('dashboard.greeting_morning');
+                    if (activeHour < 18) return t('dashboard.greeting_afternoon');
+                    return t('dashboard.greeting_evening');
+                  })()}
+                </AppText>
+                <AppText variant="heading-lg" weight="bold" style={styles.businessNameHeading} numberOfLines={2}>{userProfile.name}</AppText>
+                <AppText variant="body-sm" weight="medium" style={styles.dateLabel} numberOfLines={1}>
+                  {formatDate(new Date(), calendarType, language)}
+                </AppText>
+              </View>
+              
+              <View style={styles.headerActions}>
+                <TouchableOpacity 
+                  onPress={handleSeedData} 
+                  style={styles.headerIconBtn}
+                >
+                  <RefreshCw size={18} color={G.muted} />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  onPress={() => router.push('/notifications')} 
+                  style={styles.headerIconBtn}
+                >
+                  <NotificationBell size={20} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setShowUniversalSearch(true)}
+                  style={styles.headerIconBtn}
+                >
+                  <Search size={20} color={G.muted} />
+                </TouchableOpacity>
 
-              <TouchableOpacity 
-                onPress={openSidebar} 
-                activeOpacity={0.7}
-                style={[styles.headerAvatarWrap, { borderColor: colors.border }]}
-              >
-                <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={styles.headerAvatar} />
-                <View style={[styles.onlineIndicator, { backgroundColor: '#34C759', borderColor: colors.background }]} />
-              </TouchableOpacity>
+                <TouchableOpacity 
+                  onPress={openSidebar} 
+                  activeOpacity={0.7}
+                  style={styles.headerAvatarWrap}
+                >
+                  <View style={styles.headerAvatarGlow}>
+                    <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={styles.headerAvatar} />
+                  </View>
+                  <View style={[styles.onlineIndicator, { backgroundColor: colors.success }]} />
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
 
           {/* Dashboard Alert Cards - action required */}
-          <View style={{ paddingHorizontal: 25 }}>
+          <View style={{ paddingHorizontal: DASH_SPACING.gutter }}>
             <DashboardAlerts />
           </View>
 
-          {/* Metric Hub Area */}
-          <Animated.View entering={FadeIn.duration(600)} style={styles.metricHub}>
+          {/* Business Health Score */}
+          <View style={{ paddingHorizontal: DASH_SPACING.gutter }}>
+            <BusinessHealthCard health={businessHealth} loading={healthLoading} />
+          </View>
+
+          {/* Metric Hub */}
+          <Animated.View entering={FadeInDown.springify().damping(18).stiffness(120)} style={styles.metricHub}>
             <GestureDetector gesture={panGesture}>
-              <View style={[styles.metricCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                
-{/* Header row with metric details and status */}
-                 <View style={styles.metricCardHeader}>
-                   <View style={{ flex: 1 }}>
-                      <AppText variant="caption" weight="medium" style={[styles.metricLabel, { color: colors.textSecondary }]} numberOfLines={2}>
-                        {METRICS_DATA[currentMetric].label}
-                      </AppText>
-                      <AppText variant="display-lg" weight="black" shrink={false} style={[styles.metricValue, { color: colors.text, fontFamily: Fonts.black, fontSize: METRICS_DATA[currentMetric].value.length > 12 ? 22 : 28 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-                        {isPrivate ? '••••••' : METRICS_DATA[currentMetric].value}
+                <View style={styles.metricCard}>
+                <View style={styles.metricCardHeader}>
+                  <View style={{ flex: 1 }}>
+                    <AppText variant="caption" weight="medium" style={styles.metricLabel} numberOfLines={2}>
+                      {METRICS_DATA[currentMetric].label}
+                    </AppText>
+                    <AppNumber 
+                      value={isPrivate ? null : METRICS_DATA[currentMetric].todayValue} 
+                      size="display"
+                      prefix={METRICS_DATA[currentMetric].isCurrency ? t('common.etb') + ' ' : ''}
+                      suffix={METRICS_DATA[currentMetric].isCount ? ' ' + t('common.items') : ''}
+                      fallback="••••••"
+                      style={styles.metricValue}
+                    />
+                  </View>
+
+                  <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                    <View style={styles.statusPill}>
+                      <Zap size={12} color={G.fg} fill={G.fg} />
+                      <AppText variant="caption" weight="bold" shrink={false} style={styles.statusPillText} numberOfLines={1}>
+                        {METRICS_DATA[currentMetric].todayValue > METRICS_DATA[currentMetric].yesterdayValue ? t('dashboard.stats.growing') : (METRICS_DATA[currentMetric].todayValue < METRICS_DATA[currentMetric].yesterdayValue ? t('dashboard.stats.declining') : t('dashboard.stats.normal'))}
                       </AppText>
                     </View>
-
-                    <View style={{ alignItems: 'flex-end', gap: 6 }}>
-                      <View style={[styles.statusPill, { backgroundColor: colors.surface }]}>
-                        <Zap size={12} color={currentMetric === 3 ? '#FF3B30' : colors.primary} fill={currentMetric === 3 ? '#FF3B30' : colors.primary} />
-                        <AppText variant="caption" weight="bold" shrink={false} style={[styles.statusPillText, { color: colors.text }]} numberOfLines={1}>
-                          {METRICS_DATA[currentMetric].todayValue > METRICS_DATA[currentMetric].yesterdayValue ? t('dashboard.stats.growing') : (METRICS_DATA[currentMetric].todayValue < METRICS_DATA[currentMetric].yesterdayValue ? t('dashboard.stats.declining') : t('dashboard.stats.normal'))}
-                        </AppText>
-                      </View>
-                      <AppText variant="caption" weight="medium" style={[styles.metricSecondary, { color: colors.textSecondary }]} numberOfLines={1}>
-                        {METRICS_DATA[currentMetric].secondary}
+                    {METRICS_DATA[currentMetric].isCount && !metrics ? (
+                      <AppText variant="caption" weight="medium" style={styles.metricSecondary} numberOfLines={1}>
+                        {t('dashboard.target_items', { count: '50', items: t('common.items') })}
                       </AppText>
-                   </View>
-                 </View>
+                    ) : (
+                      <AppText variant="caption" weight="medium" style={styles.metricSecondary} numberOfLines={1}>
+                        <AppNumber value={METRICS_DATA[currentMetric].yesterdayValue} size="caption" weight="medium" prefix={METRICS_DATA[currentMetric].isCurrency ? t('common.etb') + ' ' : ''} />
+                        {' '}{t('dashboard.stats.yesterday')}
+                      </AppText>
+                    )}
+                  </View>
+                </View>
 
-                 {/* Animated Sparkline Trend */}
-                 <React.Fragment key={currentMetric}>
-                   <Animated.View entering={FadeInDown.duration(400)}>
-                     <SparklineChart
-                       todayValue={METRICS_DATA[currentMetric].todayValue}
-                       yesterdayValue={METRICS_DATA[currentMetric].yesterdayValue}
-                       color={currentMetric === 3 ? '#FF3B30' : colors.primary}
-                       loading={!metrics}
-                     />
-                   </Animated.View>
-                 </React.Fragment>
+                <SparklineChart
+                  todayValue={METRICS_DATA[currentMetric].todayValue}
+                  yesterdayValue={METRICS_DATA[currentMetric].yesterdayValue}
+                  color={G.fg}
+                  loading={!metrics}
+                />
 
-                {/* Card footer: navigation & page indicators */}
                 <View style={styles.metricCardFooter}>
                   <TouchableOpacity onPress={handlePrevMetric} style={styles.navArrow}>
-                    <ChevronLeft size={20} color={colors.textSecondary} />
+                    <ChevronLeft size={18} color={G.muted} />
                   </TouchableOpacity>
 
                   <View style={styles.dialPagination}>
                     {METRICS_DATA.map((_, i) => (
                       <React.Fragment key={i}>
-                        <View 
-                          style={[
-                            styles.paginationDot, 
-                            { backgroundColor: i === currentMetric ? colors.primary : colors.border, width: i === currentMetric ? 16 : 6 }
-                          ]} 
-                        />
+                        <View style={[
+                          styles.paginationDot,
+                          i === currentMetric && styles.paginationDotActive,
+                          { width: i === currentMetric ? 22 : 6 }
+                        ]} />
                       </React.Fragment>
                     ))}
                   </View>
 
                   <TouchableOpacity onPress={handleNextMetric} style={styles.navArrow}>
-                    <ChevronRight size={20} color={colors.textSecondary} />
+                    <ChevronRight size={18} color={G.muted} />
                   </TouchableOpacity>
                 </View>
-
-              </View>
+                    </View>
             </GestureDetector>
           </Animated.View>
 
-          {/* Quick Stats Scrollable Section */}
+          {/* Quick Stats */}
           <View style={styles.bentoSection}>
             <View style={styles.bentoSectionHeader}>
-              <AppText variant="title" weight="bold" style={[styles.bentoSectionTitle, { color: colors.text }]} numberOfLines={2}>{t('dashboard.quick_status')}</AppText>
+              <AppText variant="title" weight="bold" style={styles.bentoSectionTitle} numberOfLines={2}>{t('dashboard.quick_status')}</AppText>
             </View>
             <ScrollView 
               horizontal 
@@ -604,17 +644,16 @@ SparklineChart.displayName = 'SparklineChart';
               contentContainerStyle={styles.bentoGrid}
               decelerationRate="fast"
               snapToAlignment="start"
-              snapToInterval={width * 0.45 + 15}
+              snapToInterval={CARD_WIDTH + CARD_GAP}
             >
               {quickStats.map((stat, idx) => {
                 const StatIcon = stat.icon;
                 return (
                   <React.Fragment key={stat.id}>
                     <Animated.View 
-                      entering={FadeInDown.delay(100 * idx).duration(500)}
+                      entering={FadeInDown.delay(80 * idx).springify().damping(20).stiffness(140)}
                     >
                     <TouchableOpacity 
-                      style={[styles.bentoCard, { backgroundColor: colors.card, borderColor: colors.border }]} 
                       activeOpacity={0.7}
                       onPress={() => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -623,19 +662,21 @@ SparklineChart.displayName = 'SparklineChart';
                         else if (stat.id === 5) setActiveModal('onCreditItems');
                       }}
                     >
-                      <View style={styles.bentoCardTop}>
+                    <View style={styles.bentoCard}>
+                        <View style={styles.bentoCardTop}>
                         <View style={[styles.bentoIconBox, { backgroundColor: stat.color + '20' }]}>
                           <StatIcon size={20} color={stat.color} />
                         </View>
-                        <View style={[styles.bentoArrow, { backgroundColor: stat.color + '15' }]}>
-                          <ArrowUpRight size={14} color={stat.color} />
+                        <View style={styles.bentoArrow}>
+                          <ArrowUpRight size={13} color={G.muted} />
                         </View>
                       </View>
-              <AppText variant="display" weight="extrabold" shrink={false} style={[styles.bentoValue, { color: colors.text }]} numberOfLines={1}>{stat.value}</AppText>
-              <AppText variant="caption" weight="medium" style={[styles.bentoLabel, { color: colors.textSecondary }]} numberOfLines={2}>{stat.title}</AppText>
-                      <View style={[styles.bentoViewBtn, { backgroundColor: stat.color + '12' }]}>
-                        <AppText variant="caption" weight="bold" shrink={false} style={[styles.bentoViewBtnText, { color: stat.color }]} numberOfLines={1}>View →</AppText>
+                      <AppNumber value={stat.value} size="display" style={styles.bentoValue} />
+                      <AppText variant="caption" weight="medium" style={[styles.bentoLabel, { color: G.muted }]} numberOfLines={2}>{stat.title}</AppText>
+                      <View style={[styles.bentoViewBtn, { backgroundColor: stat.color + '18' }]}>
+                        <AppText variant="caption" weight="bold" shrink={false} style={[styles.bentoViewBtnText, { color: stat.color }]} numberOfLines={1}>{t('dashboard.view')}</AppText>
                       </View>
+                </View>
                     </TouchableOpacity>
                     </Animated.View>
                   </React.Fragment>
@@ -644,15 +685,20 @@ SparklineChart.displayName = 'SparklineChart';
             </ScrollView>
           </View>
 
-          {/* Productivity Feed Footer */}
+          {/* Business Assistant */}
+          <View style={{ paddingHorizontal: DASH_SPACING.gutter }}>
+            <BusinessAssistant insights={assistantInsights} loading={assistantLoading} />
+          </View>
+
+          {/* Activity Feed */}
           <View style={styles.feedSection}>
             <View style={styles.feedHeader}>
               <View>
-                <AppText variant="heading" weight="bold" style={[styles.feedTitle, { color: colors.text }]} numberOfLines={2}>{t('dashboard.recent_activity')}</AppText>
-                <AppText variant="body-sm" weight="medium" style={[styles.feedSub, { color: colors.textSecondary }]} numberOfLines={1}>{t('dash.live_overview')}</AppText>
+                <AppText variant="heading" weight="bold" style={styles.feedTitle} numberOfLines={2}>{t('dashboard.recent_activity')}</AppText>
+                <AppText variant="body-sm" weight="medium" style={styles.feedSub} numberOfLines={1}>{t('dash.live_overview')}</AppText>
               </View>
               <TouchableOpacity onPress={() => setShowActivityLedger(true)} style={styles.viewAllBtn}>
-                <AppText variant="body" weight="bold" shrink={false} style={[styles.viewAllBtnText, { color: colors.primary }]} numberOfLines={1}>{t('common.view_all')}</AppText>
+                <AppText variant="body" weight="bold" shrink={false} style={styles.viewAllBtnText} numberOfLines={1}>{t('common.view_all')}</AppText>
               </TouchableOpacity>
             </View>
 
@@ -660,7 +706,7 @@ SparklineChart.displayName = 'SparklineChart';
               <View style={styles.feedList}>
                 {recentActivities.map((activity, idx) => (
                   <React.Fragment key={idx}>
-                    <Animated.View entering={FadeInDown.delay(200 + (idx * 50)).duration(500)}>
+                    <Animated.View entering={FadeInDown.delay(150 + (idx * 40)).springify().damping(22).stiffness(150)}>
                       {renderActivityItem(activity)}
                     </Animated.View>
                   </React.Fragment>
@@ -668,45 +714,51 @@ SparklineChart.displayName = 'SparklineChart';
               </View>
             ) : (
               <View style={styles.emptyFeed}>
-                 <AppText variant="caption" weight="medium" style={[styles.emptyFeedText, { color: colors.textSecondary }]} numberOfLines={2}>{t('dashboard.no_activity')}</AppText>
+                <View style={styles.emptyFeedIcon}>
+                  <Clock size={24} color={G.muted} />
+                </View>
+                <AppText variant="body" weight="medium" style={styles.emptyFeedText} numberOfLines={2}>{t('dashboard.no_activity')}</AppText>
+                <AppText variant="caption" weight="medium" style={{ color: G.muted, opacity: 0.5, marginTop: 4 }} numberOfLines={1}>{t('dashboard.activity_will_appear')}</AppText>
               </View>
             )}
           </View>
         </ScrollView>
 
-        {/* Expanding Smart FAB */}
+        {/* Smart FAB */}
         <View style={styles.dockedBarWrapper}>
-          <Animated.View style={[expandStyle, { height: 56, borderRadius: 28, overflow: 'hidden' }]}>
-            <BlurView intensity={80} tint={theme !== 'light' ? 'dark' : 'light'} style={[styles.dockedBar, { borderColor: colors.border, paddingHorizontal: isBarExpanded ? 10 : 0 }]}>
+          <Animated.View style={[expandStyle, { height: 60, borderRadius: 30, overflow: 'hidden' }]}>
+            <View style={[styles.dockedBar, { paddingHorizontal: isBarExpanded ? 12 : 0 }]}>
               {isBarExpanded && (
                 <Animated.View entering={FadeIn.delay(100)} exiting={FadeOut.duration(100)}>
                   <TouchableOpacity style={styles.dockBtn} onPress={() => { setShowSearch(true); setIsBarExpanded(false); }}>
-                    <Search size={22} color={colors.textSecondary} />
+                    <ShoppingBag size={20} color={G.muted} />
                   </TouchableOpacity>
                 </Animated.View>
               )}
               
               <TouchableOpacity 
-                style={[styles.dockMainBtn, { backgroundColor: isBarExpanded ? colors.text : colors.text }]} 
-                activeOpacity={0.8}
+                style={styles.dockMainBtn} 
+                activeOpacity={0.85}
                 onPress={() => setIsBarExpanded(!isBarExpanded)}
               >
-                <Plus size={24} color={colors.background} />
+                <Animated.View entering={FadeIn.duration(200)}>
+                  {isBarExpanded ? <X size={22} color={G.bg} /> : <Plus size={22} color={G.bg} />}
+                </Animated.View>
               </TouchableOpacity>
               
               {isBarExpanded && (
                 <Animated.View entering={FadeIn.delay(100)} exiting={FadeOut.duration(100)}>
                   <TouchableOpacity style={styles.dockBtn} onPress={() => { setShowAddAsset(true); setIsBarExpanded(false); }}>
-                    <Package size={22} color={colors.textSecondary} />
+                    <Package size={20} color={G.muted} />
                   </TouchableOpacity>
                 </Animated.View>
               )}
-            </BlurView>
+            </View>
           </Animated.View>
         </View>
       </View>
 
-      {/* Bottom Sheet Modal - placed OUTSIDE the scroll tree */}
+      {/* Bottom Sheet Modal */}
       <Modal
         visible={activeModal !== null}
         transparent
@@ -715,17 +767,17 @@ SparklineChart.displayName = 'SparklineChart';
       >
         <View style={styles.modalOverlay}>
           <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setActiveModal(null)} />
-          <View style={[styles.bottomSheetContainer, { backgroundColor: colors.background }]}>
+          <View style={styles.bottomSheetContainer}>
             <View style={styles.modalHeader}>
-              <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+              <View style={styles.modalHandle} />
               <TouchableOpacity onPress={() => setActiveModal(null)} style={styles.closeBtn}>
-                <AppText variant="title" shrink={false} style={[styles.closeBtnText, { color: colors.textSecondary }]}>✕</AppText>
+                <AppText variant="title" shrink={false} style={styles.closeBtnText}>âœ•</AppText>
               </TouchableOpacity>
             </View>
-            <AppText variant="heading" weight="bold" style={[styles.sheetTitle, { color: colors.text }]} numberOfLines={2}>
+            <AppText variant="heading" weight="bold" style={styles.sheetTitle} numberOfLines={2}>
               {activeModal === 'lowStock' ? t('dashboard.low_stock') : activeModal === 'onCreditCustomers' ? t('dashboard.credit_customers') : t('dashboard.credit_items')}
             </AppText>
-            <View style={{ maxHeight: 400 }}>
+            <View style={{ height: 400 }}>
               {activeModal === 'lowStock' && <LowStockItemsScreen />}
               {activeModal === 'onCreditCustomers' && <OnCreditCustomersScreen />}
               {activeModal === 'onCreditItems' && <OnCreditItemsScreen />}
@@ -742,9 +794,9 @@ SparklineChart.displayName = 'SparklineChart';
       >
         <View style={styles.modalOverlay}>
           <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowActivityLedger(false)} />
-          <View style={[styles.bottomSheetContainer, { height: Dimensions.get('window').height * 0.85, maxHeight: undefined, backgroundColor: colors.background }]}>
+          <View style={[styles.bottomSheetContainer, { height: Dimensions.get('window').height * 0.90 }]}>
             <View style={styles.modalHeader}>
-              <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+              <View style={styles.modalHandle} />
             </View>
             <ActivityLedgerScreen onClose={() => {
               setShowActivityLedger(false);
@@ -754,7 +806,7 @@ SparklineChart.displayName = 'SparklineChart';
         </View>
       </Modal>
 
-      {/* Record and Details Bottom Sheets */}
+      {/* Sales Record Sheet */}
       <Modal
         visible={showSalesRecord}
         transparent
@@ -763,9 +815,9 @@ SparklineChart.displayName = 'SparklineChart';
       >
         <View style={styles.modalOverlay}>
           <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowSalesRecord(false)} />
-          <View style={[styles.bottomSheetContainer, { height: Dimensions.get('window').height * 0.85, maxHeight: undefined, backgroundColor: colors.background }]}>
+          <View style={[styles.bottomSheetContainer, { height: Dimensions.get('window').height * 0.90 }]}>
             <View style={styles.modalHeader}>
-              <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+              <View style={styles.modalHandle} />
             </View>
             <SalesRecordScreen onClose={() => setShowSalesRecord(false)} />
           </View>
@@ -804,35 +856,40 @@ SparklineChart.displayName = 'SparklineChart';
       </Modal>
 
       <Modal visible={showSearch} transparent animationType="slide" onRequestClose={() => setShowSearch(false)}>
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowSearch(false)} />
-          <View style={[styles.bottomSheetContainer, { height: Dimensions.get('window').height * 0.85, maxHeight: undefined, backgroundColor: colors.background }]}>
-            <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
-            <SearchScreen 
-               onSelectItem={(item: any) => {
-                 const existing = pendingSales.find(s => s.id === item.id);
-                 if (existing) {
-                   setPendingSales(pendingSales.map(s => s.id === item.id ? { ...s, quantity: s.quantity + 1 } : s));
-                 } else {
-                   setPendingSales([...pendingSales, {
-                     ...item,
-                     id: item.id,
-                     quantity: 1,
-                     unitType: 'base',
-                   }]);
-                 }
-                 setShowSearch(false);
-                 setTimeout(() => setShowPending(true), 300);
-               }} 
-            />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.modalOverlay}>
+            <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowSearch(false)} />
+            <View style={[styles.bottomSheetContainer, { maxHeight: Dimensions.get('window').height * 0.90, backgroundColor: colors.background, flex: 1 }]}>
+              <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
+              <SearchScreen 
+                 onSelectItem={(item: any) => {
+                   const existing = pendingSales.find(s => s.id === item.id);
+                   if (existing) {
+                     setPendingSales(pendingSales.map(s => s.id === item.id ? { ...s, quantity: s.quantity + 1 } : s));
+                   } else {
+                     setPendingSales([...pendingSales, {
+                       ...item,
+                       id: item.id,
+                       quantity: 1,
+                       unitType: 'base',
+                     }]);
+                   }
+                   setShowSearch(false);
+                   setTimeout(() => setShowPending(true), 300);
+                 }} 
+              />
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal visible={showPending} transparent animationType="slide" onRequestClose={() => setShowPending(false)}>
         <View style={styles.modalOverlay}>
           <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowPending(false)} />
-          <View style={[styles.bottomSheetContainer, { height: Dimensions.get('window').height * 0.85, maxHeight: undefined, backgroundColor: colors.background }]}>
+          <View style={[styles.bottomSheetContainer, { height: Dimensions.get('window').height * 0.90, backgroundColor: colors.background }]}>
             <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
             <PendingSales 
                items={pendingSales}
@@ -856,21 +913,26 @@ SparklineChart.displayName = 'SparklineChart';
       </Modal>
 
       <Modal visible={showSaleFormFlow} transparent animationType="slide" onRequestClose={() => setShowSaleFormFlow(false)}>
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowSaleFormFlow(false)} />
-          <View style={[styles.bottomSheetContainer, { height: Dimensions.get('window').height * 0.85, maxHeight: undefined, backgroundColor: colors.background }]}>
-            <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.modalOverlay}>
+            <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowSaleFormFlow(false)} />
+            <View style={[styles.bottomSheetContainer, { maxHeight: Dimensions.get('window').height * 0.90, backgroundColor: colors.background, flex: 1 }]}>
+              <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
             <GlobalCheckout 
                cart={pendingSales}
                onBack={() => {
                  setShowSaleFormFlow(false);
                  setTimeout(() => setShowPending(true), 300);
                }}
-               onFinish={async (saleMetadata: any) => {
-                 try {
-                   const { insertSale } = await import('@/database/db');
-                   
-                   for (const item of pendingSales) {
+                onFinish={async (saleMetadata: any) => {
+                  try {
+                    const { insertSale } = await import('@/database/db');
+                    const batchId = Date.now().toString() + '_' + Math.random().toString(36).substring(2, 8);
+                    
+                    for (const item of pendingSales) {
                      // Validate item data
                      if (!item.id || typeof item.id !== 'number') {
                        throw new Error(`Invalid item ID: ${item.id}`);
@@ -886,21 +948,24 @@ SparklineChart.displayName = 'SparklineChart';
                      const customerName = saleMetadata.customerName ? saleMetadata.customerName.trim() : '';
                      const customerPhone = saleMetadata.customerPhone ? saleMetadata.customerPhone.trim() : '';
                      const discount = Math.max(0, Number(saleMetadata.discount) || 0);
-                     const vat = Math.min(100, Math.max(0, Number(saleMetadata.vat) || 0));
-                     
-                     await insertSale({
-                       itemId: item.id,
-                       quantity: item.quantity,
-                       unit: finalUnitLabel,
-                       unitType: item.unitType,
-                       discount: discount / pendingSales.length,
-                       vat: vat,
-                       totalPrice: finalUnitPrice * item.quantity,
-                       paymentMethod: saleMetadata.paymentMethod,
-                       paymentStatus: saleMetadata.paymentStatus,
-                       customerName: customerName,
-                       customerPhone: customerPhone,
-                     });
+                      const vat = Math.min(100, Math.max(0, Number(saleMetadata.vat) || 0));
+                      const taxType = saleMetadata.taxType || "VAT";
+                      
+                       await insertSale({
+                         itemId: item.id,
+                         quantity: item.quantity,
+                         unit: finalUnitLabel,
+                         unitType: item.unitType,
+                         discount: discount / pendingSales.length,
+                         vat: vat,
+                         taxType: taxType,
+                         totalPrice: finalUnitPrice * item.quantity,
+                        paymentMethod: saleMetadata.paymentMethod,
+                        paymentStatus: saleMetadata.paymentStatus,
+                        customerName: customerName,
+                        customerPhone: customerPhone,
+                        batchId,
+                      });
                    }
                    setPendingSales([]);
                    setShowSaleFormFlow(false);
@@ -912,7 +977,7 @@ SparklineChart.displayName = 'SparklineChart';
                      paymentStatus: saleMetadata.paymentStatus,
                      customerName: saleMetadata.customerName,
                    });
-                  } catch (e) {
+                  } catch {
                     await dialog.alert({
                       title: t('common.error'),
                       message: t('sale.save_error'),
@@ -923,22 +988,28 @@ SparklineChart.displayName = 'SparklineChart';
             />
           </View>
         </View>
-      </Modal>
+      </KeyboardAvoidingView>
+    </Modal>
 
       <Modal visible={showAddAsset} transparent animationType="slide" onRequestClose={() => setShowAddAsset(false)}>
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowAddAsset(false)} />
-          <View style={[styles.bottomSheetContainer, { height: Dimensions.get('window').height * 0.85, maxHeight: undefined, backgroundColor: colors.background }]}>
-            <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
-            <AddAssetFlow 
-              onSuccess={() => {
-                setShowAddAsset(false);
-                loadDashboardData();
-              }} 
-              onClose={() => setShowAddAsset(false)}
-            />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.modalOverlay}>
+            <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowAddAsset(false)} />
+            <View style={[styles.bottomSheetContainer, { maxHeight: Dimensions.get('window').height * 0.90, backgroundColor: colors.background, flex: 1 }]}>
+              <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
+              <AddAssetFlow 
+                onSuccess={() => {
+                  setShowAddAsset(false);
+                  loadDashboardData();
+                }} 
+                onClose={() => setShowAddAsset(false)}
+              />
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal visible={!!lastSaleData} transparent animationType="fade">
@@ -947,20 +1018,46 @@ SparklineChart.displayName = 'SparklineChart';
           onClose={() => setLastSaleData(null)} 
         />
       </Modal>
+      <UniversalSearch
+        visible={showUniversalSearch}
+        onClose={() => setShowUniversalSearch(false)}
+        onNavigate={(result) => {
+          setShowUniversalSearch(false);
+          const data = result.data;
+          switch (result.type) {
+            case 'sale':
+              setSelectedSale(data);
+              break;
+            case 'expense':
+              setSelectedExpense(data);
+              break;
+            case 'adjustment':
+              setSelectedAdjustment(data);
+              break;
+            case 'item':
+            case 'category':
+              router.push('/inventory');
+              break;
+            case 'budget':
+              router.push('/budget');
+              break;
+            case 'warehouse':
+            case 'contact':
+              router.push('/contacts');
+              break;
+            default:
+              break;
+          }
+        }}
+      />
     </>
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (G: any) => StyleSheet.create({
   container: {
     paddingBottom: 220,
     paddingTop: 10,
-  },
-  bgGlow: {
-    position: 'absolute',
-    width: 300,
-    height: 300,
-    borderRadius: 150,
   },
   integratedHeader: {
     flexDirection: 'row',
@@ -980,75 +1077,108 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 24,
     borderWidth: 1,
+    borderColor: G.borderGlass,
+    backgroundColor: G.surfaceFill,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
+    shadowColor: G.shadowColor,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: G.shadowOuter * 0.5,
+    shadowRadius: 4,
+    elevation: 1,
   },
   notifBadge: {
     position: 'absolute',
-    top: -2,
-    right: -2,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
+    top: -3,
+    right: -3,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: 5,
     borderWidth: 2,
+    borderColor: G.bg,
   },
   notifBadgeText: {
     fontFamily: Fonts.bold,
+    fontSize: 10,
+  },
+  glassHeader: {
+    paddingHorizontal: DASH_SPACING.gutter,
+    paddingTop: Platform.OS === 'ios' ? 60 : 50,
+    paddingBottom: 20,
+  },
+  glassHeaderContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   greetingLabel: {
     fontFamily: Fonts.medium,
     marginBottom: 2,
+    color: G.muted,
   },
   businessNameHeading: {
     fontFamily: Fonts.bold,
     marginBottom: 2,
+    color: G.fg,
   },
   dateLabel: {
     fontFamily: Fonts.medium,
     opacity: 0.7,
+    color: G.muted,
   },
   headerAvatarWrap: {
     width: 50,
     height: 50,
     borderRadius: 25,
     borderWidth: 1.5,
+    borderColor: G.borderGlassStrong,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 2,
     position: 'relative',
+    backgroundColor: G.surfaceFill,
   },
   headerAvatar: {
     width: '100%',
     height: '100%',
     borderRadius: 25,
   },
+  headerAvatarGlow: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 25,
+    overflow: 'hidden',
+  },
   onlineIndicator: {
     width: 14,
     height: 14,
     borderRadius: 7,
-    borderWidth: 2,
+    borderWidth: 2.5,
+    borderColor: G.bg,
     position: 'absolute',
     bottom: 0,
     right: 0,
   },
   metricHub: {
-    paddingHorizontal: 25,
-    marginTop: 15,
-    marginBottom: 30,
+    paddingHorizontal: DASH_SPACING.gutter,
+    marginTop: 8,
+    marginBottom: 24,
   },
   metricCard: {
-    borderRadius: 24,
+    padding: 24,
+    borderRadius: DASH_SPACING.cardRadiusLg,
+    backgroundColor: G.surfaceFill,
     borderWidth: 1,
-    padding: 20,
-    shadowColor: '#000',
+    borderColor: G.borderGlass,
+    shadowColor: G.shadowColor,
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 3,
+    shadowOpacity: G.shadowOuter,
+    shadowRadius: 24,
+    elevation: 6,
   },
   metricCardHeader: {
     flexDirection: 'row',
@@ -1061,13 +1191,21 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 4,
+    color: G.muted,
   },
   metricValue: {
-    fontFamily: Fonts.extrabold,
-    letterSpacing: -0.5,
+    fontFamily: Fonts.bold,
+    color: G.fg,
   },
   metricSecondary: {
     fontFamily: Fonts.medium,
+    color: G.muted,
+  },
+  metricNoData: {
+    textAlign: 'center',
+    marginVertical: 40,
+    fontFamily: Fonts.medium,
+    color: G.muted,
   },
   metricCardFooter: {
     flexDirection: 'row',
@@ -1076,56 +1214,89 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   navArrow: {
-    padding: 6,
-    borderRadius: 12,
+    padding: 10,
+    borderRadius: 14,
+    backgroundColor: G.surfaceFillStrong,
+    borderWidth: 1,
+    borderColor: G.borderGlass,
+    shadowColor: G.shadowColor,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: G.shadowOuter * 0.5,
+    shadowRadius: 4,
+    elevation: 2,
   },
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
     gap: 6,
+    backgroundColor: G.surfaceFillStrong,
+    borderWidth: 1,
+    borderColor: G.borderGlass,
+    shadowColor: G.shadowColor,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: G.shadowOuter * 0.4,
+    shadowRadius: 4,
+    elevation: 2,
   },
   statusPillText: {
     fontFamily: Fonts.bold,
+    color: G.fg,
   },
   dialPagination: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 6,
+    gap: 7,
     marginTop: 10,
   },
   paginationDot: {
     height: 6,
     borderRadius: 3,
+    backgroundColor: G.mutedLight,
+  },
+  paginationDotActive: {
+    backgroundColor: G.fg,
+    shadowColor: G.fg,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.10,
+    shadowRadius: 4,
+    elevation: 2,
   },
   bentoSection: {
-    paddingLeft: 25,
-    marginBottom: 30,
+    paddingLeft: DASH_SPACING.gutter,
+    marginBottom: 24,
   },
   bentoSectionHeader: {
-    paddingRight: 25,
+    paddingRight: DASH_SPACING.gutter,
     marginBottom: 14,
   },
   bentoSectionTitle: {
     fontFamily: Fonts.bold,
+    color: G.fg,
   },
   bentoGrid: {
     flexDirection: 'row',
-    paddingRight: 25,
+    paddingRight: DASH_SPACING.gutter,
     gap: 15,
   },
   bentoCard: {
     flex: 1,
-    padding: 16,
-    borderRadius: 20,
-    borderWidth: 1,
+    padding: 18,
     position: 'relative',
-    overflow: 'hidden',
-    minHeight: 140,
+    minHeight: 150,
     justifyContent: 'space-between',
+    borderRadius: DASH_SPACING.cardRadius,
+    backgroundColor: G.surfaceFill,
+    borderWidth: 1,
+    borderColor: G.borderGlass,
+    shadowColor: G.shadowColor,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: G.shadowOuter * 0.8,
+    shadowRadius: 18,
+    elevation: 4,
   },
   bentoCardTop: {
     flexDirection: 'row',
@@ -1134,37 +1305,45 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   bentoIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 42,
+    height: 42,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: G.borderSubtle,
+    overflow: 'hidden',
   },
   bentoValue: {
     fontFamily: Fonts.extrabold,
     marginBottom: 4,
     letterSpacing: -0.5,
+    color: G.fg,
   },
   bentoLabel: {
     fontFamily: Fonts.medium,
     lineHeight: 16,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   bentoArrow: {
     width: 28,
     height: 28,
     borderRadius: 8,
+    backgroundColor: G.surfaceFillStrong,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: G.borderSubtle,
   },
   bentoViewBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 8,
     alignSelf: 'flex-start',
   },
   bentoViewBtnText: {
     fontFamily: Fonts.bold,
+    fontSize: 11,
   },
   bentoArrowLabel: {
     position: 'absolute',
@@ -1178,53 +1357,99 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bold,
   },
   viewAllBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    backgroundColor: G.surfaceFill,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: G.borderGlass,
+    overflow: 'hidden',
+    position: 'relative',
+    shadowColor: G.shadowColor,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: G.shadowOuter * 0.6,
+    shadowRadius: 6,
+    elevation: 2,
   },
   emptyFeedText: {
     fontFamily: Fonts.medium,
+    color: G.muted,
   },
   closeBtn: {
     position: 'absolute',
     top: 15,
     right: 20,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: G.surfaceFillStrong,
+    borderWidth: 1,
+    borderColor: G.borderGlass,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
+    shadowColor: G.shadowColor,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: G.shadowOuter * 0.5,
+    shadowRadius: 4,
+    elevation: 2,
   },
   closeBtnText: {
     fontFamily: Fonts.medium,
+    color: G.muted,
   },
   feedSection: {
-    paddingHorizontal: 25,
+    paddingHorizontal: DASH_SPACING.gutter,
+    marginTop: 8,
   },
   feedHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   feedTitle: {
     fontFamily: Fonts.bold,
     marginBottom: 2,
+    color: G.fg,
   },
   feedSub: {
     fontFamily: Fonts.medium,
+    color: G.muted,
   },
   viewAllBtnText: {
     fontFamily: Fonts.bold,
+    color: G.fgSecondary,
   },
   feedList: {
     gap: 0,
   },
+  activityCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    marginBottom: 10,
+    borderRadius: 16,
+    backgroundColor: G.surfaceFill,
+    borderWidth: 1,
+    borderColor: G.borderGlass,
+    shadowColor: G.shadowColor,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
   premiumActivityCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 18,
-    borderBottomWidth: 1,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 16,
+    backgroundColor: G.bgCard,
+    borderWidth: 1,
+    borderColor: G.border,
   },
   activityIconCircle: {
     width: 46,
@@ -1233,6 +1458,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 15,
+    borderWidth: 1,
+    borderColor: G.borderSubtle,
+    overflow: 'hidden',
   },
   activityInfo: {
     flex: 1,
@@ -1240,9 +1468,11 @@ const styles = StyleSheet.create({
   activityName: {
     fontFamily: Fonts.bold,
     marginBottom: 2,
+    color: G.fg,
   },
   activityMeta: {
     fontFamily: Fonts.medium,
+    color: G.muted,
   },
   activityRight: {
     alignItems: 'flex-end',
@@ -1253,10 +1483,29 @@ const styles = StyleSheet.create({
   },
   activityTime: {
     fontFamily: Fonts.medium,
+    color: G.muted,
   },
   emptyFeed: {
-    paddingVertical: 40,
+    paddingVertical: 56,
     alignItems: 'center',
+    backgroundColor: G.surfaceFill,
+    borderRadius: DASH_SPACING.cardRadius,
+    borderWidth: 1,
+    borderColor: G.borderGlass,
+    marginTop: 8,
+    gap: 8,
+    overflow: 'hidden',
+  },
+  emptyFeedIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: G.surfaceFillStrong,
+    borderWidth: 1,
+    borderColor: G.borderGlass,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
   },
   dockedBarWrapper: {
     position: 'absolute',
@@ -1274,12 +1523,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-evenly',
     paddingHorizontal: 10,
     borderWidth: 1,
+    borderColor: G.borderLight,
+    backgroundColor: G.bgCard || G.surfaceFill,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
   dockBtn: {
     width: 50,
@@ -1291,26 +1542,34 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
+    backgroundColor: G.fg,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 6,
+    shadowColor: G.fg,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
   modalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
+    margin: 0,
   },
   modalBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
   },
   bottomSheetContainer: {
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     paddingBottom: 40,
+    backgroundColor: G.surfaceFill,
+    borderWidth: 1,
+    borderColor: G.borderGlass,
+    borderBottomWidth: 0,
+    maxHeight: Dimensions.get('window').height * 0.90,
+    elevation: 8,
   },
   modalHeader: {
     alignItems: 'center',
@@ -1321,11 +1580,13 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
+    backgroundColor: G.mutedLight,
   },
   sheetTitle: {
     fontFamily: Fonts.bold,
-    paddingHorizontal: 25,
+    paddingHorizontal: DASH_SPACING.gutter,
     paddingBottom: 20,
+    color: G.fg,
   },
 });
 

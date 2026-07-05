@@ -11,6 +11,26 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useNotificationCenter } from '@/context/NotificationContext';
+let Notifications: any;
+try {
+  Notifications = require('expo-notifications');
+} catch {
+  Notifications = {
+    setNotificationHandler: async () => {},
+    setNotificationChannelAsync: async () => {},
+    getPermissionsAsync: async () => ({ status: 'undetermined' }),
+    requestPermissionsAsync: async () => ({ status: 'undetermined' }),
+    getExpoPushTokenAsync: async () => undefined,
+    addNotificationReceivedListener: () => ({ remove: () => {} }),
+    addNotificationResponseReceivedListener: () => ({ remove: () => {} }),
+    scheduleNotificationAsync: async () => 'noop',
+    cancelAllScheduledNotificationsAsync: async () => {},
+    dismissNotificationAsync: async () => {},
+    SchedulableTriggerInputTypes: { TIME_INTERVAL: 'timeInterval' },
+    AndroidImportance: { MAX: 5, HIGH: 4, DEFAULT: 3 },
+    NotificationBehavior: null,
+  };
+}
 
 export interface PushNotificationState {
   expoPushToken?: any;
@@ -34,16 +54,16 @@ const setupHandlerOnce = () => {
   try {
     const isExpoGo = Constants.appOwnership === 'expo';
     if (isExpoGo && Platform.OS === 'android') return;
-    const Notifications = require('expo-notifications');
     Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-      }),
+      handleNotification: async () =>
+        ({
+          shouldShowAlert: true,
+          shouldPlaySound: true,
+          shouldSetBadge: true,
+        } as any),
     });
     cachedHandlerSet = true;
-  } catch (e) {
+  } catch {
     // ignore
   }
 };
@@ -65,7 +85,6 @@ export const usePushNotifications = (): PushNotificationState & {
     try {
       const isExpoGo = Constants.appOwnership === 'expo';
       if (isExpoGo && Platform.OS === 'android') return null;
-      const Notifications = require('expo-notifications');
       const id = await Notifications.scheduleNotificationAsync({
         content: {
           title: input.title,
@@ -90,9 +109,8 @@ export const usePushNotifications = (): PushNotificationState & {
     try {
       const isExpoGo = Constants.appOwnership === 'expo';
       if (isExpoGo && Platform.OS === 'android') return;
-      const Notifications = require('expo-notifications');
       await Notifications.cancelAllScheduledNotificationsAsync();
-    } catch (e) {
+    } catch {
       // ignore
     }
   }, []);
@@ -101,9 +119,8 @@ export const usePushNotifications = (): PushNotificationState & {
     try {
       const isExpoGo = Constants.appOwnership === 'expo';
       if (isExpoGo && Platform.OS === 'android') return;
-      const Notifications = require('expo-notifications');
       await Notifications.dismissNotificationAsync(id);
-    } catch (e) {
+    } catch {
       // ignore
     }
   }, []);
@@ -115,8 +132,6 @@ export const usePushNotifications = (): PushNotificationState & {
       console.log('Skipping push notifications setup: Not supported in Expo Go on Android.');
       return;
     }
-
-    const Notifications = require('expo-notifications');
 
     registerForPushNotificationsAsync().then((token) => {
       setExpoPushToken(token);
@@ -151,10 +166,10 @@ export const usePushNotifications = (): PushNotificationState & {
 
     return () => {
       if (notificationListener.current) {
-        Notifications.removeNotificationSubscription(notificationListener.current);
+        notificationListener.current.remove();
       }
       if (responseListener.current) {
-        Notifications.removeNotificationSubscription(responseListener.current);
+        responseListener.current.remove();
       }
     };
   }, [router, refresh, markRead]);
@@ -173,7 +188,6 @@ async function registerForPushNotificationsAsync() {
   let token;
   const isExpoGo = Constants.appOwnership === 'expo';
   if (isExpoGo && Platform.OS === 'android') return undefined;
-  const Notifications = require('expo-notifications');
 
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('default', {

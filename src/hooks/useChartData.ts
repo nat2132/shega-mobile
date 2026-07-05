@@ -24,7 +24,7 @@
 //   if (state !== 'ready') return <BarChartSkeleton ... />;
 //   return <BarChart data={sanitized} ... />;
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
 export type ChartState = 'loading' | 'empty' | 'ready' | 'error';
 
@@ -69,18 +69,6 @@ export function useChartData<T extends ChartDataPoint>(
     sanitize = defaultSanitize,
   } = options;
 
-  // If the caller passes an explicit `ready` flag, prefer it.
-  const [internalReady, setInternalReady] = useState(false);
-  useEffect(() => {
-    if (ready === undefined) {
-      // Without a ready flag, the chart is only considered "ready"
-      // after the first render that includes non-undefined data.
-      // We don't actually need to set this — it's a no-op marker
-      // for future extension (e.g., delayed-load animations).
-      setInternalReady(true);
-    }
-  }, [ready]);
-
   const isExternallyReady = ready !== undefined ? ready : true;
 
   return useMemo(() => {
@@ -101,5 +89,5 @@ export function useChartData<T extends ChartDataPoint>(
       return { state: 'error' as ChartState, sanitized };
     }
     return { state: 'ready' as ChartState, sanitized };
-  }, [data, isExternallyReady, minPoints, validate, sanitize, internalReady]);
+  }, [data, isExternallyReady, minPoints, validate, sanitize]);
 }

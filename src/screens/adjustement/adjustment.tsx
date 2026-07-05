@@ -1,11 +1,10 @@
-﻿import { Fonts } from '@/constants/theme';
+import { Fonts } from '@/constants/theme';
 import { PROFILE_IMAGES, useSettings } from '@/context/SettingsContext';
 import { useSidebar } from '@/context/SidebarContext';
 import { formatTime } from '@/utils/date-utils';
 import { getAdjustmentDashboardMetrics, getRecentAdjustments } from '@/database/db';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useFocusEffect } from '@react-navigation/native';
-import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import {
@@ -13,17 +12,16 @@ import {
     BarChart3,
     Bell,
     Box,
-    ChevronRight,
     DollarSign,
     Eye,
     Plus,
-    RefreshCw,
     TrendingDown,
-    TrendingUp
+    TrendingUp,
+    X
 } from 'lucide-react-native';
 import React, { useCallback, useState } from 'react';
-import { Dimensions, Image, Modal, Platform, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { AppText, AppListItem, AppRow, AppCard } from '@/components/ui';
+import { Dimensions, Image, Modal, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { AppNumber, AppText} from '@/components/ui';
 import Animated, {
     FadeInDown,
     FadeInUp,
@@ -35,68 +33,55 @@ import AdjustmentDetailsScreen from './adjustment-details';
 import DamagedScreen from './damaged';
 import DecreaseScreen from './decrease';
 import IncreaseScreen from './increase';
+import { getAdjustmentGlass } from './glass-adjustment';
+const TYPE_CONFIG: Record<string, { icon: any; iconBg: string; labelKey: string }> = {
+  price_up: { icon: TrendingUp, iconBg: '#30D158', labelKey: 'adjustment.price_increase' },
+  price_down: { icon: TrendingDown, iconBg: '#FF453A', labelKey: 'adjustment.price_decrease' },
+  damaged: { icon: AlertTriangle, iconBg: '#FF9F0A', labelKey: 'adjustment.damaged' },
+  default: { icon: BarChart3, iconBg: '#8E8E93', labelKey: 'adj.manual' },
+};
+
 const AdjustmentItem = React.memo(({ item, onPress }: { item: any; onPress: () => void }) => {
   const { colors, timeSystem, language, t } = useSettings();
+  const G = getAdjustmentGlass(colors);
+
+  const safeType = item?.type || 'unknown';
+  const cfg = TYPE_CONFIG[safeType] || TYPE_CONFIG.default;
+  const IconComp = cfg.icon;
 
   if (!item) return null;
 
-  const safeType = item?.type || 'unknown';
   const safeItem = {
     itemName: item?.itemName || t('common.unknown_item'),
     reason: item?.reason || t('adj.manual_correction'),
     createdAt: item?.createdAt || item?.date || '',
     newValue: Number(item?.newValue) || 0,
     quantity: Number(item?.quantity) || 0,
-    type: safeType
+    type: safeType,
   };
-
-  const config = React.useMemo(() => {
-    switch(safeType) {
-      case 'price_up': return {
-        icon: <TrendingUp size={18} color={colors.textSecondary} />,
-        bg: colors.surface,
-        label: t('adjustment.price_increase')
-      };
-      case 'price_down': return {
-        icon: <TrendingDown size={18} color={colors.textSecondary} />,
-        bg: colors.surface,
-        label: t('adjustment.price_decrease')
-      };
-      case 'damaged': return {
-        icon: <AlertTriangle size={18} color={colors.textSecondary} />,
-        bg: colors.surface,
-        label: t('adjustment.damaged')
-      };
-      default: return {
-        icon: <BarChart3 size={18} color={colors.textSecondary} />,
-        bg: colors.surface,
-        label: t('adj.manual')
-      };
-    }
-  }, [safeType, colors.surface, colors.textSecondary, t]);
 
   const timeStr = safeItem.createdAt ? formatTime(safeItem.createdAt, timeSystem, language) : '';
 
   return (
     <TouchableOpacity
-      style={[styles.adjItem, { borderBottomColor: colors.border }]}
+      style={[styles.activityCard, { backgroundColor: G.bgCard, borderColor: G.border }]}
       onPress={onPress}
       activeOpacity={0.7}
     >
-      <View style={[styles.adjIconCircle, { backgroundColor: config.bg }]}>
-        {config.icon}
+      <View style={[styles.activityIconCircle, { backgroundColor: cfg.iconBg + '18', borderColor: G.border }]}>
+        <IconComp size={18} color={cfg.iconBg} />
       </View>
-      <View style={styles.adjMain}>
-        <AppText variant="body" weight="bold" style={[styles.adjName, { color: colors.text }]} numberOfLines={1}>{safeItem.itemName}</AppText>
-        <AppText variant="caption" weight="medium" style={[styles.adjType, { color: colors.textSecondary }]} numberOfLines={1}>{config.label}</AppText>
+      <View style={styles.activityInfo}>
+        <AppText variant="body" weight="bold" style={[styles.activityName, { color: G.fg }]} numberOfLines={1}>{safeItem.itemName}</AppText>
+        <AppText variant="body-sm" weight="medium" style={[styles.activityMeta, { color: G.muted }]} numberOfLines={1}>{t(cfg.labelKey)}</AppText>
       </View>
-      <View style={styles.adjEnd}>
+      <View style={styles.activityRight}>
         {safeType === 'damaged' ? (
-          <AppText variant="body" weight="bold" shrink={false} style={[styles.adjAmount, { color: colors.text }]}>-{safeItem.quantity}</AppText>
+          <AppNumber value={safeItem.quantity} size="body" weight="bold" showSign style={[styles.activityAmount, { color: cfg.iconBg }]} />
         ) : (
-          <AppText variant="body" weight="bold" shrink={false} style={[styles.adjAmount, { color: colors.text }]}>{safeItem.newValue.toLocaleString()}</AppText>
-          )}
-        <AppText variant="caption" weight="medium" style={[styles.adjTime, { color: colors.textSecondary }]} numberOfLines={1}>
+          <AppNumber value={safeItem.newValue} size="body" weight="bold" style={[styles.activityAmount, { color: G.fg }]} />
+        )}
+        <AppText variant="caption" weight="medium" style={[styles.activityTime, { color: G.muted }]} numberOfLines={1}>
           {timeStr || t('common.n_a')}
         </AppText>
       </View>
@@ -105,21 +90,25 @@ const AdjustmentItem = React.memo(({ item, onPress }: { item: any; onPress: () =
 });
 AdjustmentItem.displayName = 'AdjustmentItem';
 
-const MetricCard = ({ label, value, color, icon: Icon, accent }: { label: string; value: string; color: string; icon: any; accent?: string }) => {
+const MetricCard = ({ label, value, icon: Icon }: { label: string; value: React.ReactNode; icon: any }) => {
   const { colors } = useSettings();
+  const G = getAdjustmentGlass(colors);
   return (
-    <View style={[styles.metricCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <View style={[styles.metricIconBox, { backgroundColor: colors.surface }]}>
-        <Icon size={20} color={colors.textSecondary} />
+    <View style={[styles.metricCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+      <View style={[styles.metricIconBox, { backgroundColor: G.accentGlass }]}>
+        <Icon size={20} color={G.muted} />
       </View>
-      <AppText variant="heading" weight="bold" style={[styles.metricValue, { color: colors.text }]} numberOfLines={1}>{value}</AppText>
-      <AppText variant="caption" weight="medium" style={[styles.metricLabel, { color: colors.textSecondary }]} numberOfLines={2}>{label}</AppText>
+      {typeof value === 'string' ? (
+        <AppText variant="heading" weight="bold" style={[styles.metricValue, { color: G.fg }]} numberOfLines={1}>{value}</AppText>
+      ) : value}
+      <AppText variant="caption" weight="medium" style={[styles.metricLabel, { color: G.muted }]} numberOfLines={2}>{label}</AppText>
     </View>
   );
 };
 
 const AdjustmentScreen = () => {
-  const { colors, t, theme, userProfile } = useSettings();
+  const { colors, t, userProfile } = useSettings();
+  const G = getAdjustmentGlass(colors);
   const { openSidebar } = useSidebar();
   const { notifCount } = useNotifications();
   const router = useRouter();
@@ -167,24 +156,13 @@ const AdjustmentScreen = () => {
     setSelectedAdjustment({ viewAll: true } as any);
   };
 
-  const getNetChangeColor = () => {
-    if (!metrics) return colors.text;
-    if (metrics.netValueChange > 0) return '#34C759';
-    if (metrics.netValueChange < 0) return '#FF3B30';
-    return colors.text;
-  };
-
-  const getNetChangePrefix = () => {
-    if (!metrics) return '';
-    if (metrics.netValueChange > 0) return '+';
-    return '';
-  };
-
   return (
-    <View style={[styles.screenWrapper, { backgroundColor: colors.background }]}>
+    <View style={[styles.screenWrapper, { backgroundColor: G.bg }]}>
       {/* Ambient Background */}
       <View style={StyleSheet.absoluteFill}>
-        <View style={[styles.bgWash, { top: -150, left: -100, backgroundColor: colors.primary, opacity: 0.04 }]} />
+        <View style={[styles.bgWash, { top: -150, left: -100, backgroundColor: '#FFFFFF', opacity: 0.03 }]} />
+        <View style={[styles.bgWash, { top: 350, right: -80, backgroundColor: '#FFFFFF', opacity: 0.02 }]} />
+        <View style={[styles.bgWash, { top: 700, left: -50, backgroundColor: '#FFFFFF', opacity: 0.015 }]} />
       </View>
 
       <ScrollView 
@@ -195,25 +173,25 @@ const AdjustmentScreen = () => {
         {/* Integrated Header */}
         <View style={styles.integratedHeader}>
           <View style={{ flex: 1 }}>
-            <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.headerLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('adj.stock_rectification')}</AppText>
-            <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: colors.text }]} numberOfLines={2}>{t('adj.calibration_suite')}</AppText>
+            <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.headerLabel, { color: G.muted }]} numberOfLines={1}>{t('adj.stock_rectification')}</AppText>
+            <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{t('adj.calibration_suite')}</AppText>
           </View>
           
           <View style={styles.headerActions}>
             <TouchableOpacity 
               onPress={() => router.push('/notifications')} 
-              style={[styles.headerIconBtn, { borderColor: colors.border }]}
+              style={[styles.headerIconBtn, { borderColor: G.border, backgroundColor: G.bgCard }]}
             >
-               <Bell size={22} color={colors.text} />
+               <Bell size={22} color={G.fg} />
                {notifCount > 0 && (
-                 <View style={[styles.notifBadge, { backgroundColor: colors.primary }]}>
-                   <AppText variant="micro" weight="bold" shrink={false} style={styles.notifBadgeText} numberOfLines={1}>{notifCount}</AppText>
+                 <View style={[styles.notifBadge, { backgroundColor: '#FFFFFF' }]}>
+                   <AppText variant="micro" weight="bold" shrink={false} style={[styles.notifBadgeText, { color: G.bg }]} numberOfLines={1}>{notifCount}</AppText>
                  </View>
                )}
             </TouchableOpacity>
 
             <TouchableOpacity 
-              style={[styles.headerAvatarBox, { borderColor: colors.border, marginLeft: 10 }]}
+              style={[styles.headerAvatarBox, { borderColor: G.border, backgroundColor: G.bgCard, marginLeft: 10 }]}
               onPress={openSidebar}
             >
                 <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={styles.headerAvatar} />
@@ -226,40 +204,34 @@ const AdjustmentScreen = () => {
           <View style={styles.metricsRow}>
             <MetricCard 
               label={t('adj.metric_items_increased')}
-              value={t('adj.items_suffix', { count: String(metrics?.itemsIncreased || 0) })}
-              color="#34C759"
+              value={<AppNumber value={metrics?.itemsIncreased ?? 0} size="heading" weight="bold" />}
               icon={TrendingUp}
             />
             <MetricCard 
               label={t('adj.metric_items_decreased')}
-              value={t('adj.items_suffix', { count: String(metrics?.itemsDecreased || 0) })}
-              color="#FF3B30"
+              value={<AppNumber value={metrics?.itemsDecreased ?? 0} size="heading" weight="bold" />}
               icon={TrendingDown}
             />
           </View>
           <View style={styles.metricsRow}>
             <MetricCard 
               label={t('adj.metric_damaged')}
-              value={t('adj.units_suffix', { count: String(metrics?.damagedItems || 0) })}
-              color="#FF9500"
+              value={<AppNumber value={metrics?.damagedItems ?? 0} size="heading" weight="bold" />}
               icon={AlertTriangle}
             />
             <MetricCard 
               label={t('adj.metric_value_lost')}
-              value={`${(metrics?.estimatedValueLost || 0).toLocaleString()} ${t('common.etb')}`}
-              color="#FF3B30"
+              value={<AppNumber value={metrics?.estimatedValueLost ?? 0} prefix="ETB " size="heading" weight="bold" />}
               icon={DollarSign}
             />
           </View>
           <View style={styles.metricsRow}>
-            <View style={[styles.netMetricCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.netMetricCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
               <View style={styles.netMetricRow}>
-                <BarChart3 size={22} color={colors.textSecondary} />
-                <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.netMetricLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('adj.metric_net_change')}</AppText>
+                <BarChart3 size={22} color={G.muted} />
+                <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.netMetricLabel, { color: G.muted }]} numberOfLines={1}>{t('adj.metric_net_change')}</AppText>
               </View>
-              <AppText variant="heading" weight="bold" style={[styles.netMetricValue, { color: colors.text }]} numberOfLines={1}>
-                {getNetChangePrefix()}{(metrics?.netValueChange || 0).toLocaleString()} {t('common.etb')}
-              </AppText>
+              <AppNumber value={metrics?.netValueChange ?? 0} prefix="ETB " size="heading" weight="bold" showSign />
             </View>
           </View>
         </Animated.View>
@@ -268,30 +240,31 @@ const AdjustmentScreen = () => {
         <Animated.View entering={FadeInDown.delay(400).duration(600)} style={styles.recentSection}>
           <View style={styles.sectionHeader}>
             <View>
-              <AppText variant="subtitle" weight="bold" style={[styles.sectionTitle, { color: colors.text }]} numberOfLines={2}>{t('adj.recent_title')}</AppText>
-              <AppText variant="body-sm" weight="medium" style={[styles.sectionSub, { color: colors.textSecondary }]} numberOfLines={2}>{t('adj.recent_sub')}</AppText>
+              <AppText variant="heading" weight="bold" style={[styles.sectionTitle, { color: G.fg }]} numberOfLines={2}>{t('adj.recent_title')}</AppText>
+              <AppText variant="body-sm" weight="medium" style={[styles.sectionSub, { color: G.muted }]} numberOfLines={1}>{t('adj.recent_sub')}</AppText>
             </View>
             <TouchableOpacity 
-              style={[styles.viewAllBtn, { backgroundColor: colors.primary + '15' }]}
+              style={[styles.viewAllBtn, { borderColor: G.border }]}
               onPress={handleViewHistory}
             >
-              <AppText variant="body-sm" weight="bold" style={[styles.viewAllText, { color: colors.primary }]} numberOfLines={1}>{t('common.view_all')}</AppText>
-              <ChevronRight size={16} color={colors.primary} />
+              <AppText variant="body" weight="bold" shrink={false} style={[styles.viewAllText, { color: G.fgSecondary }]} numberOfLines={1}>{t('common.view_all')}</AppText>
             </TouchableOpacity>
           </View>
 
           {adjustments.length > 0 ? (
-            <View style={styles.adjList}>
+            <View style={styles.feedList}>
               {adjustments.map((item, index) => (
-                <Animated.View key={item.id} entering={FadeInUp.delay(500 + index * 50).duration(400)}>
+                <Animated.View key={item.id} entering={FadeInUp.delay(500 + index * 40).springify().damping(22).stiffness(150)}>
                   <AdjustmentItem item={item} onPress={() => setSelectedAdjustment(item)} />
                 </Animated.View>
               ))}
             </View>
           ) : (
-            <View style={styles.emptyState}>
-              <Box size={50} color={colors.border} strokeWidth={1} />
-              <AppText variant="body" weight="medium" align="center" style={[styles.emptyText, { color: colors.textSecondary }]} numberOfLines={2}>{t('adjustment.no_records')}</AppText>
+            <View style={[styles.emptyState, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+              <View style={[styles.activityIconCircle, { backgroundColor: G.accentGlass, borderColor: G.border }]}>
+                <Box size={22} color={G.muted} />
+              </View>
+              <AppText variant="body" weight="medium" style={[styles.emptyText, { color: G.muted }]} numberOfLines={2}>{t('adjustment.no_records')}</AppText>
             </View>
           )}
         </Animated.View>
@@ -300,8 +273,8 @@ const AdjustmentScreen = () => {
       
       {/* Quick Actions FAB */}
       <View style={styles.dockedBarWrapper}>
-        <Animated.View style={[expandStyle, { height: 56, borderRadius: 28, overflow: 'hidden' }]}>
-          <BlurView intensity={Platform.OS === 'ios' ? 80 : 100} tint={theme === 'light' ? 'light' : 'dark'} style={[styles.dockedBar, { borderColor: colors.border, paddingHorizontal: isBarExpanded ? 10 : 0 }]}>
+        <Animated.View style={[expandStyle, { height: 60, borderRadius: 30, overflow: 'hidden' }]}>
+          <View style={[styles.dockedBar, { borderColor: G.borderLight, backgroundColor: G.bgCardStrong, paddingHorizontal: isBarExpanded ? 12 : 0 }]}>
             {isBarExpanded && (
               <Animated.View entering={FadeInUp.delay(100)}>
                 <TouchableOpacity 
@@ -312,7 +285,7 @@ const AdjustmentScreen = () => {
                     setShowIncrease(true);
                   }}
                 >
-                  <TrendingUp size={20} color="#34C759" />
+                  <TrendingUp size={20} color={colors.success} />
                 </TouchableOpacity>
               </Animated.View>
             )}
@@ -327,7 +300,7 @@ const AdjustmentScreen = () => {
                     setShowDecrease(true);
                   }}
                 >
-                  <TrendingDown size={20} color="#FF3B30" />
+                  <TrendingDown size={20} color={colors.error} />
                 </TouchableOpacity>
               </Animated.View>
             )}
@@ -342,7 +315,7 @@ const AdjustmentScreen = () => {
                     setShowDamaged(true);
                   }}
                 >
-                  <AlertTriangle size={20} color="#FF9500" />
+                  <AlertTriangle size={20} color={colors.warning} />
                 </TouchableOpacity>
               </Animated.View>
             )}
@@ -357,13 +330,13 @@ const AdjustmentScreen = () => {
                     handleViewHistory();
                   }}
                 >
-                  <Eye size={20} color={colors.textSecondary} />
+                  <Eye size={20} color={G.muted} />
                 </TouchableOpacity>
               </Animated.View>
             )}
             
             <TouchableOpacity 
-              style={[styles.dockMainBtn, { backgroundColor: isBarExpanded ? colors.primary : colors.text }]}
+              style={[styles.dockMainBtn, { backgroundColor: G.fg }]}
               onPress={() => {
                 if(isBarExpanded) {
                   setShowOptions(true);
@@ -374,35 +347,35 @@ const AdjustmentScreen = () => {
               }}
             >
               {isBarExpanded ? (
-                <RefreshCw size={24} color={colors.background} strokeWidth={2.5} />
+                <X size={24} color={G.bg} strokeWidth={2.5} />
               ) : (
-                <Plus size={24} color={colors.background} strokeWidth={2.5} />
+                <Plus size={24} color={G.bg} strokeWidth={2.5} />
               )}
             </TouchableOpacity>
-          </BlurView>
+          </View>
         </Animated.View>
       </View>
 
       {/* Options Modal */}
       <Modal visible={showOptions} transparent animationType="fade" onRequestClose={() => setShowOptions(false)}>
         <TouchableOpacity style={styles.modalOverlayC} activeOpacity={1} onPress={() => setShowOptions(false)}>
-          <View style={[styles.optionsBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <AppText variant="heading" weight="bold" align="center" style={[styles.optionsTitle, { color: colors.text }]} numberOfLines={2}>{t('adjustment.select_type')}</AppText>
-              <TouchableOpacity style={[styles.optionBtn, { borderBottomColor: colors.border }]} onPress={() => { setShowOptions(false); setShowIncrease(true); }}>
-              <TrendingUp size={20} color="#34C759" style={{ marginRight: 15 }} />
-              <AppText variant="subtitle" weight="bold" style={[styles.optionText, { color: colors.text }]} numberOfLines={1}>{t('adj.add_increase')}</AppText>
+          <View style={[styles.optionsBox, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+            <AppText variant="heading" weight="bold" align="center" style={[styles.optionsTitle, { color: G.fg }]} numberOfLines={2}>{t('adjustment.select_type')}</AppText>
+              <TouchableOpacity style={[styles.optionBtn, { borderBottomColor: G.border }]} onPress={() => { setShowOptions(false); setShowIncrease(true); }}>
+              <TrendingUp size={20} color={colors.success} style={{ marginRight: 15 }} />
+              <AppText variant="subtitle" weight="bold" style={[styles.optionText, { color: G.fg }]} numberOfLines={1}>{t('adj.add_increase')}</AppText>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.optionBtn, { borderBottomColor: colors.border }]} onPress={() => { setShowOptions(false); setShowDecrease(true); }}>
-              <TrendingDown size={20} color="#FF3B30" style={{ marginRight: 15 }} />
-              <AppText variant="subtitle" weight="bold" style={[styles.optionText, { color: colors.text }]} numberOfLines={1}>{t('adj.add_decrease')}</AppText>
+            <TouchableOpacity style={[styles.optionBtn, { borderBottomColor: G.border }]} onPress={() => { setShowOptions(false); setShowDecrease(true); }}>
+              <TrendingDown size={20} color={colors.error} style={{ marginRight: 15 }} />
+              <AppText variant="subtitle" weight="bold" style={[styles.optionText, { color: G.fg }]} numberOfLines={1}>{t('adj.add_decrease')}</AppText>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.optionBtn, { borderBottomColor: colors.border }]} onPress={() => { setShowOptions(false); setShowDamaged(true); }}>
-              <AlertTriangle size={20} color="#FF9500" style={{ marginRight: 15 }} />
-              <AppText variant="subtitle" weight="bold" style={[styles.optionText, { color: colors.text }]} numberOfLines={1}>{t('adj.record_damage')}</AppText>
+            <TouchableOpacity style={[styles.optionBtn, { borderBottomColor: G.border }]} onPress={() => { setShowOptions(false); setShowDamaged(true); }}>
+              <AlertTriangle size={20} color={colors.warning} style={{ marginRight: 15 }} />
+              <AppText variant="subtitle" weight="bold" style={[styles.optionText, { color: G.fg }]} numberOfLines={1}>{t('adj.record_damage')}</AppText>
             </TouchableOpacity>
             <TouchableOpacity style={styles.optionBtn} onPress={() => { setShowOptions(false); handleViewHistory(); }}>
-              <Eye size={20} color={colors.textSecondary} style={{ marginRight: 15 }} />
-              <AppText variant="subtitle" weight="bold" style={[styles.optionText, { color: colors.text }]} numberOfLines={1}>{t('adj.view_history')}</AppText>
+              <Eye size={20} color={G.muted} style={{ marginRight: 15 }} />
+              <AppText variant="subtitle" weight="bold" style={[styles.optionText, { color: G.fg }]} numberOfLines={1}>{t('adj.view_history')}</AppText>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -412,8 +385,8 @@ const AdjustmentScreen = () => {
       <Modal visible={showIncrease} transparent animationType="slide" onRequestClose={() => setShowIncrease(false)}>
         <View style={styles.modalOverlay}>
           <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowIncrease(false)} />
-          <View style={[styles.bottomSheetContainer, { backgroundColor: colors.background, height: Dimensions.get('window').height * 0.88 }]}>
-            <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
+          <View style={[styles.bottomSheetContainer, { backgroundColor: G.bg, borderTopWidth: 1, borderTopColor: G.border, height: Dimensions.get('window').height * 0.90 }]}>
+            <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: G.mutedLight }]} /></View>
             <IncreaseScreen onComplete={() => { setShowIncrease(false); loadData(); }} />
           </View>
         </View>
@@ -422,8 +395,8 @@ const AdjustmentScreen = () => {
       <Modal visible={showDecrease} transparent animationType="slide" onRequestClose={() => setShowDecrease(false)}>
         <View style={styles.modalOverlay}>
            <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowDecrease(false)} />
-           <View style={[styles.bottomSheetContainer, { backgroundColor: colors.background, height: Dimensions.get('window').height * 0.88 }]}>
-              <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
+           <View style={[styles.bottomSheetContainer, { backgroundColor: G.bg, borderTopWidth: 1, borderTopColor: G.border, height: Dimensions.get('window').height * 0.90 }]}>
+              <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: G.mutedLight }]} /></View>
               <DecreaseScreen onComplete={() => { setShowDecrease(false); loadData(); }} />
            </View>
         </View>
@@ -432,8 +405,8 @@ const AdjustmentScreen = () => {
       <Modal visible={showDamaged} transparent animationType="slide" onRequestClose={() => setShowDamaged(false)}>
         <View style={styles.modalOverlay}>
            <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowDamaged(false)} />
-           <View style={[styles.bottomSheetContainer, { backgroundColor: colors.background, height: Dimensions.get('window').height * 0.88 }]}>
-              <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
+           <View style={[styles.bottomSheetContainer, { backgroundColor: G.bg, borderTopWidth: 1, borderTopColor: G.border, height: Dimensions.get('window').height * 0.90 }]}>
+              <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: G.mutedLight }]} /></View>
               <DamagedScreen onComplete={() => { setShowDamaged(false); loadData(); }} />
            </View>
         </View>
@@ -442,8 +415,8 @@ const AdjustmentScreen = () => {
       <Modal visible={!!selectedAdjustment} transparent animationType="slide" onRequestClose={() => setSelectedAdjustment(null)}>
         <View style={styles.modalOverlay}>
            <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setSelectedAdjustment(null)} />
-           <View style={[styles.bottomSheetContainer, { backgroundColor: colors.background, height: Dimensions.get('window').height * 0.88 }]}>
-              <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
+           <View style={[styles.bottomSheetContainer, { backgroundColor: G.bg, borderTopWidth: 1, borderTopColor: G.border, height: Dimensions.get('window').height * 0.90 }]}>
+              <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: G.mutedLight }]} /></View>
               {selectedAdjustment && selectedAdjustment.viewAll ? (
                 <AdjustmentDetailsScreen 
                   adjustment={null} 
@@ -503,7 +476,6 @@ const styles = StyleSheet.create({
     borderColor: '#FFF',
   },
   notifBadgeText: {
-    color: '#FFF',
     fontFamily: Fonts.bold,
   },
   headerLabel: { fontSize: 12, fontFamily: Fonts.bold, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 4 },
@@ -578,90 +550,99 @@ const styles = StyleSheet.create({
   // Recent Adjustments
   recentSection: {
     paddingHorizontal: 25,
+    marginTop: 8,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
+    alignItems: 'flex-end',
+    marginBottom: 16,
   },
   sectionTitle: {
     fontFamily: Fonts.bold,
+    marginBottom: 2,
   },
   sectionSub: {
     fontFamily: Fonts.medium,
-    marginTop: 4,
   },
   viewAllBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
     borderRadius: 14,
-    gap: 4,
+    borderWidth: 1,
+    overflow: 'hidden',
   },
   viewAllText: {
     fontFamily: Fonts.bold,
   },
-  adjList: {
-    gap: 2,
+  feedList: {
+    gap: 0,
   },
-  adjItem: {
+  activityCard: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 16,
-    borderBottomWidth: 1,
+    paddingHorizontal: 16,
+    marginBottom: 10,
+    borderRadius: 16,
+    borderWidth: 1,
   },
-  adjIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+  activityIconCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
+    marginRight: 15,
+    borderWidth: 1,
+    overflow: 'hidden',
   },
-  adjMain: {
+  activityInfo: {
     flex: 1,
   },
-  adjName: {
+  activityName: {
     fontFamily: Fonts.bold,
     marginBottom: 2,
   },
-  adjType: {
+  activityMeta: {
     fontFamily: Fonts.medium,
   },
-  adjEnd: {
+  activityRight: {
     alignItems: 'flex-end',
   },
-  adjAmount: {
+  activityAmount: {
     fontFamily: Fonts.bold,
     marginBottom: 2,
   },
-  adjTime: {
+  activityTime: {
     fontFamily: Fonts.medium,
   },
   emptyState: {
+    paddingVertical: 56,
     alignItems: 'center',
-    paddingVertical: 50,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: 8,
+    gap: 12,
+    overflow: 'hidden',
   },
   emptyText: {
     fontFamily: Fonts.medium,
-    marginTop: 15,
   },
   // FAB
   dockedBarWrapper: { position: 'absolute', bottom: 120, alignSelf: 'center', zIndex: 1000, alignItems: 'center', justifyContent: 'center' },
   dockedBar: { flex: 1, borderRadius: 35, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly', paddingHorizontal: 10, borderWidth: 1, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 10 },
   dockBtn: { width: 50, height: 50, justifyContent: 'center', alignItems: 'center' },
-  dockMainBtn: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 6 },
+  dockMainBtn: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 },
   // Modals
-  modalOverlayC: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  optionsBox: { width: '85%', borderRadius: 28, padding: 25, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 15 },
+  modalOverlayC: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center' },
+  optionsBox: { width: '85%', borderRadius: 28, padding: 25, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3 },
   optionsTitle: { fontSize: 20, fontFamily: Fonts.bold, marginBottom: 25, textAlign: 'center' },
   optionBtn: { width: '100%', paddingVertical: 18, flexDirection: 'row', alignItems: 'center' },
   optionText: { fontSize: 16, fontFamily: Fonts.bold },
   modalOverlay: { flex: 1, justifyContent: 'flex-end' },
-  modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
-  bottomSheetContainer: { borderTopLeftRadius: 30, borderTopRightRadius: 30, paddingBottom: 40, overflow: 'hidden' },
+  modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.65)' },
+  bottomSheetContainer: { borderTopLeftRadius: 30, borderTopRightRadius: 30, paddingBottom: 40 },
   modalHeader: {
     alignItems: 'center',
     paddingTop: 15,

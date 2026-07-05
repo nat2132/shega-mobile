@@ -1,51 +1,56 @@
-﻿import { Fonts } from '@/constants/theme';
-import { PROFILE_IMAGES, useSettings } from '@/context/SettingsContext';
+import { Fonts, Spacing } from '@/constants/theme';
 import { useDialog } from '@/context/DialogContext';
+import { PROFILE_IMAGES, useSettings } from '@/context/SettingsContext';
 import { clearDatabase } from '@/database/db';
 import * as Haptics from 'expo-haptics';
-import React, { useState } from 'react';
+import * as SecureStore from 'expo-secure-store';
+import { useState } from 'react';
 import {
-    ActivityIndicator,
-    Dimensions,
-    Image,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Image,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import Animated, {
-    FadeInDown,
+  FadeInDown,
 } from 'react-native-reanimated';
+import { getSettingsGlass } from './glass-settings';
 
 import {
-    ArrowUpRight,
-    BadgeCheck,
-    Bell,
-    Calendar,
-    ChevronRight,
-    Clock,
-    CloudDownload,
-    Database,
-    HelpCircle,
-    Languages,
-    Palette,
-    Shield,
-    Trash2,
+  ArrowUpRight,
+  BadgeCheck,
+  Bell,
+  Building2,
+  Calendar,
+  ChevronRight,
+  CloudDownload,
+  Database,
+  HelpCircle,
+  Languages,
+  Palette,
+  Shield,
+  Trash2,
+  Volume2,
+  Warehouse,
 } from 'lucide-react-native';
 
-import CalendarSettingsScreen from './calendar';
+import { DataTransferModal } from '@/components/DataTransferModal';
+import { AppListItem, AppText } from '@/components/ui';
+import { useWarehouse } from '@/context/WarehouseContext';
+import DateTimeSettings from './date-time';
 import NotificationSettingsScreen from './notification';
 import ProfileSettingsScreen from './profile-settings';
 import SecuritySettingsScreen from './security';
 import SupportScreen from './support';
-import TimeSystemSettingsScreen from './time-system';
 import TranslationSettingsScreen from './translation';
-import { DataTransferModal } from '@/components/DataTransferModal';
-import { AppText, AppListItem, AppCard, AppButton, AppRow } from '@/components/ui';
-import { BorderRadius, Spacing } from '@/constants/theme';
-// ─── Shared Sub-Components ───────────────────────────────────────────────────
+import WarehouseSettingsScreen from './warehouse';
+
+// →→→ Shared Sub-Components →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
 
 interface SettingItemProps {
   icon: any;
@@ -58,37 +63,39 @@ interface SettingItemProps {
   danger?: boolean;
 }
 
-const ConfigurationGridItem = ({ icon: Icon, title, onPress, color }: { icon: any, title: string, onPress: () => void, color: string }) => {
+const ConfigurationGridItem = ({ icon: Icon, title, onPress }: { icon: any, title: string, onPress: () => void, color: string }) => {
   const { colors } = useSettings();
+  const G = getSettingsGlass(colors);
   return (
     <TouchableOpacity
-      style={[styles.gridItem, { backgroundColor: colors.card, borderColor: colors.border }]}
+      style={[styles.gridItem, { backgroundColor: G.bgCard, borderColor: G.border }]}
       onPress={onPress}
       activeOpacity={0.7}
     >
-      <View style={[styles.gridIconBox, { backgroundColor: color + '15' }]}>
-        <Icon size={22} color={color} strokeWidth={2.5} />
+      <View style={[styles.gridIconBox, { backgroundColor: G.accentGlass }]}>
+        <Icon size={22} color={G.fg} strokeWidth={2.5} />
       </View>
-      <AppText variant="body" weight="bold" style={[styles.gridTitle, { color: colors.text }]} numberOfLines={2}>{title}</AppText>
-      <ChevronRight size={14} color={colors.textSecondary} style={styles.gridChevron} />
+      <AppText variant="body" weight="bold" style={[styles.gridTitle, { color: G.fg }]} numberOfLines={2}>{title}</AppText>
+      <ChevronRight size={14} color={G.muted} style={styles.gridChevron} />
     </TouchableOpacity>
   );
 };
 
 const SettingLedgerItem = ({ icon: Icon, title, subtitle, onPress, danger }: SettingItemProps) => {
   const { colors } = useSettings();
+  const G = getSettingsGlass(colors);
   return (
     <AppListItem
       left={
-        <View style={[styles.ledgerIconBox, { backgroundColor: danger ? '#FF3B3015' : colors.surface }]}>
-          <Icon size={18} color={danger ? '#FF3B30' : colors.text} strokeWidth={2.5} />
+        <View style={[styles.ledgerIconBox, { backgroundColor: danger ? G.accentGlass : G.accentGlass }]}>
+          <Icon size={18} color={danger ? G.muted : G.fg} strokeWidth={2.5} />
         </View>
       }
       title={title}
       subtitle={subtitle}
       subtitleMaxLines={1}
       titleMaxLines={1}
-      right={<ChevronRight size={16} color={colors.textSecondary} />}
+      right={<ChevronRight size={16} color={G.muted} />}
       onPress={onPress}
       noBorder
       padding={Spacing.md}
@@ -97,7 +104,7 @@ const SettingLedgerItem = ({ icon: Icon, title, subtitle, onPress, danger }: Set
   );
 };
 
-// ─── Theme Data ──────────────────────────────────────────────────────────────
+// →→→ Theme Data →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
 
 const THEME_OPTIONS = [
   {
@@ -172,7 +179,7 @@ const THEME_OPTIONS = [
   },
 ];
 
-// ─── Theme Card Component ────────────────────────────────────────────────────
+// →→→ Theme Card Component →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
 
 const ThemeCard = ({
   item,
@@ -231,12 +238,13 @@ const ThemeCard = ({
   );
 };
 
-// ─── Reset Modal ─────────────────────────────────────────────────────────────
+// →→→ Reset Modal →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
 
 const ResetModal = ({
   visible, onClose, pin
 }: { visible: boolean; onClose: () => void; pin: string | null }) => {
   const { colors, t } = useSettings();
+  const G = getSettingsGlass(colors);
   const dialog = useDialog();
   const [enteredPin, setEnteredPin] = useState('');
   const [loading, setLoading] = useState(false);
@@ -265,11 +273,27 @@ const ResetModal = ({
   const doReset = async () => {
     setLoading(true);
     const success = clearDatabase();
+
+    // Clear all persisted SecureStore data
+    const storeKeys = [
+      'settings_theme', 'settings_language', 'settings_calendar',
+      'settings_time_system', 'settings_profile', 'settings_notifications',
+      'settings_sound_enabled', 'settings_pin',
+      'pin_salt', 'pin_hash', 'pin_flag',
+      'recovery_salt', 'recovery_hash',
+      'biometrics_enabled',
+      'user_setupComplete', 'user_avatarIndex',
+      'last_weekly_check', 'last_notified',
+    ];
+    for (const key of storeKeys) {
+      try { await SecureStore.deleteItemAsync(key); } catch {}
+    }
+
     setLoading(false);
     if (success) {
       setEnteredPin('');
       onClose();
-      await dialog.alert({ title: `✅ ${t('settings.reset_success')}`, message: t('settings.reset_fresh'), iconType: 'success' });
+      await dialog.alert({ title: t('settings.reset_success'), message: t('settings.reset_fresh'), iconType: 'success' });
     } else {
       await dialog.alert({ title: t('common.error'), message: t('common.error'), iconType: 'danger' });
     }
@@ -278,40 +302,40 @@ const ResetModal = ({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={resetStyles.overlay}>
-        <View style={[resetStyles.box, { backgroundColor: colors.card }]}>
-          <View style={resetStyles.iconCircle}>
-            <Trash2 size={28} color="#FF3B30" />
+        <View style={[resetStyles.box, { backgroundColor: G.bgCard, borderColor: G.border, borderWidth: 1 }]}>
+          <View style={[resetStyles.iconCircle, { borderColor: G.muted, backgroundColor: G.accentGlass }]}>
+            <Trash2 size={28} color={G.fg} />
           </View>
-          <AppText variant="title" weight="bold" style={[resetStyles.title, { color: colors.text }]} numberOfLines={2}>{t('settings.reset_title')}</AppText>
-          <AppText variant="body" weight="medium" style={[resetStyles.message, { color: colors.textSecondary }]} numberOfLines={4}>
+          <AppText variant="title" weight="bold" style={[resetStyles.title, { color: G.fg }]} numberOfLines={2}>{t('settings.reset_title')}</AppText>
+          <AppText variant="body" weight="medium" style={[resetStyles.message, { color: G.muted }]} numberOfLines={4}>
             {t('settings.reset_msg')}{'\n'}
             {pin ? t('settings.reset_confirm_pin') : ''}
           </AppText>
 
           {pin ? (
             <TextInput
-              style={[resetStyles.pinInput, { color: colors.text, borderColor: colors.border }]}
+              style={[resetStyles.pinInput, { color: G.fg, borderColor: G.border, backgroundColor: G.bgCard }]}
               value={enteredPin}
               onChangeText={setEnteredPin}
               placeholder={t('security.current_pin')}
               secureTextEntry
               keyboardType="number-pad"
               maxLength={4}
-              placeholderTextColor={colors.textSecondary}
+              placeholderTextColor={G.muted}
             />
           ) : null}
 
           <TouchableOpacity
-            style={resetStyles.confirmBtn}
+            style={[resetStyles.confirmBtn, { backgroundColor: G.fg }]}
             onPress={handleReset}
             disabled={loading}
           >
             {loading
-              ? <ActivityIndicator color="#FFF" />
-              : <AppText variant="body" weight="bold" style={resetStyles.confirmBtnText} numberOfLines={1}>{t('settings.reset_btn')}</AppText>}
+              ? <ActivityIndicator color={G.bg} />
+              : <AppText variant="body" weight="bold" style={[resetStyles.confirmBtnText, { color: G.bg }]} numberOfLines={1}>{t('settings.reset_btn')}</AppText>}
           </TouchableOpacity>
           <TouchableOpacity style={resetStyles.cancelBtn} onPress={onClose}>
-            <AppText variant="body" weight="bold" style={resetStyles.cancelBtnText} numberOfLines={1}>{t('common.cancel')}</AppText>
+            <AppText variant="body" weight="bold" style={[resetStyles.cancelBtnText, { color: G.muted }]} numberOfLines={1}>{t('common.cancel')}</AppText>
           </TouchableOpacity>
         </View>
       </View>
@@ -319,39 +343,44 @@ const ResetModal = ({
   );
 };
 
-// ─── Bottom Sheet Wrapper ─────────────────────────────────────────────────────
+// →→→ Bottom Sheet Wrapper →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
 
 const BottomSheet = ({ visible, onClose, children }: any) => {
   const { colors } = useSettings();
+  const G = getSettingsGlass(colors);
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
         <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={onClose} />
-        <View style={[styles.bottomSheetContainer, { height: Dimensions.get('window').height * 0.88, backgroundColor: colors.background }]}>
-          <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
-          <ScrollView showsVerticalScrollIndicator={false}>{children}</ScrollView>
+        <View style={[styles.bottomSheetContainer, { backgroundColor: G.bg, borderColor: G.border }]}>
+          <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: G.borderLight }]} /></View>
+          <ScrollView style={styles.modalBodyScroll} contentContainerStyle={styles.modalBodyContent} showsVerticalScrollIndicator={false}>
+            {children}
+          </ScrollView>
         </View>
       </View>
     </Modal>
   );
 };
 
-// ─── Main Settings Screen ─────────────────────────────────────────────────────
+// →→→ Main Settings Screen →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
 
 const SettingsScreen = () => {
-  const { theme, setTheme, userProfile, pin, colors, t } = useSettings();
+  const { theme, setTheme, userProfile, pin, colors, t, soundEnabled, setSoundEnabled } = useSettings();
+  const G = getSettingsGlass(colors);
 
   const [showProfile, setShowProfile] = useState(false);
   const [showSecurity, setShowSecurity] = useState(false);
   const [showNotification, setShowNotification] = useState(false);
   const [showTranslation, setShowTranslation] = useState(false);
-  const [showCalendar, setShowCalendar] = useState(false);
-  const [showTimeSystem, setShowTimeSystem] = useState(false);
+  const [showDateTime, setShowDateTime] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
   const [showReset, setShowReset] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showWarehouse, setShowWarehouse] = useState(false);
 
+  const { activeWarehouse, warehouses } = useWarehouse();
 
   const handleOpenSub = (setter: (v: boolean) => void) => {
     Haptics.selectionAsync();
@@ -359,10 +388,12 @@ const SettingsScreen = () => {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Background Decor */}
-      <View style={StyleSheet.absoluteFill}>
-        <View style={[styles.bgWash, { top: -100, right: -100, backgroundColor: colors.primary, opacity: 0.05 }]} />
+    <View style={[styles.container, { backgroundColor: G.bg }]}>
+      {/* Background Ambient Glows */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <View style={[styles.bgWash, { top: -80, left: -60, backgroundColor: '#FFFFFF', opacity: 0.03 }]} />
+        <View style={[styles.bgWash, { bottom: -60, right: -40, backgroundColor: '#FFFFFF', opacity: 0.025, width: 250, height: 250, borderRadius: 125 }]} />
+        <View style={[styles.bgWash, { top: '40%', left: '30%', backgroundColor: '#FFFFFF', opacity: 0.015, width: 200, height: 200, borderRadius: 100 }]} />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
@@ -370,11 +401,11 @@ const SettingsScreen = () => {
         {/* Integrated Header */}
         <View style={styles.integratedHeader}>
           <View>
-  <AppText variant="body" weight="medium" style={[styles.headerLabel, { color: colors.textSecondary }]} numberOfLines={2}>{t('settings.system_pref')}</AppText>
-  <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: colors.text }]} numberOfLines={2}>{t('settings.configuration')}</AppText>
+  <AppText variant="body" weight="medium" style={[styles.headerLabel, { color: G.muted }]} numberOfLines={2}>{t('settings.system_pref')}</AppText>
+  <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{t('settings.configuration')}</AppText>
           </View>
-          <View style={[styles.headerIconBox, { borderColor: colors.border }]}>
-             <Shield size={24} color={colors.text} />
+          <View style={[styles.headerIconBox, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+             <Shield size={24} color={G.fg} />
           </View>
         </View>
 
@@ -383,20 +414,20 @@ const SettingsScreen = () => {
           <TouchableOpacity 
             activeOpacity={0.9} 
             onPress={() => handleOpenSub(setShowProfile)}
-            style={[styles.profileBanner, { backgroundColor: colors.card, borderColor: colors.border }]}
+            style={[styles.profileBanner, { backgroundColor: G.bgCard, borderColor: G.border }]}
           >
             <View style={styles.bannerAvatarBox}>
               <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={styles.bannerAvatar} />
-              <View style={[styles.badgeOverlay, { backgroundColor: colors.text }]}>
-                <BadgeCheck size={16} color={colors.background} fill={colors.background} />
+              <View style={[styles.badgeOverlay, { backgroundColor: G.fg }]}>
+                <BadgeCheck size={16} color={G.bg} fill={G.bg} />
               </View>
             </View>
             <View style={styles.bannerInfo}>
-            <AppText variant="title" weight="bold" style={[styles.bannerName, { color: colors.text }]} numberOfLines={2}>{userProfile.name}</AppText>
-            <AppText variant="body-sm" weight="medium" style={[styles.bannerBusiness, { color: colors.textSecondary }]} numberOfLines={1}>{userProfile.businessName}</AppText>
-              <View style={[styles.profileLinkBtn, { backgroundColor: colors.text + '10' }]}>
-                <AppText variant="caption" weight="bold" style={[styles.profileLinkText, { color: colors.text }]} numberOfLines={1}>{t('profile.edit')}</AppText>
-                <ArrowUpRight size={14} color={colors.text} />
+            <AppText variant="title" weight="bold" style={[styles.bannerName, { color: G.fg }]} numberOfLines={2}>{userProfile.name}</AppText>
+            <AppText variant="body-sm" weight="medium" style={[styles.bannerBusiness, { color: G.muted }]} numberOfLines={1}>{userProfile.businessName}</AppText>
+              <View style={[styles.profileLinkBtn, { backgroundColor: G.accentGlass }]}>
+                <AppText variant="caption" weight="bold" style={[styles.profileLinkText, { color: G.fg }]} numberOfLines={1}>{t('profile.edit')}</AppText>
+                <ArrowUpRight size={14} color={G.fg} />
               </View>
             </View>
           </TouchableOpacity>
@@ -409,13 +440,13 @@ const SettingsScreen = () => {
               icon={Shield} 
               title={t('settings.security')} 
               onPress={() => handleOpenSub(setShowSecurity)} 
-              color={colors.primary}
+              color={G.fg}
             />
             <ConfigurationGridItem 
               icon={Bell} 
               title={t('settings.notifications')} 
               onPress={() => handleOpenSub(setShowNotification)} 
-              color="#FF9500"
+              color={G.fg}
             />
           </View>
           <View style={styles.gridRow}>
@@ -423,19 +454,26 @@ const SettingsScreen = () => {
               icon={Languages} 
               title={t('settings.language')} 
               onPress={() => handleOpenSub(setShowTranslation)} 
-              color="#5856D6"
+              color={G.fg}
             />
             <ConfigurationGridItem 
               icon={Calendar} 
-              title={t('settings.date_format')} 
-              onPress={() => handleOpenSub(setShowCalendar)} 
-              color="#FF2D55"
+              title={t('settings.date_time_format')} 
+              onPress={() => handleOpenSub(setShowDateTime)} 
+              color={G.fg}
             />
-            <ConfigurationGridItem
-              icon={Clock}
-              title={t('settings.time_format')}
-              onPress={() => handleOpenSub(setShowTimeSystem)}
-              color="#34C759"
+          </View>
+        </View>
+
+        {/* Warehouse Section */}
+        <View style={styles.ledgerSection}>
+          <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: G.muted }]} numberOfLines={1}>{t('inv.warehouses_title')}</AppText>
+          <View style={[styles.ledgerGroup, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+            <SettingLedgerItem
+              icon={Warehouse}
+              title={activeWarehouse ? activeWarehouse.name : t('inv.all_warehouses')}
+              subtitle={activeWarehouse ? (activeWarehouse.location || t('data.warehouse_count', { count: warehouses.length.toString() })) : t('inv.all_warehouses_sub')}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowWarehouse(true); }}
             />
           </View>
         </View>
@@ -443,11 +481,11 @@ const SettingsScreen = () => {
         {/* The Palette — Theme Selection */}
         <View style={styles.paletteSection}>
           <View style={styles.sectionHead}>
-            <View>
-          <AppText variant="heading" weight="bold" style={[styles.sectionTitle, { color: colors.text }]} numberOfLines={2}>{t('settings.palette')}</AppText>
-          <AppText variant="body-sm" weight="medium" style={[styles.sectionSub, { color: colors.textSecondary }]} numberOfLines={2}>{t('settings.theme_subtitle')}</AppText>
-            </View>
-            <Palette size={20} color={colors.textSecondary} />
+          <View>
+          <AppText variant="heading" weight="bold" style={[styles.sectionTitle, { color: G.fg }]} numberOfLines={2}>{t('settings.palette')}</AppText>
+          <AppText variant="body-sm" weight="medium" style={[styles.sectionSub, { color: G.muted }]} numberOfLines={2}>{t('settings.theme_subtitle')}</AppText>
+          </View>
+            <Palette size={20} color={G.muted} />
           </View>
           <ScrollView
             horizontal
@@ -470,8 +508,8 @@ const SettingsScreen = () => {
 
         {/* Advanced System Ledger */}
         <View style={styles.ledgerSection}>
-          <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: colors.textSecondary }]} numberOfLines={1}>{t('settings.advanced')}</AppText>
-          <View style={[styles.ledgerGroup, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: G.muted }]} numberOfLines={1}>{t('settings.advanced')}</AppText>
+          <View style={[styles.ledgerGroup, { backgroundColor: G.bgCard, borderColor: G.border }]}>
              <SettingLedgerItem 
                 icon={Database} 
                 title={t('settings.export_data')} 
@@ -484,6 +522,24 @@ const SettingsScreen = () => {
                 subtitle={t('settings.import_desc')}
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowImportModal(true); }}
              />
+              <View style={[styles.soundRow, { borderBottomColor: G.border }]}>
+                <View style={[styles.ledgerIconBox, { backgroundColor: G.accentGlass }]}>
+                  <Volume2 size={18} color={G.fg} strokeWidth={2.5} />
+                </View>
+                <View style={{ flex: 1, marginLeft: 14 }}>
+                  <AppText variant="body" weight="bold" style={{ color: G.fg }} numberOfLines={1}>{t('settings.sound_effects')}</AppText>
+                  <AppText variant="caption" weight="medium" style={{ color: G.muted }} numberOfLines={1}>{t('settings.sound_desc')}</AppText>
+                </View>
+                <Switch
+                  value={soundEnabled}
+                  onValueChange={(val: boolean) => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setSoundEnabled(val);
+                  }}
+                  trackColor={{ false: G.border, true: G.fg + '60' }}
+                  thumbColor={soundEnabled ? G.fg : G.muted}
+                />
+              </View>
              <SettingLedgerItem 
                 icon={HelpCircle} 
                 title={t('support.contact')} 
@@ -500,7 +556,7 @@ const SettingsScreen = () => {
         </View>
 
         <View style={styles.footer}>
-           <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.versionText, { color: colors.textSecondary }]} numberOfLines={2}>{t('settings.version_info', { version: '1.0.4' })}</AppText>
+           <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.versionText, { color: G.muted }]} numberOfLines={2}>{t('settings.version_info', { version: '1.0.4' })}</AppText>
         </View>
 
         <View style={{ height: 40 }} />
@@ -519,14 +575,16 @@ const SettingsScreen = () => {
       <BottomSheet visible={showTranslation} onClose={() => setShowTranslation(false)}>
         <TranslationSettingsScreen />
       </BottomSheet>
-      <BottomSheet visible={showCalendar} onClose={() => setShowCalendar(false)}>
-        <CalendarSettingsScreen />
-      </BottomSheet>
-      <BottomSheet visible={showTimeSystem} onClose={() => setShowTimeSystem(false)}>
-        <TimeSystemSettingsScreen />
+      <BottomSheet visible={showDateTime} onClose={() => setShowDateTime(false)}>
+        <DateTimeSettings />
       </BottomSheet>
       <BottomSheet visible={showSupport} onClose={() => setShowSupport(false)}>
         <SupportScreen />
+      </BottomSheet>
+
+      {/* Warehouse Modal */}
+      <BottomSheet visible={showWarehouse} onClose={() => setShowWarehouse(false)}>
+        <WarehouseSettingsScreen onClose={() => setShowWarehouse(false)} />
       </BottomSheet>
 
       {/* Reset Modal */}
@@ -556,7 +614,7 @@ const SettingsScreen = () => {
   );
 };
 
-// ─── Theme Card Styles ────────────────────────────────────────────────────────
+// →→→ Theme Card Styles →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
 
 const themeCardStyles = StyleSheet.create({
   card: {
@@ -648,7 +706,7 @@ const themeCardStyles = StyleSheet.create({
   },
 });
 
-// ─── Main Styles ──────────────────────────────────────────────────────────────
+// →→→ Main Styles →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
 
 const styles = StyleSheet.create({
   container: {
@@ -835,6 +893,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 16,
   },
+  soundRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+  },
   ledgerTitle: {
 
     fontFamily: Fonts.bold,
@@ -859,13 +924,21 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.65)',
   },
   bottomSheetContainer: {
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     paddingBottom: 40,
-    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    maxHeight: '90%',
+  },
+  modalBodyScroll: {
+    flexGrow: 1,
+  },
+  modalBodyContent: {
+    paddingHorizontal: 20,
   },
   modalHeader: {
     alignItems: 'center',
@@ -882,7 +955,7 @@ const styles = StyleSheet.create({
 const resetStyles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 30,
@@ -897,9 +970,7 @@ const resetStyles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#FFF5F5',
     borderWidth: 1.5,
-    borderColor: '#FF3B30',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 18,

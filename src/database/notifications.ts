@@ -9,6 +9,8 @@ export type NotificationCategory =
   | 'inventory'
   | 'sales'
   | 'expense'
+  | 'budget'
+  | 'recurring'
   | 'customer'
   | 'supplier'
   | 'system'
@@ -29,7 +31,13 @@ export type NotificationIcon =
   | 'bell'
   | 'shield'
   | 'truck'
-  | 'calendar';
+  | 'calendar'
+  | 'trending-up'
+  | 'repeat'
+  | 'clock'
+  | 'megaphone'
+  | 'percent'
+  | 'receipt';
 
 export interface AppNotification {
   id: number;
@@ -138,6 +146,19 @@ export const createNotification = (
   }
 };
 
+export const hasActiveNotificationByGroupKey = (groupKey: string): boolean => {
+  try {
+    const database = getDB();
+    const row = database.getFirstSync<{ count: number }>(
+      'SELECT COUNT(*) as count FROM notifications WHERE groupKey = ? AND isDismissed = 0 AND isResolved = 0',
+      [groupKey],
+    );
+    return (row?.count || 0) > 0;
+  } catch {
+    return false;
+  }
+};
+
 export const getNotificationById = (id: number): AppNotification | null => {
   try {
     const database = getDB();
@@ -200,7 +221,7 @@ export const getUnreadCount = (): number => {
       'SELECT COUNT(*) as count FROM notifications WHERE isRead = 0 AND isDismissed = 0',
     );
     return row?.count || 0;
-  } catch (error) {
+  } catch {
     return 0;
   }
 };
@@ -212,7 +233,7 @@ export const getUnresolvedCount = (): number => {
       'SELECT COUNT(*) as count FROM notifications WHERE isResolved = 0 AND requiresAction = 1',
     );
     return row?.count || 0;
-  } catch (error) {
+  } catch {
     return 0;
   }
 };
@@ -249,7 +270,7 @@ export const markAsDismissed = (id: number): boolean => {
     const database = getDB();
     database.runSync('UPDATE notifications SET isDismissed = 1 WHERE id = ?', [id]);
     return true;
-  } catch (error) {
+  } catch {
     return false;
   }
 };
@@ -262,7 +283,7 @@ export const markAsResolved = (id: number): boolean => {
       [id],
     );
     return true;
-  } catch (error) {
+  } catch {
     return false;
   }
 };
@@ -272,7 +293,7 @@ export const clearAllNotifications = (): boolean => {
     const database = getDB();
     database.runSync('UPDATE notifications SET isDismissed = 1');
     return true;
-  } catch (error) {
+  } catch {
     return false;
   }
 };
@@ -286,12 +307,12 @@ export const deleteOldNotifications = (olderThanDays: number = 30): number => {
       [cutoff],
     );
     return (result as any).changes || 0;
-  } catch (error) {
+  } catch {
     return 0;
   }
 };
 
-// ── Scheduled Reminders ─────────────────────────────────────────────
+// â”€â”€ Scheduled Reminders â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const createReminder = (input: {
   type: string;
@@ -327,7 +348,7 @@ export const getReminderById = (id: number): ScheduledReminder | null => {
     const row = database.getFirstSync('SELECT * FROM scheduled_reminders WHERE id = ?', [id]) as any;
     if (!row) return null;
     return row as ScheduledReminder;
-  } catch (error) {
+  } catch {
     return null;
   }
 };
@@ -343,7 +364,7 @@ export const getDueReminders = (): ScheduledReminder[] => {
       [now, now],
     ) as any[];
     return rows as ScheduledReminder[];
-  } catch (error) {
+  } catch {
     return [];
   }
 };
@@ -355,7 +376,7 @@ export const getActiveReminders = (): ScheduledReminder[] => {
       `SELECT * FROM scheduled_reminders WHERE status = 'pending' ORDER BY triggerAt ASC`,
     ) as any[];
     return rows as ScheduledReminder[];
-  } catch (error) {
+  } catch {
     return [];
   }
 };
@@ -365,7 +386,7 @@ export const updateReminderStatus = (id: number, status: ScheduledReminder['stat
     const database = getDB();
     database.runSync('UPDATE scheduled_reminders SET status = ? WHERE id = ?', [status, id]);
     return true;
-  } catch (error) {
+  } catch {
     return false;
   }
 };
@@ -379,7 +400,7 @@ export const snoozeReminder = (id: number, minutes: number): boolean => {
       [newTime, id],
     );
     return true;
-  } catch (error) {
+  } catch {
     return false;
   }
 };
@@ -389,12 +410,12 @@ export const deleteReminder = (id: number): boolean => {
     const database = getDB();
     database.runSync('DELETE FROM scheduled_reminders WHERE id = ?', [id]);
     return true;
-  } catch (error) {
+  } catch {
     return false;
   }
 };
 
-// ── Preferences ─────────────────────────────────────────────────────
+// â”€â”€ Preferences â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const getPreference = (key: string): NotificationPreferences | null => {
   try {
@@ -409,7 +430,7 @@ export const getPreference = (key: string): NotificationPreferences | null => {
       sound: row.sound || 'default',
       vibration: row.vibration === 1,
     };
-  } catch (error) {
+  } catch {
     return null;
   }
 };
@@ -426,7 +447,7 @@ export const getAllPreferences = (): NotificationPreferences[] => {
       sound: row.sound || 'default',
       vibration: row.vibration === 1,
     }));
-  } catch (error) {
+  } catch {
     return [];
   }
 };
@@ -454,7 +475,7 @@ export const setPreference = (pref: Partial<NotificationPreferences> & { key: st
   }
 };
 
-// ── Cleanup utilities ───────────────────────────────────────────────
+// â”€â”€ Cleanup utilities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const cleanupExpiredNotifications = (): number => {
   try {
@@ -465,7 +486,7 @@ export const cleanupExpiredNotifications = (): number => {
       [now],
     );
     return (result as any).changes || 0;
-  } catch (error) {
+  } catch {
     return 0;
   }
 };

@@ -1,11 +1,10 @@
-﻿import { CustomDatePicker } from '@/components/CustomDatePicker';
+import { CustomDatePicker } from '@/components/CustomDatePicker';
 import { Fonts } from '@/constants/theme';
 import { PROFILE_IMAGES, useSettings } from '@/context/SettingsContext';
 import { useSidebar } from '@/context/SidebarContext';
 import { getSummaryMetricsByDateRange, getEarliestRecordDate } from '@/database/db';
 import { useNotifications } from '@/hooks/useNotifications';
 import { formatDate } from '@/utils/date-utils';
-import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import {
@@ -22,16 +21,16 @@ import {
   ThumbsUp,
   Meh,
   Frown,
-  RefreshCw,
   ChevronDown,
 } from 'lucide-react-native';
-import React, { useCallback, useEffect, useState, useRef } from 'react';
-import { Dimensions, Image, Modal, Platform, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View, Animated as RNAnimated } from 'react-native';
-import { AppText, AppListItem, AppRow, AppCard } from '@/components/ui';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Image, Modal, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { AppNumber, AppText} from '@/components/ui';
 import Animated, {
   FadeInDown,
   FadeInUp,
 } from 'react-native-reanimated';
+import { getSummaryGlass } from './glass-summary';
 
 type DateRangeOption = 
   | 'today' | 'yesterday' | 'this_week' | 'last_week' 
@@ -44,16 +43,19 @@ interface DateRange {
   label: string;
 }
 
-const MetricCard = React.memo(({ label, value, color, icon: Icon, subtitle }: { label: string; value: string; color: string; icon: any; subtitle?: string }) => {
+const MetricCard = React.memo(({ label, value, icon: Icon, subtitle }: { label: string; value: React.ReactNode; icon: any; subtitle?: string }) => {
   const { colors } = useSettings();
+  const G = getSummaryGlass(colors);
   return (
-    <View style={[styles.metricCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <View style={[styles.metricIconBox, { backgroundColor: colors.surface }]}>
-        <Icon size={18} color={colors.textSecondary} />
+    <View style={[styles.metricCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+      <View style={[styles.metricIconBox, { backgroundColor: G.accentGlass }]}>
+        <Icon size={18} color={G.muted} />
       </View>
-      <AppText variant="title" weight="bold" style={[styles.metricValue, { color: colors.text }]} numberOfLines={1}>{value}</AppText>
-      <AppText variant="caption" weight="medium" style={[styles.metricLabel, { color: colors.textSecondary }]} numberOfLines={2}>{label}</AppText>
-      {subtitle && <AppText variant="caption" weight="regular" style={[styles.metricSub, { color: colors.textSecondary }]} numberOfLines={2}>{subtitle}</AppText>}
+      {typeof value === 'string' ? (
+        <AppText variant="title" weight="bold" style={[styles.metricValue, { color: G.fg }]} numberOfLines={1}>{value}</AppText>
+      ) : value}
+      <AppText variant="caption" weight="medium" style={[styles.metricLabel, { color: G.muted }]} numberOfLines={2}>{label}</AppText>
+      {subtitle && <AppText variant="caption" weight="regular" style={[styles.metricSub, { color: G.muted }]} numberOfLines={2}>{subtitle}</AppText>}
     </View>
   );
 });
@@ -63,11 +65,11 @@ const PerformanceBadge = React.memo(({ rating }: { rating: 'Excellent' | 'Good' 
   const { colors, t } = useSettings();
 
   const config = React.useMemo(() => ({
-    Excellent: { icon: Star, color: '#34C759', bg: '#34C75915', label: t('summary.excellent') },
-    Good: { icon: ThumbsUp, color: '#007AFF', bg: '#007AFF15', label: t('summary.good') },
-    Average: { icon: Meh, color: '#FF9500', bg: '#FF950015', label: t('summary.average') },
-    Poor: { icon: Frown, color: '#FF3B30', bg: '#FF3B3015', label: t('summary.poor') },
-  }), [t]);
+    Excellent: { icon: Star, color: colors.success, bg: colors.success + '20', label: t('summary.excellent') },
+    Good: { icon: ThumbsUp, color: colors.primary, bg: colors.primary + '20', label: t('summary.good') },
+    Average: { icon: Meh, color: colors.warning, bg: colors.warning + '20', label: t('summary.average') },
+    Poor: { icon: Frown, color: colors.error, bg: colors.error + '20', label: t('summary.poor') },
+  }), [t, colors.success, colors.primary, colors.warning, colors.error]);
 
   const { icon: Icon, color, bg, label } = config[rating];
 
@@ -167,7 +169,8 @@ const getDateRangeForOption = (option: DateRangeOption, customDate?: string): Da
 
 const SummaryScreen = () => {
   const { openSidebar } = useSidebar();
-  const { colors, calendarType, language, t, theme, userProfile } = useSettings();
+  const { colors, calendarType, language, t, userProfile } = useSettings();
+  const G = getSummaryGlass(colors);
   const { notifCount } = useNotifications();
   const router = useRouter();
   const [metrics, setMetrics] = useState<any>(null);
@@ -233,12 +236,6 @@ const SummaryScreen = () => {
     }
   };
 
-  const formatCash = (val: number) => {
-    if (val >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
-    if (val >= 1000) return `${(val / 1000).toFixed(1)}K`;
-    return val.toLocaleString();
-  };
-
   const getRating = (): 'Excellent' | 'Good' | 'Average' | 'Poor' => {
     return metrics?.performanceRating || 'Poor';
   };
@@ -257,10 +254,12 @@ const SummaryScreen = () => {
   ];
 
   return (
-    <View style={[styles.screenWrapper, { backgroundColor: colors.background }]}>
+    <View style={[styles.screenWrapper, { backgroundColor: G.bg }]}>
       {/* Ambient Glow */}
       <View style={StyleSheet.absoluteFill}>
-        <View style={[styles.bgWash, { top: -150, right: -100, backgroundColor: colors.primary, opacity: 0.05 }]} />
+        <View style={[styles.bgWash, { top: -150, right: -100, backgroundColor: '#FFFFFF', opacity: 0.03 }]} />
+        <View style={[styles.bgWash, { top: 300, left: -80, backgroundColor: '#FFFFFF', opacity: 0.02 }]} />
+        <View style={[styles.bgWash, { top: 700, right: -60, backgroundColor: '#FFFFFF', opacity: 0.015 }]} />
       </View>
 
       <ScrollView 
@@ -272,7 +271,7 @@ const SummaryScreen = () => {
         <View style={styles.topBar}>
           <View style={{ flex: 1 }}>
             <TouchableOpacity 
-              style={[styles.headerAvatarBox, { borderColor: colors.border }]}
+              style={[styles.headerAvatarBox, { borderColor: G.border, backgroundColor: G.bgCard }]}
               onPress={openSidebar}
             >
               <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={styles.headerAvatar} />
@@ -283,25 +282,25 @@ const SummaryScreen = () => {
             <TouchableOpacity 
               onPress={() => setShowDateSelector(true)}
               style={[styles.headerDateBadge, { 
-                borderColor: colors.border,
-                backgroundColor: colors.surface || colors.card
+                borderColor: G.borderLight,
+                backgroundColor: G.bgCard
               }]}
             >
-              <Calendar size={14} color={colors.primary} style={{ marginRight: 6 }} />
-              <AppText variant="caption" weight="bold" shrink={false} style={[styles.headerDateText, { color: colors.primary }]} numberOfLines={1}>
+              <Calendar size={14} color={G.fg} style={{ marginRight: 6 }} />
+              <AppText variant="caption" weight="bold" shrink={false} style={[styles.headerDateText, { color: G.fg }]} numberOfLines={1}>
                 {getPeriodLabel()}
               </AppText>
-              <ChevronDown size={12} color={colors.primary} style={{ marginLeft: 4 }} />
+              <ChevronDown size={12} color={G.fg} style={{ marginLeft: 4 }} />
             </TouchableOpacity>
 
             <TouchableOpacity 
               onPress={() => router.push('/notifications')} 
-              style={[styles.headerIconBtn, { borderColor: colors.border }]}
+              style={[styles.headerIconBtn, { borderColor: G.border, backgroundColor: G.bgCard }]}
             >
-              <Bell size={22} color={colors.text} />
+              <Bell size={22} color={G.fg} />
               {notifCount > 0 && (
-                <View style={[styles.notifBadge, { backgroundColor: colors.primary }]}>
-                  <AppText variant="micro" weight="bold" shrink={false} style={styles.notifBadgeText} numberOfLines={1}>{notifCount}</AppText>
+                <View style={[styles.notifBadge, { backgroundColor: '#FFFFFF' }]}>
+                  <AppNumber value={notifCount} size="micro" weight="bold" style={[styles.notifBadgeText, { color: G.bg }]} />
                 </View>
               )}
             </TouchableOpacity>
@@ -310,8 +309,8 @@ const SummaryScreen = () => {
 
         {/* Period Header */}
         <Animated.View entering={FadeInDown.duration(600)} style={styles.screenHeader}>
-          <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.headerLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('common.overview')}</AppText>
-          <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: colors.text }]} numberOfLines={2}>{getPeriodLabel()}</AppText>
+          <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.headerLabel, { color: G.muted }]} numberOfLines={1}>{t('common.overview')}</AppText>
+          <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{getPeriodLabel()}</AppText>
         </Animated.View>
 
         {/* Metrics Grid */}
@@ -320,14 +319,12 @@ const SummaryScreen = () => {
           <View style={styles.metricsRow}>
             <MetricCard 
               label={t('summary.sales_cash')}
-              value={`${formatCash(metrics?.salesCash || 0)} ${t('common.etb')}`}
-              color="#34C759"
+              value={<AppNumber value={metrics?.salesCash ?? 0} prefix="ETB " size="title" weight="bold" compact />}
               icon={DollarSign}
             />
             <MetricCard 
               label={t('summary.sales_items')}
-              value={`${(metrics?.salesItems || 0).toLocaleString()}`}
-              color="#007AFF"
+              value={<AppNumber value={metrics?.salesItems ?? 0} size="title" weight="bold" />}
               icon={Package}
             />
           </View>
@@ -336,14 +333,12 @@ const SummaryScreen = () => {
           <View style={styles.metricsRow}>
             <MetricCard 
               label={t('summary.profit_cash')}
-              value={`${formatCash(metrics?.profit || 0)} ${t('common.etb')}`}
-              color="#34C759"
+              value={<AppNumber value={metrics?.profit ?? 0} prefix="ETB " size="title" weight="bold" compact />}
               icon={TrendingUp}
             />
             <MetricCard 
               label={t('summary.expenses')}
-              value={`${formatCash(metrics?.expenses || 0)} ${t('common.etb')}`}
-              color="#FF3B30"
+              value={<AppNumber value={metrics?.expenses ?? 0} prefix="ETB " size="title" weight="bold" compact />}
               icon={CreditCard}
             />
           </View>
@@ -352,14 +347,12 @@ const SummaryScreen = () => {
           <View style={styles.metricsRow}>
             <MetricCard 
               label={t('summary.debt')}
-              value={`${formatCash(metrics?.debt || 0)} ${t('common.etb')}`}
-              color="#FF9500"
+              value={<AppNumber value={metrics?.debt ?? 0} prefix="ETB " size="title" weight="bold" compact />}
               icon={BarChart3}
             />
             <MetricCard 
               label={t('summary.damage_loss')}
-              value={`${formatCash(metrics?.damageLoss || 0)} ${t('common.etb')}`}
-              color="#FF3B30"
+              value={<AppNumber value={metrics?.damageLoss ?? 0} prefix="ETB " size="title" weight="bold" compact />}
               icon={AlertTriangle}
             />
           </View>
@@ -368,40 +361,47 @@ const SummaryScreen = () => {
           <View style={styles.metricsRow}>
             <MetricCard 
               label={t('summary.price_changes')}
-              value={`${metrics?.priceChanges && metrics.priceChanges >= 0 ? '+' : ''}${formatCash(metrics?.priceChanges || 0)} ${t('common.etb')}`}
-              color={metrics?.priceChanges && metrics.priceChanges >= 0 ? '#34C759' : '#FF3B30'}
+              value={<AppNumber value={metrics?.priceChanges ?? 0} prefix="ETB " size="title" weight="bold" compact showSign />}
               icon={TrendingDown}
             />
-            <View style={[styles.netMetricCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View style={[styles.metricIconBox, { backgroundColor: colors.surface }]}>
-                <Star size={18} color={colors.textSecondary} />
+            <View style={[styles.netMetricCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+              <View style={[styles.metricIconBox, { backgroundColor: G.accentGlass }]}>
+                <Star size={18} color={G.muted} />
               </View>
-              <AppText variant="title" weight="bold" style={[styles.metricValue, { color: colors.text }]} numberOfLines={1}>
-                {metrics?.netProfit && metrics.netProfit >= 0 ? '+' : ''}{formatCash(metrics?.netProfit || 0)} {t('common.etb')}
-              </AppText>
-              <AppText variant="caption" weight="medium" style={[styles.metricLabel, { color: colors.textSecondary }]} numberOfLines={2}>{t('summary.net_profit')}</AppText>
+              <AppNumber value={metrics?.netProfit ?? 0} prefix="ETB " size="title" weight="bold" showSign />
+              <AppText variant="caption" weight="medium" style={[styles.metricLabel, { color: G.muted }]} numberOfLines={2}>{t('summary.net_profit')}</AppText>
             </View>
           </View>
         </Animated.View>
 
         {/* Performance Rating */}
         <Animated.View entering={FadeInUp.delay(600).duration(600)} style={styles.perfSection}>
-          <View style={[styles.perfCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.perfCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
             <View style={styles.perfHeader}>
-              <AppText variant="title" weight="bold" style={[styles.perfTitle, { color: colors.text }]} numberOfLines={2}>{t('summary.performance_rating')}</AppText>
+              <AppText variant="title" weight="bold" style={[styles.perfTitle, { color: G.fg }]} numberOfLines={2}>{t('summary.performance_rating')}</AppText>
               <PerformanceBadge rating={getRating()} />
             </View>
-            <AppText variant="body" weight="medium" style={[styles.perfDesc, { color: colors.textSecondary }]} numberOfLines={4}>
+            <AppText variant="body" weight="medium" style={[styles.perfDesc, { color: G.muted }]} numberOfLines={4}>
               {t('summary.performance_desc')}
             </AppText>
-            <View style={styles.perfFormula}>
-              <AppText variant="caption" weight="medium" align="center" style={[styles.perfFormulaLabel, { color: colors.textSecondary, marginBottom: 4 }]} numberOfLines={2}>              {t('summary.formula_label')}</AppText>
-              <AppText variant="micro" weight="medium" align="center" shrink={false} style={{ color: colors.text, marginVertical: 2 }}>
-                = {formatCash(metrics?.profit || 0)} + {formatCash(metrics?.priceChangeGains || 0)} − {formatCash(metrics?.expenses || 0)} − {formatCash(metrics?.damageLoss || 0)} − {formatCash(metrics?.otherLosses || 0)}
-              </AppText>
-              <AppText variant="caption" weight="bold" align="center" shrink={false} style={{ color: metrics?.netProfit && metrics.netProfit >= 0 ? '#34C759' : '#FF3B30', marginTop: 2 }}>
-                = {metrics?.netProfit && metrics.netProfit >= 0 ? '+' : ''}{formatCash(metrics?.netProfit || 0)} {t('common.etb')}
-              </AppText>
+            <View style={[styles.perfFormula, { backgroundColor: G.accentGlass }]}>
+              <AppText variant="caption" weight="medium" align="center" style={[styles.perfFormulaLabel, { color: G.muted, marginBottom: 4 }]} numberOfLines={2}>              {t('summary.formula_label')}</AppText>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: 2, marginVertical: 2 }}>
+                <AppText variant="micro" weight="medium" style={{ color: G.fgSecondary }}>=</AppText>
+                <AppNumber value={metrics?.profit ?? 0} size="micro" prefix="ETB " compact />
+                <AppText variant="micro" weight="medium" style={{ color: G.fgSecondary }}>+</AppText>
+                <AppNumber value={metrics?.priceChangeGains ?? 0} size="micro" prefix="ETB " compact />
+                <AppText variant="micro" weight="medium" style={{ color: G.fgSecondary }}>−</AppText>
+                <AppNumber value={metrics?.expenses ?? 0} size="micro" prefix="ETB " compact />
+                <AppText variant="micro" weight="medium" style={{ color: G.fgSecondary }}>−</AppText>
+                <AppNumber value={metrics?.damageLoss ?? 0} size="micro" prefix="ETB " compact />
+                <AppText variant="micro" weight="medium" style={{ color: G.fgSecondary }}>−</AppText>
+                <AppNumber value={metrics?.otherLosses ?? 0} size="micro" prefix="ETB " compact />
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 2 }}>
+                <AppText variant="caption" weight="bold" style={{ color: G.fgSecondary }}>=</AppText>
+                <AppNumber value={metrics?.netProfit ?? 0} prefix="ETB " size="caption" showSign />
+              </View>
             </View>
           </View>
         </Animated.View>
@@ -411,26 +411,26 @@ const SummaryScreen = () => {
       {/* Date Selector Modal */}
       <Modal visible={showDateSelector} transparent animationType="fade" onRequestClose={() => setShowDateSelector(false)}>
         <TouchableOpacity style={styles.modalOverlayC} activeOpacity={1} onPress={() => setShowDateSelector(false)}>
-          <View style={[styles.selectorBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <AppText variant="title" weight="bold" align="center" style={[styles.selectorTitle, { color: colors.text }]} numberOfLines={2}>{t('summary.select_date_range')}</AppText>
+          <View style={[styles.selectorBox, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+            <AppText variant="title" weight="bold" align="center" style={[styles.selectorTitle, { color: G.fg }]} numberOfLines={2}>{t('summary.select_date_range')}</AppText>
             <ScrollView style={styles.selectorList} showsVerticalScrollIndicator={false}>
               {dateOptions.map((opt) => (
                 <TouchableOpacity
                   key={opt.key}
                   style={[
                     styles.selectorItem,
-                    activeOption === opt.key && { backgroundColor: colors.primary + '15' }
+                    activeOption === opt.key && { backgroundColor: G.accentGlass }
                   ]}
                   onPress={() => handleOptionSelect(opt.key)}
                 >
                   <AppText variant="body" weight="bold" style={[
                     styles.selectorText,
-                    { color: activeOption === opt.key ? colors.primary : colors.text }
+                    { color: activeOption === opt.key ? G.fg : G.muted }
                   ]} numberOfLines={2}>
                     {t(opt.labelKey)}
                   </AppText>
                   {activeOption === opt.key && (
-                    <View style={[styles.selectorDot, { backgroundColor: colors.primary }]} />
+                    <View style={[styles.selectorDot, { backgroundColor: G.fg }]} />
                   )}
                 </TouchableOpacity>
               ))}
@@ -495,7 +495,6 @@ const styles = StyleSheet.create({
     borderColor: '#FFF',
   },
   notifBadgeText: {
-    color: '#FFF',
     fontFamily: Fonts.bold,
   },
   headerLabel: { 
@@ -503,7 +502,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase', 
     letterSpacing: 1.5, 
     marginBottom: 8,
-    opacity: 0.7
   },
   headerTitle: { 
     fontFamily: Fonts.bold, 
@@ -619,7 +617,6 @@ const styles = StyleSheet.create({
   perfFormula: {
     padding: 12,
     borderRadius: 12,
-    backgroundColor: 'rgba(0,0,0,0.03)',
   },
   perfFormulaLabel: {
     fontFamily: Fonts.medium,
@@ -628,7 +625,7 @@ const styles = StyleSheet.create({
   // Modals
   modalOverlayC: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.65)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -639,10 +636,10 @@ const styles = StyleSheet.create({
     padding: 25,
     borderWidth: 1,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 15,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
   selectorTitle: {
     fontFamily: Fonts.bold,

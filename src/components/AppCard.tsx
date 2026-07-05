@@ -1,20 +1,3 @@
-// AppCard — a flexible, language-safe card container.
-//
-// Why a custom Card?
-// ──────────────────
-// The original screens had many ad-hoc cards with hard-coded
-// `borderRadius: 16`, `padding: 18`, `flexDirection: 'row'`, etc.
-// Translations get longer → the inner text wraps to a second line →
-// the fixed `padding` looks wrong → the right-aligned value column
-// gets pushed off-screen.
-//
-// AppCard fixes that:
-//   * `padding` and `gap` are theme tokens, not literals.
-//   * `flexWrap: 'wrap'` is the default so child rows gracefully
-//     collapse to two lines instead of overflowing.
-//   * `minHeight` is the only vertical dimension — no fixed `height`.
-//   * Sub-views (`header`, `body`, `footer`) are pre-styled slots.
-
 import React from 'react';
 import {
   StyleProp,
@@ -97,9 +80,7 @@ AppCard.displayName = 'AppCard';
 
 const styles = StyleSheet.create({
   base: {
-    // No fixed height — let content decide.
     minHeight: 0,
-    // Allow children to shrink below their natural size.
     minWidth: 0,
   },
 });

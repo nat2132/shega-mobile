@@ -1,4 +1,4 @@
-﻿// Dashboard alerts strip
+// Dashboard alerts strip
 // Shows the most critical unresolved notifications right on the dashboard
 // so the user can act on them quickly.
 
@@ -14,10 +14,10 @@ import { useNavigationIntent } from '@/context/NavigationIntentContext';
 import { DashboardAlertCard } from './DashboardAlertCard';
 import { AppNotification } from '@/database/notifications';
 import { NotificationDetailSheet } from './NotificationDetailSheet';
-import { AppText } from '@/components/ui';
+import { AppText, AppNumber } from '@/components/ui';
 export const DashboardAlerts: React.FC = () => {
   const { colors, t } = useSettings();
-  const { notifications, dismiss, resolve, refresh } = useNotificationCenter();
+  const { notifications, dismiss, resolve } = useNotificationCenter();
   const { publishIntent } = useNavigationIntent();
   const router = useRouter();
   const [selected, setSelected] = useState<AppNotification | null>(null);
@@ -47,7 +47,7 @@ export const DashboardAlerts: React.FC = () => {
             {t('dashboard.alerts_title')}
           </AppText>
           <View style={[styles.countPill, { backgroundColor: colors.error || '#FF3B30' }]}>
-            <AppText variant="micro" weight="bold" shrink={false} style={[styles.countText, { color: '#FFF' }]} numberOfLines={1}>{visible.length}</AppText>
+            <AppNumber value={visible.length} size="micro" style={[styles.countText, { color: '#FFF' }]} />
           </View>
         </View>
         <View style={styles.headerActions}>

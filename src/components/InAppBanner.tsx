@@ -54,24 +54,18 @@ const InAppBannerContext = createContext<InAppBannerContextType | undefined>(
   undefined,
 );
 
-const ICON_BG: Record<InAppBannerIconType, string> = {
-  success: 'rgba(52, 199, 89, 0.14)',
-  error: 'rgba(255, 59, 48, 0.14)',
-  warning: 'rgba(255, 149, 0, 0.16)',
-  info: 'rgba(47, 111, 237, 0.14)',
-};
-
-const ICON_COLOR: Record<InAppBannerIconType, string> = {
-  success: '#34C759',
-  error: '#FF3B30',
-  warning: '#FF9500',
-  info: '#2F6FED',
-};
-
-function BannerIcon({ type }: { type?: InAppBannerIconType }) {
+function BannerIcon({ type, colors }: { type?: InAppBannerIconType; colors: any }) {
   if (!type) return null;
-  const color = ICON_COLOR[type];
-  const bg = ICON_BG[type];
+  const color =
+    type === 'success' ? colors.success :
+    type === 'error' ? colors.error :
+    type === 'warning' ? colors.warning :
+    colors.primary;
+  const bg =
+    type === 'success' ? colors.success + '24' :
+    type === 'error' ? colors.error + '24' :
+    type === 'warning' ? colors.warning + '29' :
+    colors.primary + '24';
   switch (type) {
     case 'success':
       return (
@@ -157,7 +151,7 @@ const BannerCard: React.FC<BannerCardProps> = React.memo(({ entry, onDismiss }) 
         },
       ]}
     >
-      <BannerIcon type={entry.options.iconType} />
+      <BannerIcon type={entry.options.iconType} colors={colors} />
       <View style={styles.content}>
         {entry.options.title ? (
           <AppText

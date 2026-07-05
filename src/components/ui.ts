@@ -33,3 +33,6 @@ export type { AppListItemProps } from './AppListItem';
 
 export { AppRow } from './AppRow';
 export type { AppRowProps } from './AppRow';
+
+export { AppNumber } from './AppNumber';
+export type { AppNumberProps, NumberSize } from './AppNumber';

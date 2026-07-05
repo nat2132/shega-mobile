@@ -1,24 +1,18 @@
-﻿import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Fonts } from '@/constants/theme';
 import {
   StyleSheet,
   View,
   TouchableOpacity,
-  Dimensions,
-  Alert,
-  Platform
-} from 'react-native';
+  Dimensions} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as SecureStore from 'expo-secure-store';
-import { Delete, ChevronRight, ShieldCheck, ArrowLeft, ShieldAlert } from 'lucide-react-native';
+import { Delete, ChevronRight, ArrowLeft, ShieldAlert } from 'lucide-react-native';
 import { useSettings } from '@/context/SettingsContext';
 import { AppText } from '@/components/ui';
-import Animated, { 
-  FadeIn, 
-  FadeInDown, 
-  Layout, 
-  useAnimatedStyle, 
-  withSpring, 
+import { getAccountGlass } from './glass-account';
+import Animated, {
+  FadeIn,
+  useAnimatedStyle,
   useSharedValue,
   withSequence,
   withTiming
@@ -37,16 +31,17 @@ const WEAK_PINS = new Set([
   '2468', '1357',
 ]);
 
-const validatePin = (pin: string): string | null => {
-  if (pin.length !== 4) return 'PIN must be exactly 4 digits';
-  if (WEAK_PINS.has(pin)) return 'This PIN is too common. Please choose a stronger one.';
-  if (/^(\d)\1{3}$/.test(pin)) return 'Repeating digits are not allowed.';
-  if (/^(\d)\1{2}(\d)\2$/.test(pin)) return 'Pattern is too predictable.';
+const validatePin = (pin: string, t: any): string | null => {
+  if (pin.length !== 4) return t('account.pin_length');
+  if (WEAK_PINS.has(pin)) return t('account.pin_too_common');
+  if (/^(\d)\1{3}$/.test(pin)) return t('account.pin_repeating');
+  if (/^(\d)\1{2}(\d)\2$/.test(pin)) return t('account.pin_pattern');
   return null;
 };
 
 const CreatePinScreen: React.FC<CreatePinScreenProps> = ({ onConfirm, onSkip }) => {
-  const { setPin } = useSettings();
+  const { colors, setPin, t } = useSettings();
+  const G = getAccountGlass(colors);
   const [pin, setPinLocal] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [pinPhase, setPinPhase] = useState<'create' | 'confirm'>('create');
@@ -110,25 +105,181 @@ const CreatePinScreen: React.FC<CreatePinScreenProps> = ({ onConfirm, onSkip }) 
     </TouchableOpacity>
   );
 
+  const styles = useMemo(() => StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: G.bg,
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 25,
+      paddingTop: 10,
+    },
+    backBtn: {
+      padding: 8,
+    },
+    skipArea: {
+      padding: 8,
+    },
+    skipText: {
+      fontFamily: Fonts.bold,
+      letterSpacing: 1.5,
+    },
+    content: {
+      flex: 1,
+      paddingHorizontal: 30,
+      alignItems: 'center',
+    },
+    titleNode: {
+      alignItems: 'center',
+      marginTop: 40,
+      marginBottom: 50,
+    },
+    title: {
+      fontFamily: Fonts.extrabold,
+      fontWeight: '800',
+    },
+    subtitle: {
+      fontFamily: Fonts.medium,
+      marginTop: 6,
+    },
+    dotsNode: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      marginBottom: 60,
+    },
+    dot: {
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      marginHorizontal: 15,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    dotEmpty: {
+      borderWidth: 1.5,
+      borderColor: G.border,
+      backgroundColor: 'transparent',
+    },
+    dotFilled: {
+      backgroundColor: G.fg,
+    },
+    dotPulse: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: G.bg,
+    },
+    keypadOrchestration: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+      width: '100%',
+      paddingHorizontal: 20,
+      flex: 1,
+    },
+    keyNode: {
+      width: (width - 150) / 3,
+      height: 70,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 20,
+      borderRadius: 35,
+    },
+    keyText: {
+      fontFamily: Fonts.bold,
+      color: G.fg,
+    },
+    footerNode: {
+      width: '100%',
+      paddingBottom: 40,
+    },
+    phaseIndicator: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      marginBottom: 30,
+    },
+    phaseDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      backgroundColor: G.border,
+    },
+    phaseDotActive: {
+      backgroundColor: G.fg,
+      width: 24,
+      borderRadius: 5,
+      height: 10,
+    },
+    phaseLine: {
+      width: 30,
+      height: 2,
+      backgroundColor: G.border,
+      borderRadius: 1,
+    },
+    errorBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: G.bgCard,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 12,
+      marginBottom: 20,
+      gap: 10,
+    },
+    errorBannerText: {
+      fontFamily: Fonts.semibold,
+      flex: 1,
+    },
+    dotError: {
+      backgroundColor: G.error,
+    },
+    confirmActionBtn: {
+      flexDirection: 'row',
+      height: 68,
+      borderRadius: 24,
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: 12,
+    },
+    confirmBtnText: {
+      fontFamily: Fonts.bold,
+      letterSpacing: 1.2,
+    },
+    glowWash: {
+      position: 'absolute',
+      borderRadius: 200,
+    },
+  }), [G]);
+
   return (
     <SafeAreaView style={styles.container}>
+      {/* Ambient Glass Glow */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <View style={[styles.glowWash, { top: -120, left: -60, width: 300, height: 300, opacity: 0.12 }]} />
+        <View style={[styles.glowWash, { bottom: -80, right: -40, width: 250, height: 250, opacity: 0.08 }]} />
+      </View>
       {/* Header Orchestration */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={onSkip}>
-          <ArrowLeft size={22} color="#000" />
+          <ArrowLeft size={22} color={G.fg} />
         </TouchableOpacity>
         <TouchableOpacity onPress={onSkip} style={styles.skipArea}>
-          <AppText style={styles.skipText} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>LATER</AppText>
+           <AppText style={[styles.skipText, { color: G.fgSecondary }]} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>{t('account.later')}</AppText>
         </TouchableOpacity>
       </View>
 
       <Animated.View entering={FadeIn.duration(800)} style={styles.content}>
         <View style={styles.titleNode}>
-          <AppText style={styles.title} variant="display" weight="bold" numberOfLines={2}>Secure Access</AppText>
-          <AppText style={styles.subtitle} variant="body" weight="medium" numberOfLines={3}>
+            <AppText style={[styles.title, { color: G.fg }]} variant="display" weight="bold" numberOfLines={2}>{t('account.secure_access')}</AppText>
+            <AppText style={[styles.subtitle, { color: G.fgSecondary }]} variant="body" weight="medium" numberOfLines={3}>
             {pinPhase === 'create'
-              ? 'Define a 4-digit protocol for terminal entry'
-              : 'Re-enter your PIN to confirm'
+              ? t('account.pin_create_hint')
+              : t('account.pin_confirm_hint')
             }
           </AppText>
         </View>
@@ -143,8 +294,8 @@ const CreatePinScreen: React.FC<CreatePinScreenProps> = ({ onConfirm, onSkip }) 
         {/* PIN Error */}
         {pinError && (
           <Animated.View entering={FadeIn.duration(300)} style={styles.errorBanner}>
-            <ShieldAlert size={16} color="#FF3B30" />
-            <AppText style={styles.errorBannerText} variant="body-sm" weight="semibold" numberOfLines={2}>{pinError}</AppText>
+            <ShieldAlert size={16} color={colors.error} />
+            <AppText style={[styles.errorBannerText, { color: colors.error }]} variant="body-sm" weight="semibold" numberOfLines={2}>{pinError}</AppText>
           </Animated.View>
         )}
 
@@ -160,7 +311,7 @@ const CreatePinScreen: React.FC<CreatePinScreenProps> = ({ onConfirm, onSkip }) 
                 style={[
                   styles.dot,
                   isFilled ? styles.dotFilled : styles.dotEmpty,
-                  showError && isFilled && styles.dotError,
+                  showError && isFilled && { backgroundColor: colors.error },
                 ]}
               >
                 {isFilled && (
@@ -176,7 +327,7 @@ const CreatePinScreen: React.FC<CreatePinScreenProps> = ({ onConfirm, onSkip }) 
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => renderKey(n))}
           <View style={styles.keyNode} />
           {renderKey(0)}
-          {renderKey('del', <Delete size={24} color="#000" strokeWidth={1.5} />)}
+          {renderKey('del', <Delete size={24} color={G.fg} strokeWidth={1.5} />)}
         </View>
 
         {/* Confirmation Node */}
@@ -184,14 +335,14 @@ const CreatePinScreen: React.FC<CreatePinScreenProps> = ({ onConfirm, onSkip }) 
           <TouchableOpacity
             style={[
               styles.confirmActionBtn,
-              { backgroundColor: (pinPhase === 'create' ? pin.length : confirmPin.length) === pinLength ? '#000000' : 'rgba(0,0,0,0.05)' }
+              { backgroundColor: (pinPhase === 'create' ? pin.length : confirmPin.length) === pinLength ? G.fg : G.bgCardStrong }
             ]}
             disabled={(pinPhase === 'create' ? pin.length : confirmPin.length) !== pinLength}
             onPress={async () => {
               try {
                 if (pinPhase === 'create') {
                   // Validate the pin
-                  const validationError = validatePin(pin);
+                   const validationError = validatePin(pin, t);
                   if (validationError) {
                     setPinError(validationError);
                     shake('create');
@@ -214,7 +365,7 @@ const CreatePinScreen: React.FC<CreatePinScreenProps> = ({ onConfirm, onSkip }) 
                   await setPin(pin);
                   onConfirm?.();
                 }
-              } catch (error) {
+              } catch {
                 shake('create');
                 setPinError('Encryption failure. Please try again.');
                 setPinLocal('');
@@ -223,11 +374,11 @@ const CreatePinScreen: React.FC<CreatePinScreenProps> = ({ onConfirm, onSkip }) 
               }
             }}
           >
-            <AppText style={[styles.confirmBtnText, { color: (pinPhase === 'create' ? pin.length : confirmPin.length) === pinLength ? '#FFF' : '#BBB' }]} variant="body" weight="bold" numberOfLines={1}>
+            <AppText style={[styles.confirmBtnText, { color: (pinPhase === 'create' ? pin.length : confirmPin.length) === pinLength ? G.bg : G.muted }]} variant="body" weight="bold" numberOfLines={1}>
               {pinPhase === 'create' ? 'CONFIRM PROTOCOL' : 'VERIFY PIN'}
             </AppText>
             {(pinPhase === 'create' ? pin.length : confirmPin.length) === pinLength && (
-               <ChevronRight size={18} color="#FFF" />
+               <ChevronRight size={18} color={G.bg} />
             )}
           </TouchableOpacity>
         </View>
@@ -235,156 +386,5 @@ const CreatePinScreen: React.FC<CreatePinScreenProps> = ({ onConfirm, onSkip }) 
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 25,
-    paddingTop: 10,
-  },
-  backBtn: {
-    padding: 8,
-  },
-  skipArea: {
-    padding: 8,
-  },
-  skipText: {
-    color: '#999',
-    fontFamily: Fonts.bold,
-    letterSpacing: 1.5,
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 30,
-    alignItems: 'center',
-  },
-  titleNode: {
-    alignItems: 'center',
-    marginTop: 40,
-    marginBottom: 50,
-  },
-  title: {
-    fontFamily: Fonts.extrabold,
-    fontWeight: '800',
-    color: '#000',
-  },
-  subtitle: {
-    color: '#888',
-    fontFamily: Fonts.medium,
-    marginTop: 6,
-  },
-  dotsNode: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 60,
-  },
-  dot: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    marginHorizontal: 15,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  dotEmpty: {
-    borderWidth: 1.5,
-    borderColor: 'rgba(0,0,0,0.1)',
-    backgroundColor: 'transparent',
-  },
-  dotFilled: {
-    backgroundColor: '#000',
-  },
-  dotPulse: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#FFF',
-  },
-  keypadOrchestration: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    width: '100%',
-    paddingHorizontal: 20,
-    flex: 1,
-  },
-  keyNode: {
-    width: (width - 150) / 3,
-    height: 70,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-    borderRadius: 35,
-  },
-  keyText: {
-    fontFamily: Fonts.bold,
-    color: '#000',
-  },
-  footerNode: {
-    width: '100%',
-    paddingBottom: 40,
-  },
-  phaseIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginBottom: 30,
-  },
-  phaseDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-  },
-  phaseDotActive: {
-    backgroundColor: '#000',
-    width: 24,
-    borderRadius: 5,
-    height: 10,
-  },
-  phaseLine: {
-    width: 30,
-    height: 2,
-    backgroundColor: 'rgba(0,0,0,0.08)',
-    borderRadius: 1,
-  },
-  errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF0F0',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    marginBottom: 20,
-    gap: 10,
-  },
-  errorBannerText: {
-    fontFamily: Fonts.semibold,
-    color: '#FF3B30',
-    flex: 1,
-  },
-  dotError: {
-    backgroundColor: '#FF3B30',
-  },
-  confirmActionBtn: {
-    flexDirection: 'row',
-    height: 68,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 12,
-  },
-  confirmBtnText: {
-    fontFamily: Fonts.bold,
-    letterSpacing: 1.2,
-  },
-});
 
 export default CreatePinScreen;

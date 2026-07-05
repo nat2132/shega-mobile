@@ -1,22 +1,22 @@
-﻿import React from 'react';
-import { View, TouchableOpacity, Image, StyleSheet, Dimensions } from 'react-native';
+import React from 'react';
+import { View, TouchableOpacity, Image, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { X, Banknote, SlidersHorizontal, ClipboardList, LogOut, ChevronRight, User as UserIcon, TrendingUp, Users, Phone, HandCoins } from 'lucide-react-native';
-import { Fonts } from '@/constants/theme';
+import { X, Banknote, SlidersHorizontal, ClipboardList, LogOut, ChevronRight, User as UserIcon, TrendingUp, Users} from 'lucide-react-native';
+import { Fonts , Spacing } from '@/constants/theme';
 import { useSettings, PROFILE_IMAGES } from '@/context/SettingsContext';
 import { AppText, AppListItem } from '@/components/ui';
-import { BorderRadius, Spacing } from '@/constants/theme';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
-const { width } = Dimensions.get('window');
 
+import { getBarsGlass } from './glass-bars';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 interface SidebarProps {
   onClose: () => void;
 }
 
 const MyStoreMenu: React.FC<SidebarProps> = ({ onClose }) => {
   const router = useRouter();
-  const { userProfile, colors, t, theme } = useSettings();
+  const { userProfile, t, theme, colors } = useSettings();
+  const G = getBarsGlass(colors);
 
   const handleRoute = (routePath: string) => {
     if (onClose) onClose();
@@ -29,14 +29,14 @@ const MyStoreMenu: React.FC<SidebarProps> = ({ onClose }) => {
     <Animated.View entering={FadeInDown.delay(delay).duration(500)}>
       <AppListItem
         left={
-          <View style={[styles.iconContainer, { backgroundColor: colors.text + '05' }]}>
-            <Icon color={colors.text} size={22} strokeWidth={2} />
+            <View style={[styles.iconContainer, { backgroundColor: G.mutedLight }]}>
+             <Icon color={G.fg} size={22} strokeWidth={2} />
           </View>
         }
         title={label}
         titleMaxLines={2}
         right={
-          <ChevronRight size={18} color={colors.border} />
+          <ChevronRight size={18} color={G.border} />
         }
         onPress={onPress}
         noBorder
@@ -50,23 +50,20 @@ const MyStoreMenu: React.FC<SidebarProps> = ({ onClose }) => {
   );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: G.bg }]}>
       {/* Header with Close Button */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-          <X size={28} color={colors.text} strokeWidth={2} />
+          <X size={28} color={G.fg} strokeWidth={2} />
         </TouchableOpacity>
       </View>
 
       {/* ScrollView as a child to avoid nesting issues */}
-      {(() => {
-        const RNScrollView = require('react-native').ScrollView;
-        return (
-          <RNScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView showsVerticalScrollIndicator={false}>
             {/* Profile Section */}
             <Animated.View entering={FadeIn.duration(800)} style={styles.profileSection}>
               <TouchableOpacity 
-                style={[styles.avatarNode, { borderColor: colors.border }]} 
+                style={[styles.avatarNode, { borderColor: G.border }]} 
                 activeOpacity={0.8} 
                 onPress={() => handleRoute('/profile-settings')}
               >
@@ -74,22 +71,22 @@ const MyStoreMenu: React.FC<SidebarProps> = ({ onClose }) => {
                   source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} 
                   style={styles.avatarRender} 
                 />
-                <View style={[styles.editBadge, { backgroundColor: colors.text }]}>
-                   <UserIcon size={12} color={colors.background} />
+                <View style={[styles.editBadge, { backgroundColor: G.fg }]}>
+                   <UserIcon size={12} color={G.bg} />
                 </View>
               </TouchableOpacity>
               
-              <AppText variant="display-lg" weight="extrabold" style={[styles.storeName, { color: colors.text }]} numberOfLines={2}>
+              <AppText variant="display-lg" weight="extrabold" style={[styles.storeName, { color: G.fg }]} numberOfLines={2}>
                 {userProfile.businessName}
               </AppText>
-              <AppText variant="title-sm" weight="medium" style={[styles.userName, { color: colors.textSecondary }]} numberOfLines={1}>
+              <AppText variant="title-sm" weight="medium" style={[styles.userName, { color: G.fgSecondary }]} numberOfLines={1}>
                 {userProfile.name}
               </AppText>
             </Animated.View>
 
             {/* Menu Items List */}
             <View style={styles.menuList}>
-              <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.sectionHeading, { color: colors.textSecondary }]} numberOfLines={1}>
+              <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.sectionHeading, { color: G.fgSecondary }]} numberOfLines={1}>
                 {t('sidebar.quick_links')}
               </AppText>
               
@@ -123,14 +120,8 @@ const MyStoreMenu: React.FC<SidebarProps> = ({ onClose }) => {
                 onPress={() => handleRoute('/reports')} 
                 delay={430}
               />
-              <MenuItem 
-                icon={HandCoins} 
-                label={t('sidebar.debt_management')} 
-                onPress={() => handleRoute('/debt-detail')} 
-                delay={460}
-              />
 
-              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+              <View style={[styles.divider, { backgroundColor: G.border }]} />
               
               <MenuItem 
                 icon={LogOut} 
@@ -139,13 +130,11 @@ const MyStoreMenu: React.FC<SidebarProps> = ({ onClose }) => {
                 delay={500}
               />
             </View>
-          </RNScrollView>
-        );
-      })()}
+          </ScrollView>
 
       {/* Footer Meta */}
       <View style={styles.footerNode}>
-         <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.footerText, { color: colors.border }]} numberOfLines={1}>
+         <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.footerText, { color: G.border }]} numberOfLines={1}>
            ORCHESTRATION v4.2.0 • {theme.toUpperCase()}
          </AppText>
       </View>

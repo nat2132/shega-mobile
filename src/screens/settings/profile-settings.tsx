@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -27,9 +27,11 @@ import { useSettings, PROFILE_IMAGES } from '@/context/SettingsContext';
 import { useDialog } from '@/context/DialogContext';
 
 import { router } from 'expo-router';
-import { AppText, AppCard, AppButton, AppListItem, AppRow } from '@/components/ui';
+import { AppText} from '@/components/ui';
+import { getSettingsGlass } from './glass-settings';
 const EditProfileScreen = () => {
   const { userProfile, setUserProfile, t, colors } = useSettings();
+  const G = getSettingsGlass(colors);
   const dialog = useDialog();
   const [name, setName] = useState(userProfile.name);
   const [businessName, setBusinessName] = useState(userProfile.businessName);
@@ -85,36 +87,40 @@ const EditProfileScreen = () => {
     : PROFILE_IMAGES[selectedAvatar >= 0 ? selectedAvatar : 0];
 
   return (
-    <ScrollView 
-      style={{ backgroundColor: colors.background }}
-      contentContainerStyle={styles.container} 
-      showsVerticalScrollIndicator={false}
-    >
+    <View style={{ flex: 1, backgroundColor: G.bg }}>
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <View style={[styles.glowWash, { backgroundColor: G.mutedLight, top: -80, left: -60, width: 200, height: 200, borderRadius: 100 }]} />
+        <View style={[styles.glowWash, { backgroundColor: G.mutedLight, bottom: -40, right: -30, width: 160, height: 160, borderRadius: 80 }]} />
+      </View>
+      <ScrollView 
+        contentContainerStyle={styles.container} 
+        showsVerticalScrollIndicator={false}
+      >
       {/* Elite Profile Banner */}
       <View style={styles.bannerContainer}>
-        <View style={[styles.bannerWash, { backgroundColor: colors.text + '05' }]} />
+        <View style={[styles.bannerWash, { backgroundColor: G.fg + '05' }]} />
         <Animated.View entering={ZoomIn} style={styles.avatarWrapper}>
            <Image 
              source={avatarSource} 
-             style={[styles.mainAvatar, { borderColor: colors.background }]} 
+             style={[styles.mainAvatar, { borderColor: G.bg }]} 
            />
            <View style={[styles.verifiedBadge, { backgroundColor: colors.primary }]}>
-             <BadgeCheck size={18} color={colors.background} />
+             <BadgeCheck size={18} color={G.bg} />
            </View>
            <TouchableOpacity 
-             style={[styles.pencilIcon, { backgroundColor: colors.text }]}
+             style={[styles.pencilIcon, { backgroundColor: G.fg }]}
              onPress={handlePickImage}
            >
-             <Camera size={16} color={colors.background} />
+             <Camera size={16} color={G.bg} />
            </TouchableOpacity>
         </Animated.View>
-        <AppText variant="heading-lg" weight="bold" style={[styles.profileTitle, { color: colors.text }]} numberOfLines={2}>{userProfile.businessName || t('profile.elite_user')}</AppText>
-        <AppText variant="caption" weight="bold" style={[styles.profileSub, { color: colors.textSecondary }]} numberOfLines={1}>{t('profile.verified_identity')}</AppText>
+        <AppText variant="heading-lg" weight="bold" style={[styles.profileTitle, { color: G.fg }]} numberOfLines={2}>{userProfile.businessName || t('profile.elite_user')}</AppText>
+        <AppText variant="caption" weight="bold" style={[styles.profileSub, { color: G.fgSecondary }]} numberOfLines={1}>{t('profile.verified_identity')}</AppText>
       </View>
 
       <Animated.View entering={FadeInDown.delay(200)} style={styles.sectionHeader}>
         <Sparkles size={16} color={colors.primary} />
-        <AppText variant="caption" weight="bold" style={[styles.sectionSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>{t('settings.choose_avatar')}</AppText>
+        <AppText variant="caption" weight="bold" style={[styles.sectionSubtitle, { color: G.fgSecondary }]} numberOfLines={1}>{t('settings.choose_avatar')}</AppText>
       </Animated.View>
 
       <View style={styles.avatarGrid}>
@@ -130,7 +136,7 @@ const EditProfileScreen = () => {
               <Image source={img} style={styles.smallAvatar} />
               {selectedAvatar === i && !customAvatarUri && (
                 <View style={[styles.checkBadge, { backgroundColor: colors.primary }]}>
-                  <Check size={8} color={colors.background} strokeWidth={4} />
+                  <Check size={8} color={G.bg} strokeWidth={4} />
                 </View>
               )}
             </TouchableOpacity>
@@ -145,12 +151,12 @@ const EditProfileScreen = () => {
               customAvatarUri && [styles.selectedAvatarWrapper, { borderColor: colors.primary }]
             ]}
           >
-            <View style={[styles.smallAvatar, { backgroundColor: colors.border, justifyContent: 'center', alignItems: 'center' }]}>
-              <Camera size={22} color={colors.textSecondary} />
+            <View style={[styles.smallAvatar, { backgroundColor: G.border, justifyContent: 'center', alignItems: 'center' }]}>
+              <Camera size={22} color={G.fgSecondary} />
             </View>
             {customAvatarUri && (
               <View style={[styles.checkBadge, { backgroundColor: colors.primary }]}>
-                <Check size={8} color={colors.background} strokeWidth={4} />
+                <Check size={8} color={G.bg} strokeWidth={4} />
               </View>
             )}
           </TouchableOpacity>
@@ -159,54 +165,55 @@ const EditProfileScreen = () => {
 
       {/* Verification Nodes */}
       <Animated.View entering={FadeInDown.delay(600)} style={styles.formContainer}>
-        <View style={[styles.formCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <AppText variant="caption" weight="bold" style={[styles.formLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('settings.personal_info').toUpperCase()}</AppText>
+        <View style={[styles.formCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+          <AppText variant="caption" weight="bold" style={[styles.formLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('settings.personal_info').toUpperCase()}</AppText>
           
           <View style={styles.inputNode}>
             <View style={styles.nodeHeader}>
-               <User size={14} color={colors.textSecondary} />
-               <AppText variant="caption" weight="bold" style={[styles.nodeLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('profile.name')}</AppText>
+               <User size={14} color={G.fgSecondary} />
+               <AppText variant="caption" weight="bold" style={[styles.nodeLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('profile.name')}</AppText>
             </View>
             <TextInput 
-              style={[styles.input, { color: colors.text, borderColor: colors.border }]} 
+              style={[styles.input, { color: G.fg, borderColor: G.border }]} 
               value={name} 
               onChangeText={setName}
               placeholder={t('settings.name_placeholder')}
-              placeholderTextColor={colors.textSecondary}
+              placeholderTextColor={G.fgSecondary}
               onFocus={() => Haptics.selectionAsync()}
             />
           </View>
 
           <View style={styles.inputNode}>
             <View style={styles.nodeHeader}>
-               <Building2 size={14} color={colors.textSecondary} />
-               <AppText variant="caption" weight="bold" style={[styles.nodeLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('profile.business')}</AppText>
+               <Building2 size={14} color={G.fgSecondary} />
+               <AppText variant="caption" weight="bold" style={[styles.nodeLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('profile.business')}</AppText>
             </View>
             <TextInput 
-              style={[styles.input, { color: colors.text, borderColor: colors.border }]} 
+              style={[styles.input, { color: G.fg, borderColor: G.border }]} 
               value={businessName} 
               onChangeText={setBusinessName}
               placeholder={t('settings.business_placeholder')}
-              placeholderTextColor={colors.textSecondary}
+              placeholderTextColor={G.fgSecondary}
               onFocus={() => Haptics.selectionAsync()}
             />
           </View>
         </View>
 
         <TouchableOpacity 
-          style={[styles.saveButton, { backgroundColor: colors.text }]} 
+          style={[styles.saveButton, { backgroundColor: G.fg }]} 
           onPress={handleSave}
           activeOpacity={0.8}
         >
-          <ShieldCheck size={20} color={colors.background} />
-          <AppText variant="body" weight="bold" style={[styles.saveButtonText, { color: colors.background }]} numberOfLines={1}>{t('common.save')}</AppText>
+          <ShieldCheck size={20} color={G.bg} />
+          <AppText variant="body" weight="bold" style={[styles.saveButtonText, { color: G.bg }]} numberOfLines={1}>{t('common.save')}</AppText>
         </TouchableOpacity>
         
-        <AppText variant="caption" weight="medium" style={[styles.footerText, { color: colors.textSecondary }]} numberOfLines={3}>{t('settings.profile_footer')}</AppText>
+        <AppText variant="caption" weight="medium" style={[styles.footerText, { color: G.fgSecondary }]} numberOfLines={3}>{t('settings.profile_footer')}</AppText>
       </Animated.View>
       
       <View style={{ height: 60 }} />
     </ScrollView>
+    </View>
   );
 };
 
@@ -228,7 +235,7 @@ const styles = StyleSheet.create({
   smallAvatar: { width: '100%', height: '100%', borderRadius: 30 },
   checkBadge: { position: 'absolute', top: -4, right: -4, width: 16, height: 16, borderRadius: 8, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#FFF' },
   formContainer: { width: '100%', paddingHorizontal: 25 },
-  formCard: { width: '100%', borderWidth: 1, borderRadius: 32, padding: 25 },
+  formCard: { width: '100%', borderWidth: 1, borderRadius: 32, padding: 25, overflow: 'hidden' },
   formLabel: { fontSize: 11, fontFamily: Fonts.bold, letterSpacing: 1.5, marginBottom: 25 },
   inputNode: { marginBottom: 25 },
   nodeHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10, paddingLeft: 5 },
@@ -236,7 +243,8 @@ const styles = StyleSheet.create({
   input: { height: 60, borderWidth: 1, borderRadius: 18, paddingHorizontal: 20, fontSize: 16, fontFamily: Fonts.medium },
   saveButton: { width: '100%', height: 65, borderRadius: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 30 },
   saveButtonText: { fontSize: 16, fontFamily: Fonts.bold },
-  footerText: { textAlign: 'center', marginTop: 25, fontSize: 11, fontFamily: Fonts.medium, opacity: 0.6 }
+  footerText: { textAlign: 'center', marginTop: 25, fontSize: 11, fontFamily: Fonts.medium, opacity: 0.6 },
+  glowWash: { position: 'absolute' },
 });
 
 export default EditProfileScreen;

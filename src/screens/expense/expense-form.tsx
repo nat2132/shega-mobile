@@ -1,329 +1,703 @@
-﻿import React, { useState } from 'react';
-import { 
-  View, 
-  StyleSheet, 
-  TextInput, 
-  Switch, 
-  TouchableOpacity, 
-  ScrollView, 
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
   Platform,
-  Modal,
   KeyboardAvoidingView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { 
-  FadeInDown, 
-  FadeInUp, 
-  FadeIn,
-  Layout
-} from 'react-native-reanimated';
-import { 
-  ChevronLeft, 
-  Calendar as CalendarIcon, 
-  Wallet,
-  TrendingDown,
-  Info,
-  Calendar,
-  History,
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import {
+  Calendar as CalendarIcon,
   ShieldCheck,
-  Zap,
-  Repeat,
-  Bell,
-  ArrowRight,
   Tag,
-  CreditCard,
-  DollarSign
+  DollarSign,
+  AlertTriangle,
+  Wallet,
+  Repeat,
 } from 'lucide-react-native';
-import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
-import { insertExpense } from '@/database/db';
+import { playNice, playBad } from '@/services/soundService';
+import {
+  insertExpense,
+  insertRecurringTemplate,
+  autoLinkExpenseToBudget,
+  getBudgetStatusForCategory,
+  getBudgets,
+  getBudgetCategorySpending,
+} from '@/database/db';
+import { notifyExpenseRecorded, notifyExpensePushedBudgetOverLimit, notifyLargeExpense } from '@/services/notificationService';
 import { useSettings } from '@/context/SettingsContext';
 import { useDialog } from '@/context/DialogContext';
 import { Fonts } from '@/constants/theme';
 import { formatDate } from '@/utils/date-utils';
 import BusinessSuccessModal, { BusinessSuccessDetails } from '@/components/BusinessSuccessModal';
 import { CustomDatePicker } from '@/components/CustomDatePicker';
-import { AppText, AppListItem, AppRow, AppCard } from '@/components/ui';
-const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
-  const { colors, theme, t, calendarType, language } = useSettings();
-  const dialog = useDialog();
-  const [name, setName] = useState('');
-  const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState(t('common.general'));
-  const [isRecurring, setIsRecurring] = useState(false);
-  const [frequency, setFrequency] = useState('Monthly'); // Daily, Weekly, Monthly, Yearly
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [notify, setNotify] = useState(false);
-  const [successDetails, setSuccessDetails] = useState<BusinessSuccessDetails | null>(null);
-  const [recordDate, setRecordDate] = useState('');
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+import { AppNumber, AppText } from '@/components/ui';
+import { getExpenseGlass } from './glass-expense';
+import { useFormDrafts } from '@/hooks/useFormDrafts';
+import { DraftSection } from '@/components/DraftSection';
+import { Draft } from '@/services/draftService';
 
-  const calculateNextBilling = (start: string, freq: string) => {
-    const date = new Date(start);
-    if (freq === 'Daily') date.setDate(date.getDate() + 1);
-    else if (freq === 'Weekly') date.setDate(date.getDate() + 7);
-    else if (freq === 'Monthly') date.setMonth(date.getMonth() + 1);
-    else if (freq === 'Yearly') date.setFullYear(date.getFullYear() + 1);
-    return date.toISOString().split('T')[0];
+const FREQUENT_CATEGORIES_KEY = 'frequent_expense_categories';
+
+const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
+  const { colors, t, calendarType, language } = useSettings();
+  const G = getExpenseGlass(colors);
+  const dialog = useDialog();
+
+  const [amount, setAmount] = useState('');
+  const [category, setCategory] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [description, setDescription] = useState('');
+
+  const [budgetStatus, setBudgetStatus] = useState<any>(null);
+  const [budgetCategoryId, setBudgetCategoryId] = useState<number | null>(null);
+  const [ambiguousCategories, setAmbiguousCategories] = useState<any[]>([]);
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [frequentCategories, setFrequentCategories] = useState<string[]>([]);
+  const [budgets, setBudgets] = useState<any[]>([]);
+  const [selectedBudgetId, setSelectedBudgetId] = useState<number | null>(null);
+  const [budgetCategoryNames, setBudgetCategoryNames] = useState<string[]>([]);
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurFrequency, setRecurFrequency] = useState('Monthly');
+  const [recurStartDate, setRecurStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [recurEndDate, setRecurEndDate] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().split('T')[0];
+  });
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
+  const [successDetails, setSuccessDetails] = useState<BusinessSuccessDetails | null>(null);
+
+  const draftFormKey = 'expense';
+  const draftFormData = useFormDrafts({
+    screen: 'expense',
+    formKey: draftFormKey,
+    getPayload: useCallback(() => ({
+      amount,
+      category,
+      date,
+      description,
+      selectedBudgetId,
+      isRecurring,
+      recurFrequency,
+      recurStartDate,
+      recurEndDate,
+    }), [amount, category, date, description, selectedBudgetId, isRecurring, recurFrequency, recurStartDate, recurEndDate]),
+    getTitle: useCallback(() => (category ? `Expense - ${category}` : 'Expense Draft'), [category]),
+    getSubtitle: useCallback(() => (amount ? `ETB ${amount}` : 'No amount set'), [amount]),
+    enabled: !successDetails,
+  });
+
+  useEffect(() => {
+    try {
+      const stored = globalThis?.localStorage?.getItem(FREQUENT_CATEGORIES_KEY);
+      if (stored) setFrequentCategories(JSON.parse(stored));
+    } catch {}
+    setBudgets(getBudgets({ status: 'active' }));
+  }, []);
+
+  useEffect(() => {
+    const d = new Date(recurStartDate);
+    switch (recurFrequency) {
+      case 'Daily': d.setDate(d.getDate() + 1); break;
+      case 'Weekly': d.setDate(d.getDate() + 7); break;
+      case 'Monthly': d.setDate(d.getDate() + 30); break;
+      case 'Yearly': d.setFullYear(d.getFullYear() + 1); break;
+    }
+    setRecurEndDate(d.toISOString().split('T')[0]);
+  }, [recurFrequency, recurStartDate]);
+
+  const saveFrequentCategory = (cat: string) => {
+    const updated = [cat, ...frequentCategories.filter(c => c !== cat)].slice(0, 5);
+    setFrequentCategories(updated);
+    try {
+      globalThis?.localStorage?.setItem(FREQUENT_CATEGORIES_KEY, JSON.stringify(updated));
+    } catch {}
+  };
+
+  const handleBudgetSelect = (budgetId: number | null) => {
+    setSelectedBudgetId(budgetId);
+    Haptics.selectionAsync();
+    if (budgetId) {
+      const cats = getBudgetCategorySpending(budgetId);
+      setBudgetCategoryNames(cats.map((c: any) => c.category));
+    } else {
+      setBudgetCategoryNames([]);
+    }
+    if (budgetId && category) {
+      const result = autoLinkExpenseToBudget(category, date, budgetId);
+      if (result.budgetCategoryId) {
+        setBudgetCategoryId(result.budgetCategoryId);
+        setAmbiguousCategories([]);
+        const status = getBudgetStatusForCategory(category, date);
+        setBudgetStatus(status);
+      }
+    } else if (!budgetId) {
+      setBudgetCategoryId(null);
+      setAmbiguousCategories([]);
+      setBudgetStatus(null);
+    }
+  };
+
+  const handleCategoryChange = (cat: string) => {
+    setCategory(cat);
+    setShowCategoryPicker(false);
+    Haptics.selectionAsync();
+
+    const result = autoLinkExpenseToBudget(cat, date, selectedBudgetId || undefined);
+    if (result.budgetCategoryId) {
+      setBudgetCategoryId(result.budgetCategoryId);
+      setAmbiguousCategories([]);
+      const status = getBudgetStatusForCategory(cat, date);
+      setBudgetStatus(status);
+    } else if (result.ambiguousCategories && result.ambiguousCategories.length > 1) {
+      setAmbiguousCategories(result.ambiguousCategories || []);
+      setBudgetCategoryId(null);
+      setBudgetStatus(null);
+    } else {
+      setBudgetCategoryId(null);
+      setAmbiguousCategories([]);
+      setBudgetStatus(null);
+    }
+  };
+
+  const handleSelectAmbiguousCategory = (cat: any) => {
+    setBudgetCategoryId(cat.id);
+    setAmbiguousCategories([]);
+    const status = getBudgetStatusForCategory(cat.category, date);
+    setBudgetStatus(status);
+    Haptics.selectionAsync();
+  };
+
+  const handleDateChange = (newDate: string) => {
+    setDate(newDate);
+    setShowDatePicker(false);
+    if (category) {
+      const result = autoLinkExpenseToBudget(category, newDate, selectedBudgetId || undefined);
+      if (result.budgetCategoryId) {
+        setBudgetCategoryId(result.budgetCategoryId);
+        const status = getBudgetStatusForCategory(category, newDate);
+        setBudgetStatus(status);
+      }
+    }
   };
 
   const handleSave = async () => {
-    // Validate all required fields
-    if (!name.trim()) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      await dialog.alert({ title: t('common.error'), message: t('expense.validation_name') || 'Please enter a description', iconType: 'danger' });
-      return;
-    }
-    
     const amountNum = Number(amount);
     if (!amount || isNaN(amountNum) || amountNum <= 0) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      await dialog.alert({ title: t('common.error'), message: t('expense.validation_amount') || 'Please enter a valid positive amount', iconType: 'danger' });
+      playBad();
+      await dialog.alert({ title: t('common.error'), message: t('expense.validation_amount') || 'Enter a valid amount', iconType: 'danger' });
+      return;
+    }
+    if (!category.trim()) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      playBad();
+      await dialog.alert({ title: t('common.error'), message: 'Please select a category', iconType: 'danger' });
       return;
     }
 
-    const nextBilling = isRecurring ? calculateNextBilling(startDate, frequency) : null;
+    saveFrequentCategory(category.trim());
 
-    const expenseData = {
-      name: name.trim(),
+    if (isRecurring) {
+      insertRecurringTemplate({
+        name: description.trim() || category.trim(),
+        category: category.trim(),
+        amount: amountNum,
+        frequency: recurFrequency as any,
+        startDate: recurStartDate,
+        endDate: recurEndDate || undefined,
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      playNice();
+      await draftFormData.clearCurrent();
+      setSuccessDetails({
+        title: 'Recurring expense scheduled',
+        subtitle: `${recurFrequency} Â· ${formatDate(new Date(recurStartDate), calendarType, language)}`,
+        mainLabel: t('expense.magnitude'),
+        mainValue: `${amountNum.toLocaleString()} ${t('common.etb')}`,
+        secondaryLabel: t('common.category'),
+        secondaryValue: category.trim(),
+        iconType: 'expense',
+        itemName: description.trim() || category.trim()
+      });
+      return;
+    }
+
+    const expenseData: any = {
+      name: description.trim() || category.trim(),
       amount: amountNum,
       category: category.trim(),
-      date: startDate,
-      isRecurring,
-      frequency: isRecurring ? frequency : null,
-      nextBillingDate: nextBilling,
-      createdAt: recordDate || undefined,
+      date,
+      budgetCategoryId: budgetCategoryId || undefined,
     };
 
-    const id = await insertExpense(expenseData as any);
+    const id = insertExpense(expenseData);
     if (id) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      playNice();
+      await draftFormData.clearCurrent();
+      notifyExpenseRecorded({
+        id: id as number,
+        name: description.trim() || category.trim(),
+        amount: amountNum,
+        category: category.trim(),
+      });
+      if (amountNum >= 50000) {
+        notifyLargeExpense({
+          id: id as number,
+          name: description.trim() || category.trim(),
+          amount: amountNum,
+          category: category.trim(),
+          threshold: 50000,
+        });
+      }
+      if (category.trim()) {
+        try {
+          const status = getBudgetStatusForCategory(category.trim(), date);
+          if (status && status.status === 'exceeded' && status.remaining < 0) {
+            const budgets = getBudgets({ status: 'active' });
+            const budget = (budgets as any[]).find((b: any) => status.budgetName && b.name === status.budgetName);
+            notifyExpensePushedBudgetOverLimit({
+              expenseId: id as number,
+              expenseName: description.trim() || category.trim(),
+              categoryName: category.trim(),
+              budgetName: status.budgetName,
+              budgetId: budget?.id || 0,
+              excess: Math.abs(status.remaining),
+            });
+          }
+        } catch {}
+      }
+
       setSuccessDetails({
         title: t('expense.commit_success'),
         subtitle: t('expense.magnitude_logged'),
         mainLabel: t('expense.magnitude'),
         mainValue: `${amountNum.toLocaleString()} ${t('common.etb')}`,
-        secondaryLabel: t('expense.status'),
-        secondaryValue: isRecurring ? t(`expense.${frequency.toLowerCase()}`) : t('expense.one_time'),
+        secondaryLabel: t('common.category'),
+        secondaryValue: category.trim(),
         iconType: 'expense',
-        itemName: name
+        itemName: description.trim() || category.trim()
       });
     } else {
       await dialog.alert({ title: t('common.error'), message: t('expense.failed_to_save'), iconType: 'danger' });
     }
   };
 
+  const progressColor = !budgetStatus ? G.fgSecondary
+    : budgetStatus.status === 'exceeded' ? colors.error
+    : budgetStatus.status === 'critical' ? colors.warning
+    : budgetStatus.status === 'warning' ? colors.warning
+    : colors.success;
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 90}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        
-        {/* Outflow Header */}
-        <Animated.View entering={FadeInDown.duration(600)} style={styles.header}>
-            <View style={styles.headerRow}>
-               <View>
-                  <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.headerSub, { color: colors.textSecondary }]} numberOfLines={1}>{t('expense.capital_management')}</AppText>
-                  <AppText variant="title" weight="bold" style={[styles.headerTitle, { color: colors.text }]} numberOfLines={2}>{t('expense.outflow_intelligence')}</AppText>
-               </View>
-               <View style={[styles.walletBadge, { backgroundColor: '#FF3B3015' }]}>
-                  <TrendingDown size={20} color="#FF3B30" />
-               </View>
-            </View>
-        </Animated.View>
+    <SafeAreaView style={[styles.container, { backgroundColor: G.bg }]}>
+      {/* Ambient glow washes */}
+      <View style={{ position: 'absolute', top: -80, left: -40, width: 200, height: 200, borderRadius: 100, backgroundColor: G.mutedLight, opacity: 0.12 }} />
+      <View style={{ position: 'absolute', bottom: -40, right: -60, width: 180, height: 180, borderRadius: 90, backgroundColor: G.mutedLight, opacity: 0.08 }} />
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          {draftFormData.showDrafts && (
+            <DraftSection
+              drafts={draftFormData.drafts}
+              onRestore={async (draft) => {
+                const d = draft.data;
+                setAmount(d.amount || '');
+                setCategory(d.category || '');
+                setDate(d.date || '');
+                setDescription(d.description || '');
+                setSelectedBudgetId(d.selectedBudgetId || null);
+                setIsRecurring(d.isRecurring || false);
+                setRecurFrequency(d.recurFrequency || 'Monthly');
+                setRecurStartDate(d.recurStartDate || '');
+                setRecurEndDate(d.recurEndDate || '');
+                await draftFormData.remove(draft.id);
+              }}
+              onDelete={async (id) => {
+                await draftFormData.remove(id);
+              }}
+            />
+          )}
+          <View style={styles.header}>
+            <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.headerSub, { color: G.fgSecondary }]}>
+              {t('expense.capital_management')}
+            </AppText>
+            <AppText variant="title" weight="bold" style={[styles.headerTitle, { color: G.fg }]}>
+              {t('expense.new_expense')}
+            </AppText>
+          </View>
 
-        {/* Magnitude Card */}
-        <Animated.View entering={FadeInDown.delay(200)} style={[styles.magnitudeCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.magnitudeLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('expense.capital_magnitude')}</AppText>
-
-          {/* Record Date */}
-          <TouchableOpacity 
-            style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border, marginBottom: 15 }}
-            onPress={() => setShowDatePicker(true)}
-          >
-            <CalendarIcon size={18} color={colors.primary} style={{ marginRight: 10 }} />
-            <View style={{ flex: 1 }}>
-              <AppText variant="caption" weight="bold" transform="uppercase" style={{ color: colors.textSecondary }} numberOfLines={1}>{t('common.record_date')}</AppText>
-              <AppText variant="body-sm" weight="bold" style={{ color: recordDate ? colors.text : colors.textSecondary, marginTop: 2 }} numberOfLines={1}>
-                {recordDate ? formatDate(new Date(recordDate), calendarType, language) : t('common.select_date')}
+          {/* Amount Input */}
+          <Animated.View entering={FadeInDown.duration(400)} style={[styles.amountCard, { backgroundColor: G.bgCard, borderColor: G.border, overflow: 'hidden' }]}>
+            <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.amountLabel, { color: G.fgSecondary }]}>
+              {t('expense.magnitude')}
+            </AppText>
+            <View style={styles.amountRow}>
+              <TextInput
+                style={[styles.amountInput, { color: G.fg }]}
+                placeholder="0.00"
+                keyboardType="numeric"
+                value={amount}
+                onChangeText={setAmount}
+                placeholderTextColor={G.border}
+                autoFocus
+              />
+              <AppText variant="heading" weight="bold" style={[styles.currency, { color: G.fgSecondary }]}>
+                {t('common.etb')}
               </AppText>
             </View>
-          </TouchableOpacity>
+          </Animated.View>
 
-          <View style={styles.magnitudeInputRow}>
-            <TextInput
-              style={[styles.magnitudeValue, { color: colors.text }]}
-              placeholder="0.00"
-              keyboardType="numeric"
-              value={amount}
-              onChangeText={setAmount}
-              placeholderTextColor={colors.border}
-              onFocus={() => Haptics.selectionAsync()}
-            />
-            <AppText variant="heading" weight="bold" style={[styles.magnitudeCurr, { color: colors.textSecondary }]} numberOfLines={1}>{t('common.etb')}</AppText>
-          </View>
-          <View style={styles.magnitudeFooter}>
-             <ShieldCheck size={12} color={colors.textSecondary} />
-             <AppText variant="caption" weight="medium" style={[styles.magnitudeFooterText, { color: colors.textSecondary }]} numberOfLines={2}>{t('expense.security_active')}</AppText>
-          </View>
-        </Animated.View>
+          {/* Category */}
+          <Animated.View entering={FadeInDown.duration(400).delay(100)}>
+            <TouchableOpacity
+              style={[styles.fieldCard, { backgroundColor: G.bgCard, borderColor: G.border, overflow: 'hidden' }]}
+              onPress={() => setShowCategoryPicker(!showCategoryPicker)}
+            >
+              <View style={styles.fieldRow}>
+                <Tag size={18} color={G.fgSecondary} />
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary }]}>
+                    {t('common.category')}
+                  </AppText>
+                  <AppText variant="body" weight="bold" style={[styles.fieldValue, { color: category ? G.fg : G.fgSecondary }]}>
+                    {category || t('common.select_category')}
+                  </AppText>
+                </View>
+              </View>
+            </TouchableOpacity>
 
-        <Animated.View entering={FadeInDown.delay(400)} style={styles.formSection}>
-          {/* Identity Nodes */}
-          <View style={styles.inputNode}>
-             <View style={styles.nodeHeader}>
-                <Zap size={14} color={colors.textSecondary} />
-                <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('expense.desc_payee')}</AppText>
-             </View>
-             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-               <TextInput 
-                 style={[styles.input, { flex: 1, color: colors.text, borderColor: colors.border }]} 
-                 placeholder={t('expense.desc_placeholder')} 
-                 placeholderTextColor={colors.textSecondary}
-                 value={name}
-                 onChangeText={(val) => { if (val.length <= 50) setName(val); }}
-                 maxLength={50}
-               />
-             </View>
-             <AppText variant="caption" weight="medium" shrink={false} style={{ color: colors.textSecondary, textAlign: 'right', marginTop: 4 }} numberOfLines={1}>{name.length}/50</AppText>
-          </View>
+            {showCategoryPicker && (
+              <Animated.View entering={FadeIn} style={styles.categoryGrid}>
+                {frequentCategories.length > 0 && (
+                  <>
+                    <AppText variant="caption" weight="bold" style={[styles.sectionLabel, { color: G.fgSecondary }]}>
+                      Recent
+                    </AppText>
+                    <View style={styles.chipRow}>
+                      {frequentCategories.map(cat => (
+                        <TouchableOpacity key={cat} style={[styles.chip, { backgroundColor: G.bgCard, borderColor: G.border }]}
+                          onPress={() => handleCategoryChange(cat)}>
+                          <AppText variant="body-sm" weight="bold" style={{ color: G.fg }}>{cat}</AppText>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </>
+                )}
+                <AppText variant="caption" weight="bold" style={[styles.sectionLabel, { color: G.fgSecondary }]}>
+                  {selectedBudgetId && budgetCategoryNames.length > 0 ? `Budget: ${budgets.find((b: any) => b.id === selectedBudgetId)?.name || ''} Categories` : t('common.categories')}
+                </AppText>
+                <View style={styles.chipRow}>
+                  {(selectedBudgetId && budgetCategoryNames.length > 0 ? budgetCategoryNames : DEFAULT_CATEGORIES).map(cat => (
+                    <TouchableOpacity key={cat} style={[styles.chip, { backgroundColor: G.bgCard, borderColor: G.border }]}
+                      onPress={() => handleCategoryChange(cat)}>
+                      <AppText variant="body-sm" weight="bold" style={{ color: G.fg }}>{cat}</AppText>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </Animated.View>
+            )}
+          </Animated.View>
 
-          {/* Automation Blocks */}
-          <View style={[styles.automationBlock, { backgroundColor: colors.card, borderColor: colors.border }]}>
-             <View style={styles.blockHeader}>
-                <Repeat size={18} color={colors.primary} />
-                <AppText variant="body" weight="bold" style={[styles.blockTitle, { color: colors.text }]} numberOfLines={2}>{t('expense.automate_outflow')}</AppText>
-                <TouchableOpacity 
-                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setIsRecurring(!isRecurring); }}
-                   style={[styles.switch, { backgroundColor: isRecurring ? colors.text : colors.border }]}
-                >
-                   <View style={[styles.switchThumb, { backgroundColor: colors.background, left: isRecurring ? 24 : 2 }]} />
-                </TouchableOpacity>
-             </View>
-             
-             {isRecurring && (
-               <Animated.View entering={FadeIn} style={styles.recurringConfig}>
-                  <View style={styles.freqRow}>
-                    {['Daily', 'Weekly', 'Monthly', 'Yearly'].map(freq => (
-                      <TouchableOpacity 
-                        key={freq} 
-                        style={[styles.freqChip, { backgroundColor: colors.background, borderColor: colors.border }, frequency === freq && { borderColor: colors.text, backgroundColor: colors.card }]}
-                        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setFrequency(freq); }}
+          {/* Date */}
+          <Animated.View entering={FadeInDown.duration(400).delay(150)}>
+            <TouchableOpacity
+              style={[styles.fieldCard, { backgroundColor: G.bgCard, borderColor: G.border }]}
+              onPress={() => setShowDatePicker(true)}
+            >
+              <View style={styles.fieldRow}>
+                <CalendarIcon size={18} color={G.fgSecondary} />
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary }]}>
+                    {t('common.date')}
+                  </AppText>
+                  <AppText variant="body" weight="bold" style={[styles.fieldValue, { color: G.fg }]}>
+                    {formatDate(new Date(date), calendarType, language)}
+                  </AppText>
+                </View>
+              </View>
+            </TouchableOpacity>
+          </Animated.View>
+
+          {/* Description (optional) */}
+          <Animated.View entering={FadeInDown.duration(400).delay(200)}>
+            <View style={[styles.fieldCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+              <TextInput
+                style={[styles.descInput, { color: G.fg }]}
+                placeholder={t('expense.desc_placeholder') || 'Description (optional)'}
+                placeholderTextColor={G.fgSecondary}
+                value={description}
+                onChangeText={setDescription}
+                maxLength={100}
+              />
+            </View>
+          </Animated.View>
+
+          {/* Budget Selector */}
+          {budgets.length > 0 && (
+            <Animated.View entering={FadeInDown.duration(400).delay(250)}>
+              <View style={[styles.fieldCard, { backgroundColor: G.bgCard, borderColor: G.border, marginBottom: 12, overflow: 'hidden' }]}>
+                <View style={styles.fieldRow}>
+                  <Wallet size={18} color={G.fgSecondary} />
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary }]}>
+                      Budget
+                    </AppText>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginTop: 8 }}>
+                      <TouchableOpacity
+                        style={[styles.miniChip, { backgroundColor: selectedBudgetId === null ? G.fg : G.bgCard, borderColor: G.border }]}
+                        onPress={() => handleBudgetSelect(null)}
                       >
-                        <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.freqText, { color: frequency === freq ? colors.text : colors.textSecondary }]} numberOfLines={1}>{t(`expense.${freq.toLowerCase()}`)}</AppText>
+                        <AppText variant="micro" weight="bold" style={{ color: selectedBudgetId === null ? G.bg : G.fg }}>
+                          Auto
+                        </AppText>
+                      </TouchableOpacity>
+                      {budgets.map((b: any) => (
+                        <TouchableOpacity
+                          key={b.id}
+                          style={[styles.miniChip, { backgroundColor: selectedBudgetId === b.id ? G.fg : G.bgCard, borderColor: G.border }]}
+                          onPress={() => handleBudgetSelect(b.id)}
+                        >
+                          <AppText variant="micro" weight="bold" style={{ color: selectedBudgetId === b.id ? G.bg : G.fg }}>
+                            {b.name}
+                          </AppText>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                </View>
+              </View>
+            </Animated.View>
+          )}
+
+          {/* Ambiguous category selection */}
+          {ambiguousCategories.length > 0 && (
+            <Animated.View entering={FadeIn} style={[styles.warningCard, { backgroundColor: colors.warning + '15', borderColor: colors.warning }]}>
+              <AppText variant="caption" weight="bold" style={{ color: colors.warning, marginBottom: 8 }}>
+                Multiple budget categories match. Select one:
+              </AppText>
+              {ambiguousCategories.map((cat: any) => (
+                <TouchableOpacity key={cat.id} style={[styles.ambiguousRow, { borderBottomColor: G.border }]}
+                  onPress={() => handleSelectAmbiguousCategory(cat)}>
+                  <AppText variant="body-sm" weight="bold" style={{ color: G.fg }}>{cat.category}</AppText>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <AppText variant="caption" style={{ color: G.fgSecondary }}>Budget: </AppText>
+                    <AppNumber value={cat.plannedAmount} size="caption" prefix={t('common.etb') + ' '} />
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </Animated.View>
+          )}
+
+          {/* Budget Status Card */}
+          {budgetStatus && (
+            <Animated.View entering={FadeIn} style={[styles.budgetCard, { backgroundColor: G.bgCard, borderColor: progressColor + '30', overflow: 'hidden' }]}>
+              <View style={styles.budgetHeader}>
+                <DollarSign size={16} color={progressColor} />
+                <AppText variant="caption" weight="bold" style={[styles.budgetName, { color: G.fgSecondary }]}>
+                  {budgetStatus.budgetName}
+                </AppText>
+                <View style={[styles.statusPill, { backgroundColor: progressColor + '20' }]}>
+                  <AppText variant="micro" weight="bold" style={{ color: progressColor }}>
+                    {budgetStatus.status === 'exceeded' ? t('budget.exceeded') || 'Exceeded'
+                      : budgetStatus.status === 'critical' ? '90%'
+                      : budgetStatus.status === 'warning' ? '80%'
+                      : t('budget.on_track') || 'On Track'}
+                  </AppText>
+                </View>
+              </View>
+
+              <View style={styles.budgetBar}>
+                <View style={[styles.budgetBarBg, { backgroundColor: G.border }]}>
+                  <View style={[styles.budgetBarFill, { width: `${Math.min(budgetStatus.percentUsed, 100)}%`, backgroundColor: progressColor }]} />
+                </View>
+              </View>
+
+              <View style={styles.budgetStats}>
+                <View>
+                  <AppText variant="micro" weight="medium" style={{ color: G.fgSecondary }}>{t('expense.planned')}</AppText>
+                  <AppNumber value={budgetStatus.planned} size="body-sm" prefix={t('common.etb') + ' '} />
+                </View>
+                <View>
+                  <AppText variant="micro" weight="medium" style={{ color: G.fgSecondary }}>{t('expense.spent')}</AppText>
+                  <AppNumber value={budgetStatus.spent} size="body-sm" prefix={t('common.etb') + ' '} />
+                </View>
+                <View>
+                  <AppText variant="micro" weight="medium" style={{ color: G.fgSecondary }}>{t('expense.remaining')}</AppText>
+                  <AppNumber value={budgetStatus.remaining} size="body-sm" prefix={t('common.etb') + ' '} />
+                </View>
+              </View>
+
+              {budgetStatus.remaining < 0 && (
+                <View style={[styles.overWarning, { backgroundColor: colors.error + '15' }]}>
+                  <AlertTriangle size={14} color={colors.error} />
+                  <AppText variant="caption" weight="bold" style={{ color: colors.error, flex: 1, marginLeft: 6 }}>
+                    This will exceed the budget
+                  </AppText>
+                </View>
+              )}
+            </Animated.View>
+          )}
+
+          {/* Recurring Toggle */}
+          <Animated.View entering={FadeInDown.duration(400).delay(350)}>
+            <TouchableOpacity
+              style={[styles.fieldCard, { backgroundColor: G.bgCard, borderColor: isRecurring ? G.fg : G.border, marginBottom: isRecurring ? 8 : 12, overflow: 'hidden' }]}
+              onPress={() => { setIsRecurring(!isRecurring); Haptics.selectionAsync(); }}
+              activeOpacity={0.7}
+            >
+              <View style={styles.fieldRow}>
+                <Repeat size={18} color={isRecurring ? G.fg : G.fgSecondary} />
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary }]}>
+                    Recurring
+                  </AppText>
+                  <AppText variant="body" weight="bold" style={[styles.fieldValue, { color: isRecurring ? G.fg : G.fgSecondary }]}>
+                    {isRecurring ? `${recurFrequency} Â· ${formatDate(new Date(recurStartDate), calendarType, language)}` : 'One-time expense'}
+                  </AppText>
+                </View>
+                <View style={[styles.toggleTrack, { backgroundColor: isRecurring ? G.fg : G.border }]}>
+                  <View style={[styles.toggleThumb, { backgroundColor: isRecurring ? G.bg : G.bgCard }]} />
+                </View>
+              </View>
+            </TouchableOpacity>
+
+            {isRecurring && (
+              <Animated.View entering={FadeIn} style={{ marginBottom: 12 }}>
+                <View style={[styles.fieldCard, { backgroundColor: G.bgCard, borderColor: G.border, marginBottom: 8, overflow: 'hidden' }]}>
+                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary, marginBottom: 10 }]}>{t('expense.frequency')}</AppText>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                    {['Daily', 'Weekly', 'Monthly', 'Yearly'].map(freq => (
+                      <TouchableOpacity key={freq}
+                        style={[styles.chip, { backgroundColor: G.bgCard, borderColor: G.border, paddingVertical: 8, paddingHorizontal: 14 }, recurFrequency === freq && { backgroundColor: G.fg }]}
+                        onPress={() => { setRecurFrequency(freq); Haptics.selectionAsync(); }}
+                      >
+                        <AppText variant="body-sm" weight="bold" style={{ color: recurFrequency === freq ? G.bg : G.fg }}>{freq}</AppText>
                       </TouchableOpacity>
                     ))}
                   </View>
+                </View>
 
-                  <View style={styles.dateIntake}>
-                     <TouchableOpacity 
-                       style={[styles.dateNode, { borderRightWidth: 1, borderColor: colors.border }]}
-                       onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowStartDatePicker(true); }}
-                       activeOpacity={0.7}
-                     >
-                        <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.dateLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('expense.start_date')}</AppText>
-                        <AppText variant="body-sm" weight="bold" style={[styles.dateValue, { color: colors.text }]} numberOfLines={1}>{formatDate(new Date(startDate), calendarType, language)}</AppText>
-                     </TouchableOpacity>
-                     <View style={styles.dateNode}>
-                        <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.dateLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('expense.next_drill')}</AppText>
-                        <AppText variant="body-sm" weight="bold" style={[styles.dateValue, { color: colors.primary }]} numberOfLines={1}>{formatDate(new Date(calculateNextBilling(startDate, frequency)), calendarType, language)}</AppText>
-                     </View>
-                  </View>
-               </Animated.View>
-             )}
-          </View>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <TouchableOpacity
+                    style={[styles.dateField, { backgroundColor: G.bgCard, borderColor: G.border, flex: 1 }]}
+                    onPress={() => setShowStartPicker(true)}
+                  >
+                    <CalendarIcon size={16} color={G.fgSecondary} />
+                    <AppText variant="caption" weight="bold" style={{ color: G.fg, marginLeft: 6 }} numberOfLines={1}>
+                      {formatDate(new Date(recurStartDate), calendarType, language)}
+                    </AppText>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.dateField, { backgroundColor: G.bgCard, borderColor: G.border, flex: 1 }]}
+                    onPress={() => setShowEndPicker(true)}
+                  >
+                    <CalendarIcon size={16} color={G.fgSecondary} />
+                    <AppText variant="caption" weight="bold" style={{ color: G.fg, marginLeft: 6 }} numberOfLines={1}>
+                      {formatDate(new Date(recurEndDate), calendarType, language)}
+                    </AppText>
+                  </TouchableOpacity>
+                </View>
+              </Animated.View>
+            )}
+          </Animated.View>
 
-          <View style={[styles.rowBetween, { marginTop: 10 }]}>
-             <View style={styles.nodeHeader}>
-                <Bell size={14} color={colors.textSecondary} />
-                <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('expense.prior_notification')}</AppText>
-             </View>
-             <Switch 
-               value={notify} 
-               onValueChange={(val) => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setNotify(val); }}
-               trackColor={{ false: colors.border, true: colors.text }}
-               thumbColor={notify ? colors.background : colors.textSecondary}
-             />
-          </View>
-
-          <TouchableOpacity 
-            style={[styles.finishBtn, { backgroundColor: colors.text }]} 
+          {/* Save Button */}
+          <TouchableOpacity
+            style={[styles.saveBtn, { backgroundColor: G.fg, overflow: 'hidden' }]}
             onPress={handleSave}
             activeOpacity={0.8}
           >
-            <ShieldCheck size={22} color={colors.background} />
-            <AppText variant="body" weight="bold" style={[styles.finishBtnText, { color: colors.background }]} numberOfLines={1}>{t('expense.commit_ledger')}</AppText>
+            <ShieldCheck size={22} color={G.bg} />
+            <AppText variant="body" weight="bold" style={[styles.saveBtnText, { color: G.bg }]}>
+              {isRecurring ? 'Save & Schedule' : t('expense.commit_ledger')}
+            </AppText>
           </TouchableOpacity>
-        </Animated.View>
-        
-        <View style={{ height: 100 }} />
-
-        <Modal visible={!!successDetails} transparent animationType="fade">
-          <BusinessSuccessModal 
-            details={successDetails!} 
-            onClose={() => {
-              setSuccessDetails(null);
-              onSaveSuccess?.();
-            }} 
-          />
-        </Modal>
-      </ScrollView>
+        </ScrollView>
       </KeyboardAvoidingView>
 
       <CustomDatePicker
         visible={showDatePicker}
         onClose={() => setShowDatePicker(false)}
-        onSelectDate={(date) => { setRecordDate(date); setShowDatePicker(false); }}
-        initialDate={recordDate}
+        onSelectDate={handleDateChange}
+        initialDate={date}
       />
 
-      {/* Start Date Picker for Recurring Automation */}
       <CustomDatePicker
-        visible={showStartDatePicker}
-        onClose={() => setShowStartDatePicker(false)}
-        onSelectDate={(date) => { if (date) setStartDate(date); setShowStartDatePicker(false); }}
-        initialDate={startDate}
+        visible={showStartPicker}
+        onClose={() => setShowStartPicker(false)}
+        initialDate={recurStartDate}
+        onSelectDate={(d) => { setRecurStartDate(d); setShowStartPicker(false); }}
       />
+      <CustomDatePicker
+        visible={showEndPicker}
+        onClose={() => setShowEndPicker(false)}
+        initialDate={recurEndDate}
+        onSelectDate={(d) => { setRecurEndDate(d); setShowEndPicker(false); }}
+      />
+
+      {successDetails && (
+        <BusinessSuccessModal
+          details={successDetails}
+          onClose={() => {
+            setSuccessDetails(null);
+            onSaveSuccess?.();
+          }}
+        />
+      )}
     </SafeAreaView>
   );
 };
 
+const DEFAULT_CATEGORIES = [
+  'Utilities', 'Rent', 'Salaries', 'Inventory', 'Transportation',
+  'Marketing', 'Maintenance', 'Taxes', 'Loan Payment', 'Office Supplies',
+  'Insurance', 'General'
+];
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scrollContent: { padding: 25 },
-  header: { marginTop: 20, marginBottom: 30 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  headerSub: { fontSize: 13, fontFamily: Fonts.bold, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 4 },
-  headerTitle: { fontSize: 32, fontFamily: Fonts.bold, letterSpacing: -1 },
-  walletBadge: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-  magnitudeCard: { borderRadius: 32, padding: 30, borderWidth: 1, alignItems: 'center', marginBottom: 35 },
-  magnitudeLabel: { fontSize: 11, fontFamily: Fonts.bold, letterSpacing: 1.5, marginBottom: 15 },
-  magnitudeInputRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 20 },
-  magnitudeValue: { fontSize: 48, fontFamily: Fonts.bold, textAlign: 'center' },
-  magnitudeCurr: { fontSize: 18, fontFamily: Fonts.bold, marginLeft: 8 },
-  magnitudeFooter: { flexDirection: 'row', alignItems: 'center', gap: 6, opacity: 0.5 },
-  magnitudeFooterText: { fontSize: 9, fontFamily: Fonts.bold, letterSpacing: 1 },
-  formSection: { gap: 25 },
-  inputNode: { gap: 10 },
-  nodeHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 5 },
-  nodeLabel: { fontSize: 12, fontFamily: Fonts.bold, textTransform: 'uppercase' },
-  input: { height: 60, borderRadius: 18, borderWidth: 1, paddingHorizontal: 20, fontSize: 16, fontFamily: Fonts.medium },
-  automationBlock: { borderRadius: 28, padding: 20, borderWidth: 1 },
-  blockHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 5 },
-  blockTitle: { flex: 1, fontSize: 15, fontFamily: Fonts.bold },
-  switch: { width: 50, height: 28, borderRadius: 14, padding: 2, position: 'relative' },
-  switchThumb: { width: 24, height: 24, borderRadius: 12, position: 'absolute', top: 2 },
-  recurringConfig: { marginTop: 20, gap: 20 },
-  freqRow: { flexDirection: 'row', gap: 8 },
-  freqChip: { flex: 1, height: 44, borderRadius: 12, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
-  freqText: { fontSize: 11, fontFamily: Fonts.bold },
-  dateIntake: { flexDirection: 'row', height: 65, borderRadius: 16, overflow: 'hidden' },
-  dateNode: { flex: 1, justifyContent: 'center', paddingLeft: 20 },
-  dateLabel: { fontSize: 10, fontFamily: Fonts.bold, letterSpacing: 0.5 },
-  dateValue: { fontSize: 14, fontFamily: Fonts.bold, marginTop: 4 },
-  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  finishBtn: { height: 65, borderRadius: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 20 },
-  finishBtnText: { fontSize: 16, fontFamily: Fonts.bold },
+  scrollContent: { padding: 20, paddingBottom: 60 },
+  header: { marginTop: 8, marginBottom: 16 },
+  headerSub: { fontSize: 12, letterSpacing: 1.2, marginBottom: 4, opacity: 0.7 },
+  headerTitle: { fontSize: 28, letterSpacing: -0.5 },
+  amountCard: { borderRadius: 24, padding: 16, borderWidth: 1, alignItems: 'center', marginBottom: 12 },
+  amountLabel: { fontSize: 11, letterSpacing: 1.5, marginBottom: 8 },
+  amountRow: { flexDirection: 'row', alignItems: 'baseline' },
+  amountInput: { fontSize: 40, fontFamily: Fonts.bold, textAlign: 'center', minWidth: 160 },
+  currency: { fontSize: 16, fontFamily: Fonts.bold, marginLeft: 8 },
+  fieldCard: { borderRadius: 16, padding: 14, borderWidth: 1, marginBottom: 10 },
+  fieldRow: { flexDirection: 'row', alignItems: 'center' },
+  fieldLabel: { fontSize: 10, letterSpacing: 0.5, marginBottom: 2 },
+  fieldValue: { fontSize: 16, fontFamily: Fonts.bold },
+  descInput: { fontSize: 16, fontFamily: Fonts.medium, padding: 0 },
+  categoryGrid: { paddingVertical: 8, gap: 8, marginBottom: 8 },
+  sectionLabel: { fontSize: 12, fontFamily: Fonts.bold, textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.6 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14, borderWidth: 1 },
+  miniChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1 },
+  warningCard: { borderRadius: 16, padding: 16, borderWidth: 1, marginBottom: 12 },
+  ambiguousRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' },
+  toggleTrack: { width: 44, height: 24, borderRadius: 12, justifyContent: 'center', paddingHorizontal: 2 },
+  toggleThumb: { width: 20, height: 20, borderRadius: 10 },
+  dateField: { flexDirection: 'row', alignItems: 'center', height: 44, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12 },
+  budgetCard: { borderRadius: 18, padding: 18, borderWidth: 1, marginBottom: 16 },
+  budgetHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
+  budgetName: { flex: 1, marginLeft: 8, fontSize: 12, fontFamily: Fonts.bold },
+  statusPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  budgetBar: { marginBottom: 14 },
+  budgetBarBg: { height: 6, borderRadius: 3, overflow: 'hidden' },
+  budgetBarFill: { height: '100%', borderRadius: 3 },
+  budgetStats: { flexDirection: 'row', justifyContent: 'space-between' },
+  overWarning: { flexDirection: 'row', alignItems: 'center', marginTop: 12, padding: 10, borderRadius: 10 },
+  saveBtn: { height: 54, borderRadius: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 4 },
+  saveBtnText: { fontSize: 16, fontFamily: Fonts.bold },
 });
 
 export default AddExpenseScreen;

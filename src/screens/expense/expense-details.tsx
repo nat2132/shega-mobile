@@ -1,53 +1,42 @@
-﻿import React, { useState } from 'react';
-import { 
-  View, 
-  StyleSheet, 
-  TouchableOpacity, 
-  ScrollView, 
+import React, { useState } from 'react';
+import {
+  View,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
   TextInput,
-  Dimensions,
-  Platform,
   Modal
 } from 'react-native';
 import Animated, { 
   FadeInDown, 
-  FadeInUp, 
-  ZoomIn,
-  Layout
+  ZoomIn
 } from 'react-native-reanimated';
 import { 
   Repeat, 
   Tag, 
-  Calendar, 
-  Info, 
   Edit2, 
   Check, 
   X,
   ChevronLeft,
-  DollarSign,
   TrendingDown,
   ShieldCheck,
   Zap,
-  History,
-  Bell,
-  Clock,
-  ArrowRight,
-  Package,
-  LayoutGrid,
   Trash2
 } from 'lucide-react-native';
-import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
+import { playNice} from '@/services/soundService';
 import { Fonts } from '@/constants/theme';
 import { updateExpense, deleteExpense } from '@/database/db';
+import { notifyExpenseEdited, notifyExpenseDeleted } from '@/services/notificationService';
 import { useSettings } from '@/context/SettingsContext';
 import { formatDate } from '@/utils/date-utils';
-import { AppText, AppListItem, AppRow, AppCard } from '@/components/ui';
+import { AppNumber, AppText } from '@/components/ui';
 import PremiumActionModal from '@/components/PremiumActionModal';
-const { width } = Dimensions.get('window');
+import { getExpenseGlass } from './glass-expense';
 
 const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => void }) => {
-  const { colors, calendarType, language, t, theme } = useSettings();
+  const { colors, calendarType, language, t } = useSettings();
+  const G = getExpenseGlass(colors);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState(expense);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -72,8 +61,16 @@ const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => vo
   const handleSave = () => {
     if (!validateEditForm()) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    playNice();
     const success = updateExpense(expense.id, editForm);
     if (success) {
+      notifyExpenseEdited({
+        id: expense.id,
+        name: editForm.name || expense.name,
+        amount: Number(editForm.amount) || expense.amount,
+        category: editForm.category || expense.category,
+        oldAmount: expense.amount,
+      });
       setIsEditing(false);
       if (onClose) onClose();
     } else {
@@ -94,8 +91,16 @@ const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => vo
       alert(t('common.error'));
       return;
     }
+    const deletedName = expense.name;
+    const deletedAmount = expense.amount;
+    const deletedCategory = expense.category;
     const success = deleteExpense(expense.id);
     if (success) {
+      notifyExpenseDeleted({
+        name: deletedName,
+        amount: deletedAmount,
+        category: deletedCategory,
+      });
       setShowDeleteConfirm(false);
       if (onClose) onClose();
     } else {
@@ -105,31 +110,34 @@ const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => vo
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: G.bg }]}>
+      {/* Ambient glow washes */}
+      <View style={{ position: 'absolute', top: -120, left: -80, width: 280, height: 280, borderRadius: 140, backgroundColor: G.mutedLight, opacity: 0.15 }} />
+      <View style={{ position: 'absolute', bottom: -60, right: -60, width: 220, height: 220, borderRadius: 110, backgroundColor: G.mutedLight, opacity: 0.10 }} />
       {/* Capital Drill-down Header */}
       <View style={styles.heroContainer}>
-         <View style={[styles.heroWash, { backgroundColor: '#FF3B3008' }]} />
+          <View style={[styles.heroWash, { backgroundColor: colors.error + '08' }]} />
          <View style={styles.topActions}>
-            <TouchableOpacity onPress={onClose} style={[styles.circleBtn, { backgroundColor: colors.background + '80' }]}>
-               <ChevronLeft size={20} color={colors.text} />
+            <TouchableOpacity onPress={onClose} style={[styles.circleBtn, { backgroundColor: G.bgCard }]}>
+               <ChevronLeft size={20} color={G.fg} />
             </TouchableOpacity>
             <View style={styles.row}>
                {isEditing ? (
                  <View style={styles.editActions}>
-                    <TouchableOpacity onPress={handleCancel} style={[styles.circleBtn, { backgroundColor: '#FF3B3015', marginRight: 10 }]}>
-                       <X size={20} color="#FF3B30" />
+                    <TouchableOpacity onPress={handleCancel} style={[styles.circleBtn, { backgroundColor: colors.error + '15', marginRight: 10 }]}>
+                       <X size={20} color={colors.error} />
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={handleSave} style={[styles.circleBtn, { backgroundColor: '#34C75915' }]}>
-                       <Check size={20} color="#34C759" />
+                    <TouchableOpacity onPress={handleSave} style={[styles.circleBtn, { backgroundColor: colors.success + '15' }]}>
+                       <Check size={20} color={colors.success} />
                     </TouchableOpacity>
                  </View>
                ) : (
                  <View style={styles.editActions}>
-                    <TouchableOpacity onPress={() => setShowDeleteConfirm(true)} style={[styles.circleBtn, { backgroundColor: '#FF3B3015', marginRight: 10 }]}>
-                       <Trash2 size={18} color="#FF3B30" />
+                    <TouchableOpacity onPress={() => setShowDeleteConfirm(true)} style={[styles.circleBtn, { backgroundColor: colors.error + '15', marginRight: 10 }]}>
+                       <Trash2 size={18} color={colors.error} />
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setIsEditing(true); }} style={[styles.circleBtn, { backgroundColor: colors.background + '80' }]}>
-                       <Edit2 size={18} color={colors.text} />
+                    <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setIsEditing(true); }} style={[styles.circleBtn, { backgroundColor: G.bgCard }]}>
+                        <Edit2 size={18} color={G.fg} />
                     </TouchableOpacity>
                  </View>
                )}
@@ -137,14 +145,14 @@ const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => vo
          </View>
 
          <Animated.View entering={ZoomIn} style={styles.heroContent}>
-            <View style={[styles.badgeContainer, { backgroundColor: '#FF3B3015' }]}>
-               <TrendingDown size={28} color="#FF3B30" />
+            <View style={[styles.badgeContainer, { backgroundColor: colors.error + '15' }]}>
+               <TrendingDown size={28} color={colors.error} />
             </View>
-            <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.heroSub, { color: colors.textSecondary }]} numberOfLines={1}>{t('expense.capital_management')}</AppText>
+            <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.heroSub, { color: G.fgSecondary }]} numberOfLines={1}>{t('expense.capital_management')}</AppText>
 {isEditing ? (
                <View style={styles.priceEditRow}>
                  <TextInput
-                   style={[styles.heroInput, { color: colors.text }]}
+                   style={[styles.heroInput, { color: G.fg, borderColor: G.border }]}
                    value={String(editForm.amount)}
                    keyboardType="numeric"
                    onChangeText={(text) => {
@@ -152,15 +160,14 @@ const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => vo
                      setEditForm((prev: any) => ({ ...prev, amount: isNaN(num) ? 0 : num }));
                    }}
                  />
-                 <AppText variant="heading" weight="bold" style={[styles.heroTitle, { color: colors.textSecondary }]} numberOfLines={1}>{t('common.etb')}</AppText>
+                 <AppText variant="heading" weight="bold" style={[styles.heroTitle, { color: G.fgSecondary }]} numberOfLines={1}>{t('common.etb')}</AppText>
                </View>
             ) : (
-               <View style={styles.heroTitleRow}>
-                 <AppText variant="display" weight="bold" style={[styles.heroTitle, { color: colors.text }]} numberOfLines={1}>{typeof editForm.amount === 'number' ? editForm.amount.toLocaleString() : 0}</AppText>
-                 <AppText variant="heading" weight="medium" style={{ opacity: 0.6, color: colors.text, marginLeft: 8 }} numberOfLines={1}>{t('common.etb')}</AppText>
-               </View>
+                <View style={styles.heroTitleRow}>
+                  <AppNumber value={editForm.amount} size="display" prefix={t('common.etb') + ' '} />
+                </View>
             )}
-            <AppText variant="body-sm" weight="bold" style={[styles.heroMeta, { color: colors.textSecondary }]} numberOfLines={1}>
+            <AppText variant="body-sm" weight="bold" style={[styles.heroMeta, { color: G.fgSecondary }]} numberOfLines={1}>
                {editForm.date ? formatDate(new Date(editForm.date), calendarType, language) : t('common.loading')}
             </AppText>
          </Animated.View>
@@ -170,38 +177,38 @@ const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => vo
         
         {/* Magnitude & Context */}
         <Animated.View entering={FadeInDown.delay(200)} style={styles.section}>
-           <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.sectionTitle, { color: colors.textSecondary }]} numberOfLines={1}>{t('expense.outflow_identity')}</AppText>
-           <View style={[styles.intelligenceBlock, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View style={styles.node}>
-                 <View style={styles.nodeInfo}>
-                    <Zap size={16} color={colors.textSecondary} />
-                    <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('common.description')}</AppText>
+           <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.sectionTitle, { color: G.fgSecondary }]} numberOfLines={1}>{t('expense.outflow_identity')}</AppText>
+            <View style={[styles.intelligenceBlock, { backgroundColor: G.bgCard, borderColor: G.border, overflow: 'hidden' }]}>
+               <View style={styles.node}>
+                  <View style={styles.nodeInfo}>
+                     <Zap size={16} color={G.fgSecondary} />
+                    <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('common.description')}</AppText>
                  </View>
                  {isEditing ? (
                    <TextInput 
-                     style={[styles.nodeInput, { color: colors.text, borderColor: colors.border }]} 
+                     style={[styles.nodeInput, { color: G.fg, borderColor: G.border }]} 
                      value={editForm.name}
                      onChangeText={(t) => setEditForm((prev: any) => ({ ...prev, name: t }))}
                    />
                  ) : (
-                   <AppText variant="body-sm" weight="bold" style={[styles.nodeValue, { color: colors.text }]} numberOfLines={2}>{editForm.name}</AppText>
+                   <AppText variant="body-sm" weight="bold" style={[styles.nodeValue, { color: G.fg }]} numberOfLines={2}>{editForm.name}</AppText>
                  )}
               </View>
-              <View style={styles.nodeDivider} />
-              <View style={styles.node}>
-                 <View style={styles.nodeInfo}>
-                    <Tag size={16} color={colors.textSecondary} />
-                    <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('common.category')}</AppText>
+               <View style={[styles.nodeDivider, { backgroundColor: G.border }]} />
+               <View style={styles.node}>
+                  <View style={styles.nodeInfo}>
+                     <Tag size={16} color={G.fgSecondary} />
+                    <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('common.category')}</AppText>
                  </View>
                  {isEditing ? (
                    <TextInput 
-                     style={[styles.nodeInput, { color: colors.text, borderColor: colors.border }]} 
+                     style={[styles.nodeInput, { color: G.fg, borderColor: G.border }]} 
                      value={editForm.category || ''}
                      onChangeText={(t) => setEditForm((prev: any) => ({ ...prev, category: t }))}
                    />
                  ) : (
-                   <View style={[styles.miniBadge, { backgroundColor: colors.text + '08' }]}>
-                      <AppText variant="caption" weight="bold" transform="uppercase" shrink={false} style={[styles.badgeText, { color: colors.textSecondary }]} numberOfLines={1}>{editForm.category || t('common.none')}</AppText>
+                    <View style={[styles.miniBadge, { backgroundColor: G.accentGlass }]}>
+                       <AppText variant="caption" weight="bold" transform="uppercase" shrink={false} style={[styles.badgeText, { color: G.fgSecondary }]} numberOfLines={1}>{editForm.category || t('common.none')}</AppText>
                    </View>
                  )}
               </View>
@@ -210,25 +217,25 @@ const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => vo
 
         {/* Orchestration Block (Recurring) */}
         <Animated.View entering={FadeInDown.delay(400)} style={styles.section}>
-          <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.sectionTitle, { color: colors.textSecondary }]} numberOfLines={1}>{t('expense.orchestration_nodes')}</AppText>
-          <View style={[styles.intelligenceBlock, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.node}>
-              <View style={styles.nodeInfo}>
-                <Repeat size={18} color={editForm.isRecurring ? colors.primary : colors.textSecondary} />
+          <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.sectionTitle, { color: G.fgSecondary }]} numberOfLines={1}>{t('expense.orchestration_nodes')}</AppText>
+           <View style={[styles.intelligenceBlock, { backgroundColor: G.bgCard, borderColor: G.border, overflow: 'hidden' }]}>
+             <View style={styles.node}>
+               <View style={styles.nodeInfo}>
+                 <Repeat size={18} color={editForm.isRecurring ? colors.primary : G.fgSecondary} />
                 <View>
-                  <AppText variant="body-sm" weight="bold" style={[styles.nodeValue, { color: colors.text }]} numberOfLines={1}>{editForm.isRecurring ? t('expense.automated') : t('expense.one_time')}</AppText>
-                  <AppText variant="caption" weight="medium" style={[styles.nodeSub, { color: colors.textSecondary }]} numberOfLines={2}>{editForm.isRecurring ? t('expense.repeats_every', { frequency: t(`expense.${(editForm.frequency || 'Monthly').toLowerCase()}`) }) : t('expense.no_pulse')}</AppText>
+                  <AppText variant="body-sm" weight="bold" style={[styles.nodeValue, { color: G.fg }]} numberOfLines={1}>{editForm.isRecurring ? t('expense.automated') : t('expense.one_time')}</AppText>
+                  <AppText variant="caption" weight="medium" style={[styles.nodeSub, { color: G.fgSecondary }]} numberOfLines={2}>{editForm.isRecurring ? t('expense.repeats_every', { frequency: t(`expense.${(editForm.frequency || 'Monthly').toLowerCase()}`) }) : t('expense.no_pulse')}</AppText>
                 </View>
               </View>
             </View>
             {editForm.isRecurring && (
               <View style={styles.dateNodes}>
-                <View style={[styles.dNode, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                  <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.dLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('expense.committed')}</AppText>
-                  <AppText variant="body-sm" weight="bold" style={[styles.dValue, { color: colors.text }]} numberOfLines={1}>{editForm.date ? formatDate(new Date(editForm.date), calendarType, language) : 'N/A'}</AppText>
+                <View style={[styles.dNode, { backgroundColor: G.bg, borderColor: G.border, overflow: 'hidden' }]}>
+                  <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.dLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('expense.committed')}</AppText>
+                  <AppText variant="body-sm" weight="bold" style={[styles.dValue, { color: G.fg }]} numberOfLines={1}>{editForm.date ? formatDate(new Date(editForm.date), calendarType, language) : 'N/A'}</AppText>
                 </View>
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.dLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('expense.next_drill')}</AppText>
+                  <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.dLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('expense.next_drill')}</AppText>
                   <AppText variant="body-sm" weight="bold" style={[styles.dValue, { color: colors.primary }]} numberOfLines={1}>{editForm.nextBillingDate ? formatDate(new Date(editForm.nextBillingDate), calendarType, language) : 'N/A'}</AppText>
                 </View>
               </View>
@@ -240,21 +247,21 @@ const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => vo
       </ScrollView>
 
       {/* Action Float */}
-      <BlurView intensity={theme === 'dark' ? 40 : 80} tint={theme === 'dark' ? 'dark' : 'light'} style={styles.actionFloat}>
+      <View style={[styles.actionFloat, { backgroundColor: colors.background }]}>
          <TouchableOpacity 
-           style={[styles.primaryAction, { backgroundColor: colors.text }]}
+            style={[styles.primaryAction, { backgroundColor: G.fg, shadowColor: G.fg }]}
            onPress={isEditing ? handleSave : () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setIsEditing(true); }}
          >
             {isEditing ? (
-              <ShieldCheck size={20} color={colors.background} />
+              <ShieldCheck size={20} color={G.bg} />
             ) : (
-              <Edit2 size={18} color={colors.background} />
+              <Edit2 size={18} color={G.bg} />
             )}
-            <AppText variant="body" weight="bold" style={[styles.actionText, { color: colors.background }]} numberOfLines={1}>
+            <AppText variant="body" weight="bold" style={[styles.actionText, { color: G.bg }]} numberOfLines={1}>
               {isEditing ? t('expense.commit_ledger') : t('expense.modify_outflow')}
             </AppText>
          </TouchableOpacity>
-      </BlurView>
+      </View>
 
       <Modal visible={showDeleteConfirm} transparent animationType="fade">
         <PremiumActionModal

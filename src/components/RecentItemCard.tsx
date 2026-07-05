@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
 import { Fonts } from '@/constants/theme';
 import { Package } from 'lucide-react-native';
@@ -6,7 +6,7 @@ import { ItemData } from '@/database/db';
 import { useSettings } from '@/context/SettingsContext';
 import { SwipeableItem } from '@/components/SwipeableItem';
 import { formatDate } from '@/utils/date-utils';
-import { AppText, AppListItem, AppRow, AppCard } from '@/components/ui';
+import { AppText, AppNumber} from '@/components/ui';
 interface RecentItemCardProps {
   item: ItemData;
   onPress?: () => void;
@@ -29,12 +29,6 @@ const RecentItemCard: React.FC<RecentItemCardProps> = React.memo(({ item, onPres
     return formatDate(date, calendarType, language);
   };
 
-  const formatPrice = (price: any) => {
-    const val = Number(price) || 0;
-    return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
-
-  const quantityString = `${item.totalBaseQuantity || 0} ${item.baseUnit || 'items'}`;
   const isOutOfStock = (item.totalBaseQuantity || 0) <= 0;
 
   return (
@@ -65,16 +59,22 @@ const RecentItemCard: React.FC<RecentItemCardProps> = React.memo(({ item, onPres
 
       <View style={[styles.itemFooter, { borderTopColor: colors.border }]}>
         <View style={{ flex: 1 }}>
-          <AppText variant="caption" weight="medium" style={[styles.footerLabel, { color: colors.textSecondary }]} numberOfLines={1}>Quantity</AppText>
-          <AppText variant="body-sm" weight="bold" style={[styles.footerValue, { color: colors.text }]} numberOfLines={1}>{quantityString}</AppText>
+          <AppText variant="caption" weight="medium" style={[styles.footerLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('common.quantity')}</AppText>
+          <AppText variant="body-sm" weight="bold" style={[styles.footerValue, { color: colors.text }]} numberOfLines={1}>
+            <AppNumber value={item.totalBaseQuantity || 0} size="body-sm" /> {item.baseUnit || 'items'}
+          </AppText>
         </View>
         <View style={{ flex: 1 }}>
           <AppText variant="caption" weight="medium" style={[styles.footerLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('inventory.base_cost')}</AppText>
-          <AppText variant="body-sm" weight="bold" style={[styles.footerValue, { color: colors.text }]} numberOfLines={1}>{formatPrice(item.basePurchasePrice)} {t('common.etb')}</AppText>
+          <AppText variant="body-sm" weight="bold" style={[styles.footerValue, { color: colors.text }]} numberOfLines={1}>
+            <AppNumber value={item.basePurchasePrice} size="body-sm" prefix="ETB " decimals={2} />
+          </AppText>
         </View>
         <View style={{ flex: 1, alignItems: 'flex-end' }}>
           <AppText variant="caption" weight="medium" style={[styles.footerLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('inventory.base_price')}</AppText>
-          <AppText variant="body-sm" weight="bold" style={[styles.footerValue, { color: colors.text }]} numberOfLines={1}>{formatPrice(item.baseSellingPrice)} {t('common.etb')}</AppText>
+          <AppText variant="body-sm" weight="bold" style={[styles.footerValue, { color: colors.text }]} numberOfLines={1}>
+            <AppNumber value={item.baseSellingPrice} size="body-sm" prefix="ETB " decimals={2} />
+          </AppText>
         </View>
       </View>
       </Pressable>

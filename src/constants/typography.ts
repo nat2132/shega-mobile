@@ -1,4 +1,4 @@
-﻿// Typography system for the multilingual shega-mobile app.
+// Typography system for the multilingual shega-mobile app.
 //
 // Goals
 // ─────

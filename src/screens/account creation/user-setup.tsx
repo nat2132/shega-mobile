@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Fonts } from '@/constants/theme';
 import {
   StyleSheet,
@@ -14,9 +14,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
-import { User, Briefcase, Camera, ChevronRight, Sparkles, Globe, Palette, Calendar, ChevronLeft, Check } from 'lucide-react-native';
-import Animated, { FadeIn, FadeInDown, Layout, FadeOut } from 'react-native-reanimated';
-import { BlurView } from 'expo-blur';
+import { User, Briefcase, ChevronRight, Sparkles, Globe, Palette, Calendar, ChevronLeft, Check } from 'lucide-react-native';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import { getAccountGlass } from './glass-account';
 import { useSettings } from '@/context/SettingsContext';
 import { AppText } from '@/components/ui';
 const { width } = Dimensions.get('window');
@@ -36,6 +36,7 @@ const PROFILE_IMAGES = [
 
 const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete }) => {
   const { language, setLanguage, theme, setTheme, calendarType, setCalendarType, colors, t, setUserProfile } = useSettings();
+  const G = getAccountGlass(colors);
   const [step, setStep] = useState(0); // 0: Identity, 1: Preferences
   const [fullName, setFullName] = useState('');
   const [businessName, setBusinessName] = useState('');
@@ -56,25 +57,25 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
 
   const LANGUAGES = [
     { id: 'en', title: 'English', sub: 'System Default' },
-    { id: 'am', title: 'አማርኛ', sub: 'Amharic' },
+    { id: 'am', title: 'áŠ áˆ›áˆ­áŠ›', sub: 'Amharic' },
     { id: 'om', title: 'Afaan Oromo', sub: 'Oromo' },
-    { id: 'ti', title: 'ትግርኛ', sub: 'Tigrinya' },
+    { id: 'ti', title: 'á‰µáŒáˆ­áŠ›', sub: 'Tigrinya' },
   ];
 
   const handleContinue = async () => {
     if (step === 0) {
       const newErrors: { fullName?: string; businessName?: string } = {};
       if (!fullName.trim()) {
-        newErrors.fullName = 'Full name is required';
+        newErrors.fullName = t('account.name_required');
       } else if (fullName.trim().length < 2) {
-        newErrors.fullName = 'Name must be at least 2 characters';
+        newErrors.fullName = t('account.name_min_length');
       } else if (fullName.trim().length > 100) {
-        newErrors.fullName = 'Name is too long';
+        newErrors.fullName = t('account.name_too_long');
       }
       if (!businessName.trim()) {
-        newErrors.businessName = 'Business entity is required';
+        newErrors.businessName = t('account.business_required');
       } else if (businessName.trim().length > 100) {
-        newErrors.businessName = 'Business name is too long';
+        newErrors.businessName = t('account.business_too_long');
       }
       setTouched({ fullName: true, businessName: true });
       setErrors(newErrors);
@@ -104,280 +105,14 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
     }
   };
 
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <KeyboardAvoidingView 
-        style={{ flex: 1 }} 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
-      >
-        <ScrollView 
-          contentContainerStyle={styles.scrollContent} 
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-        {step === 0 ? (
-          <Animated.View entering={FadeIn.duration(600)} exiting={FadeOut}>
-            <View style={styles.headerNode}>
-              <AppText style={[styles.title, { color: colors.text }]} variant="display" weight="bold" numberOfLines={2}>Establish Identity</AppText>
-              <AppText style={[styles.subtitle, { color: colors.textSecondary }]} variant="body" weight="medium" numberOfLines={3}>
-                Define your curatorial signature for the system vault and secure ledger.
-              </AppText>
-            </View>
-
-            {/* Identity Avatar Node */}
-            <View style={styles.avatarOrchestration}>
-              <View style={styles.mainAvatarBox}>
-                <View style={[styles.avatarRing, { borderColor: colors.border }]}>
-                  <Image 
-                    source={PROFILE_IMAGES[selectedAvatar]} 
-                    style={styles.mainProfileImage}
-                  />
-                  <View style={[styles.sparkleBadge, { backgroundColor: colors.primary, borderColor: colors.background }]}>
-                     <Sparkles size={14} color="#FFF" />
-                  </View>
-                </View>
-                <AppText style={[styles.avatarMeta, { color: colors.text }]} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>SELECTED CURATOR ID</AppText>
-              </View>
-
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false} 
-                contentContainerStyle={styles.avatarLibrary}
-                style={styles.avatarLibraryRow}
-              >
-                {PROFILE_IMAGES.map((source, index) => {
-                  const isActive = selectedAvatar === index;
-                  return (
-                    <TouchableOpacity
-                      key={index}
-                      onPress={() => setSelectedAvatar(index)}
-                      style={[
-                        styles.libraryThumbnail,
-                        { borderColor: colors.border },
-                        isActive && { borderColor: colors.primary, backgroundColor: colors.primary + '10' },
-                      ]}
-                      activeOpacity={0.8}
-                    >
-                      <Image source={source} style={styles.thumbnailImage} />
-                      {isActive && (
-                        <View style={[styles.activeOverlay, { backgroundColor: colors.primary }]}>
-                           <Check size={12} color="#FFF" />
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
-
-            {/* Entry Nodes */}
-            <View style={styles.formNodes}>
-              <View style={[styles.inputNode, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <View style={[styles.inputIcon, { backgroundColor: colors.background }]}>
-                   <User size={18} color={colors.text} />
-                </View>
-                <View style={styles.inputTextContainer}>
-                   <AppText style={[styles.inputTag, { color: colors.textSecondary }]} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>FULL NAME</AppText>
-                   <TextInput
-                     style={[styles.textInputNode, { color: colors.text }]}
-                     placeholder={t('account.name_placeholder')}
-                     placeholderTextColor={colors.textSecondary + '80'}
-                     value={fullName}
-                     onChangeText={(text) => {
-                       setFullName(text);
-                       if (touched.fullName) {
-                         setErrors(prev => ({
-                           ...prev,
-                           fullName: text.trim().length < 2 && text.trim().length > 0 ? 'Name must be at least 2 characters' : undefined
-                         }));
-                       }
-                     }}
-                     onBlur={() => {
-                       setTouched(prev => ({ ...prev, fullName: true }));
-                       if (!fullName.trim()) {
-                         setErrors(prev => ({ ...prev, fullName: 'Full name is required' }));
-                       } else if (fullName.trim().length < 2) {
-                         setErrors(prev => ({ ...prev, fullName: 'Name must be at least 2 characters' }));
-                       } else {
-                         setErrors(prev => ({ ...prev, fullName: undefined }));
-                       }
-                     }}
-                     maxLength={100}
-                     selectionColor={colors.primary}
-                     autoCapitalize="words"
-                   />
-                </View>
-                {errors.fullName && touched.fullName && (
-                  <AppText style={[styles.errorText, { color: '#FF3B30' }]} variant="body-sm" weight="semibold" numberOfLines={2}>{errors.fullName}</AppText>
-                )}
-              </View>
-
-              <View style={[styles.inputNode, { backgroundColor: colors.card, borderColor: colors.border }, (touched.businessName && errors.businessName) && { borderColor: '#FF3B30' }]}>
-                 <View style={[styles.inputIcon, { backgroundColor: colors.background }]}>
-                    <Briefcase size={18} color={colors.text} />
-                 </View>
-                 <View style={styles.inputTextContainer}>
-                    <AppText style={[styles.inputTag, { color: colors.textSecondary }]} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>BUSINESS ENTITY</AppText>
-                    <TextInput
-                      style={[styles.textInputNode, { color: colors.text }]}
-                      placeholder={t('account.business_placeholder')}
-                      placeholderTextColor={colors.textSecondary + '80'}
-                      value={businessName}
-                       onChangeText={(text) => {
-                         setBusinessName(text);
-                       }}
-                      onBlur={() => {
-                        setTouched(prev => ({ ...prev, businessName: true }));
-                        if (!businessName.trim()) {
-                          setErrors(prev => ({ ...prev, businessName: 'Business entity is required' }));
-                        } else {
-                          setErrors(prev => ({ ...prev, businessName: undefined }));
-                        }
-                      }}
-                      maxLength={100}
-                      selectionColor={colors.primary}
-                      autoCapitalize="words"
-                    />
-                 </View>
-              </View>
-              {errors.businessName && touched.businessName && (
-                <AppText style={[styles.errorText, { color: '#FF3B30' }]} variant="body-sm" weight="semibold" numberOfLines={2}>{errors.businessName}</AppText>
-              )}
-            </View>
-
-            {/* Action Node */}
-            <View style={styles.actionNode}>
-              <TouchableOpacity 
-                style={[styles.primaryActionBtn, { backgroundColor: colors.text }, ((!fullName.trim() || !businessName.trim()) || loading) && { opacity: 0.6 }]} 
-                activeOpacity={0.8} 
-                onPress={handleContinue}
-                disabled={!fullName.trim() || !businessName.trim() || loading}
-              >
-                <AppText style={[styles.actionBtnText, { color: colors.background }]} variant="body" weight="bold" numberOfLines={1}>CONTINUE TO PREFERENCES</AppText>
-                <ChevronRight size={20} color={colors.background} />
-              </TouchableOpacity>
-              <AppText style={[styles.securitySub, { color: colors.textSecondary }]} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>SECURE AES-256 ENCRYPTED STORAGE</AppText>
-            </View>
-          </Animated.View>
-        ) : (
-          <Animated.View entering={FadeIn.duration(600)} exiting={FadeOut}>
-            <TouchableOpacity style={styles.backBtn} onPress={() => setStep(0)}>
-               <ChevronLeft size={24} color={colors.text} />
-               <AppText style={[styles.backText, { color: colors.text }]} variant="body" weight="semibold" numberOfLines={1}>Identity</AppText>
-            </TouchableOpacity>
-
-            <View style={styles.headerNode}>
-              <AppText style={[styles.title, { color: colors.text }]} variant="display" weight="bold" numberOfLines={2}>Define Environment</AppText>
-              <AppText style={[styles.subtitle, { color: colors.textSecondary }]} variant="body" weight="medium" numberOfLines={3}>
-                Calibrate your system with the appropriate linguistic schema, visual palette, and temporal system.
-              </AppText>
-            </View>
-
-            {/* Preferences Sections */}
-            <View style={styles.preferencesWrapper}>
-               {/* Language */}
-               <View style={styles.prefSection}>
-                  <View style={styles.prefHeader}>
-                    <Globe size={18} color={colors.primary} />
-                    <AppText style={[styles.prefTitle, { color: colors.text }]} variant="title" weight="bold" numberOfLines={2}>Linguistic Schema</AppText>
-                  </View>
-                  <View style={styles.langGrid}>
-                    {LANGUAGES.map((lang) => (
-                      <TouchableOpacity 
-                        key={lang.id} 
-                        onPress={() => setLanguage(lang.id as any)}
-                        style={[
-                          styles.langCard, 
-                          { backgroundColor: colors.card, borderColor: colors.border },
-                          language === lang.id && { borderColor: colors.primary, borderWidth: 2 }
-                        ]}
-                      >
-                         <AppText style={[styles.langText, { color: colors.text }]} variant="body" weight="bold" numberOfLines={1}>{lang.title}</AppText>
-                         <AppText style={[styles.langSub, { color: colors.textSecondary }]} variant="body-sm" weight="medium" numberOfLines={2}>{lang.sub}</AppText>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-               </View>
-
-               {/* Theme */}
-               <View style={styles.prefSection}>
-                  <View style={styles.prefHeader}>
-                    <Palette size={18} color={colors.primary} />
-                    <AppText style={[styles.prefTitle, { color: colors.text }]} variant="title" weight="bold" numberOfLines={2}>Visual Palette</AppText>
-                  </View>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.themeRow}>
-                    {THEMES.map((themeOption) => (
-                      <TouchableOpacity 
-                        key={themeOption.id} 
-                        onPress={() => setTheme(themeOption.id)}
-                        style={styles.themeItem}
-                      >
-                         <View style={[
-                           styles.themeSwatch, 
-                           { backgroundColor: themeOption.color, borderColor: colors.border },
-                           theme === themeOption.id && { borderColor: colors.primary, borderWidth: 3 }
-                         ]} />
-                         <AppText style={[styles.themeLabel, { color: colors.text }]} variant="body" weight="bold" numberOfLines={1}>{themeOption.name}</AppText>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-               </View>
-
-               {/* Calendar */}
-               <View style={styles.prefSection}>
-                  <View style={styles.prefHeader}>
-                    <Calendar size={18} color={colors.primary} />
-                    <AppText style={[styles.prefTitle, { color: colors.text }]} variant="title" weight="bold" numberOfLines={2}>Temporal Logic</AppText>
-                  </View>
-                  <View style={[styles.calendarToggle, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                     <TouchableOpacity 
-                       style={[styles.calBtn, calendarType === 'ethiopian' && { backgroundColor: colors.primary }]}
-                       onPress={() => setCalendarType('ethiopian')}
-                     >
-                        <AppText style={[styles.calBtnText, { color: calendarType === 'ethiopian' ? '#FFF' : colors.text }]} variant="body" weight="bold" numberOfLines={1}>Ethiopian</AppText>
-                     </TouchableOpacity>
-                     <TouchableOpacity 
-                       style={[styles.calBtn, calendarType === 'gregorian' && { backgroundColor: colors.primary }]}
-                       onPress={() => setCalendarType('gregorian')}
-                     >
-                        <AppText style={[styles.calBtnText, { color: calendarType === 'gregorian' ? '#FFF' : colors.text }]} variant="body" weight="bold" numberOfLines={1}>Gregorian</AppText>
-                     </TouchableOpacity>
-                  </View>
-               </View>
-            </View>
-
-            {/* Final Action Node */}
-            <View style={styles.actionNode}>
-              <TouchableOpacity 
-                style={[styles.primaryActionBtn, { backgroundColor: colors.text }, loading && { opacity: 0.6 }]} 
-                activeOpacity={0.8} 
-                onPress={handleContinue}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color={colors.background} />
-                ) : (
-                  <>
-                    <AppText style={[styles.actionBtnText, { color: colors.background }]} variant="body" weight="bold" numberOfLines={1}>ESTABLISH LEDGER</AppText>
-                    <ChevronRight size={20} color={colors.background} />
-                  </>
-                )}
-              </TouchableOpacity>
-              <AppText style={[styles.securitySub, { color: colors.textSecondary }]} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>INITIATING SECURE ENCRYPTED ENVIRONMENT</AppText>
-            </View>
-          </Animated.View>
-        )}
-      </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
-  );
-};
-
-const styles = StyleSheet.create({
+  const styles = useMemo(() => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: G.bg,
+  },
+  glowWash: {
+    position: 'absolute',
+    borderRadius: 200,
   },
   scrollContent: {
     paddingHorizontal: 25,
@@ -391,12 +126,12 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: Fonts.extrabold,
     fontWeight: '800',
-    color: '#000',
+    color: G.fg,
     textAlign: 'center',
     marginBottom: 12,
   },
   subtitle: {
-    color: '#666',
+    color: G.fgSecondary,
     textAlign: 'center',
     lineHeight: 22,
     fontFamily: Fonts.medium,
@@ -413,9 +148,9 @@ const styles = StyleSheet.create({
     width: 150,
     height: 150,
     borderRadius: 75,
-    backgroundColor: 'rgba(0,0,0,0.03)',
+    backgroundColor: G.bgCard,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.05)',
+    borderColor: G.border,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
@@ -432,16 +167,16 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#000',
+    backgroundColor: G.fg,
     borderWidth: 4,
-    borderColor: '#FFF',
+    borderColor: G.bg,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarMeta: {
     fontFamily: Fonts.bold,
     letterSpacing: 1.5,
-    color: '#000',
+    color: G.fg,
     marginTop: 20,
   },
   avatarLibrary: {
@@ -455,7 +190,7 @@ const styles = StyleSheet.create({
     width: 70,
     height: 70,
     borderRadius: 24,
-    backgroundColor: 'rgba(0,0,0,0.03)',
+    backgroundColor: G.bgCard,
     borderWidth: 1.5,
     borderColor: 'transparent',
     justifyContent: 'center',
@@ -463,8 +198,8 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   activeThumbnail: {
-    borderColor: '#000',
-    backgroundColor: 'rgba(0,0,0,0.01)',
+    borderColor: G.fg,
+    backgroundColor: G.bgCard,
   },
   thumbnailImage: {
     width: 50,
@@ -478,7 +213,7 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#000',
+    backgroundColor: G.fg,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -488,10 +223,10 @@ const styles = StyleSheet.create({
   inputNode: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.02)',
+    backgroundColor: G.bgCard,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.05)',
+    borderColor: G.border,
     paddingHorizontal: 20,
     paddingVertical: 14,
     marginBottom: 16,
@@ -500,7 +235,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: '#FFF',
+    backgroundColor: G.fg,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -516,12 +251,12 @@ const styles = StyleSheet.create({
   inputTag: {
     fontFamily: Fonts.bold,
     letterSpacing: 0.8,
-    color: '#888',
+    color: G.fgSecondary,
     marginBottom: 4,
   },
   textInputNode: {
     fontFamily: Fonts.semibold,
-    color: '#000',
+    color: G.fg,
     height: 24,
     padding: 0,
   },
@@ -532,7 +267,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     width: '100%',
     height: 68,
-    backgroundColor: '#000',
+    backgroundColor: G.fg,
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
@@ -552,11 +287,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   inputNodeError: {
-    borderColor: '#FF3B30',
+    borderColor: G.error,
     borderWidth: 1.5,
   },
   actionBtnText: {
-    color: '#FFF',
+    color: G.bg,
     fontFamily: Fonts.bold,
     letterSpacing: 1,
   },
@@ -641,6 +376,281 @@ const styles = StyleSheet.create({
   calBtnText: {
     fontFamily: Fonts.bold,
   },
-});
+}), [G]);
+
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: G.bg }]}>
+      {/* Ambient Glass Glow */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <View style={[styles.glowWash, { top: -120, left: -60, width: 300, height: 300, opacity: 0.12 }]} />
+        <View style={[styles.glowWash, { bottom: -80, right: -40, width: 250, height: 250, opacity: 0.08 }]} />
+      </View>
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
+      >
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent} 
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+        {step === 0 ? (
+          <Animated.View entering={FadeIn.duration(600)} exiting={FadeOut}>
+            <View style={styles.headerNode}>
+              <AppText style={[styles.title, { color: G.fg }]} variant="display" weight="bold" numberOfLines={2}>{t('account.establish_identity')}</AppText>
+              <AppText style={[styles.subtitle, { color: G.fgSecondary }]} variant="body" weight="medium" numberOfLines={3}>
+                {t('account.identity_subtitle')}
+              </AppText>
+            </View>
+
+            {/* Identity Avatar Node */}
+            <View style={styles.avatarOrchestration}>
+              <View style={styles.mainAvatarBox}>
+                <View style={[styles.avatarRing, { borderColor: G.border }]}>
+                  <Image 
+                    source={PROFILE_IMAGES[selectedAvatar]} 
+                    style={styles.mainProfileImage}
+                  />
+                  <View style={[styles.sparkleBadge, { backgroundColor: G.fg, borderColor: G.bg }]}>
+                     <Sparkles size={14} color={G.bg} />
+                  </View>
+                </View>
+                <AppText style={[styles.avatarMeta, { color: G.fg }]} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>{t('account.selected_curator_id')}</AppText>
+              </View>
+
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false} 
+                contentContainerStyle={styles.avatarLibrary}
+                style={styles.avatarLibraryRow}
+              >
+                {PROFILE_IMAGES.map((source, index) => {
+                  const isActive = selectedAvatar === index;
+                  return (
+                    <TouchableOpacity
+                      key={index}
+                      onPress={() => setSelectedAvatar(index)}
+                      style={[
+                        styles.libraryThumbnail,
+                        { borderColor: G.border },
+                        isActive && { borderColor: G.fg, backgroundColor: G.accentGlass },
+                      ]}
+                      activeOpacity={0.8}
+                    >
+                      <Image source={source} style={styles.thumbnailImage} />
+                      {isActive && (
+                        <View style={[styles.activeOverlay, { backgroundColor: G.fg }]}>
+                           <Check size={12} color={G.bg} />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            {/* Entry Nodes */}
+            <View style={styles.formNodes}>
+              <View style={[styles.inputNode, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+                <View style={[styles.inputIcon, { backgroundColor: G.bg }]}>
+                   <User size={18} color={G.fg} />
+                </View>
+                <View style={styles.inputTextContainer}>
+                   <AppText style={[styles.inputTag, { color: G.fgSecondary }]} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>{t('account.full_name_label')}</AppText>
+                   <TextInput
+                     style={[styles.textInputNode, { color: G.fg }]}
+                     placeholder={t('account.name_placeholder')}
+                     placeholderTextColor={G.fgSecondary + '80'}
+                     value={fullName}
+                     onChangeText={(text) => {
+                       setFullName(text);
+                       if (touched.fullName) {
+                         setErrors(prev => ({
+                           ...prev,
+                           fullName: text.trim().length < 2 && text.trim().length > 0 ? t('account.name_min_length') : undefined
+                         }));
+                       }
+                     }}
+                     onBlur={() => {
+                       setTouched(prev => ({ ...prev, fullName: true }));
+                       if (!fullName.trim()) {
+                          setErrors(prev => ({ ...prev, fullName: t('account.name_required') }));
+                       } else if (fullName.trim().length < 2) {
+                          setErrors(prev => ({ ...prev, fullName: t('account.name_min_length') }));
+                       } else {
+                         setErrors(prev => ({ ...prev, fullName: undefined }));
+                       }
+                     }}
+                     maxLength={100}
+                     selectionColor={G.fg}
+                     autoCapitalize="words"
+                   />
+                </View>
+                {errors.fullName && touched.fullName && (
+                  <AppText style={[styles.errorText, { color: colors.error }]} variant="body-sm" weight="semibold" numberOfLines={2}>{errors.fullName}</AppText>
+                )}
+              </View>
+
+              <View style={[styles.inputNode, { backgroundColor: G.bgCard, borderColor: G.border }, (touched.businessName && errors.businessName) && { borderColor: colors.error }]}>
+                 <View style={[styles.inputIcon, { backgroundColor: G.bg }]}>
+                    <Briefcase size={18} color={G.fg} />
+                 </View>
+                 <View style={styles.inputTextContainer}>
+                     <AppText style={[styles.inputTag, { color: G.fgSecondary }]} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>{t('account.business_entity_label')}</AppText>
+                    <TextInput
+                      style={[styles.textInputNode, { color: G.fg }]}
+                      placeholder={t('account.business_placeholder')}
+                      placeholderTextColor={G.fgSecondary + '80'}
+                      value={businessName}
+                       onChangeText={(text) => {
+                         setBusinessName(text);
+                       }}
+                      onBlur={() => {
+                        setTouched(prev => ({ ...prev, businessName: true }));
+                        if (!businessName.trim()) {
+                          setErrors(prev => ({ ...prev, businessName: t('account.business_required') }));
+                        } else {
+                          setErrors(prev => ({ ...prev, businessName: undefined }));
+                        }
+                      }}
+                      maxLength={100}
+                      selectionColor={G.fg}
+                      autoCapitalize="words"
+                    />
+                 </View>
+              </View>
+              {errors.businessName && touched.businessName && (
+                <AppText style={[styles.errorText, { color: colors.error }]} variant="body-sm" weight="semibold" numberOfLines={2}>{errors.businessName}</AppText>
+              )}
+            </View>
+
+            {/* Action Node */}
+            <View style={styles.actionNode}>
+              <TouchableOpacity 
+                style={[styles.primaryActionBtn, { backgroundColor: G.fg }, ((!fullName.trim() || !businessName.trim()) || loading) && { opacity: 0.6 }]} 
+                activeOpacity={0.8} 
+                onPress={handleContinue}
+                disabled={!fullName.trim() || !businessName.trim() || loading}
+              >
+                <AppText style={[styles.actionBtnText, { color: G.bg }]} variant="body" weight="bold" numberOfLines={1}>{t('account.continue_to_preferences')}</AppText>
+                <ChevronRight size={20} color={G.bg} />
+              </TouchableOpacity>
+              <AppText style={[styles.securitySub, { color: G.fgSecondary }]} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>{t('account.secure_storage')}</AppText>
+            </View>
+          </Animated.View>
+        ) : (
+          <Animated.View entering={FadeIn.duration(600)} exiting={FadeOut}>
+            <TouchableOpacity style={styles.backBtn} onPress={() => setStep(0)}>
+               <ChevronLeft size={24} color={G.fg} />
+               <AppText style={[styles.backText, { color: G.fg }]} variant="body" weight="semibold" numberOfLines={1}>{t('account.identity')}</AppText>
+            </TouchableOpacity>
+
+            <View style={styles.headerNode}>
+              <AppText style={[styles.title, { color: G.fg }]} variant="display" weight="bold" numberOfLines={2}>{t('account.define_environment')}</AppText>
+              <AppText style={[styles.subtitle, { color: G.fgSecondary }]} variant="body" weight="medium" numberOfLines={3}>
+                {t('account.environment_subtitle')}
+              </AppText>
+            </View>
+
+            {/* Preferences Sections */}
+            <View style={styles.preferencesWrapper}>
+               {/* Language */}
+               <View style={styles.prefSection}>
+                  <View style={styles.prefHeader}>
+                    <Globe size={18} color={G.fg} />
+                    <AppText style={[styles.prefTitle, { color: G.fg }]} variant="title" weight="bold" numberOfLines={2}>Linguistic Schema</AppText>
+                  </View>
+                  <View style={styles.langGrid}>
+                    {LANGUAGES.map((lang) => (
+                      <TouchableOpacity 
+                        key={lang.id} 
+                        onPress={() => setLanguage(lang.id as any)}
+                        style={[
+                          styles.langCard, 
+                          { backgroundColor: G.bgCard, borderColor: G.border },
+                          language === lang.id && { borderColor: G.fg, borderWidth: 2 }
+                        ]}
+                      >
+                         <AppText style={[styles.langText, { color: G.fg }]} variant="body" weight="bold" numberOfLines={1}>{lang.title}</AppText>
+                         <AppText style={[styles.langSub, { color: G.fgSecondary }]} variant="body-sm" weight="medium" numberOfLines={2}>{lang.sub}</AppText>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+               </View>
+
+               {/* Theme */}
+               <View style={styles.prefSection}>
+                  <View style={styles.prefHeader}>
+                    <Palette size={18} color={G.fg} />
+                    <AppText style={[styles.prefTitle, { color: G.fg }]} variant="title" weight="bold" numberOfLines={2}>Visual Palette</AppText>
+                  </View>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.themeRow}>
+                    {THEMES.map((themeOption) => (
+                      <TouchableOpacity 
+                        key={themeOption.id} 
+                        onPress={() => setTheme(themeOption.id)}
+                        style={styles.themeItem}
+                      >
+                         <View style={[
+                           styles.themeSwatch, 
+                           { backgroundColor: themeOption.color, borderColor: G.border },
+                           theme === themeOption.id && { borderColor: G.fg, borderWidth: 3 }
+                         ]} />
+                         <AppText style={[styles.themeLabel, { color: G.fg }]} variant="body" weight="bold" numberOfLines={1}>{themeOption.name}</AppText>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+               </View>
+
+               {/* Calendar */}
+               <View style={styles.prefSection}>
+                  <View style={styles.prefHeader}>
+                    <Calendar size={18} color={G.fg} />
+                     <AppText style={[styles.prefTitle, { color: G.fg }]} variant="title" weight="bold" numberOfLines={2}>{t('account.temporal_logic')}</AppText>
+                  </View>
+                  <View style={[styles.calendarToggle, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+                     <TouchableOpacity 
+                       style={[styles.calBtn, calendarType === 'ethiopian' && { backgroundColor: G.fg }]}
+                       onPress={() => setCalendarType('ethiopian')}
+                     >
+                        <AppText style={[styles.calBtnText, { color: calendarType === 'ethiopian' ? G.bg : G.fg }]} variant="body" weight="bold" numberOfLines={1}>Ethiopian</AppText>
+                     </TouchableOpacity>
+                     <TouchableOpacity 
+                       style={[styles.calBtn, calendarType === 'gregorian' && { backgroundColor: G.fg }]}
+                       onPress={() => setCalendarType('gregorian')}
+                     >
+                        <AppText style={[styles.calBtnText, { color: calendarType === 'gregorian' ? G.bg : G.fg }]} variant="body" weight="bold" numberOfLines={1}>Gregorian</AppText>
+                     </TouchableOpacity>
+                  </View>
+               </View>
+            </View>
+
+            {/* Final Action Node */}
+            <View style={styles.actionNode}>
+              <TouchableOpacity 
+                style={[styles.primaryActionBtn, { backgroundColor: G.fg }, loading && { opacity: 0.6 }]} 
+                activeOpacity={0.8} 
+                onPress={handleContinue}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color={G.bg} />
+                ) : (
+                  <>
+                    <AppText style={[styles.actionBtnText, { color: G.bg }]} variant="body" weight="bold" numberOfLines={1}>{t('account.establish_ledger')}</AppText>
+                    <ChevronRight size={20} color={G.bg} />
+                  </>
+                )}
+              </TouchableOpacity>
+              <AppText style={[styles.securitySub, { color: G.fgSecondary }]} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>{t('account.initiating_secure')}</AppText>
+            </View>
+          </Animated.View>
+        )}
+      </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+};
 
 export default ProfileSetupScreen;

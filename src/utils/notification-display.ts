@@ -15,7 +15,11 @@ const paramsFrom = (data: any): Record<string, string> => {
     if (k === 'titleKey' || k === 'messageKey') return;
     const v = data[k];
     if (v === null || v === undefined) return;
-    out[k] = String(v);
+    if (typeof v === 'number' && !Number.isInteger(v)) {
+      out[k] = v.toFixed(2);
+    } else {
+      out[k] = String(v);
+    }
   });
   return out;
 };

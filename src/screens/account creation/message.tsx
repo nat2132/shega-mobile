@@ -1,84 +1,31 @@
-﻿import React from 'react';
+import React, { useMemo } from 'react';
 import { Fonts } from '@/constants/theme';
 import {
   StyleSheet,
   View,
   TouchableOpacity,
-  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { CheckCircle2, Sparkles, ChevronRight, LayoutDashboard, Send } from 'lucide-react-native';
+import { CheckCircle2, Sparkles, LayoutDashboard} from 'lucide-react-native';
 import { AppText } from '@/components/ui';
-import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
-const { width } = Dimensions.get('window');
+import { getAccountGlass } from './glass-account';
+import { useSettings } from '@/context/SettingsContext';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 
 interface SuccessScreenProps {
   onGoToDashboard?: () => void;
 }
 
 const SuccessScreen: React.FC<SuccessScreenProps> = ({ onGoToDashboard }) => {
-  return (
-    <SafeAreaView style={styles.container}>
-      {/* Background Ambience */}
-      <View style={StyleSheet.absoluteFill}>
-        <View style={[styles.glowNode, { top: -100, right: -100, backgroundColor: '#000', opacity: 0.05 }]} />
-        <View style={[styles.glowNode, { bottom: -100, left: -100, backgroundColor: '#000', opacity: 0.03 }]} />
-      </View>
-
-      <View style={styles.content}>
-        <Animated.View entering={FadeInDown.duration(800)} style={styles.visualOrchestration}>
-          <View style={styles.successNode}>
-            <View style={styles.mainCircle}>
-               <CheckCircle2 size={56} color="#FFF" strokeWidth={1.5} />
-               <View style={styles.sparkleBadge}>
-                  <Sparkles size={16} color="#000" />
-               </View>
-            </View>
-            <View style={styles.pulseRing} />
-          </View>
-        </Animated.View>
-
-        <Animated.View entering={FadeInDown.delay(200).duration(800)} style={styles.briefingArea}>
-          <AppText style={styles.title} variant="display" weight="bold" numberOfLines={2}>System Ready</AppText>
-          <AppText style={styles.subtitle} variant="body" weight="medium" numberOfLines={3}>
-            Your curatorial environment is fully initialized.{'\n'}Welcome to the professional terminal.
-          </AppText>
-        </Animated.View>
-
-        <Animated.View entering={FadeInDown.delay(400).duration(800)} style={styles.actionArea}>
-          <TouchableOpacity 
-            style={styles.primaryActionBtn} 
-            activeOpacity={0.8} 
-            onPress={onGoToDashboard}
-          >
-            <AppText style={styles.btnText} variant="body" weight="bold" numberOfLines={1}>ENTER TERMINAL</AppText>
-            <LayoutDashboard size={20} color="#FFF" />
-          </TouchableOpacity>
-
-          <View style={styles.statusIndicator}>
-             <View style={styles.statusDot} />
-             <AppText style={styles.statusText} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>ALL SYSTEMS NOMINAL</AppText>
-          </View>
-        </Animated.View>
-      </View>
-
-      {/* Footer Branding */}
-      <Animated.View entering={FadeInUp.delay(600).duration(800)} style={styles.footerBranding}>
-         <AppText style={styles.footerTag} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>ESTABLISHED SECURE SESSION • AES-256</AppText>
-      </Animated.View>
-    </SafeAreaView>
-  );
-};
-
-const styles = StyleSheet.create({
+  const { colors, t } = useSettings();
+  const G = getAccountGlass(colors);
+  const styles = useMemo(() => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: G.bg,
   },
-  glowNode: {
+  glowWash: {
     position: 'absolute',
-    width: 400,
-    height: 400,
     borderRadius: 200,
   },
   content: {
@@ -99,15 +46,15 @@ const styles = StyleSheet.create({
     width: 140,
     height: 140,
     borderRadius: 70,
-    backgroundColor: '#000',
+    backgroundColor: G.fg,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 2,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.2,
-    shadowRadius: 20,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   sparkleBadge: {
     position: 'absolute',
@@ -116,11 +63,11 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#FFF',
+    backgroundColor: G.bgCard,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.1)',
+    borderColor: G.border,
   },
   pulseRing: {
     position: 'absolute',
@@ -128,7 +75,7 @@ const styles = StyleSheet.create({
     height: 180,
     borderRadius: 90,
     borderWidth: 1.5,
-    borderColor: 'rgba(0,0,0,0.05)',
+    borderColor: G.border,
     zIndex: 1,
   },
   briefingArea: {
@@ -138,12 +85,12 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: Fonts.extrabold,
     fontWeight: '800',
-    color: '#000',
+    color: G.fg,
     textAlign: 'center',
     marginBottom: 16,
   },
   subtitle: {
-    color: '#777',
+    color: G.fgSecondary,
     textAlign: 'center',
     lineHeight: 26,
     fontFamily: Fonts.medium,
@@ -155,7 +102,7 @@ const styles = StyleSheet.create({
   primaryActionBtn: {
     flexDirection: 'row',
     width: '100%',
-    backgroundColor: '#000',
+    backgroundColor: G.fg,
     height: 72,
     borderRadius: 28,
     justifyContent: 'center',
@@ -169,7 +116,7 @@ const styles = StyleSheet.create({
     marginBottom: 25,
   },
   btnText: {
-    color: '#FFF',
+    color: G.bg,
     fontFamily: Fonts.bold,
     letterSpacing: 1.5,
   },
@@ -182,11 +129,11 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#10B981', // Emerald green
+    backgroundColor: G.success, // Emerald green
   },
   statusText: {
     fontFamily: Fonts.bold,
-    color: '#888',
+    color: G.fgSecondary,
     letterSpacing: 1,
   },
   footerBranding: {
@@ -195,9 +142,61 @@ const styles = StyleSheet.create({
   },
   footerTag: {
     fontFamily: Fonts.bold,
-    color: '#BBB',
+    color: G.muted,
     letterSpacing: 1.5,
   },
-});
+}), [G]);
+  return (
+    <SafeAreaView style={styles.container}>
+      {/* Ambient Glass Glow */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <View style={[styles.glowWash, { top: -120, left: -60, width: 300, height: 300, opacity: 0.12 }]} />
+        <View style={[styles.glowWash, { bottom: -80, right: -40, width: 250, height: 250, opacity: 0.08 }]} />
+      </View>
+
+      <View style={styles.content}>
+        <Animated.View entering={FadeInDown.duration(800)} style={styles.visualOrchestration}>
+          <View style={styles.successNode}>
+            <View style={styles.mainCircle}>
+               <CheckCircle2 size={56} color={G.bg} strokeWidth={1.5} />
+               <View style={styles.sparkleBadge}>
+                  <Sparkles size={16} color={G.bg} />
+               </View>
+            </View>
+            <View style={styles.pulseRing} />
+          </View>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(200).duration(800)} style={styles.briefingArea}>
+          <AppText style={styles.title} variant="display" weight="bold" numberOfLines={2}>{t('account.system_ready')}</AppText>
+          <AppText style={styles.subtitle} variant="body" weight="medium" numberOfLines={3}>
+            {t('account.ready_subtitle')}
+          </AppText>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(400).duration(800)} style={styles.actionArea}>
+          <TouchableOpacity 
+            style={styles.primaryActionBtn} 
+            activeOpacity={0.8} 
+            onPress={onGoToDashboard}
+          >
+            <AppText style={styles.btnText} variant="body" weight="bold" numberOfLines={1}>{t('account.enter_terminal')}</AppText>
+            <LayoutDashboard size={20} color={G.bg} />
+          </TouchableOpacity>
+
+          <View style={styles.statusIndicator}>
+             <View style={styles.statusDot} />
+             <AppText style={styles.statusText} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>{t('account.systems_nominal')}</AppText>
+          </View>
+        </Animated.View>
+      </View>
+
+      {/* Footer Branding */}
+      <Animated.View entering={FadeInUp.delay(600).duration(800)} style={styles.footerBranding}>
+         <AppText style={styles.footerTag} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>ESTABLISHED SECURE SESSION • AES-256</AppText>
+      </Animated.View>
+    </SafeAreaView>
+  );
+};
 
 export default SuccessScreen;

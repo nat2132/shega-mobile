@@ -1,43 +1,48 @@
-﻿import React from 'react';
+import React from 'react';
 import {
   View,
   StyleSheet,
   TouchableOpacity,
   Modal,
-  Dimensions,
   Platform
 } from 'react-native';
-import { Globe, Check, Sparkles, X } from 'lucide-react-native';
-import { BlurView } from 'expo-blur';
+import { Globe, Check, Sparkles, X, Calendar, Sun } from 'lucide-react-native';
+
 import * as Haptics from 'expo-haptics';
-import Animated, { FadeIn, SlideInDown } from 'react-native-reanimated';
+import Animated, { SlideInDown } from 'react-native-reanimated';
 import { Fonts } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
-import { AppCard, AppButton, AppText } from '@/components/ui';
-const { height } = Dimensions.get('window');
+import { AppText } from '@/components/ui';
 
 type LangCode = 'en' | 'am' | 'om' | 'ti';
+type CalendarType = 'gregorian' | 'ethiopian';
 
 interface PDFLanguageModalProps {
   visible: boolean;
   onClose: () => void;
-  onSelect: (lang: LangCode, action: 'share' | 'save') => void;
+  onSelect: (lang: LangCode, calendar: CalendarType, action: 'share' | 'save') => void;
 }
 
 const LANGUAGES: { id: LangCode; label: string; sub: string; flag: string }[] = [
-  { id: 'en', label: 'English', sub: 'System Standard Format', flag: '🇬🇧' },
-  { id: 'am', label: 'አማርኛ (Amharic)', sub: 'የኢትዮጵያ ፊደል', flag: '🇪🇹' },
-  { id: 'om', label: 'Afaan Oromoo', sub: 'Qubee Laatin Variant', flag: '🇪🇹' },
-  { id: 'ti', label: 'ትግርኛ (Tigrinya)', sub: 'ፊደል ትግርኛ', flag: '🇪🇹' }
+  { id: 'en', label: 'English', sub: 'System Standard Format', flag: 'EN' },
+  { id: 'am', label: 'Amharic (አማርኛ)', sub: 'Ethiopic Script', flag: 'AM' },
+  { id: 'om', label: 'Afaan Oromoo', sub: 'Latin Script', flag: 'OM' },
+  { id: 'ti', label: 'Tigrinya (ትግርኛ)', sub: 'Ethiopic Script', flag: 'TI' }
+];
+
+const CALENDARS: { id: CalendarType; label: string; sub: string }[] = [
+  { id: 'gregorian', label: 'Gregorian', sub: 'Device Calendar' },
+  { id: 'ethiopian', label: 'Ethiopian', sub: 'መጋቢት ፳፪ / Yekatit 22' },
 ];
 
 export const PDFLanguageModal: React.FC<PDFLanguageModalProps> = ({ visible, onClose, onSelect }) => {
-  const { colors, theme, t } = useSettings();
+  const { colors, t } = useSettings();
   const [selectedLang, setSelectedLang] = React.useState<LangCode>('en');
+  const [selectedCalendar, setSelectedCalendar] = React.useState<CalendarType>('gregorian');
 
   const handleAction = (action: 'share' | 'save') => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    onSelect(selectedLang, action);
+    onSelect(selectedLang, selectedCalendar, action);
     onClose();
   };
 
@@ -45,13 +50,11 @@ export const PDFLanguageModal: React.FC<PDFLanguageModalProps> = ({ visible, onC
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
         {/* Backdrop blur/tint */}
-        <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose}>
-          <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFill} />
-        </TouchableOpacity>
+        <TouchableOpacity style={[styles.backdrop, { backgroundColor: 'rgba(0,0,0,0.50)' }]} activeOpacity={1} onPress={onClose} />
 
         {/* Bottom Sheet Card */}
         <Animated.View 
-          entering={SlideInDown.springify().damping(18)}
+          entering={SlideInDown.springify().damping(28).stiffness(250)}
           style={[styles.sheet, { backgroundColor: colors.background, borderTopColor: colors.border }]}
         >
           <View style={styles.header}>
@@ -118,6 +121,37 @@ export const PDFLanguageModal: React.FC<PDFLanguageModalProps> = ({ visible, onC
             })}
           </View>
 
+          {/* Calendar Section */}
+          <View style={styles.calendarSection}>
+            <View style={styles.calendarHeader}>
+              <Calendar size={16} color={colors.textSecondary} />
+              <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.calendarTitle, { color: colors.textSecondary }]} numberOfLines={1}>Calendar</AppText>
+            </View>
+            <View style={styles.calendarRow}>
+              {CALENDARS.map((cal) => {
+                const isSelected = selectedCalendar === cal.id;
+                return (
+                  <TouchableOpacity
+                    key={cal.id}
+                    style={[
+                      styles.calendarOption,
+                      { backgroundColor: colors.card, borderColor: isSelected ? colors.primary : colors.border },
+                      isSelected && { borderWidth: 2 }
+                    ]}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setSelectedCalendar(cal.id);
+                    }}
+                  >
+                    <Sun size={16} color={isSelected ? colors.primary : colors.textSecondary} />
+                    <AppText variant="body" weight="bold" style={[styles.calendarLabel, { color: isSelected ? colors.primary : colors.text }]} numberOfLines={1}>{cal.label}</AppText>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
           <View style={styles.actionRow}>
             <TouchableOpacity 
               style={[styles.actionBtn, { backgroundColor: colors.card, borderColor: colors.border }]} 
@@ -140,6 +174,8 @@ export const PDFLanguageModal: React.FC<PDFLanguageModalProps> = ({ visible, onC
   );
 };
 
+const CAL_PADDING = 25;
+
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -153,11 +189,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 36,
     borderTopWidth: 1,
     paddingBottom: Platform.OS === 'ios' ? 44 : 30,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 15,
-    elevation: 24,
+    elevation: 8,
   },
   header: {
     paddingHorizontal: 25,
@@ -245,6 +277,37 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  calendarSection: {
+    paddingHorizontal: CAL_PADDING,
+    marginTop: 20,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  calendarTitle: {
+    fontFamily: Fonts.bold,
+    letterSpacing: 1,
+  },
+  calendarRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  calendarOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  calendarLabel: {
+    fontFamily: Fonts.bold,
   },
   actionRow: {
     flexDirection: 'row',

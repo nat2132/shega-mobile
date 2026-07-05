@@ -1,4 +1,4 @@
-﻿import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { Fonts } from '@/constants/theme';
 import {
   Package,
@@ -12,8 +12,9 @@ import {
 } from 'react-native';
 import { useSettings } from '@/context/SettingsContext';
 import { getLowStockItems, ItemData } from '@/database/db';
-import { AppText, AppListItem } from '@/components/ui';
+import { AppNumber, AppText, AppListItem } from '@/components/ui';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { getDashGlass } from './glass-dashboard';
 const LowStockRow = React.memo(({
   item,
   index,
@@ -22,19 +23,21 @@ const LowStockRow = React.memo(({
   index: number;
 }) => {
   const { colors, t } = useSettings();
+  const G = getDashGlass(colors);
+  const styles = useMemo(() => createStyles(G), [G]);
   const isOut = item.totalBaseQuantity <= 0;
   return (
     <Animated.View
       entering={FadeInDown.delay(Math.min(index, 6) * 50).duration(500)}
     >
       <View
-        style={[styles.nodeCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+        style={[styles.nodeCard, { backgroundColor: G.bgCard, borderColor: G.border }]}
       >
         <AppListItem
           left={
-            <View style={[styles.iconNode, { backgroundColor: isOut ? colors.primary + '15' : colors.text + '05' }]}>
-              <Package size={22} color={isOut ? colors.primary : colors.text} />
-              <View style={[styles.alertDot, { backgroundColor: isOut ? colors.primary : '#FF9500' }]} />
+            <View style={[styles.iconNode, { backgroundColor: isOut ? colors.primary + '15' : G.fg + '05' }]}>
+              <Package size={22} color={isOut ? colors.primary : G.fg} />
+              <View style={[styles.alertDot, { backgroundColor: isOut ? colors.primary : colors.warning }]} />
             </View>
           }
           title={item.name}
@@ -44,11 +47,11 @@ const LowStockRow = React.memo(({
           right={
             <View style={styles.statArea}>
               <View style={styles.qtyRow}>
-                <ArrowDownRight size={14} color={isOut ? colors.primary : '#FF9500'} />
-                <AppText variant="body" weight="bold" shrink={false} style={[styles.qtyText, { color: colors.text }]} numberOfLines={1}>{item.totalBaseQuantity}</AppText>
-                <AppText variant="caption" weight="medium" shrink={false} style={[styles.unitText, { color: colors.textSecondary }]} numberOfLines={1}>{t('form.' + (item.baseUnit || 'pieces').toLowerCase())}</AppText>
+                <ArrowDownRight size={14} color={isOut ? colors.primary : colors.warning} />
+                <AppNumber value={item.totalBaseQuantity} size="body" color={G.fg} numberOfLines={1} />
+                <AppText variant="caption" weight="medium" shrink={false} style={[styles.unitText, { color: G.fgSecondary }]} numberOfLines={1}>{t('form.' + (item.baseUnit || 'pieces').toLowerCase())}</AppText>
               </View>
-              <AppText variant="micro" weight="bold" transform="uppercase" shrink={false} style={[styles.statusLabel, { color: isOut ? colors.primary : '#FF9500' }]} numberOfLines={1}>
+              <AppText variant="micro" weight="bold" transform="uppercase" shrink={false} style={[styles.statusLabel, { color: isOut ? colors.primary : colors.warning }]} numberOfLines={1}>
                 {isOut ? t('dash.depleted') : t('dash.critical')}
               </AppText>
             </View>
@@ -64,6 +67,8 @@ LowStockRow.displayName = 'LowStockRow';
 
 const LowStockItemsScreen = () => {
   const { colors, t } = useSettings();
+  const G = getDashGlass(colors);
+  const styles = useMemo(() => createStyles(G), [G]);
   const [data, setData] = React.useState<ItemData[]>([]);
 
   const loadData = async () => {
@@ -82,7 +87,9 @@ const LowStockItemsScreen = () => {
   const keyExtractor = useCallback((item: ItemData) => String(item.id), []);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: G.bg }]}>
+      <View style={{ position: 'absolute', top: -80, left: -30, width: 180, height: 180, borderRadius: 90, backgroundColor: G.mutedLight, opacity: 0.3 }} />
+      <View style={{ position: 'absolute', bottom: -50, right: -20, width: 160, height: 160, borderRadius: 80, backgroundColor: G.mutedLight, opacity: 0.2 }} />
       <FlatList
         data={data}
         keyExtractor={keyExtractor}
@@ -96,8 +103,8 @@ const LowStockItemsScreen = () => {
         ListHeaderComponent={
           <View style={styles.headerRowContainer}>
             <View style={styles.headerNode}>
-               <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.headerSub, { color: colors.textSecondary }]} numberOfLines={1}>{t('dash.inventory_health')}</AppText>
-               <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: colors.text }]} numberOfLines={2}>{t('dash.deficit_intel')}</AppText>
+               <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.headerSub, { color: G.fgSecondary }]} numberOfLines={1}>{t('dash.inventory_health')}</AppText>
+               <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{t('dash.deficit_intel')}</AppText>
             </View>
           </View>
         }
@@ -106,8 +113,8 @@ const LowStockItemsScreen = () => {
             <View style={[styles.emptyIconCircle, { backgroundColor: colors.success + '10' }]}>
                <Zap size={40} color={colors.success} />
             </View>
-            <AppText variant="title" weight="bold" style={[styles.emptyTitle, { color: colors.text }]} numberOfLines={2}>{t('dash.optimal_stock')}</AppText>
-            <AppText variant="body" weight="medium" style={[styles.emptySub, { color: colors.textSecondary }]} numberOfLines={3}>{t('dash.all_assets_meet')}</AppText>
+            <AppText variant="title" weight="bold" style={[styles.emptyTitle, { color: G.fg }]} numberOfLines={2}>{t('dash.optimal_stock')}</AppText>
+            <AppText variant="body" weight="medium" style={[styles.emptySub, { color: G.fgSecondary }]} numberOfLines={3}>{t('dash.all_assets_meet')}</AppText>
           </View>
         }
       />
@@ -115,7 +122,7 @@ const LowStockItemsScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (G: any) => StyleSheet.create({
   container: { flex: 1 },
   listContainer: { paddingHorizontal: 25, paddingBottom: 40, paddingTop: 20 },
   headerRowContainer: {
@@ -163,7 +170,7 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: '#FFF',
+    borderColor: G.fg,
   },
   infoArea: {
     flex: 1,

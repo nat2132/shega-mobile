@@ -38,7 +38,7 @@ export const Skeleton: React.FC<SkeletonProps> = React.memo(({
   style,
   circle = false,
 }) => {
-  const { colors, theme } = useSettings();
+  const { theme } = useSettings();
   const isDark = theme !== 'light';
 
   const baseColor = isDark ? '#2A2A2C' : '#E5E7EB';

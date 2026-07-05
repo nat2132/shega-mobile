@@ -1,0 +1,719 @@
+﻿node.exe : npm warn Unknown user config "python". This will stop working in the next major version of npm. See `npm 
+help npmrc` for supported config options.
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Users\Natol\AppData\Roaming\ ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (npm warn Unknow...config options.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+npm warn Unknown env config "python". This will stop working in the next major version of npm. See `npm help npmrc` 
+for supported config options.
+npm warn Unknown user config "python". This will stop working in the next major version of npm. See `npm help npmrc` 
+for supported config options.
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\app\notifications.tsx
+   1:1   warning  Unexpected Unicode BOM (Byte Order Mark)                                        unicode-bom
+   4:10  warning  'ChevronLeft' is defined but never used                                         @typescript-eslint/no-unused-vars
+   6:8   warning  Using exported name 'NotificationsListScreen' as identifier for default import  import/no-named-as-default
+   7:10  warning  'Fonts' is defined but never used                                               @typescript-eslint/no-unused-vars
+  11:9   warning  'router' is assigned a value but never used                                     @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\app\reports.tsx
+    1:1   warning  Unexpected Unicode BOM (Byte Order Mark)                                                                      unicode-bom
+   49:9   warning  'width' is assigned a value but never used                                                                    @typescript-eslint/no-unused-vars
+   55:19  warning  'theme' is assigned a value but never used                                                                    @typescript-eslint/no-unused-vars
+  239:37  warning  React Hook useEffect has a missing dependency: 'loadStats'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  390:9   warning  'currentRoute' is assigned a value but never used                                                             @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\app\sale-form.tsx
+  1:1   warning  Unexpected Unicode BOM (Byte Order Mark)  unicode-bom
+  1:10  warning  'router' is defined but never used        @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\components\AddOrderItemModal.tsx
+  19:9  warning  'height' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\components\BottomSheet.tsx
+  45:19  warning  'theme' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\components\BusinessSuccessModal.tsx
+   16:3  warning  'FadeIn' is defined but never used                                                                                                             @typescript-eslint/no-unused-vars
+   21:3  warning  'TrendingUp' is defined but never used                                                                                                         @typescript-eslint/no-unused-vars
+   22:3  warning  'TrendingDown' is defined but never used                                                                                                       @typescript-eslint/no-unused-vars
+   23:3  warning  'Receipt' is defined but never used                                                                                                            @typescript-eslint/no-unused-vars
+   24:3  warning  'AlertOctagon' is defined but never used                                                                                                       @typescript-eslint/no-unused-vars
+   50:6  warning  React Hook useEffect has a missing dependency: 'progress'. Either include it or remove the dependency array                                    react-hooks/exhaustive-deps
+  105:6  warning  React Hook useEffect has missing dependencies: 'checkScale', 'glowScale', and 'ringScale'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\components\CustomDatePicker.tsx
+  33:10  warning  'currentDate' is assigned a value but never used     @typescript-eslint/no-unused-vars
+  33:23  warning  'setCurrentDate' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\components\CustomTabBar.tsx
+   1:1   warning  Unexpected Unicode BOM (Byte Order Mark)                                                                        unicode-bom
+   1:28  warning  'useRef' is defined but never used                                                                              @typescript-eslint/no-unused-vars
+   4:63  warning  'withTiming' is defined but never used                                                                          @typescript-eslint/no-unused-vars
+   4:91  warning  'interpolateColor' is defined but never used                                                                    @typescript-eslint/no-unused-vars
+   7:10  warning  'Fonts' is defined but never used                                                                               @typescript-eslint/no-unused-vars
+  67:6   warning  React Hook useEffect has a missing dependency: 'activePillX'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\components\DashboardAlerts.tsx
+  20:44  warning  'refresh' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\components\DataSuccessModal.tsx
+  13:3  warning  'withTiming' is defined but never used                                                                                           @typescript-eslint/no-unused-vars
+  21:3  warning  'ShieldCheck' is defined but never used                                                                                          @typescript-eslint/no-unused-vars
+  45:6  warning  React Hook useEffect has missing dependencies: 'checkScale' and 'ringScale'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\components\DataTransferModal.tsx
+    1:1   warning  Unexpected Unicode BOM (Byte Order Mark)            unicode-bom
+   11:5   warning  'getFilteredAdjustments' is defined but never used  @typescript-eslint/no-unused-vars
+   46:5   warning  'findDuplicates' is defined but never used          @typescript-eslint/no-unused-vars
+   92:9   warning  'dialog' is assigned a value but never used         @typescript-eslint/no-unused-vars
+  180:37  warning  A `require()` style import is forbidden             @typescript-eslint/no-require-imports
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\components\ExpenseReminderModal.tsx
+  111:9  warning  'width' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\components\GlobalHeader.tsx
+  24:8   warning  'Animated' is defined but never used           @typescript-eslint/no-unused-vars
+  25:3   warning  'FadeIn' is defined but never used             @typescript-eslint/no-unused-vars
+  26:3   warning  'useAnimatedStyle' is defined but never used   @typescript-eslint/no-unused-vars
+  27:3   warning  'withSpring' is defined but never used         @typescript-eslint/no-unused-vars
+  30:9   warning  'width' is assigned a value but never used     @typescript-eslint/no-unused-vars
+  35:68  warning  'language' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\components\NotificationDetailSheet.tsx
+  23:3  warning  'Phone' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\components\PDFLanguageModal.tsx
+  13:20  warning  'FadeIn' is defined but never used           @typescript-eslint/no-unused-vars
+  17:9   warning  'height' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  35:19  warning  'theme' is assigned a value but never used   @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\components\PremiumActionModal.tsx
+  18:3  warning  'X' is defined but never used                                                                                                   @typescript-eslint/no-unused-vars
+  54:6  warning  React Hook useEffect has missing dependencies: 'iconScale' and 'ringScale'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\components\SafeFlashList.tsx
+  15:18  warning  An interface declaring no members is equivalent to its supertype  @typescript-eslint/no-empty-object-type
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\components\SaleSuccessModal.tsx
+    7:3  warning  'Platform' is defined but never used                                                                                                                      @typescript-eslint/no-unused-vars
+   14:3  warning  'withSequence' is defined but never used                                                                                                                  @typescript-eslint/no-unused-vars
+   16:3  warning  'FadeIn' is defined but never used                                                                                                                        @typescript-eslint/no-unused-vars
+   52:6  warning  React Hook useEffect has a missing dependency: 'progress'. Either include it or remove the dependency array                                               react-hooks/exhaustive-deps
+  109:6  warning  React Hook useEffect has missing dependencies: 'checkScale', 'glowScale', 'opacity', and 'ringScale'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\components\SidebarOverlay.tsx
+  30:6  warning  React Hook useEffect has a missing dependency: 'progress'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\components\Skeleton.tsx
+   1:1   warning  Unexpected Unicode BOM (Byte Order Mark)     unicode-bom
+  41:11  warning  'colors' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\constants\theme.ts
+  1:1  warning  Unexpected Unicode BOM (Byte Order Mark)  unicode-bom
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\context\NotificationContext.tsx
+  1:1  warning  Unexpected Unicode BOM (Byte Order Mark)        unicode-bom
+  8:3  warning  'NotificationFilter' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\context\ToastContext.tsx
+  1:10  warning  'Fonts' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\database\db.ts
+     1:1    warning  Unexpected Unicode BOM (Byte Order Mark)                           unicode-bom
+    31:14   warning  'e' is defined but never used                                      @typescript-eslint/no-unused-vars
+    40:12   warning  'e' is defined but never used                                      @typescript-eslint/no-unused-vars
+    46:12   warning  'e' is defined but never used                                      @typescript-eslint/no-unused-vars
+    52:12   warning  'e' is defined but never used                                      @typescript-eslint/no-unused-vars
+    58:12   warning  'e' is defined but never used                                      @typescript-eslint/no-unused-vars
+    62:12   warning  'e' is defined but never used                                      @typescript-eslint/no-unused-vars
+    68:12   warning  'e' is defined but never used                                      @typescript-eslint/no-unused-vars
+   225:14   warning  'e' is defined but never used                                      @typescript-eslint/no-unused-vars
+   231:12   warning  'e' is defined but never used                                      @typescript-eslint/no-unused-vars
+   237:12   warning  'e' is defined but never used                                      @typescript-eslint/no-unused-vars
+   242:12   warning  'e' is defined but never used                                      @typescript-eslint/no-unused-vars
+   247:12   warning  'e' is defined but never used                                      @typescript-eslint/no-unused-vars
+   252:12   warning  'e' is defined but never used                                      @typescript-eslint/no-unused-vars
+   258:12   warning  'e' is defined but never used                                      @typescript-eslint/no-unused-vars
+   262:12   warning  'e' is defined but never used                                      @typescript-eslint/no-unused-vars
+   266:12   warning  'e' is defined but never used                                      @typescript-eslint/no-unused-vars
+   270:12   warning  'e' is defined but never used                                      @typescript-eslint/no-unused-vars
+   390:99   warning  '_' is defined but never used                                      @typescript-eslint/no-unused-vars
+   391:155  warning  '_' is defined but never used                                      @typescript-eslint/no-unused-vars
+   412:12   warning  '_' is defined but never used                                      @typescript-eslint/no-unused-vars
+   452:12   warning  'e' is defined but never used                                      @typescript-eslint/no-unused-vars
+  1265:11   warning  'dateWhere' is assigned a value but never used                     @typescript-eslint/no-unused-vars
+  1556:11   warning  'today' is assigned a value but never used                         @typescript-eslint/no-unused-vars
+  3212:11   warning  'params' is assigned a value but never used                        @typescript-eslint/no-unused-vars
+  4133:7    warning  'getMovingItemsWithFiltersFix' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\database\generateTestData.ts
+    1:1   warning  Unexpected Unicode BOM (Byte Order Mark)        unicode-bom
+  208:13  warning  'createdAt' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  255:13  warning  'createdAt' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  345:13  warning  'date' is assigned a value but never used       @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\database\notifications.ts
+    1:1   warning  Unexpected Unicode BOM (Byte Order Mark)  unicode-bom
+  211:12  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  223:12  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  260:12  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  273:12  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  283:12  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  297:12  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  338:12  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  354:12  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  366:12  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  376:12  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  390:12  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  400:12  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  420:12  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  437:12  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  476:12  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\hooks\useChartData.ts
+  104:6  warning  React Hook useMemo has an unnecessary dependency: 'internalReady'. Either exclude it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\hooks\useLocalNotifications.ts
+    1:1   warning  Unexpected Unicode BOM (Byte Order Mark)  unicode-bom
+   39:27  warning  A `require()` style import is forbidden   @typescript-eslint/no-require-imports
+   48:12  warning  'e' is defined but never used             @typescript-eslint/no-unused-vars
+   69:29  warning  A `require()` style import is forbidden   @typescript-eslint/no-require-imports
+   94:29  warning  A `require()` style import is forbidden   @typescript-eslint/no-require-imports
+   96:14  warning  'e' is defined but never used             @typescript-eslint/no-unused-vars
+  105:29  warning  A `require()` style import is forbidden   @typescript-eslint/no-require-imports
+  107:14  warning  'e' is defined but never used             @typescript-eslint/no-unused-vars
+  120:27  warning  A `require()` style import is forbidden   @typescript-eslint/no-require-imports
+  241:16  warning  'e' is defined but never used             @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\hooks\useNotificationTriggers.ts
+   1:1   warning  Unexpected Unicode BOM (Byte Order Mark)  unicode-bom
+  28:27  warning  A `require()` style import is forbidden   @typescript-eslint/no-require-imports
+  69:16  warning  '_' is defined but never used             @typescript-eslint/no-unused-vars
+  71:12  warning  'e' is defined but never used             @typescript-eslint/no-unused-vars
+  99:14  warning  'e' is defined but never used             @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\hooks\usePushNotifications.ts
+    1:1   warning  Unexpected Unicode BOM (Byte Order Mark)  unicode-bom
+   37:27  warning  A `require()` style import is forbidden   @typescript-eslint/no-require-imports
+   46:12  warning  'e' is defined but never used             @typescript-eslint/no-unused-vars
+   68:29  warning  A `require()` style import is forbidden   @typescript-eslint/no-require-imports
+   93:29  warning  A `require()` style import is forbidden   @typescript-eslint/no-require-imports
+   95:14  warning  'e' is defined but never used             @typescript-eslint/no-unused-vars
+  104:29  warning  A `require()` style import is forbidden   @typescript-eslint/no-require-imports
+  106:14  warning  'e' is defined but never used             @typescript-eslint/no-unused-vars
+  119:27  warning  A `require()` style import is forbidden   @typescript-eslint/no-require-imports
+  176:25  warning  A `require()` style import is forbidden   @typescript-eslint/no-require-imports
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\account creation\create-pin.tsx
+    1:1   warning  Unexpected Unicode BOM (Byte Order Mark)  unicode-bom
+    8:3   warning  'Alert' is defined but never used         @typescript-eslint/no-unused-vars
+    9:3   warning  'Platform' is defined but never used      @typescript-eslint/no-unused-vars
+   12:13  warning  'SecureStore' is defined but never used   @typescript-eslint/no-unused-vars
+   19:3   warning  'FadeInDown' is defined but never used    @typescript-eslint/no-unused-vars
+   20:3   warning  'Layout' is defined but never used        @typescript-eslint/no-unused-vars
+   22:3   warning  'withSpring' is defined but never used    @typescript-eslint/no-unused-vars
+  375:24  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\account creation\message.tsx
+   1:1   warning  Unexpected Unicode BOM (Byte Order Mark)    unicode-bom
+  14:20  warning  'FadeIn' is defined but never used          @typescript-eslint/no-unused-vars
+  15:9   warning  'width' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\account creation\pin-setup.tsx
+   1:1   warning  Unexpected Unicode BOM (Byte Order Mark)    unicode-bom
+   8:3   warning  'Platform' is defined but never used        @typescript-eslint/no-unused-vars
+  13:20  warning  'FadeIn' is defined but never used          @typescript-eslint/no-unused-vars
+  16:9   warning  'width' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\account creation\user-setup.tsx
+   1:1   warning  Unexpected Unicode BOM (Byte Order Mark)  unicode-bom
+  18:28  warning  'FadeInDown' is defined but never used    @typescript-eslint/no-unused-vars
+  18:40  warning  'Layout' is defined but never used        @typescript-eslint/no-unused-vars
+  20:10  warning  'BlurView' is defined but never used      @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\adjustement\adjustment-details.tsx
+  113:22  warning  'theme' is assigned a value but never used                                                                         @typescript-eslint/no-unused-vars
+  127:42  warning  React Hook React.useEffect has a missing dependency: 'loadData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\adjustement\adjustment.tsx
+    1:1   warning  Unexpected Unicode BOM (Byte Order Mark)                unicode-bom
+   20:5   warning  'RefreshCw' is defined but never used                   @typescript-eslint/no-unused-vars
+  113:19  warning  't' is assigned a value but never used                  @typescript-eslint/no-unused-vars
+  127:22  warning  'theme' is assigned a value but never used              @typescript-eslint/no-unused-vars
+  176:9   warning  'getNetChangeColor' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\adjustement\damaged.tsx
+   1:1   warning  Unexpected Unicode BOM (Byte Order Mark)      unicode-bom
+  16:3   warning  'CheckCircle2' is defined but never used      @typescript-eslint/no-unused-vars
+  17:3   warning  'AlertOctagon' is defined but never used      @typescript-eslint/no-unused-vars
+  18:3   warning  'ChevronLeft' is defined but never used       @typescript-eslint/no-unused-vars
+  22:3   warning  'Archive' is defined but never used           @typescript-eslint/no-unused-vars
+  29:3   warning  'FadeInUp' is defined but never used          @typescript-eslint/no-unused-vars
+  30:3   warning  'FadeIn' is defined but never used            @typescript-eslint/no-unused-vars
+  31:3   warning  'useAnimatedStyle' is defined but never used  @typescript-eslint/no-unused-vars
+  32:3   warning  'useSharedValue' is defined but never used    @typescript-eslint/no-unused-vars
+  33:3   warning  'withSpring' is defined but never used        @typescript-eslint/no-unused-vars
+  35:10  warning  'BlurView' is defined but never used          @typescript-eslint/no-unused-vars
+  49:19  warning  'theme' is assigned a value but never used    @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\adjustement\decrease.tsx
+  1:1   warning  Unexpected Unicode BOM (Byte Order Mark)        unicode-bom
+  3:10  warning  'getAdjustmentGlass' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\adjustement\increase.tsx
+   1:1   warning  Unexpected Unicode BOM (Byte Order Mark)      unicode-bom
+   8:3   warning  'FlatList' is defined but never used          @typescript-eslint/no-unused-vars
+  16:3   warning  'CheckCircle2' is defined but never used      @typescript-eslint/no-unused-vars
+  20:3   warning  'ArrowRight' is defined but never used        @typescript-eslint/no-unused-vars
+  24:3   warning  'ChevronLeft' is defined but never used       @typescript-eslint/no-unused-vars
+  28:3   warning  'FadeInUp' is defined but never used          @typescript-eslint/no-unused-vars
+  29:3   warning  'FadeIn' is defined but never used            @typescript-eslint/no-unused-vars
+  30:3   warning  'useAnimatedStyle' is defined but never used  @typescript-eslint/no-unused-vars
+  31:3   warning  'useSharedValue' is defined but never used    @typescript-eslint/no-unused-vars
+  32:3   warning  'withSpring' is defined but never used        @typescript-eslint/no-unused-vars
+  34:10  warning  'BlurView' is defined but never used          @typescript-eslint/no-unused-vars
+  48:19  warning  'theme' is assigned a value but never used    @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\auth\forgot-pin.tsx
+   1:1   warning  Unexpected Unicode BOM (Byte Order Mark)         unicode-bom
+  22:9   warning  'width' is assigned a value but never used       @typescript-eslint/no-unused-vars
+  30:11  warning  't' is assigned a value but never used           @typescript-eslint/no-unused-vars
+  36:10  warning  'bioEnabled' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\auth\recovery-code-confirm.tsx
+   1:1   warning  Unexpected Unicode BOM (Byte Order Mark)                                                                                  unicode-bom
+  10:13  warning  'SecureStore' is defined but never used                                                                                   @typescript-eslint/no-unused-vars
+  20:9   warning  'width' is assigned a value but never used                                                                                @typescript-eslint/no-unused-vars
+  27:11  warning  't' is assigned a value but never used                                                                                    @typescript-eslint/no-unused-vars
+  39:6   warning  React Hook useEffect has a missing dependency: 'setRecoveryCodeExists'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\auth\reset-pin.tsx
+  1:1  warning  Unexpected Unicode BOM (Byte Order Mark)  unicode-bom
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\auth\verify-pin.tsx
+   1:1  warning  Unexpected Unicode BOM (Byte Order Mark)              unicode-bom
+   8:3  warning  'Alert' is defined but never used                     @typescript-eslint/no-unused-vars
+   9:3  warning  'Platform' is defined but never used                  @typescript-eslint/no-unused-vars
+  21:3  warning  'FadeInDown' is defined but never used                @typescript-eslint/no-unused-vars
+  26:3  warning  'withRepeat' is defined but never used                @typescript-eslint/no-unused-vars
+  27:3  warning  'interpolateColor' is defined but never used          @typescript-eslint/no-unused-vars
+  49:9  warning  'lockdownOpacity' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\bars\bottom-bar.tsx
+  1:1  warning  Unexpected Unicode BOM (Byte Order Mark)  unicode-bom
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\bars\sidebar.tsx
+   1:1   warning  Unexpected Unicode BOM (Byte Order Mark)    unicode-bom
+  12:9   warning  'width' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  70:30  warning  A `require()` style import is forbidden     @typescript-eslint/no-require-imports
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\budget\budget.tsx
+    1:1   warning  Unexpected Unicode BOM (Byte Order Mark)           unicode-bom
+   23:32  warning  'FadeIn' is defined but never used                 @typescript-eslint/no-unused-vars
+   40:9   warning  'width' is assigned a value but never used         @typescript-eslint/no-unused-vars
+   97:35  warning  'language' is assigned a value but never used      @typescript-eslint/no-unused-vars
+   97:45  warning  'calendarType' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  101:11  warning  'showToast' is assigned a value but never used     @typescript-eslint/no-unused-vars
+  107:10  warning  'loading' is assigned a value but never used       @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\contacts\contact-details.tsx
+   1:1  warning  Unexpected Unicode BOM (Byte Order Mark)    unicode-bom
+  20:9  warning  'width' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\contacts\contact-form.tsx
+   1:1   warning  Unexpected Unicode BOM (Byte Order Mark)  unicode-bom
+  91:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\contacts\contacts-list.tsx
+    1:1   warning  Unexpected Unicode BOM (Byte Order Mark)                                                                                             unicode-bom
+   33:3   warning  'Home' is defined but never used                                                                                                     @typescript-eslint/no-unused-vars
+   34:3   warning  'Store' is defined but never used                                                                                                    @typescript-eslint/no-unused-vars
+   35:3   warning  'Warehouse' is defined but never used                                                                                                @typescript-eslint/no-unused-vars
+   36:15  warning  'SettingsIcon' is defined but never used                                                                                             @typescript-eslint/no-unused-vars
+   48:9   warning  'width' is assigned a value but never used                                                                                           @typescript-eslint/no-unused-vars
+  105:5   warning  React Hook React.useMemo has an unnecessary dependency: 'contact.category'. Either exclude it or remove the dependency array         react-hooks/exhaustive-deps
+  219:9   warning  'handleDelete' is assigned a value but never used                                                                                    @typescript-eslint/no-unused-vars
+  264:6   warning  React Hook useCallback has missing dependencies: 'G.border' and 'G.fgSecondary'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\dashboard\activity-ledger.tsx
+    1:1   warning  Unexpected Unicode BOM (Byte Order Mark)                                                                                                                                                                                            unicode-bom
+   40:9   warning  'width' is assigned a value but never used                                                                                                                                                                                          @typescript-eslint/no-unused-vars
+   47:58  warning  'theme' is assigned a value but never used                                                                                                                                                                                          @typescript-eslint/no-unused-vars
+  107:6   warning  React Hook useCallback has a missing dependency: 't'. Either include it or remove the dependency array                                                                                                                              react-hooks/exhaustive-deps
+  259:6   warning  React Hook React.useCallback has missing dependencies: 'G.bg', 'G.bgCard', 'G.border', 'G.fg', 'G.fgSecondary', 'styles.dateHeader', 'styles.dateHeaderText', and 'timeSystem'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\dashboard\dashboard.tsx
+    1:1   warning  Unexpected Unicode BOM (Byte Order Mark)                                                                                                                                                                                           unicode-bom
+   12:5   warning  'Bell' is defined but never used                                                                                                                                                                                                   @typescript-eslint/no-unused-vars
+   20:5   warning  'Search' is defined but never used                                                                                                                                                                                                 @typescript-eslint/no-unused-vars
+   41:8   warning  Using exported name 'AddAssetFlow' as identifier for default import                                                                                                                                                                import/no-named-as-default
+  185:70  warning  'theme' is assigned a value but never used                                                                                                                                                                                         @typescript-eslint/no-unused-vars
+  188:13  warning  'notifCount' is assigned a value but never used                                                                                                                                                                                    @typescript-eslint/no-unused-vars
+  190:23  warning  'setIsPrivate' is assigned a value but never used                                                                                                                                                                                  @typescript-eslint/no-unused-vars
+  204:12  warning  'recentInventoryItems' is assigned a value but never used                                                                                                                                                                          @typescript-eslint/no-unused-vars
+  205:12  warning  'selectedItem' is assigned a value but never used                                                                                                                                                                                  @typescript-eslint/no-unused-vars
+  205:26  warning  'setSelectedItem' is assigned a value but never used                                                                                                                                                                               @typescript-eslint/no-unused-vars
+  208:12  warning  'invStats' is assigned a value but never used                                                                                                                                                                                      @typescript-eslint/no-unused-vars
+  218:6   warning  React Hook useEffect has a missing dependency: 'expandedWidth'. Either include it or remove the dependency array. Outer scope values like 'width' aren't valid dependencies because mutating them doesn't re-render the component  react-hooks/exhaustive-deps
+  971:28  warning  'e' is defined but never used                                                                                                                                                                                                      @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\dashboard\debt-list-con.tsx
+  1:1  warning  Unexpected Unicode BOM (Byte Order Mark)  unicode-bom
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\dashboard\debt-list.tsx
+   1:1   warning  Unexpected Unicode BOM (Byte Order Mark)    unicode-bom
+   5:3   warning  'Check' is defined but never used           @typescript-eslint/no-unused-vars
+   7:3   warning  'ArrowUpRight' is defined but never used    @typescript-eslint/no-unused-vars
+  10:3   warning  'ChevronRight' is defined but never used    @typescript-eslint/no-unused-vars
+  11:3   warning  'Calendar' is defined but never used        @typescript-eslint/no-unused-vars
+  21:3   warning  'Alert' is defined but never used           @typescript-eslint/no-unused-vars
+  27:13  warning  'Haptics' is defined but never used         @typescript-eslint/no-unused-vars
+  30:9   warning  'width' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\dashboard\oncredit-list-con.tsx
+    1:1  warning  Unexpected Unicode BOM (Byte Order Mark)                                                                           unicode-bom
+  338:6  warning  React Hook React.useEffect has a missing dependency: 'loadData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\dashboard\oncredit-list.tsx
+   1:1  warning  Unexpected Unicode BOM (Byte Order Mark)      unicode-bom
+   6:3  warning  'ChevronLeft' is defined but never used       @typescript-eslint/no-unused-vars
+   8:3  warning  'AlertTriangle' is defined but never used     @typescript-eslint/no-unused-vars
+  15:3  warning  'TouchableOpacity' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\expense\expense-details.tsx
+   1:1   warning  Unexpected Unicode BOM (Byte Order Mark)    unicode-bom
+   9:3   warning  'Platform' is defined but never used        @typescript-eslint/no-unused-vars
+  14:3   warning  'FadeInUp' is defined but never used        @typescript-eslint/no-unused-vars
+  16:3   warning  'Layout' is defined but never used          @typescript-eslint/no-unused-vars
+  21:3   warning  'Calendar' is defined but never used        @typescript-eslint/no-unused-vars
+  22:3   warning  'Info' is defined but never used            @typescript-eslint/no-unused-vars
+  27:3   warning  'DollarSign' is defined but never used      @typescript-eslint/no-unused-vars
+  31:3   warning  'History' is defined but never used         @typescript-eslint/no-unused-vars
+  32:3   warning  'Bell' is defined but never used            @typescript-eslint/no-unused-vars
+  33:3   warning  'Clock' is defined but never used           @typescript-eslint/no-unused-vars
+  34:3   warning  'ArrowRight' is defined but never used      @typescript-eslint/no-unused-vars
+  35:3   warning  'Package' is defined but never used         @typescript-eslint/no-unused-vars
+  36:3   warning  'LayoutGrid' is defined but never used      @typescript-eslint/no-unused-vars
+  50:9   warning  'width' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  53:46  warning  'theme' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\expense\expense-form.tsx
+    1:1   warning  Unexpected Unicode BOM (Byte Order Mark)  unicode-bom
+   14:3   warning  'ChevronLeft' is defined but never used   @typescript-eslint/no-unused-vars
+   16:3   warning  'TrendingDown' is defined but never used  @typescript-eslint/no-unused-vars
+   21:3   warning  'Info' is defined but never used          @typescript-eslint/no-unused-vars
+  253:18  warning  '_' is defined but never used             @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\expense\expense-list.tsx
+    1:1   warning  Unexpected Unicode BOM (Byte Order Mark)                                                                             unicode-bom
+   49:19  warning  'calendarType' is assigned a value but never used                                                                    @typescript-eslint/no-unused-vars
+   49:33  warning  'language' is assigned a value but never used                                                                        @typescript-eslint/no-unused-vars
+   49:46  warning  'theme' is assigned a value but never used                                                                           @typescript-eslint/no-unused-vars
+   53:10  warning  'loading' is assigned a value but never used                                                                         @typescript-eslint/no-unused-vars
+   90:6   warning  React Hook useCallback has a missing dependency: 't'. Either include it or remove the dependency array               react-hooks/exhaustive-deps
+  148:6   warning  React Hook useCallback has a missing dependency: 'handleMarkPaid'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  346:19  warning  'calendarType' is assigned a value but never used                                                                    @typescript-eslint/no-unused-vars
+  346:33  warning  'language' is assigned a value but never used                                                                        @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\expense\expense-loss.tsx
+   1:1  warning  Unexpected Unicode BOM (Byte Order Mark)                                                                           unicode-bom
+  44:8  warning  React Hook useCallback has a missing dependency: 'loadLossData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  51:6  warning  React Hook useCallback has a missing dependency: 'loadLossData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\expense\expense.tsx
+    1:1   warning  Unexpected Unicode BOM (Byte Order Mark)                                                                          unicode-bom
+   26:3   warning  'TrendingDown' is defined but never used                                                                          @typescript-eslint/no-unused-vars
+   29:3   warning  'AlertTriangle' is defined but never used                                                                         @typescript-eslint/no-unused-vars
+   39:10  warning  'formatDate' is defined but never used                                                                            @typescript-eslint/no-unused-vars
+   52:40  warning  'FadeInUp' is defined but never used                                                                              @typescript-eslint/no-unused-vars
+   77:37  warning  'theme' is assigned a value but never used                                                                        @typescript-eslint/no-unused-vars
+   77:44  warning  'calendarType' is assigned a value but never used                                                                 @typescript-eslint/no-unused-vars
+   84:11  warning  'dialog' is assigned a value but never used                                                                       @typescript-eslint/no-unused-vars
+  150:6   warning  React Hook useCallback has a missing dependency: 'timeSystem'. Either include it or remove the dependency array   react-hooks/exhaustive-deps
+  160:6   warning  React Hook useEffect has a missing dependency: 'expandedWidth'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\inventory\inventory-record.tsx
+  1:1  warning  Unexpected Unicode BOM (Byte Order Mark)  unicode-bom
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\inventory\inventroy-form.tsx
+    1:1   warning  Unexpected Unicode BOM (Byte Order Mark)                     unicode-bom
+    1:38  warning  'useCallback' is defined but never used                      @typescript-eslint/no-unused-vars
+   18:3   warning  'FadeInUp' is defined but never used                         @typescript-eslint/no-unused-vars
+   19:3   warning  'FadeIn' is defined but never used                           @typescript-eslint/no-unused-vars
+   20:3   warning  'FadeOut' is defined but never used                          @typescript-eslint/no-unused-vars
+   21:3   warning  'useAnimatedStyle' is defined but never used                 @typescript-eslint/no-unused-vars
+   22:3   warning  'useSharedValue' is defined but never used                   @typescript-eslint/no-unused-vars
+   23:3   warning  'withSpring' is defined but never used                       @typescript-eslint/no-unused-vars
+   24:3   warning  'withTiming' is defined but never used                       @typescript-eslint/no-unused-vars
+   25:3   warning  'Layout' is defined but never used                           @typescript-eslint/no-unused-vars
+   28:3   warning  'PackageCheck' is defined but never used                     @typescript-eslint/no-unused-vars
+   30:3   warning  'Info' is defined but never used                             @typescript-eslint/no-unused-vars
+   37:3   warning  'Trash2' is defined but never used                           @typescript-eslint/no-unused-vars
+   38:3   warning  'Shield' is defined but never used                           @typescript-eslint/no-unused-vars
+   40:3   warning  'ShoppingCart' is defined but never used                     @typescript-eslint/no-unused-vars
+   41:3   warning  'CheckCircle' is defined but never used                      @typescript-eslint/no-unused-vars
+   42:3   warning  'BarChart3' is defined but never used                        @typescript-eslint/no-unused-vars
+   44:3   warning  'History' is defined but never used                          @typescript-eslint/no-unused-vars
+   48:3   warning  'Target' is defined but never used                           @typescript-eslint/no-unused-vars
+   50:3   warning  'Sparkles' is defined but never used                         @typescript-eslint/no-unused-vars
+   51:3   warning  'Zap' is defined but never used                              @typescript-eslint/no-unused-vars
+   52:3   warning  'Hammer' is defined but never used                           @typescript-eslint/no-unused-vars
+   53:3   warning  'ShieldCheck' is defined but never used                      @typescript-eslint/no-unused-vars
+   63:10  warning  'BlurView' is defined but never used                         @typescript-eslint/no-unused-vars
+   83:22  warning  'calendarType' is assigned a value but never used            @typescript-eslint/no-unused-vars
+   83:36  warning  'language' is assigned a value but never used                @typescript-eslint/no-unused-vars
+   83:46  warning  'theme' is assigned a value but never used                   @typescript-eslint/no-unused-vars
+   86:9   warning  'dialog' is assigned a value but never used                  @typescript-eslint/no-unused-vars
+  478:22  warning  'calendarType' is assigned a value but never used            @typescript-eslint/no-unused-vars
+  478:36  warning  'language' is assigned a value but never used                @typescript-eslint/no-unused-vars
+  478:46  warning  'theme' is assigned a value but never used                   @typescript-eslint/no-unused-vars
+  501:27  warning  'setAllowSellByBase' is assigned a value but never used      @typescript-eslint/no-unused-vars
+  505:17  warning  'setNotes' is assigned a value but never used                @typescript-eslint/no-unused-vars
+  508:10  warning  'supplierName' is assigned a value but never used            @typescript-eslint/no-unused-vars
+  508:24  warning  'setSupplierName' is assigned a value but never used         @typescript-eslint/no-unused-vars
+  512:10  warning  'supplierSearchQuery' is assigned a value but never used     @typescript-eslint/no-unused-vars
+  512:31  warning  'setSupplierSearchQuery' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  517:28  warning  'setNewSupplierNotes' is assigned a value but never used     @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\inventory\inventroy.tsx
+    1:1   warning  Unexpected Unicode BOM (Byte Order Mark)                                                                          unicode-bom
+   36:5   warning  'Search' is defined but never used                                                                                @typescript-eslint/no-unused-vars
+   46:41  warning  'useMemo' is defined but never used                                                                               @typescript-eslint/no-unused-vars
+   70:8   warning  Using exported name 'AddAssetFlow' as identifier for default import                                               import/no-named-as-default
+   74:10  warning  'ChartEmpty' is defined but never used                                                                            @typescript-eslint/no-unused-vars
+  193:35  warning  'theme' is assigned a value but never used                                                                        @typescript-eslint/no-unused-vars
+  263:6   warning  React Hook useEffect has a missing dependency: 'expandedWidth'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\inventory\item-details.tsx
+    8:3   warning  'Platform' is defined but never used                       @typescript-eslint/no-unused-vars
+   13:10  warning  'SafeAreaView' is defined but never used                   @typescript-eslint/no-unused-vars
+   16:3   warning  'FadeInUp' is defined but never used                       @typescript-eslint/no-unused-vars
+   17:3   warning  'FadeIn' is defined but never used                         @typescript-eslint/no-unused-vars
+   30:3   warning  'Truck' is defined but never used                          @typescript-eslint/no-unused-vars
+   41:3   warning  'Phone' is defined but never used                          @typescript-eslint/no-unused-vars
+   54:9   warning  'width' is assigned a value but never used                 @typescript-eslint/no-unused-vars
+  140:9   warning  'totalPotentialProfit' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\inventory\warehouse-manager.tsx
+  10:13  warning  'RNText' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\notifications\notifications-list.tsx
+    1:1   warning  Unexpected Unicode BOM (Byte Order Mark)  unicode-bom
+   10:30  warning  'useEffect' is defined but never used     @typescript-eslint/no-unused-vars
+   12:3   warning  'Modal' is defined but never used         @typescript-eslint/no-unused-vars
+   27:3   warning  'ChevronRight' is defined but never used  @typescript-eslint/no-unused-vars
+  503:14  warning  'e' is defined but never used             @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\notifications\reminder-history.tsx
+    1:1  warning  Unexpected Unicode BOM (Byte Order Mark)                                                                                                                                                                                                      unicode-bom
+   12:3  warning  'Calendar' is defined but never used                                                                                                                                                                                                          @typescript-eslint/no-unused-vars
+  260:9  warning  The 'handleSnooze' function makes the dependencies of useCallback Hook (at line 318) change on every render. Move it inside the useCallback callback. Alternatively, wrap the definition of 'handleSnooze' in its own useCallback() Hook      react-hooks/exhaustive-deps
+  274:9  warning  The 'handleComplete' function makes the dependencies of useCallback Hook (at line 318) change on every render. Move it inside the useCallback callback. Alternatively, wrap the definition of 'handleComplete' in its own useCallback() Hook  react-hooks/exhaustive-deps
+  286:9  warning  The 'handleRemove' function makes the dependencies of useCallback Hook (at line 318) change on every render. Move it inside the useCallback callback. Alternatively, wrap the definition of 'handleRemove' in its own useCallback() Hook      react-hooks/exhaustive-deps
+  300:9  warning  'formatDate' is assigned a value but never used                                                                                                                                                                                               @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\onboarding\analytics-onboarding.tsx
+    1:1  warning  Unexpected Unicode BOM (Byte Order Mark)                                                                                                 unicode-bom
+    3:3  warning  'Dimensions' is defined but never used                                                                                                   @typescript-eslint/no-unused-vars
+   11:3  warning  'TrendingUp' is defined but never used                                                                                                   @typescript-eslint/no-unused-vars
+   72:6  warning  React Hook useEffect has missing dependencies: 'index' and 'scaleY'. Either include them or remove the dependency array                  react-hooks/exhaustive-deps
+  118:6  warning  React Hook useEffect has missing dependencies: 'index', 'opacity', and 'translateY'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+  175:6  warning  React Hook useEffect has a missing dependency: 'glowPulse'. Either include it or remove the dependency array                             react-hooks/exhaustive-deps
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\onboarding\first-onboarding.tsx
+    1:1  warning  Unexpected Unicode BOM (Byte Order Mark)                                                                                                                                                                                                                                                                                                             unicode-bom
+   19:3  warning  'SPRING' is defined but never used                                                                                                                                                                                                                                                                                                                   @typescript-eslint/no-unused-vars
+   20:3  warning  'TIMING' is defined but never used                                                                                                                                                                                                                                                                                                                   @typescript-eslint/no-unused-vars
+   78:6  warning  React Hook useEffect has missing dependencies: 'index', 'opacity', 'ringDelay', and 'scale'. Either include them or remove the dependency array                                                                                                                                                                                                      react-hooks/exhaustive-deps
+  152:6  warning  React Hook useEffect has missing dependencies: 'opacity', 'particle.delay', 'particle.duration', 'particle.opacity', 'scale', 'translateX', and 'translateY'. Either include them or remove the dependency array                                                                                                                                     react-hooks/exhaustive-deps
+  301:6  warning  React Hook useEffect has missing dependencies: 'dividerScale', 'glassGlow', 'logoOpacity', 'logoRotate', 'logoScale', 'progressOpacity', 'progressWidth', 'reflectionOpacity', 'reflectionRotate', 'shimmerX', 'subtitleOpacity', 'subtitleY', 'taglineOpacity', 'taglineScale', and 'taglineY'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\onboarding\glass-theme.ts
+  1:1  warning  Unexpected Unicode BOM (Byte Order Mark)  unicode-bom
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\onboarding\inventory-onboarding.tsx
+    1:1   warning  Unexpected Unicode BOM (Byte Order Mark)                                                                                                                       unicode-bom
+    1:10  warning  'Fonts' is defined but never used                                                                                                                              @typescript-eslint/no-unused-vars
+    2:28  warning  'useMemo' is defined but never used                                                                                                                            @typescript-eslint/no-unused-vars
+    4:3   warning  'Dimensions' is defined but never used                                                                                                                         @typescript-eslint/no-unused-vars
+   78:6   warning  React Hook useEffect has missing dependencies: 'index', 'isLow', 'opacity', 'pulseGlow', and 'translateX'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+  139:6   warning  React Hook useEffect has a missing dependency: 'glowPulse'. Either include it or remove the dependency array                                                   react-hooks/exhaustive-deps
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\onboarding\sales-onboarding.tsx
+    1:1  warning  Unexpected Unicode BOM (Byte Order Mark)                                                                                                 unicode-bom
+    3:3  warning  'Dimensions' is defined but never used                                                                                                   @typescript-eslint/no-unused-vars
+   62:6  warning  React Hook useEffect has missing dependencies: 'index', 'opacity', and 'translateX'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+  136:6  warning  React Hook useEffect has missing dependencies: 'delay', 'opacity', and 'translateY'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+  165:6  warning  React Hook useEffect has a missing dependency: 'glowPulse'. Either include it or remove the dependency array                             react-hooks/exhaustive-deps
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\onboarding\welcome-choice.tsx
+   1:1  warning  Unexpected Unicode BOM (Byte Order Mark)                                                                                                                  unicode-bom
+   6:3  warning  'Dimensions' is defined but never used                                                                                                                    @typescript-eslint/no-unused-vars
+  53:6  warning  React Hook useEffect has missing dependencies: 'delay', 'duration', 'opacity', 'translateY', and 'y'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\orders\create-order.tsx
+   1:1   warning  Unexpected Unicode BOM (Byte Order Mark)    unicode-bom
+  38:9   warning  'width' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  50:22  warning  'theme' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\orders\order-detail.tsx
+   1:1   warning  Unexpected Unicode BOM (Byte Order Mark)    unicode-bom
+  30:3   warning  'Clock' is defined but never used           @typescript-eslint/no-unused-vars
+  35:3   warning  'AlertTriangle' is defined but never used   @typescript-eslint/no-unused-vars
+  42:9   warning  'width' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  52:22  warning  'theme' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\orders\order-list.tsx
+    1:1   warning  Unexpected Unicode BOM (Byte Order Mark)        unicode-bom
+   34:9   warning  'width' is assigned a value but never used      @typescript-eslint/no-unused-vars
+   64:11  warning  'itemCount' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  149:22  warning  'theme' is assigned a value but never used      @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\sales\pending.tsx
+   1:1   warning  Unexpected Unicode BOM (Byte Order Mark)          unicode-bom
+   6:3   warning  'FlatList' is defined but never used              @typescript-eslint/no-unused-vars
+  15:3   warning  'X' is defined but never used                     @typescript-eslint/no-unused-vars
+  24:20  warning  'FadeIn' is defined but never used                @typescript-eslint/no-unused-vars
+  28:7   warning  'SALES_GLASS' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  29:9   warning  'width' is assigned a value but never used        @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\sales\sale-form.tsx
+    1:1   warning  Unexpected Unicode BOM (Byte Order Mark)           unicode-bom
+   15:3   warning  'FadeInUp' is defined but never used               @typescript-eslint/no-unused-vars
+   16:3   warning  'FadeIn' is defined but never used                 @typescript-eslint/no-unused-vars
+   20:3   warning  'BadgeCheck' is defined but never used             @typescript-eslint/no-unused-vars
+   21:3   warning  'ArrowRight' is defined but never used             @typescript-eslint/no-unused-vars
+   28:3   warning  'Percent' is defined but never used                @typescript-eslint/no-unused-vars
+   29:3   warning  'Calculator' is defined but never used             @typescript-eslint/no-unused-vars
+   33:3   warning  'Info' is defined but never used                   @typescript-eslint/no-unused-vars
+   35:3   warning  'Sparkles' is defined but never used               @typescript-eslint/no-unused-vars
+   37:3   warning  'DollarSign' is defined but never used             @typescript-eslint/no-unused-vars
+   73:21  warning  'setGlobalVat' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  104:21  warning  'vatAmount' is assigned a value but never used     @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\sales\sales-details.tsx
+   1:1  warning  Unexpected Unicode BOM (Byte Order Mark)    unicode-bom
+  59:9  warning  'width' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\sales\sales-record.tsx
+    1:1   warning  Unexpected Unicode BOM (Byte Order Mark)                                                                                                                                  unicode-bom
+    7:3   warning  'getCategories' is defined but never used                                                                                                                                 @typescript-eslint/no-unused-vars
+   20:10  warning  'BlurView' is defined but never used                                                                                                                                      @typescript-eslint/no-unused-vars
+   21:13  warning  'Haptics' is defined but never used                                                                                                                                       @typescript-eslint/no-unused-vars
+   27:3   warning  'Calendar' is defined but never used                                                                                                                                      @typescript-eslint/no-unused-vars
+   31:3   warning  'Filter' is defined but never used                                                                                                                                        @typescript-eslint/no-unused-vars
+   33:3   warning  'LayoutGrid' is defined but never used                                                                                                                                    @typescript-eslint/no-unused-vars
+   39:30  warning  'useEffect' is defined but never used                                                                                                                                     @typescript-eslint/no-unused-vars
+   41:3   warning  'Dimensions' is defined but never used                                                                                                                                    @typescript-eslint/no-unused-vars
+   44:3   warning  'Platform' is defined but never used                                                                                                                                      @typescript-eslint/no-unused-vars
+   53:3   warning  'FadeIn' is defined but never used                                                                                                                                        @typescript-eslint/no-unused-vars
+   55:3   warning  'FadeInUp' is defined but never used                                                                                                                                      @typescript-eslint/no-unused-vars
+   56:3   warning  'FadeOut' is defined but never used                                                                                                                                       @typescript-eslint/no-unused-vars
+   57:3   warning  'useAnimatedStyle' is defined but never used                                                                                                                              @typescript-eslint/no-unused-vars
+   58:3   warning  'useSharedValue' is defined but never used                                                                                                                                @typescript-eslint/no-unused-vars
+   59:3   warning  'withSpring' is defined but never used                                                                                                                                    @typescript-eslint/no-unused-vars
+   90:58  warning  'theme' is assigned a value but never used                                                                                                                                @typescript-eslint/no-unused-vars
+  390:6   warning  React Hook useMemo has missing dependencies: 'calendarType', 'getHeaderLabel', 'language', 't', and 'totalForPeriod'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\sales\sales.tsx
+     1:1   warning  Unexpected Unicode BOM (Byte Order Mark)                                                                                                                                                                                           unicode-bom
+    15:3   warning  'getSaleWithItemsById' is defined but never used                                                                                                                                                                                   @typescript-eslint/no-unused-vars
+    29:3   warning  'toEthiopianHour' is defined but never used                                                                                                                                                                                        @typescript-eslint/no-unused-vars
+   138:71  warning  'theme' is assigned a value but never used                                                                                                                                                                                         @typescript-eslint/no-unused-vars
+   154:10  warning  'selectedItem' is assigned a value but never used                                                                                                                                                                                  @typescript-eslint/no-unused-vars
+   171:10  warning  'summary' is assigned a value but never used                                                                                                                                                                                       @typescript-eslint/no-unused-vars
+   249:6   warning  React Hook React.useCallback has a missing dependency: 'loadData'. Either include it or remove the dependency array                                                                                                                react-hooks/exhaustive-deps
+   253:6   warning  React Hook useEffect has a missing dependency: 'loadData'. Either include it or remove the dependency array                                                                                                                        react-hooks/exhaustive-deps
+   261:6   warning  React Hook useEffect has a missing dependency: 'expandedWidth'. Either include it or remove the dependency array. Outer scope values like 'width' aren't valid dependencies because mutating them doesn't re-render the component  react-hooks/exhaustive-deps
+   306:6   warning  React Hook useMemo has an unnecessary dependency: 'width'. Either exclude it or remove the dependency array. Outer scope values like 'width' aren't valid dependencies because mutating them doesn't re-render the component       react-hooks/exhaustive-deps
+   408:15  warning  'isHighlighted' is assigned a value but never used                                                                                                                                                                                 @typescript-eslint/no-unused-vars
+   432:5   warning  React Hook useMemo has a missing dependency: 't'. Either include it or remove the dependency array                                                                                                                                 react-hooks/exhaustive-deps
+   477:5   warning  React Hook useMemo has a missing dependency: 'colors.warning'. Either include it or remove the dependency array                                                                                                                    react-hooks/exhaustive-deps
+   603:5   warning  React Hook useMemo has missing dependencies: 'colors.error', 'colors.primary', 'colors.warning', and 'router'. Either include them or remove the dependency array                                                                  react-hooks/exhaustive-deps
+  3555:28  warning  'e' is defined but never used                                                                                                                                                                                                      @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\sales\search.tsx
+   1:1   warning  Unexpected Unicode BOM (Byte Order Mark)             unicode-bom
+   6:3   warning  'FlatList' is defined but never used                 @typescript-eslint/no-unused-vars
+   9:3   warning  'Platform' is defined but never used                 @typescript-eslint/no-unused-vars
+  11:10  warning  'BlurView' is defined but never used                 @typescript-eslint/no-unused-vars
+  22:9   warning  'width' is assigned a value but never used           @typescript-eslint/no-unused-vars
+  36:9   warning  'hasPackPricing' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  96:22  warning  'theme' is assigned a value but never used           @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\settings\csv-manager.tsx
+    1:1   warning  Unexpected Unicode BOM (Byte Order Mark)                                                                                              unicode-bom
+   52:9   warning  'router' is assigned a value but never used                                                                                           @typescript-eslint/no-unused-vars
+   53:19  warning  't' is assigned a value but never used                                                                                                @typescript-eslint/no-unused-vars
+  104:14  warning  'error' is defined but never used                                                                                                     @typescript-eslint/no-unused-vars
+  107:6   warning  React Hook useCallback has a missing dependency: 'showToast'. Either include it or remove the dependency array                        react-hooks/exhaustive-deps
+  123:6   warning  React Hook useCallback has a missing dependency: 'showToast'. Either include it or remove the dependency array                        react-hooks/exhaustive-deps
+  151:20  warning  A `require()` style import is forbidden                                                                                               @typescript-eslint/no-require-imports
+  153:20  warning  A `require()` style import is forbidden                                                                                               @typescript-eslint/no-require-imports
+  155:20  warning  A `require()` style import is forbidden                                                                                               @typescript-eslint/no-require-imports
+  157:20  warning  A `require()` style import is forbidden                                                                                               @typescript-eslint/no-require-imports
+  178:14  warning  'error' is defined but never used                                                                                                     @typescript-eslint/no-unused-vars
+  182:6   warning  React Hook useCallback has missing dependencies: 'performImport' and 'showToast'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+  201:14  warning  'error' is defined but never used                                                                                                     @typescript-eslint/no-unused-vars
+  221:18  warning  A `require()` style import is forbidden                                                                                               @typescript-eslint/no-require-imports
+  224:18  warning  A `require()` style import is forbidden                                                                                               @typescript-eslint/no-require-imports
+  227:18  warning  A `require()` style import is forbidden                                                                                               @typescript-eslint/no-require-imports
+  230:18  warning  A `require()` style import is forbidden                                                                                               @typescript-eslint/no-require-imports
+  233:18  warning  A `require()` style import is forbidden                                                                                               @typescript-eslint/no-require-imports
+  239:14  warning  'error' is defined but never used                                                                                                     @typescript-eslint/no-unused-vars
+  242:6   warning  React Hook useCallback has a missing dependency: 'showToast'. Either include it or remove the dependency array                        react-hooks/exhaustive-deps
+  303:9   warning  'selectedModuleInfo' is assigned a value but never used                                                                               @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\settings\date-time.tsx
+   1:1  warning  Unexpected Unicode BOM (Byte Order Mark)  unicode-bom
+  10:6  warning  'CalendarId' is defined but never used    @typescript-eslint/no-unused-vars
+  11:6  warning  'TimeSystemId' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\settings\notification.tsx
+   1:1   warning  Unexpected Unicode BOM (Byte Order Mark)  unicode-bom
+  11:3   warning  'Alert' is defined but never used         @typescript-eslint/no-unused-vars
+  32:3   warning  'Truck' is defined but never used         @typescript-eslint/no-unused-vars
+  70:29  warning  A `require()` style import is forbidden   @typescript-eslint/no-require-imports
+  97:27  warning  A `require()` style import is forbidden   @typescript-eslint/no-require-imports
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\settings\security.tsx
+  1:1   warning  Unexpected Unicode BOM (Byte Order Mark)  unicode-bom
+  4:13  warning  'SecureStore' is defined but never used   @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\settings\translation.tsx
+  1:1  warning  Unexpected Unicode BOM (Byte Order Mark)  unicode-bom
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\screens\summary\summary.tsx
+    8:10   warning  'BlurView' is defined but never used        @typescript-eslint/no-unused-vars
+   25:3    warning  'RefreshCw' is defined but never used       @typescript-eslint/no-unused-vars
+   28:51   warning  'useRef' is defined but never used          @typescript-eslint/no-unused-vars
+   29:100  warning  'RNAnimated' is defined but never used      @typescript-eslint/no-unused-vars
+  172:46   warning  'theme' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\services\notificationService.ts
+    1:1   warning  Unexpected Unicode BOM (Byte Order Mark)  unicode-bom
+   30:3   warning  'getBudgets' is defined but never used    @typescript-eslint/no-unused-vars
+  251:16  warning  'e' is defined but never used             @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\utils\createGlassTokens.ts
+   1:1  warning  Unexpected Unicode BOM (Byte Order Mark)         unicode-bom
+  34:9  warning  'accentDark' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\utils\csv-utils.ts
+    1:1   warning  Unexpected Unicode BOM (Byte Order Mark)        unicode-bom
+  554:13  warning  'unitPrice' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  845:12  warning  'error' is defined but never used               @typescript-eslint/no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\utils\date_test.js
+  1:1  warning  Unexpected Unicode BOM (Byte Order Mark)  unicode-bom
+  4:9  warning  'r' is assigned a value but never used    no-unused-vars
+
+C:\Users\Natol\Desktop\Projects\shega-mobile\src\utils\pdf-utils.ts
+  1:1  warning  Unexpected Unicode BOM (Byte Order Mark)  unicode-bom
+
+Γ£û 517 problems (0 errors, 517 warnings)
+  0 errors and 73 warnings potentially fixable with the `--fix` option.
+

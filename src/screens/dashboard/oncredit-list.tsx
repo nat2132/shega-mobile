@@ -1,24 +1,22 @@
-﻿import React, { useCallback, useState } from 'react';
-import { Fonts } from '@/constants/theme';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Fonts , BorderRadius, Spacing } from '@/constants/theme';
 import {
   Building2,
   ShieldAlert,
-  ChevronLeft,
   ShieldCheck,
-  AlertTriangle,
   CreditCard,
 } from 'lucide-react-native';
 import {
   FlatList,
   StyleSheet,
   View,
-  TouchableOpacity,
 } from 'react-native';
 import { useSettings } from '@/context/SettingsContext';
 import { getOnCreditItems, ItemData } from '@/database/db';
-import { AppText, AppListItem, AppRow, AppCard, AppButton } from '@/components/ui';
-import { BorderRadius, Spacing } from '@/constants/theme';
+import { AppNumber, AppText, AppListItem, AppCard} from '@/components/ui';
+
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { getDashGlass } from './glass-dashboard';
 const OnCreditRow = React.memo(({
   item,
   index,
@@ -27,6 +25,8 @@ const OnCreditRow = React.memo(({
   index: number;
 }) => {
   const { colors, t } = useSettings();
+  const G = getDashGlass(colors);
+  const styles = useMemo(() => createStyles(G), [G]);
   const creditAmount = React.useMemo(() => {
     if (item.packPurchasePrice && item.totalPackQuantity) {
       return item.packPurchasePrice * item.totalPackQuantity;
@@ -42,18 +42,19 @@ const OnCreditRow = React.memo(({
       <AppCard
         padding={Spacing.md}
         gap={Spacing.md}
-        background={colors.card}
+        background={G.bgCard}
         bordered
         style={{
-          borderColor: colors.border,
+          borderColor: G.border,
           borderRadius: BorderRadius.lg,
           marginBottom: Spacing.md,
+          overflow: 'hidden',
         }}
       >
         <AppListItem
           left={
-            <View style={[styles.iconNode, { backgroundColor: colors.text + '05' }]}>
-              <Building2 size={22} color={colors.text} />
+            <View style={[styles.iconNode, { backgroundColor: G.fg + '05' }]}>
+              <Building2 size={22} color={G.fg} />
             </View>
           }
           title={item.name}
@@ -62,9 +63,10 @@ const OnCreditRow = React.memo(({
           subtitleMaxLines={1}
           right={
             <View style={styles.statArea}>
-              <AppText variant="title-sm" weight="bold" shrink={false} style={[styles.qtyText, { color: colors.text }]} numberOfLines={1}>
-                {typeof item.totalBaseQuantity === 'number' ? item.totalBaseQuantity.toLocaleString() : '0'} <AppText variant="caption" weight="medium" style={styles.unitSmall}>{t('form.' + (item.baseUnit || 'pieces').toLowerCase())}</AppText>
-              </AppText>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                <AppNumber value={item.totalBaseQuantity} size="title-sm" color={G.fg} numberOfLines={1} />
+                <AppText variant="caption" weight="medium" style={styles.unitSmall}>{t('form.' + (item.baseUnit || 'pieces').toLowerCase())}</AppText>
+              </View>
               <View style={[styles.statusBadgeSmall, { backgroundColor: colors.primary + '15' }]}>
                 <ShieldAlert size={10} color={colors.primary} />
                 <AppText variant="micro" weight="bold" transform="uppercase" shrink={false} style={[styles.statusBadgeText, { color: colors.primary }]} numberOfLines={1}>
@@ -76,13 +78,11 @@ const OnCreditRow = React.memo(({
           noBorder
           padding={0}
         />
-        <View style={[styles.creditFooter, { borderTopColor: colors.border }]}>
+        <View style={[styles.creditFooter, { borderTopColor: G.border }]}>
           <View style={styles.creditRow}>
-            <CreditCard size={14} color={colors.textSecondary} />
-            <AppText variant="caption" weight="medium" style={[styles.creditLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('dash.total_credit')}</AppText>
-            <AppText variant="body" weight="bold" shrink={false} style={[styles.creditAmount, { color: '#FF3B30' }]} numberOfLines={1}>
-              {creditAmount.toLocaleString()} {t('common.etb')}
-            </AppText>
+            <CreditCard size={14} color={G.fgSecondary} />
+            <AppText variant="caption" weight="medium" style={[styles.creditLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('dash.total_credit')}</AppText>
+            <AppNumber value={creditAmount} size="body" prefix="ETB " color={colors.error} numberOfLines={1} />
           </View>
         </View>
       </AppCard>
@@ -93,6 +93,8 @@ OnCreditRow.displayName = 'OnCreditRow';
 
 const OnCreditItemsScreen = () => {
   const { colors, t } = useSettings();
+  const G = getDashGlass(colors);
+  const styles = useMemo(() => createStyles(G), [G]);
   const [items, setItems] = useState<ItemData[]>([]);
 
   const loadData = async () => {
@@ -111,7 +113,9 @@ const OnCreditItemsScreen = () => {
   const keyExtractor = useCallback((item: ItemData, index: number) => `oc-${item.id}-${index}`, []);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: G.bg }]}>
+      <View style={{ position: 'absolute', top: -80, left: -30, width: 180, height: 180, borderRadius: 90, backgroundColor: G.mutedLight, opacity: 0.3 }} />
+      <View style={{ position: 'absolute', bottom: -50, right: -20, width: 160, height: 160, borderRadius: 80, backgroundColor: G.mutedLight, opacity: 0.2 }} />
       <FlatList
         data={items}
         keyExtractor={keyExtractor}
@@ -124,10 +128,10 @@ const OnCreditItemsScreen = () => {
         removeClippedSubviews={true}
         ListHeaderComponent={
           <View style={styles.headerNode}>
-            <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.headerSub, { color: colors.textSecondary }]} numberOfLines={1}>
+            <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.headerSub, { color: G.fgSecondary }]} numberOfLines={1}>
               {t('dash.supply_intel')}
             </AppText>
-            <AppText variant="heading-lg" weight="bold" style={[styles.headerTitle, { color: colors.text }]} numberOfLines={2}>
+            <AppText variant="heading-lg" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>
               {t('dash.credit_inventory')}
             </AppText>
           </View>
@@ -137,10 +141,10 @@ const OnCreditItemsScreen = () => {
             <View style={[styles.emptyIconCircle, { backgroundColor: colors.success + '10' }]}>
               <ShieldCheck size={40} color={colors.success} />
             </View>
-            <AppText variant="title" weight="bold" style={[styles.emptyTitle, { color: colors.text }]} numberOfLines={2}>
+            <AppText variant="title" weight="bold" style={[styles.emptyTitle, { color: G.fg }]} numberOfLines={2}>
               {t('dash.zero_credit')}
             </AppText>
-            <AppText variant="body" weight="medium" style={[styles.emptySub, { color: colors.textSecondary }]} numberOfLines={3}>
+            <AppText variant="body" weight="medium" style={[styles.emptySub, { color: G.fgSecondary }]} numberOfLines={3}>
               {t('dash.all_assets_settled')}
             </AppText>
           </View>
@@ -150,7 +154,7 @@ const OnCreditItemsScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (G: any) => StyleSheet.create({
   container: { flex: 1 },
   listContainer: { paddingHorizontal: 25, paddingBottom: 40, paddingTop: 20 },
   headerNode: { marginBottom: 25 },

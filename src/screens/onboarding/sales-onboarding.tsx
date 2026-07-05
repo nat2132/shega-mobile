@@ -1,26 +1,37 @@
-﻿import { Fonts } from '@/constants/theme';
+import React, { useEffect } from 'react';
 import {
-  Dimensions,
   StyleSheet,
   TouchableOpacity,
   View,
-  Image,
 } from 'react-native';
-import { useEffect } from 'react';
-import { MoveLeft, MoveRight, CircleCheckBig } from 'lucide-react-native';
+import {
+  MoveLeft,
+  MoveRight,
+  TrendingUp,
+  ShoppingCart,
+  CreditCard,
+  CheckCircle,
+  ArrowUpRight,
+} from 'lucide-react-native';
 import { AppText } from '@/components/ui';
-import Animated, { 
-  FadeInDown, 
-  FadeInUp, 
-  useSharedValue, 
-  useAnimatedStyle, 
-  withRepeat, 
-  withTiming, 
-  withDelay, 
-  Easing 
+import Animated, {
+  Easing,
+  useSharedValue,
+  useAnimatedStyle,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
+  interpolate,
+  FadeInDown,
+  FadeInUp,
+  FadeIn,
 } from 'react-native-reanimated';
+import { useSettings } from '@/context/SettingsContext';
+import { getGlass, DIMENSIONS } from './glass-theme';
 
-const { width } = Dimensions.get('window');
+const { W: w } = DIMENSIONS;
 
 interface OnboardingScreenProps {
   onNext?: () => void;
@@ -28,113 +39,272 @@ interface OnboardingScreenProps {
   onSkip?: () => void;
 }
 
-const SalesOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNext, onBack, onSkip }) => {
-  const moneyY = useSharedValue(0);
-  const receiptY = useSharedValue(0);
-  const checkY = useSharedValue(0);
+const TRANSACTIONS = [
+  { type: 'Wholesale Order', amount: 'Br 48,200', status: 'completed' as const, icon: 'cart' as const },
+  { type: 'Retail Sale', amount: 'Br 12,500', status: 'completed' as const, icon: 'card' as const },
+  { type: 'Refund', amount: 'Br 2,300', status: 'pending' as const, icon: 'check' as const },
+];
+
+function TransactionRow({
+  tx, index, G,
+}: {
+  tx: { type: string; amount: string; status: string; icon: string };
+  index: number; G: ReturnType<typeof getGlass>;
+}) {
+  const translateX = useSharedValue(40);
+  const opacity = useSharedValue(0);
 
   useEffect(() => {
-    moneyY.value = withRepeat(
-      withTiming(-10, { duration: 2800, easing: Easing.inOut(Easing.ease) }),
-      -1,
-      true
+    const d = 800 + index * 200;
+    translateX.value = withDelay(d, withSpring(0, { damping: 16, stiffness: 140 }));
+    opacity.value = withDelay(d, withTiming(1, { duration: 600 }));
+  }, []);
+
+  const rowStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+    opacity: opacity.value,
+  }));
+
+  const IconComponent = tx.icon === 'cart'
+    ? ShoppingCart : tx.icon === 'card'
+    ? CreditCard : CheckCircle;
+
+  const isPending = tx.status === 'pending';
+
+  return (
+    <Animated.View style={[{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: G.glassCardMedium, borderRadius: 12 }, rowStyle]}>
+      <View style={[styles.txIconWrap, { backgroundColor: G.glassCard, borderColor: 'transparent' }]}>
+        <IconComponent size={13} color={G.textGlass} />
+      </View>
+      <View style={styles.txInfo}>
+        <AppText
+          variant="body-sm"
+          weight="semibold"
+          numberOfLines={1}
+          style={{ color: G.textGlassStrong, letterSpacing: 0.2 }}
+        >
+          {tx.type}
+        </AppText>
+        <AppText
+          variant="caption"
+          weight="medium"
+          numberOfLines={1}
+          style={{ color: G.textGlassMedium }}
+        >
+          {tx.amount}
+        </AppText>
+      </View>
+      {isPending && (
+        <View style={[styles.pendingBadge, { backgroundColor: G.glassCard }]}>
+          <AppText
+            variant="micro"
+            weight="bold"
+            numberOfLines={1}
+            style={{ color: G.textGlass, letterSpacing: 0.8, fontSize: 9 }}
+          >
+            PENDING
+          </AppText>
+        </View>
+      )}
+    </Animated.View>
+  );
+}
+
+function FloatingIcon({
+  Icon, x, y, delay, size = 18, G,
+}: {
+  Icon: React.FC<{ size: number; color: string }>;
+  x: number; y: number; delay: number; size?: number; G: ReturnType<typeof getGlass>;
+}) {
+  const translateY = useSharedValue(0);
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    opacity.value = withDelay(delay, withTiming(0.25, { duration: 1000 }));
+    translateY.value = withDelay(
+      delay,
+      withRepeat(
+        withSequence(
+          withTiming(-10, { duration: 3000 + Math.random() * 1500, easing: Easing.inOut(Easing.sin) }),
+          withTiming(10, { duration: 3000 + Math.random() * 1500, easing: Easing.inOut(Easing.sin) }),
+        ),
+        -1,
+        true,
+      ),
     );
-    receiptY.value = withDelay(400, withRepeat(
-      withTiming(-15, { duration: 3200, easing: Easing.inOut(Easing.ease) }),
-      -1,
-      true
-    ));
-    checkY.value = withDelay(800, withRepeat(
-      withTiming(-6, { duration: 2500, easing: Easing.inOut(Easing.ease) }),
-      -1,
-      true
-    ));
-  }, [moneyY, receiptY, checkY]);
+  }, []);
 
-  const animatedMoneyStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: moneyY.value }],
-  }));
-
-  const animatedReceiptStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: receiptY.value }],
-  }));
-
-  const animatedCheckStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: checkY.value }],
+  const style = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+    opacity: opacity.value,
   }));
 
   return (
-    <View style={styles.container}>
-      <TouchableOpacity style={styles.skipContainer} onPress={onSkip}>
-        <AppText style={styles.skipText} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>SKIP</AppText>
-      </TouchableOpacity>
+    <Animated.View
+      pointerEvents="none"
+      style={[{ position: 'absolute', left: x, top: y }, style]}
+    >
+      <Icon size={size} color={G.textGlass} />
+    </Animated.View>
+  );
+}
+
+function CardPreview({ G }: { G: ReturnType<typeof getGlass> }) {
+  const glowPulse = useSharedValue(0);
+
+  useEffect(() => {
+    glowPulse.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 3500, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0, { duration: 3500, easing: Easing.inOut(Easing.sin) }),
+      ),
+      -1,
+      true,
+    );
+  }, []);
+
+  const glowStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(glowPulse.value, [0, 1], [0, 0.6]),
+    transform: [
+      { scale: interpolate(glowPulse.value, [0, 1], [1, 1.04]) },
+    ],
+  }));
+
+  return (
+    <View style={[styles.cardPreview, { backgroundColor: G.glassCardMedium, borderColor: G.glassBorder }]}>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.cardGlow,
+          { backgroundColor: G.accentGlow },
+          glowStyle,
+        ]}
+      />
+      <View style={styles.cardPreviewInner}>
+        <View style={styles.cardPreviewHeader}>
+          <View style={styles.cardPreviewHeaderLeft}>
+            <TrendingUp size={14} color={G.textGlass} />
+            <AppText
+              variant="caption"
+              weight="semibold"
+              numberOfLines={1}
+              style={{ color: G.textGlass, letterSpacing: 0.3 }}
+            >
+              Today&apos;s Sales
+            </AppText>
+          </View>
+          <ArrowUpRight size={14} color={G.accentGlass} />
+        </View>
+
+        <AppText
+          variant="heading-lg"
+          weight="bold"
+          numberOfLines={1}
+          style={{ color: G.fg, letterSpacing: -0.5, marginBottom: 16 }}
+        >
+          Br 84,200
+        </AppText>
+
+        <View style={[styles.cardPreviewDivider, { backgroundColor: G.glassBorder }]} />
+
+        <View style={styles.txList}>
+          {TRANSACTIONS.map((tx, i) => (
+            <TransactionRow key={i} tx={tx} index={i} G={G} />
+          ))}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const SalesOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNext, onBack, onSkip }) => {
+  const { colors } = useSettings();
+  const G = getGlass(colors);
+
+  return (
+    <View style={[styles.container, { backgroundColor: G.bg }]}>
+      <View style={styles.topBar}>
+        <TouchableOpacity style={[styles.topBarBtn, { backgroundColor: G.glassCard, borderColor: G.glassBorder }]} onPress={onBack}>
+          <MoveLeft size={18} color={G.textGlass} />
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.topBarBtn, { backgroundColor: G.glassCard, borderColor: G.glassBorder }]} onPress={onSkip}>
+          <AppText
+            variant="caption"
+            weight="bold"
+            numberOfLines={1}
+            style={{ color: G.textGlass, letterSpacing: 1.2 }}
+          >
+            SKIP
+          </AppText>
+        </TouchableOpacity>
+      </View>
 
       <View style={styles.mainContent}>
-        <Animated.View entering={FadeInDown.duration(800)} style={styles.mediaContainer}>
-          <View style={styles.mediaBox}>
-            <View style={styles.cardStack}>
-              <Image
-                source={require('../../assets/images/sales/list.png')}
-                style={styles.listCard}
-                resizeMode="contain"
-              />
-              <Animated.View style={[styles.iconOverlayTop, animatedMoneyStyle]}>
-                <View style={styles.iconCircle}>
-                  <Image
-                    source={require('../../assets/images/sales/money.png')}
-                    style={styles.floatingIcon}
-                    resizeMode="contain"
-                  />
-                </View>
-              </Animated.View>
-              <Animated.View style={[styles.iconOverlayBottomLeft, animatedReceiptStyle]}>
-                <View style={styles.iconCircle}>
-                  <Image
-                    source={require('../../assets/images/sales/reciept.png')}
-                    style={styles.floatingIcon}
-                    resizeMode="contain"
-                  />
-                </View>
-              </Animated.View>
-              <Animated.View style={[styles.iconOverlayBottomRight, animatedCheckStyle]}>
-                <View style={styles.checkCircle}>
-                  <CircleCheckBig size={32} color="#000" />
-                </View>
-              </Animated.View>
-            </View>
-          </View>
-          <View style={styles.mediaShadow} />
+        <FloatingIcon Icon={ShoppingCart} x={w * 0.04} y={w * 0.12} delay={300} size={16} G={G} />
+        <FloatingIcon Icon={CreditCard} x={w * 0.78} y={w * 0.10} delay={700} size={14} G={G} />
+        <FloatingIcon Icon={CheckCircle} x={w * 0.06} y={w * 0.58} delay={1100} size={12} G={G} />
+
+        <Animated.View
+          entering={FadeInDown.duration(900).springify().damping(18)}
+          style={styles.mediaContainer}
+        >
+          <CardPreview G={G} />
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(200).duration(800)} style={styles.textNode}>
-          <AppText style={styles.title} variant="heading-lg" weight="bold" numberOfLines={2}>Record Sales</AppText>
-          <AppText style={styles.subtitle} variant="body-lg" weight="medium" numberOfLines={3}>
-            Easily track every transaction{'\n'}as it happens.
+        <Animated.View
+          entering={FadeInDown.delay(350).duration(700).springify().damping(16)}
+          style={styles.textNode}
+        >
+          <AppText
+            variant="heading-lg"
+            weight="bold"
+            numberOfLines={2}
+            align="center"
+            style={{ color: G.fg, textAlign: 'center', marginBottom: 12 }}
+          >
+            Record Sales
+          </AppText>
+          <AppText
+            variant="body-lg"
+            weight="medium"
+            numberOfLines={3}
+            align="center"
+            style={{ color: G.muted, textAlign: 'center', lineHeight: 24 }}
+          >
+            Easily track every transaction{'\n'}as it happens
           </AppText>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(400).duration(800)} style={styles.pagination}>
-          <View style={styles.dot} />
-          <View style={[styles.dot, styles.activeDot]} />
-          <View style={styles.dot} />
+        <Animated.View entering={FadeIn.delay(500).duration(500)} style={[styles.pagination, { gap: 10, flexDirection: 'row', marginBottom: 40, alignItems: 'center' }]}>
+          <View style={[styles.dot, { backgroundColor: G.textGlassVeryFaint }]} />
+          <View style={[styles.dot, styles.activeDot, { backgroundColor: G.textGlassMedium }]} />
+          <View style={[styles.dot, { backgroundColor: G.textGlassVeryFaint }]} />
+          <View style={[styles.dot, { backgroundColor: G.textGlassVeryFaint }]} />
         </Animated.View>
 
-        <Animated.View entering={FadeInUp.delay(600).duration(800)} style={styles.actionRow}>
-          <TouchableOpacity 
-            style={styles.backBtn} 
+        <Animated.View entering={FadeInUp.delay(700).duration(600)} style={[styles.actionRow, { width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 }]}>
+          <TouchableOpacity
+            style={[styles.backBtn, { backgroundColor: G.glassCard, borderColor: G.glassBorder }]}
             onPress={onBack}
             activeOpacity={0.7}
           >
-            <MoveLeft size={24} color="#FFF" />
+            <MoveLeft size={18} color={G.textGlass} />
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={styles.nextBtn} 
+          <TouchableOpacity
+            style={[styles.nextBtn, { backgroundColor: G.fg, flex: 1 }]}
             onPress={onNext}
-            activeOpacity={0.8}
+            activeOpacity={0.85}
           >
-            <AppText style={styles.nextText} variant="body" weight="bold" numberOfLines={1}>Next</AppText>
-            <MoveRight size={20} color="#FFF" />
+            <AppText
+              variant="body"
+              weight="bold"
+              numberOfLines={1}
+              style={{ color: G.buttonFg, letterSpacing: 0.3 }}
+            >
+              Next
+            </AppText>
+            <MoveRight size={18} color={G.buttonFg} />
           </TouchableOpacity>
         </Animated.View>
       </View>
@@ -145,18 +315,21 @@ const SalesOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNext, onBack
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
-  skipContainer: {
+  topBar: {
     position: 'absolute',
     top: 60,
-    right: 30,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
     zIndex: 10,
   },
-  skipText: {
-    fontFamily: Fonts.bold,
-    color: '#000',
-    letterSpacing: 1,
+  topBarBtn: {
+    padding: 10,
+    borderRadius: 999,
+    borderWidth: 1,
   },
   mainContent: {
     flex: 1,
@@ -166,159 +339,103 @@ const styles = StyleSheet.create({
     paddingTop: 40,
   },
   mediaContainer: {
-    marginBottom: 60,
-    width: width * 0.75,
-    height: width * 0.9,
-    position: 'relative',
-  },
-  mediaBox: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 40,
-    overflow: 'visible',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 2,
-  },
-  cardStack: {
-    width: '100%',
-    height: '100%',
-    position: 'relative',
-    justifyContent: 'center',
+    marginBottom: 48,
     alignItems: 'center',
   },
-  listCard: {
-    width: '100%',
-    height: '100%',
+  cardPreview: {
+    width: w * 0.75,
+    borderRadius: 28,
+    borderWidth: 1,
+    overflow: 'hidden',
+    position: 'relative',
   },
-  iconOverlayTop: {
+  cardGlow: {
     position: 'absolute',
-    top: 50,
-    right: -20,
+    top: -40,
+    right: -30,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
   },
-  iconOverlayBottomLeft: {
-    position: 'absolute',
-    bottom: 120,
-    left: -20,
+  cardPreviewInner: {
+    padding: 22,
   },
-  iconOverlayBottomRight: {
-    position: 'absolute',
-    bottom: 110,
-    right: 40,
+  cardPreviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
   },
-  iconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(50, 50, 50, 0.9)',
+  cardPreviewHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  cardPreviewDivider: {
+    height: 1,
+    marginBottom: 12,
+  },
+  txList: {
+    gap: 6,
+  },
+  txInfo: {
+    flex: 1,
+  },
+  txIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
   },
-  checkCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#FFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  floatingIcon: {
-    width: '50%',
-    height: '50%',
-  },
-  mediaShadow: {
-    position: 'absolute',
-    top: '15%',
-    left: '15%',
-    width: '70%',
-    height: '70%',
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    borderRadius: 40,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 30 },
-    shadowOpacity: 0.5,
-    shadowRadius: 40,
-    zIndex: 1,
-    elevation: 25,
+  pendingBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
   },
   textNode: {
     alignItems: 'center',
-    marginBottom: 40,
-  },
-  title: {
-    fontFamily: Fonts.extrabold,
-    color: '#000',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  subtitle: {
-    color: '#777',
-    textAlign: 'center',
-    lineHeight: 28,
-    fontFamily: Fonts.medium,
+    marginBottom: 32,
   },
   pagination: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 60,
+    gap: 10,
+    marginBottom: 40,
     alignItems: 'center',
   },
   dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#E0E0E0',
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   activeDot: {
-    width: 32,
-    backgroundColor: '#000',
+    width: 28,
+    borderRadius: 3,
+    height: 6,
   },
   actionRow: {
     width: '100%',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingBottom: 40,
+    gap: 12,
   },
   backBtn: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#A0A0A0',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 4,
+    borderWidth: 1,
   },
   nextBtn: {
     flexDirection: 'row',
-    backgroundColor: '#000',
-    height: 64,
-    borderRadius: 32,
-    paddingHorizontal: 32,
+    height: 56,
+    borderRadius: 999,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 15,
-    elevation: 8,
-  },
-  nextText: {
-    color: '#FFF',
-    fontFamily: Fonts.bold,
-    letterSpacing: 0.5,
+    gap: 10,
   },
 });
 

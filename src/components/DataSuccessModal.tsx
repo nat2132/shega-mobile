@@ -1,4 +1,4 @@
-﻿import React, { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { 
   View, 
   StyleSheet, 
@@ -10,7 +10,6 @@ import Animated, {
   useAnimatedStyle, 
   withSpring, 
   withDelay, 
-  withTiming,
   FadeInDown
 } from 'react-native-reanimated';
 import { 
@@ -18,14 +17,13 @@ import {
   ChevronRight,
   Database,
   CloudDownload,
-  ShieldCheck,
   RefreshCw
 } from 'lucide-react-native';
-import { BlurView } from 'expo-blur';
+
 import * as Haptics from 'expo-haptics';
 import { useSettings } from '@/context/SettingsContext';
 import { Fonts } from '@/constants/theme';
-import { AppText, AppCard, AppButton } from '@/components/ui';
+import { AppText} from '@/components/ui';
 const { width } = Dimensions.get('window');
 
 interface DataSuccessModalProps {
@@ -42,7 +40,7 @@ const DataSuccessModal: React.FC<DataSuccessModalProps> = ({ type, onClose }) =>
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     ringScale.value = withSpring(1, { damping: 10, stiffness: 100 });
     checkScale.value = withDelay(300, withSpring(1, { damping: 8, stiffness: 120 }));
-  }, []);
+  }, [checkScale, ringScale]);
 
   const animatedCheckStyle = useAnimatedStyle(() => ({
     transform: [{ scale: checkScale.value }]
@@ -84,13 +82,13 @@ const DataSuccessModal: React.FC<DataSuccessModalProps> = ({ type, onClose }) =>
 
   return (
     <View style={styles.overlay}>
-      <BlurView intensity={theme === 'dark' ? 100 : 80} tint={theme === 'dark' ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
-      
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.50)' }]} />
+
       <View style={styles.container}>
         <View style={styles.iconContainer}>
           <Animated.View style={[styles.successRing, { borderColor: colors.primary + '40' }, animatedRingStyle]} />
           <Animated.View style={[styles.iconCircle, { backgroundColor: colors.primary }, animatedCheckStyle]}>
-            <Check size={48} color="#FFF" strokeWidth={3} />
+            <Check size={48} color={colors.background} strokeWidth={3} />
           </Animated.View>
         </View>
 

@@ -1,7 +1,6 @@
-﻿import { Fonts } from '@/constants/theme';
 import { Image } from 'expo-image';
-import React, { useEffect } from 'react';
-import { Dimensions, StyleSheet, View } from 'react-native';
+import React, { useCallback, useEffect } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { AppText } from '@/components/ui';
 import Animated, {
   Easing,
@@ -9,459 +8,577 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withDelay,
+  withRepeat,
   withSequence,
   withSpring,
-  withTiming
+  withTiming,
 } from 'react-native-reanimated';
+import { useSettings } from '@/context/SettingsContext';
+import {
+  DIMENSIONS,
+  getGlass,
+} from './glass-theme';
 
-const { width: W, height: H } = Dimensions.get('window');
+const { W, H } = DIMENSIONS;
 
-// ─── Accent palette ───────────────────────────────────────────────────────────
-const GREEN = '#22C55E';
-const BLUE = '#3B82F6';
-const LIGHT_GREEN = '#DCFCE7';
-const LIGHT_BLUE = '#DBEAFE';
+const LOGO_SIZE = 120;
+const RING_COUNT = 5;
+const PARTICLE_COUNT = W > 390 ? 16 : 10;
 
-// ─── Timing constants (ms) ────────────────────────────────────────────────────
-const CHAOS_DURATION = 1200;   // 0 → 1.2 s  floating chaos
-const SNAP_DURATION  = 600;    // 1.2 → 1.8 s  snap-to-grid
-const CARDS_START    = 1800;   // 1.8 s  cards appear
-const CARDS_DURATION = 1200;   // 1.8 → 3.0 s
-const LOGO_START     = 3200;   // 3.2 s  logo reveal
-const LOGO_DURATION  = 800;    // 3.2 → 4.0 s
-const TAGLINE_START  = 3800;   // 3.8 s  tagline
-const TOTAL          = 5000;   // hand-off at 5 s
+const PARTICLES: ParticleData[] = Array.from({ length: PARTICLE_COUNT }, (_, i) => ({
+  x: Math.random() * W,
+  y: Math.random() * H,
+  size: 4 + Math.random() * 8,
+  delay: i * 120,
+  duration: 2500 + Math.random() * 2000,
+  opacity: 0.15 + Math.random() * 0.2,
+}));
 
-// ─── Floating chaos icons ─────────────────────────────────────────────────────
-const CHAOS_ICONS: {
-  emoji: string;
-  startX: number;
-  startY: number;
-  rotation: number;
-  color: string;
-}[] = [
-  { emoji: '📦', startX: -W * 0.3,  startY: -H * 0.25, rotation: -25, color: LIGHT_BLUE },
-  { emoji: '🧾', startX:  W * 0.28, startY: -H * 0.30, rotation:  18, color: LIGHT_GREEN },
-  { emoji: '🛒', startX: -W * 0.25, startY:  H * 0.20, rotation: -15, color: LIGHT_BLUE },
-  { emoji: '💰', startX:  W * 0.30, startY:  H * 0.22, rotation:  22, color: LIGHT_GREEN },
-  { emoji: '📊', startX: -W * 0.10, startY: -H * 0.35, rotation: -10, color: LIGHT_BLUE },
-  { emoji: '🏷️', startX:  W * 0.15, startY:  H * 0.32, rotation:  30, color: LIGHT_GREEN },
-];
-
-// ─── Grid snap targets (3-column, 2-row) ──────────────────────────────────────
-const GRID_POSITIONS = [
-  { x: -W * 0.22, y: -60 },
-  { x:  0,        y: -60 },
-  { x:  W * 0.22, y: -60 },
-  { x: -W * 0.22, y:  60 },
-  { x:  0,        y:  60 },
-  { x:  W * 0.22, y:  60 },
-];
-
-// ─── Stat cards ───────────────────────────────────────────────────────────────
-const STAT_CARDS = [
-  { label: 'Sales Today',  value: '₦ 84,200', delta: '+12%', color: GREEN,  bg: LIGHT_GREEN },
-  { label: 'Stock Items',  value: '1,340',     delta: '+8',   color: BLUE,   bg: LIGHT_BLUE  },
-  { label: 'Low Stock',    value: '3 items',   delta: 'Alert',color: '#F59E0B', bg: '#FEF3C7' },
-];
-
-// ─── Chaos icon component ─────────────────────────────────────────────────────
-const ChaosIcon: React.FC<{
-  emoji: string;
-  startX: number;
-  startY: number;
-  startRotation: number;
-  snapX: number;
-  snapY: number;
-  bg: string;
+interface ParticleData {
+  x: number;
+  y: number;
+  size: number;
   delay: number;
-}> = ({ emoji, startX, startY, startRotation, snapX, snapY, bg, delay }) => {
-  const tx = useSharedValue(startX);
-  const ty = useSharedValue(startY);
-  const rot = useSharedValue(startRotation);
-  const scale = useSharedValue(0.7);
+  duration: number;
+  opacity: number;
+}
+
+function ExpandingRing({ index, total, delay: ringDelay, g }: { index: number; total: number; delay: number; g: string }) {
+  const scale = useSharedValue(0.4 - index * 0.05);
   const opacity = useSharedValue(0);
 
   useEffect(() => {
-    // Appear
-    opacity.value = withDelay(delay, withTiming(1, { duration: 400 }));
-    scale.value   = withDelay(delay, withSpring(1, { damping: 12, stiffness: 120 }));
+    const baseDuration = 5000 - index * 400;
+    const maxScale = 1.4 - index * 0.12;
 
-    // Gentle float during chaos phase
-    tx.value = withDelay(
-      delay,
-      withSequence(
-        withTiming(startX * 0.85, { duration: CHAOS_DURATION * 0.5, easing: Easing.inOut(Easing.sin) }),
-        withTiming(startX * 1.05, { duration: CHAOS_DURATION * 0.5, easing: Easing.inOut(Easing.sin) }),
+    scale.value = withDelay(
+      ringDelay + index * 250,
+      withRepeat(
+        withSequence(
+          withTiming(maxScale, {
+            duration: baseDuration,
+            easing: Easing.inOut(Easing.sin),
+          }),
+          withTiming(0.4 - index * 0.05, {
+            duration: baseDuration,
+            easing: Easing.inOut(Easing.sin),
+          }),
+        ),
+        -1,
+        true,
       ),
     );
-    ty.value = withDelay(
-      delay,
-      withSequence(
-        withTiming(startY * 0.9,  { duration: CHAOS_DURATION * 0.5, easing: Easing.inOut(Easing.sin) }),
-        withTiming(startY * 1.1,  { duration: CHAOS_DURATION * 0.5, easing: Easing.inOut(Easing.sin) }),
-      ),
-    );
 
-    // Snap to grid
-    const snapDelay = delay + CHAOS_DURATION;
-    tx.value  = withDelay(snapDelay, withSpring(snapX, { damping: 18, stiffness: 200 }));
-    ty.value  = withDelay(snapDelay, withSpring(snapY, { damping: 18, stiffness: 200 }));
-    rot.value = withDelay(snapDelay, withSpring(0,    { damping: 20, stiffness: 220 }));
-    scale.value = withDelay(snapDelay, withSpring(0.85, { damping: 14, stiffness: 180 }));
-
-    // Fade out before logo
     opacity.value = withDelay(
-      LOGO_START - 300,
-      withTiming(0, { duration: 400, easing: Easing.out(Easing.quad) }),
+      ringDelay + index * 250,
+      withTiming(1, { duration: 1200, easing: Easing.out(Easing.quad) }),
+    );
+  }, []);
+
+  const ringStyle = useAnimatedStyle(() => ({
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    borderWidth: 1,
+    borderColor: index === 0
+      ? `rgba(${g},${interpolate(opacity.value, [0, 1], [0, 0.12])})`
+      : `rgba(${g},${interpolate(opacity.value, [0, 1], [0, 0.06 - index * 0.008])})`,
+    transform: [{ scale: scale.value }],
+    opacity: interpolate(opacity.value, [0, 1], [0, 0.75 - index * 0.1]),
+  }));
+
+  return <Animated.View style={[styles.ring, ringStyle]} pointerEvents="none" />;
+}
+
+function GlassParticle({ particle, g }: { particle: ParticleData; g: string }) {
+  const translateY = useSharedValue(0);
+  const translateX = useSharedValue(0);
+  const opacity = useSharedValue(0);
+  const scale = useSharedValue(0);
+
+  useEffect(() => {
+    const driftX = (Math.random() - 0.5) * 60;
+
+    opacity.value = withDelay(
+      particle.delay,
+      withSequence(
+        withTiming(particle.opacity, { duration: 1000, easing: Easing.out(Easing.quad) }),
+        withDelay(particle.duration * 0.5, withTiming(0, { duration: 1000 })),
+      ),
+    );
+
+    scale.value = withDelay(
+      particle.delay,
+      withSpring(1, { damping: 12, stiffness: 80 }),
+    );
+
+    translateY.value = withDelay(
+      particle.delay,
+      withRepeat(
+        withSequence(
+          withTiming(-H * 0.35, {
+            duration: particle.duration,
+            easing: Easing.inOut(Easing.sin),
+          }),
+          withTiming(H * 0.05, {
+            duration: particle.duration,
+            easing: Easing.inOut(Easing.sin),
+          }),
+        ),
+        -1,
+        true,
+      ),
+    );
+
+    translateX.value = withDelay(
+      particle.delay,
+      withRepeat(
+        withSequence(
+          withTiming(driftX, {
+            duration: particle.duration * 1.3,
+            easing: Easing.inOut(Easing.sin),
+          }),
+          withTiming(-driftX, {
+            duration: particle.duration * 1.3,
+            easing: Easing.inOut(Easing.sin),
+          }),
+        ),
+        -1,
+        true,
+      ),
     );
   }, []);
 
   const style = useAnimatedStyle(() => ({
     transform: [
-      { translateX: tx.value },
-      { translateY: ty.value },
-      { rotate: `${rot.value}deg` },
+      { translateY: translateY.value },
+      { translateX: translateX.value },
       { scale: scale.value },
     ],
     opacity: opacity.value,
   }));
 
   return (
-    <Animated.View style={[styles.iconBubble, { backgroundColor: bg }, style]}>
-      <AppText style={styles.iconEmoji} variant="title" weight="regular" numberOfLines={1}>{emoji}</AppText>
-    </Animated.View>
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        styles.particle,
+        {
+          left: particle.x,
+          width: particle.size,
+          height: particle.size,
+          borderRadius: particle.size / 2,
+          backgroundColor: `rgba(${g},0.3)`,
+        },
+        style,
+      ]}
+    />
   );
-};
+}
 
-// ─── Stat card component ──────────────────────────────────────────────────────
-const StatCard: React.FC<{
-  label: string;
-  value: string;
-  delta: string;
-  color: string;
-  bg: string;
-  delay: number;
-}> = ({ label, value, delta, color, bg, delay }) => {
-  const opacity = useSharedValue(0);
-  const ty      = useSharedValue(24);
-  const scale   = useSharedValue(0.92);
+interface FirstOnboardingScreenProps {
+  onNext?: () => void;
+}
 
-  useEffect(() => {
-    opacity.value = withDelay(delay, withTiming(1,    { duration: 500, easing: Easing.out(Easing.quad) }));
-    ty.value      = withDelay(delay, withSpring(0,    { damping: 16, stiffness: 160 }));
-    scale.value   = withDelay(delay, withSpring(1,    { damping: 14, stiffness: 150 }));
+const FirstOnboardingScreen: React.FC<FirstOnboardingScreenProps> = ({ onNext }) => {
+  const { colors } = useSettings();
+  const G = getGlass(colors);
 
-    // Fade out before logo
-    opacity.value = withDelay(
-      LOGO_START - 300,
-      withTiming(0, { duration: 400, easing: Easing.out(Easing.quad) }),
-    );
-  }, []);
-
-  const style = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ translateY: ty.value }, { scale: scale.value }],
-  }));
-
-  return (
-    <Animated.View style={[styles.statCard, style]}>
-      <View style={[styles.statDot, { backgroundColor: color }]} />
-      <View style={styles.statBody}>
-        <AppText style={styles.statLabel} variant="caption" weight="bold" numberOfLines={1}>{label}</AppText>
-        <AppText style={[styles.statValue, { color }]} variant="body-lg" weight="bold" numberOfLines={1}>{value}</AppText>
-      </View>
-      <View style={[styles.statBadge, { backgroundColor: bg }]}>
-        <AppText style={[styles.statDelta, { color }]} variant="micro" weight="bold" numberOfLines={1}>{delta}</AppText>
-      </View>
-    </Animated.View>
-  );
-};
-
-// ─── Main component ───────────────────────────────────────────────────────────
-const FirstOnboardingScreen: React.FC<{ onNext?: () => void }> = ({ onNext }) => {
-  // Logo
+  const logoScale = useSharedValue(0);
   const logoOpacity = useSharedValue(0);
-  const logoScale   = useSharedValue(0.6);
-  const logoGlow    = useSharedValue(0);
+  const logoRotate = useSharedValue(0);
+  const reflectionOpacity = useSharedValue(0);
+  const reflectionRotate = useSharedValue(0);
+  const taglineOpacity = useSharedValue(0);
+  const taglineY = useSharedValue(30);
+  const taglineScale = useSharedValue(0.9);
+  const dividerScale = useSharedValue(0);
+  const subtitleOpacity = useSharedValue(0);
+  const subtitleY = useSharedValue(20);
+  const progressWidth = useSharedValue(0);
+  const progressOpacity = useSharedValue(0);
+  const shimmerX = useSharedValue(-1.5);
+  const glassGlow = useSharedValue(0);
 
-  // Tagline
-  const tagOpacity = useSharedValue(0);
-  const tagTy      = useSharedValue(16);
-
-  // Grid lines
-  const gridOpacity = useSharedValue(0);
+  const onNextCallback = useCallback(() => onNext?.(), [onNext]);
 
   useEffect(() => {
-    // Grid lines appear at snap moment
-    gridOpacity.value = withDelay(
-      CHAOS_DURATION + 200,
-      withSequence(
-        withTiming(0.35, { duration: 400 }),
-        withDelay(600, withTiming(0, { duration: 400 })),
+    const INTRO_DURATION = 6500;
+
+    logoScale.value = withDelay(
+      400,
+      withSpring(1, { damping: 12, stiffness: 100 }),
+    );
+    logoOpacity.value = withDelay(
+      400,
+      withTiming(1, { duration: 1000, easing: Easing.out(Easing.quad) }),
+    );
+    logoRotate.value = withDelay(
+      400,
+      withSpring(0, { damping: 14, stiffness: 80 }),
+    );
+
+    reflectionOpacity.value = withDelay(
+      1000,
+      withTiming(0.8, { duration: 1200, easing: Easing.out(Easing.quad) }),
+    );
+    reflectionRotate.value = withDelay(
+      1000,
+      withRepeat(
+        withSequence(
+          withTiming(8, { duration: 4000, easing: Easing.inOut(Easing.sin) }),
+          withTiming(-8, { duration: 4000, easing: Easing.inOut(Easing.sin) }),
+        ),
+        -1,
+        true,
       ),
     );
 
-    // Logo entrance
-    logoOpacity.value = withDelay(LOGO_START, withTiming(1, { duration: LOGO_DURATION, easing: Easing.out(Easing.quad) }));
-    logoScale.value   = withDelay(LOGO_START, withSpring(1, { damping: 14, stiffness: 120 }));
-    logoGlow.value    = withDelay(LOGO_START + 400, withTiming(1, { duration: 600, easing: Easing.out(Easing.quad) }));
+    taglineOpacity.value = withDelay(
+      2000,
+      withTiming(1, { duration: 800, easing: Easing.out(Easing.quad) }),
+    );
+    taglineY.value = withDelay(
+      2000,
+      withSpring(0, { damping: 14, stiffness: 120 }),
+    );
+    taglineScale.value = withDelay(
+      2000,
+      withSpring(1, { damping: 14, stiffness: 120 }),
+    );
 
-    // Tagline
-    tagOpacity.value = withDelay(TAGLINE_START, withTiming(1, { duration: 700, easing: Easing.out(Easing.quad) }));
-    tagTy.value      = withDelay(TAGLINE_START, withSpring(0, { damping: 18, stiffness: 140 }));
+    dividerScale.value = withDelay(
+      2800,
+      withSpring(1, { damping: 12, stiffness: 100 }),
+    );
 
-    // Hand-off
-    const timer = setTimeout(() => onNext?.(), TOTAL);
+    subtitleOpacity.value = withDelay(
+      3200,
+      withTiming(1, { duration: 700, easing: Easing.out(Easing.quad) }),
+    );
+    subtitleY.value = withDelay(
+      3200,
+      withSpring(0, { damping: 16, stiffness: 130 }),
+    );
+
+    progressOpacity.value = withDelay(
+      1400,
+      withTiming(1, { duration: 400 }),
+    );
+    progressWidth.value = withDelay(
+      1400,
+      withTiming(1, {
+        duration: INTRO_DURATION - 1400,
+        easing: Easing.in(Easing.quad),
+      }),
+    );
+
+    glassGlow.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 2500, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0, { duration: 2500, easing: Easing.inOut(Easing.sin) }),
+      ),
+      -1,
+      true,
+    );
+
+    shimmerX.value = withDelay(
+      1200,
+      withRepeat(
+        withSequence(
+          withTiming(2.5, { duration: 3500, easing: Easing.inOut(Easing.sin) }),
+          withTiming(-1.5, { duration: 0 }),
+        ),
+        -1,
+        false,
+      ),
+    );
+
+    const timer = setTimeout(onNextCallback, INTRO_DURATION);
     return () => clearTimeout(timer);
-  }, [onNext]);
+  }, [onNextCallback]);
 
-  const logoStyle = useAnimatedStyle(() => ({
+  const logoAnimatedStyle = useAnimatedStyle(() => ({
     opacity: logoOpacity.value,
-    transform: [{ scale: logoScale.value }],
+    transform: [
+      { scale: logoScale.value },
+      { rotate: `${interpolate(logoRotate.value, [0, 1], [0, 360])}deg` },
+    ],
   }));
 
-  const glowStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(logoGlow.value, [0, 1], [0, 0.55]),
-    transform: [{ scale: interpolate(logoGlow.value, [0, 1], [0.8, 1.4]) }],
+  const reflectionAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: reflectionOpacity.value,
+    transform: [{ rotate: `${reflectionRotate.value}deg` }],
   }));
 
-  const tagStyle = useAnimatedStyle(() => ({
-    opacity: tagOpacity.value,
-    transform: [{ translateY: tagTy.value }],
+  const taglineAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: taglineOpacity.value,
+    transform: [
+      { translateY: taglineY.value },
+      { scale: taglineScale.value },
+    ],
   }));
 
-  const gridStyle = useAnimatedStyle(() => ({
-    opacity: gridOpacity.value,
+  const dividerAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scaleX: dividerScale.value }],
+    opacity: dividerScale.value,
+  }));
+
+  const subtitleAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: subtitleOpacity.value,
+    transform: [{ translateY: subtitleY.value }],
+  }));
+
+  const progressAnimatedStyle = useAnimatedStyle(() => ({
+    width: `${progressWidth.value * 100}%` as any,
+    opacity: progressOpacity.value,
+  }));
+
+  const shimmerAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateX: interpolate(
+          shimmerX.value,
+          [-1.5, 2.5],
+          [-LOGO_SIZE * 1.5, LOGO_SIZE * 2.5],
+        ),
+      },
+    ],
+  }));
+
+  const glowAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(glassGlow.value, [0, 1], [0, 1]),
+    transform: [
+      { scale: interpolate(glassGlow.value, [0, 1], [1, 1.06]) },
+    ],
   }));
 
   return (
-    <View style={styles.container}>
-
-      {/* ── Subtle grid lines (snap moment) ── */}
-      <Animated.View style={[StyleSheet.absoluteFill, styles.gridOverlay, gridStyle]} pointerEvents="none">
-        {[0.25, 0.5, 0.75].map((f) => (
-          <View key={`v${f}`} style={[styles.gridLineV, { left: `${f * 100}%` as any }]} />
-        ))}
-        {[0.33, 0.66].map((f) => (
-          <View key={`h${f}`} style={[styles.gridLineH, { top: `${f * 100}%` as any }]} />
-        ))}
-      </Animated.View>
-
-      {/* ── Chaos + grid icons ── */}
-      <View style={styles.iconLayer} pointerEvents="none">
-        {CHAOS_ICONS.map((ic, i) => (
-          <ChaosIcon
-            key={i}
-            emoji={ic.emoji}
-            startX={ic.startX}
-            startY={ic.startY}
-            startRotation={ic.rotation}
-            snapX={GRID_POSITIONS[i].x}
-            snapY={GRID_POSITIONS[i].y}
-            bg={ic.color}
-            delay={i * 60}
-          />
+    <View style={[styles.container, { backgroundColor: G.bg }]}>
+      <View style={styles.particleLayer} pointerEvents="none">
+        {PARTICLES.map((p, i) => (
+          <GlassParticle key={i} particle={p} g={G.g} />
         ))}
       </View>
 
-      {/* ── Stat cards ── */}
-      <View style={styles.cardsLayer} pointerEvents="none">
-        {STAT_CARDS.map((c, i) => (
-          <StatCard
-            key={i}
-            label={c.label}
-            value={c.value}
-            delta={c.delta}
-            color={c.color}
-            bg={c.bg}
-            delay={CARDS_START + i * 180}
-          />
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.ambientGlow,
+          { backgroundColor: G.accentGlow },
+          glowAnimatedStyle,
+        ]}
+      />
+
+      <View style={styles.ringLayer} pointerEvents="none">
+        {Array.from({ length: RING_COUNT }, (_, i) => (
+          <ExpandingRing key={i} index={i} total={RING_COUNT} delay={600} g={G.g} />
         ))}
       </View>
 
-      {/* ── Logo + glow ── */}
-      <View style={styles.logoLayer} pointerEvents="none">
-        {/* Glow ring */}
-        <Animated.View style={[styles.glowRing, glowStyle]} />
-
-        <Animated.View style={[styles.logoContainer, logoStyle]}>
-          <View style={styles.logoCircle}>
-            <Image
-              source={require('../../assets/images/logo.svg')}
-              style={styles.logoImage}
-              contentFit="contain"
+      <View style={styles.contentLayer}>
+        <Animated.View style={[styles.logoContainer, logoAnimatedStyle]}>
+          <View style={[styles.logoGlassOuter, { backgroundColor: G.glassCard, borderColor: G.glassBorder }]}>
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.logoGlowRing,
+                { backgroundColor: G.accentGlow },
+                glowAnimatedStyle,
+              ]}
             />
+            <View style={[styles.logoGlassInner, { backgroundColor: G.bg, borderColor: G.glassBorderLight }]}>
+              <Animated.View
+                pointerEvents="none"
+                style={[styles.shimmerBar, { backgroundColor: G.glassCardMedium }, shimmerAnimatedStyle]}
+              />
+              <Image
+                source={require('../../assets/images/logo.svg')}
+                style={styles.logoImage}
+                contentFit="contain"
+              />
+            </View>
           </View>
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.reflectionArc,
+              {
+                borderColor: G.glassBorder,
+                borderTopColor: G.textGlassMedium,
+                borderRightColor: G.textGlass,
+                borderLeftColor: 'transparent',
+                borderBottomColor: 'transparent',
+              },
+              reflectionAnimatedStyle,
+            ]}
+          />
         </Animated.View>
 
-        <Animated.View style={[styles.taglineWrap, tagStyle]}>
-          <AppText style={styles.tagline} variant="title" weight="bold" numberOfLines={2}>Manage Your Shop Smartly</AppText>
-          <View style={styles.taglineDivider} />
+        <Animated.View style={[styles.taglineWrap, taglineAnimatedStyle]}>
+          <AppText
+            variant="display-lg"
+            weight="bold"
+            numberOfLines={2}
+            align="center"
+            style={{ color: G.fg, letterSpacing: -0.5, lineHeight: 44 }}
+          >
+            Manage Your Shop{'\n'}Smartly
+          </AppText>
+        </Animated.View>
+
+        <Animated.View style={[styles.dividerWrap, dividerAnimatedStyle]} pointerEvents="none">
+          <View style={[styles.dividerInner, { backgroundColor: G.textGlass }]} />
+        </Animated.View>
+
+        <Animated.View style={[styles.subtitleWrap, subtitleAnimatedStyle]}>
+          <AppText
+            variant="body"
+            weight="medium"
+            numberOfLines={2}
+            align="center"
+            style={{ color: G.muted, lineHeight: 22 }}
+          >
+            Real-time inventory, sales tracking,{'\n'}and insights at your fingertips
+          </AppText>
         </Animated.View>
       </View>
 
+      <View style={[styles.progressLayer, { backgroundColor: G.progressTrack }]} pointerEvents="none">
+        <Animated.View style={[{ backgroundColor: G.progressFill, height: '100%', borderRadius: 1 }, progressAnimatedStyle]} />
+      </View>
+
+      <View style={styles.footerLayer} pointerEvents="none">
+        <Animated.View entering={undefined}>
+          <AppText
+            variant="micro"
+            weight="semibold"
+            style={{ color: G.textGlassFaint, letterSpacing: 5 }}
+            numberOfLines={1}
+            align="center"
+          >
+            SHEGA
+          </AppText>
+        </Animated.View>
+      </View>
     </View>
   );
 };
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-
-  // Grid overlay
-  gridOverlay: {
+  particleLayer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  particle: {
     position: 'absolute',
   },
-  gridLineV: {
+  ambientGlow: {
     position: 'absolute',
-    top: 0,
-    bottom: 0,
-    width: 1,
-    backgroundColor: BLUE,
+    width: W * 0.7,
+    height: W * 0.7,
+    borderRadius: W * 0.35,
+    top: '30%',
+    alignSelf: 'center',
   },
-  gridLineH: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 1,
-    backgroundColor: GREEN,
-  },
-
-  // Icon layer (chaos → grid)
-  iconLayer: {
+  ringLayer: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconBubble: {
+  ring: {
     position: 'absolute',
-    width: 64,
-    height: 64,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 4,
   },
-  iconEmoji: {
-  },
-
-  // Stat cards
-  cardsLayer: {
+  contentLayer: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
-  },
-  statCard: {
-    width: W * 0.78,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FAFAFA',
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: '#F0F0F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-    gap: 12,
-  },
-  statDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  statBody: {
-    flex: 1,
-  },
-  statLabel: {
-    fontFamily: Fonts.medium,
-    color: '#9CA3AF',
-    marginBottom: 2,
-    letterSpacing: 0.3,
-  },
-  statValue: {
-    fontFamily: Fonts.extrabold,
-    letterSpacing: -0.3,
-  },
-  statBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-  },
-  statDelta: {
-    fontFamily: Fonts.bold,
-    letterSpacing: 0.2,
-  },
-
-  // Logo layer
-  logoLayer: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  glowRing: {
-    position: 'absolute',
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: 'transparent',
-    borderWidth: 40,
-    borderColor: 'rgba(34,197,94,0.12)',
-    shadowColor: GREEN,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 40,
+    paddingHorizontal: 40,
   },
   logoContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 28,
+    marginBottom: 48,
+    position: 'relative',
   },
-  logoCircle: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    backgroundColor: '#000',
+  logoGlassOuter: {
+    width: LOGO_SIZE + 16,
+    height: LOGO_SIZE + 16,
+    borderRadius: (LOGO_SIZE + 16) / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
-    elevation: 12,
+    borderWidth: 1,
+  },
+  logoGlowRing: {
+    position: 'absolute',
+    width: LOGO_SIZE + 40,
+    height: LOGO_SIZE + 40,
+    borderRadius: (LOGO_SIZE + 40) / 2,
+  },
+  logoGlassInner: {
+    width: LOGO_SIZE,
+    height: LOGO_SIZE,
+    borderRadius: LOGO_SIZE / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    overflow: 'hidden',
   },
   logoImage: {
-    width: '68%',
-    height: '68%',
+    width: '60%',
+    height: '60%',
+  },
+  shimmerBar: {
+    position: 'absolute',
+    width: 44,
+    height: '200%',
+    transform: [{ rotate: '22deg' }],
+    top: '-50%',
+  },
+  reflectionArc: {
+    position: 'absolute',
+    top: -10,
+    left: -10,
+    right: -10,
+    bottom: -10,
+    borderRadius: (LOGO_SIZE + 24) / 2,
+    borderWidth: 1,
   },
   taglineWrap: {
     alignItems: 'center',
-    gap: 10,
+    marginBottom: 20,
   },
-  tagline: {
-    fontFamily: Fonts.semibold,
-    color: '#111827',
-    letterSpacing: 0.2,
+  dividerWrap: {
+    alignItems: 'center',
+    marginBottom: 20,
+    height: 1,
+    overflow: 'hidden',
+    width: 50,
   },
-  taglineDivider: {
-    width: 36,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: GREEN,
+  dividerInner: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 0.5,
+  },
+  subtitleWrap: {
+    paddingHorizontal: 24,
+  },
+  progressLayer: {
+    position: 'absolute',
+    bottom: 100,
+    left: 40,
+    right: 40,
+    height: 2,
+    borderRadius: 1,
+  },
+  footerLayer: {
+    position: 'absolute',
+    bottom: 56,
+    alignSelf: 'center',
   },
 });
 

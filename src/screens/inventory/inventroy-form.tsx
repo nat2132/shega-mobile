@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -9,71 +9,499 @@ import {
   Pressable,
   Platform,
   KeyboardAvoidingView,
-  Linking
+  Linking,
+  FlatList
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
-  FadeInDown,
-  FadeInUp,
-  FadeIn,
-  FadeOut,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
-  Layout
+  FadeInDown
 } from 'react-native-reanimated';
 import {
-  PackageCheck,
   ChevronDown,
-  Info,
   Calendar,
   ArrowRight,
   X,
   Check,
   Plus,
   Package,
-  Trash2,
-  Shield,
   Building2,
-  ShoppingCart,
-  CheckCircle,
-  BarChart3,
   Tag,
-  History,
   AlertCircle,
   Truck,
   CreditCard,
-  Target,
   ChevronLeft,
-  Sparkles,
-  Zap,
-  Hammer,
-  ShieldCheck,
   LayoutGrid,
   Phone,
-  PhoneCall
+  PhoneCall,
+  Search,
+  RefreshCw
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { BlurView } from 'expo-blur';
+import { playNice, playBad } from '@/services/soundService';
 import {
    insertItem,
    insertCategory,
-   getCategories,
+   getUserCategories,
    insertPack,
    getSuppliers,
-   insertContact
+   insertContact,
+   getItems,
+   updateItem
 } from '@/database/db';
 import { useSettings } from '@/context/SettingsContext';
 import { useDialog } from '@/context/DialogContext';
 import { Fonts } from '@/constants/theme';
 import { CustomDatePicker } from '@/components/CustomDatePicker';
-import { AppText, AppListItem, AppRow, AppCard } from '@/components/ui';
+import { AppNumber, AppText} from '@/components/ui';
+import { getInventoryGlass } from './glass-inventory';
+import { useFormDrafts } from '@/hooks/useFormDrafts';
+import { DraftSection } from '@/components/DraftSection';
+import { Draft } from '@/services/draftService';
 const QUALITY_GRADES = ['grade1', 'grade2', 'grade3'];
 
 export const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?: () => void }) => {
-  const { colors, t, calendarType, language, theme } = useSettings();
+  const { colors, t } = useSettings();
+  const G = getInventoryGlass(colors);
+  const styles = useMemo(() => createStyles(G), [G]);
+  const router = useRouter();
+  const [mode, setMode] = useState<'add' | 'restock' | null>(null);
+
+  if (!mode) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: G.bg }]}>
+        {/* Ambient glow washes */}
+        <View style={[styles.glowWash1, { backgroundColor: G.mutedLight }]} />
+        <View style={[styles.glowWash2, { backgroundColor: G.mutedLight }]} />
+        <View style={[styles.glowWash3, { backgroundColor: G.mutedLight }]} />
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => {
+              if (onClose) onClose();
+              else if (router.canGoBack()) router.back();
+            }}
+            style={[styles.closeBtn, { borderColor: G.border }]}
+          >
+            <X size={20} color={G.fg} />
+          </TouchableOpacity>
+          <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{t('inventory.header')}</AppText>
+          <View style={{ width: 40 }} />
+        </View>
+
+        <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 25, gap: 16 }}>
+          <TouchableOpacity
+            style={[styles.modeCard, { backgroundColor: G.bgCard, borderColor: G.border }]}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setMode('add'); }}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.modeIcon, { backgroundColor: colors.primary + '15' }]}>
+              <Plus size={28} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <AppText variant="heading" weight="bold" style={{ color: G.fg }} numberOfLines={1}>{t('form.add_new_item')}</AppText>
+              <AppText variant="body-sm" weight="medium" style={{ color: G.fgSecondary, marginTop: 4 }} numberOfLines={2}>{t('form.add_new_item_desc')}</AppText>
+            </View>
+            <ArrowRight size={20} color={G.fgSecondary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.modeCard, { backgroundColor: G.bgCard, borderColor: G.border }]}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setMode('restock'); }}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.modeIcon, { backgroundColor: colors.warning + '15' }]}>
+              <RefreshCw size={28} color={colors.warning} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <AppText variant="heading" weight="bold" style={{ color: G.fg }} numberOfLines={1}>{t('form.restock_item')}</AppText>
+              <AppText variant="body-sm" weight="medium" style={{ color: G.fgSecondary, marginTop: 4 }} numberOfLines={2}>{t('form.restock_item_desc')}</AppText>
+            </View>
+            <ArrowRight size={20} color={G.fgSecondary} />
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (mode === 'restock') {
+    return <RestockFlow onSuccess={onSuccess} onClose={() => setMode(null)} />;
+  }
+
+  return <AddItemFlow onSuccess={onSuccess} onClose={onClose} />;
+};
+
+const RestockFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?: () => void }) => {
+  const { colors, t } = useSettings();
+  const G = getInventoryGlass(colors);
+  const styles = useMemo(() => createStyles(G), [G]);
+  const dialog = useDialog();
+  const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [allItems, setAllItems] = useState<any[]>([]);
+  const [selectedItem, setSelectedItem] = useState<any>(null);
+
+  const [buyingPrice, setBuyingPrice] = useState('');
+  const [unitSellingPrice, setUnitSellingPrice] = useState('');
+  const [bulkSellingPrice, setBulkSellingPrice] = useState('');
+  const [restockQty, setRestockQty] = useState('1');
+  const [supplierPhone, setSupplierPhone] = useState('');
+  const [supplierCallEnabled, setSupplierCallEnabled] = useState(false);
+  const [supplierLog, setSupplierLog] = useState(false);
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [showSupplierModal, setShowSupplierModal] = useState(false);
+  const [selectedSupplier, setSelectedSupplier] = useState<any>(null);
+
+  const draftFormKeyRestock = 'inventory-restock';
+  const draftFormDataRestock = useFormDrafts({
+    screen: 'inventory',
+    formKey: draftFormKeyRestock,
+    getPayload: useCallback(() => ({
+      searchQuery,
+      selectedItem,
+      buyingPrice,
+      unitSellingPrice,
+      bulkSellingPrice,
+      restockQty,
+      supplierPhone,
+      supplierCallEnabled,
+      selectedSupplier,
+    }), [searchQuery, selectedItem, buyingPrice, unitSellingPrice, bulkSellingPrice, restockQty, supplierPhone, supplierCallEnabled, selectedSupplier]),
+    getTitle: useCallback(() => (selectedItem?.name ? `Restock - ${selectedItem.name}` : 'Restock Draft'), [selectedItem]),
+    getSubtitle: useCallback(() => `Qty: ${restockQty || '0'}`, [restockQty]),
+    enabled: true,
+  });
+
+  useEffect(() => {
+    const items = getItems();
+    setAllItems(items);
+    const sups = getSuppliers();
+    setSuppliers(sups);
+  }, []);
+
+  const filteredItems = useMemo(() => {
+    if (!searchQuery.trim()) return allItems;
+    const q = searchQuery.toLowerCase();
+    return allItems.filter((i: any) => i.name?.toLowerCase().includes(q) || i.categoryName?.toLowerCase().includes(q));
+  }, [allItems, searchQuery]);
+
+  const selectItem = (item: any) => {
+    setSelectedItem(item);
+    setBuyingPrice(String(item.basePurchasePrice || ''));
+    setUnitSellingPrice(String(item.baseSellingPrice || ''));
+    setBulkSellingPrice(String(item.packSellingPrice || ''));
+    setRestockQty('1');
+    setSupplierPhone(item.supplierPhone || '');
+    setSupplierCallEnabled(!!item.supplierCallEnabled);
+    setSupplierLog(false);
+    setSelectedSupplier(null);
+  };
+
+  const handleSave = async () => {
+    if (!selectedItem) return;
+    const qty = parseInt(restockQty) || 0;
+    if (qty <= 0) {
+      await dialog.alert({ title: t('common.error'), message: t('form.error_quantity_positive'), iconType: 'danger' });
+      return;
+    }
+    const newBaseQty = (selectedItem.totalBaseQuantity || 0) + qty * (selectedItem.unitsPerPack || 1);
+    const newPackQty = (selectedItem.totalPackQuantity || 0) + qty;
+
+    const updates: any = {
+      basePurchasePrice: parseFloat(buyingPrice) || selectedItem.basePurchasePrice,
+      baseSellingPrice: parseFloat(unitSellingPrice) || selectedItem.baseSellingPrice,
+      packSellingPrice: parseFloat(bulkSellingPrice) || selectedItem.packSellingPrice,
+      totalBaseQuantity: newBaseQty,
+      totalPackQuantity: newPackQty,
+      supplierCallEnabled,
+    };
+    if (supplierPhone.trim()) updates.supplierPhone = supplierPhone.trim();
+    if (selectedSupplier) {
+      updates.supplierPhone = selectedSupplier.phone || supplierPhone;
+      updates.supplierAccount = selectedSupplier.accountNumber || selectedItem.supplierAccount;
+    }
+
+    const success = updateItem(selectedItem.id, updates);
+    if (success) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      playNice();
+      await draftFormDataRestock.clearCurrent();
+      if (onSuccess) onSuccess();
+      else if (onClose) onClose();
+      else if (router.canGoBack()) router.back();
+    } else {
+      await dialog.alert({ title: t('common.error'), message: t('inventory.failed_to_save'), iconType: 'danger' });
+    }
+  };
+
+  if (!selectedItem) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: G.bg }]}>
+        {/* Ambient glow washes */}
+        <View style={[styles.glowWash1, { backgroundColor: G.mutedLight }]} />
+        <View style={[styles.glowWash2, { backgroundColor: G.mutedLight }]} />
+        <View style={[styles.glowWash3, { backgroundColor: G.mutedLight }]} />
+        <View style={styles.header}>
+          <TouchableOpacity onPress={onClose} style={[styles.closeBtn, { borderColor: G.border }]}>
+            <X size={20} color={G.fg} />
+          </TouchableOpacity>
+          <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{t('form.restock_item')}</AppText>
+          <View style={{ width: 40 }} />
+        </View>
+
+        <View style={{ paddingHorizontal: 25, marginBottom: 10 }}>
+          <View style={[styles.input, { flexDirection: 'row', alignItems: 'center', height: 50, paddingHorizontal: 15 }]}>
+            <Search size={18} color={G.fgSecondary} />
+            <TextInput
+              style={{ flex: 1, marginLeft: 10, fontSize: 15, fontFamily: Fonts.medium, color: G.fg }}
+              placeholder={t('inv.search_items_ph')}
+              placeholderTextColor={G.fgSecondary}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <X size={16} color={G.fgSecondary} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        <FlatList
+          data={filteredItems}
+          keyExtractor={(item: any) => String(item.id)}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 25, paddingBottom: 40 }}
+          renderItem={({ item }: { item: any }) => (
+            <TouchableOpacity
+              style={[styles.modeCard, { backgroundColor: G.bgCard, borderColor: G.border, marginBottom: 8 }]}
+              onPress={() => { Haptics.selectionAsync(); selectItem(item); }}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.modeIcon, { backgroundColor: colors.primary + '15', width: 44, height: 44, borderRadius: 12 }]}>
+                <Package size={20} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <AppText variant="body" weight="bold" style={{ color: G.fg }} numberOfLines={1}>{item.name}</AppText>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                  <AppNumber value={item.baseSellingPrice} prefix={t('common.etb') + ' '} size="caption" />
+                  <AppText variant="caption" weight="medium" style={{ color: G.fgSecondary }} numberOfLines={1}> / {item.baseUnit || 'pcs'}</AppText>
+                  {item.categoryName ? <AppText variant="caption" weight="medium" style={{ color: G.fgSecondary }} numberOfLines={1}> • {item.categoryName}</AppText> : null}
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                <AppNumber value={item.totalBaseQuantity} fallback="0" size="caption" />
+                <AppText variant="caption" weight="bold" style={{ color: G.fgSecondary }} numberOfLines={1}> {item.baseUnit || 'pcs'}</AppText>
+              </View>
+            </TouchableOpacity>
+          )}
+          ListEmptyComponent={
+            <View style={{ alignItems: 'center', marginTop: 60 }}>
+              <Package size={48} color={G.border} />
+              <AppText variant="body" weight="medium" style={{ color: G.fgSecondary, marginTop: 12 }} numberOfLines={2}>{t('inv.no_items_found')}</AppText>
+            </View>
+          }
+        />
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: G.bg }]}>
+      {/* Ambient glow washes */}
+      <View style={[styles.glowWash1, { backgroundColor: G.mutedLight }]} />
+      <View style={[styles.glowWash2, { backgroundColor: G.mutedLight }]} />
+      <View style={[styles.glowWash3, { backgroundColor: G.mutedLight }]} />
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => setSelectedItem(null)} style={[styles.closeBtn, { borderColor: G.border }]}>
+          <X size={20} color={G.fg} />
+        </TouchableOpacity>
+        <View style={{ flex: 1 }}>
+          <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.fgSecondary }} numberOfLines={1}>{t('form.restock_item')}</AppText>
+          <AppText variant="title" weight="bold" style={{ color: G.fg, marginTop: 2 }} numberOfLines={1}>{selectedItem.name}</AppText>
+        </View>
+        <View style={{ width: 40 }} />
+      </View>
+
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        {draftFormDataRestock.showDrafts && (
+          <DraftSection
+            drafts={draftFormDataRestock.drafts}
+            onRestore={async (draft: Draft) => {
+              const d = draft.data;
+              setSearchQuery(d.searchQuery || '');
+              setBuyingPrice(d.buyingPrice || '');
+              setUnitSellingPrice(d.unitSellingPrice || '');
+              setBulkSellingPrice(d.bulkSellingPrice || '');
+              setRestockQty(d.restockQty || '1');
+              setSupplierPhone(d.supplierPhone || '');
+              setSupplierCallEnabled(d.supplierCallEnabled || false);
+              if (d.selectedItem) setSelectedItem(d.selectedItem);
+              if (d.selectedSupplier) setSelectedSupplier(d.selectedSupplier);
+              await draftFormDataRestock.remove(draft.id);
+            }}
+            onDelete={async (id: string) => {
+              await draftFormDataRestock.remove(id);
+            }}
+          />
+        )}
+        <Animated.View entering={FadeInDown} style={styles.formCard}>
+          {/* Prices */}
+          <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.cardTitle, { color: G.fgSecondary }]} numberOfLines={1}>{t('form.financial_strategy')}</AppText>
+
+          <View style={styles.row}>
+            <View style={{ flex: 1, marginRight: 15 }}>
+              <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('form.unit_cost')}</AppText>
+              <TextInput
+                style={[styles.input, { color: G.fg, borderColor: G.border, fontFamily: Fonts.bold }]}
+                placeholder="0.00"
+                value={buyingPrice}
+                onChangeText={setBuyingPrice}
+                keyboardType="numeric"
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('form.unit_selling_price')}</AppText>
+              <TextInput
+                style={[styles.input, { color: G.fg, borderColor: G.border, fontFamily: Fonts.bold }]}
+                placeholder="0.00"
+                value={unitSellingPrice}
+                onChangeText={setUnitSellingPrice}
+                keyboardType="numeric"
+              />
+            </View>
+          </View>
+
+          {selectedItem.unitsPerPack > 1 && (
+            <View style={styles.inputNode}>
+              <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('form.bulk_selling_price')}</AppText>
+              <TextInput
+                style={[styles.input, { color: G.fg, borderColor: G.border, fontFamily: Fonts.bold }]}
+                placeholder="0.00"
+                value={bulkSellingPrice}
+                onChangeText={setBulkSellingPrice}
+                keyboardType="numeric"
+              />
+            </View>
+          )}
+
+          {/* Quantity */}
+          <View style={styles.inputNode}>
+            <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('form.initial_stock', { unit: selectedItem.purchaseUnit || selectedItem.baseUnit || 'pcs' })}</AppText>
+            <TextInput
+              style={[styles.input, { color: G.fg, borderColor: G.border, fontFamily: Fonts.bold, fontSize: 18 }]}
+              value={restockQty}
+              onChangeText={setRestockQty}
+              keyboardType="numeric"
+            />
+          </View>
+
+          {/* Supplier */}
+          <TouchableOpacity
+            style={[styles.intelligenceBlock, { backgroundColor: G.bgCard, borderColor: G.border, flexDirection: 'row', alignItems: 'center' }]}
+            onPress={() => { setShowSupplierModal(true); }}
+          >
+            <Truck size={20} color={colors.primary} />
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <AppText variant="body" weight="bold" style={[styles.blockTitle, { color: G.fg }]} numberOfLines={2}>{t('form.supplier_label')}</AppText>
+              <AppText variant="body-sm" weight="medium" style={[styles.blockSub, { color: G.fgSecondary }]} numberOfLines={2}>
+                {selectedSupplier ? selectedSupplier.fullName : t('form.tap_select_supplier')}
+              </AppText>
+            </View>
+            <ChevronDown size={18} color={G.fgSecondary} />
+          </TouchableOpacity>
+
+          {/* Call supplier on price change */}
+          <View style={[styles.intelligenceBlock, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+            <View style={styles.blockHeader}>
+              <PhoneCall size={20} color={colors.primary} />
+              <View style={{ flex: 1 }}>
+                <AppText variant="body" weight="bold" style={[styles.blockTitle, { color: G.fg }]} numberOfLines={2}>{t('form.supplier_call_title')}</AppText>
+                <AppText variant="micro" weight="medium" style={{ color: G.fgSecondary, marginTop: 2 }} numberOfLines={2}>{t('form.supplier_call_sub')}</AppText>
+              </View>
+              <TouchableOpacity
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setSupplierCallEnabled(!supplierCallEnabled); }}
+                style={[styles.switch, { backgroundColor: supplierCallEnabled ? G.fg : G.border }]}
+              >
+                <View style={[styles.switchThumb, { backgroundColor: G.bg, left: supplierCallEnabled ? 24 : 2 }]} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Log as supplier */}
+          <View style={[styles.intelligenceBlock, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+            <View style={styles.blockHeader}>
+              <Building2 size={20} color={colors.primary} />
+              <View style={{ flex: 1 }}>
+                <AppText variant="body" weight="bold" style={[styles.blockTitle, { color: G.fg }]} numberOfLines={2}>{t('form.log_as_supplier')}</AppText>
+                <AppText variant="micro" weight="medium" style={{ color: G.fgSecondary, marginTop: 2 }} numberOfLines={2}>{t('form.log_as_supplier_desc')}</AppText>
+              </View>
+              <TouchableOpacity
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setSupplierLog(!supplierLog); }}
+                style={[styles.switch, { backgroundColor: supplierLog ? G.fg : G.border }]}
+              >
+                <View style={[styles.switchThumb, { backgroundColor: G.bg, left: supplierLog ? 24 : 2 }]} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Animated.View>
+
+        {/* Save button */}
+        <View style={styles.actionDock}>
+          <TouchableOpacity
+            style={[styles.nextBtn, { backgroundColor: G.fg, flex: 1 }]}
+            onPress={handleSave}
+          >
+            <Check size={18} color={G.bg} />
+            <AppText variant="body" weight="bold" shrink={false} style={[styles.nextBtnText, { color: G.bg }]} numberOfLines={1}>{t('form.initialize_asset')}</AppText>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+
+      {/* Supplier Modal */}
+      <Modal visible={showSupplierModal} transparent animationType="slide">
+        <Pressable style={styles.modalOverlay} onPress={() => setShowSupplierModal(false)}>
+          <Pressable style={[styles.categorySheet, { backgroundColor: G.bg }]}>
+            <View style={styles.modalHandleRow}>
+              <View style={[styles.modalHandle, { backgroundColor: G.border }]} />
+            </View>
+            <View style={styles.modalHeader}>
+               <AppText variant="title" weight="bold" style={[styles.modalTitle, { color: G.fg }]} numberOfLines={2}>{t('inv.select_supplier')}</AppText>
+              <TouchableOpacity onPress={() => setShowSupplierModal(false)}>
+                <X size={24} color={G.fg} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView contentContainerStyle={styles.catScroll}>
+              {suppliers.length === 0 && (
+                <View style={{ padding: 30, alignItems: 'center' }}>
+                   <AppText variant="body" weight="medium" align="center" style={{ color: G.fgSecondary }} numberOfLines={2}>{t('inv.no_suppliers')}</AppText>
+                </View>
+              )}
+              {suppliers.map((sup: any) => (
+                <TouchableOpacity
+                  key={sup.id}
+                  style={[styles.catItem, { borderColor: G.border }]}
+                  onPress={() => { setSelectedSupplier(sup); setShowSupplierModal(false); Haptics.selectionAsync(); }}
+                >
+                  <AppText variant="heading" shrink={false} style={styles.catIcon}>ðŸšš</AppText>
+                  <View style={{ marginLeft: 12, flex: 1 }}>
+                    <AppText variant="body" weight="bold" style={[styles.catName, { color: G.fg }]} numberOfLines={1}>{sup.fullName}</AppText>
+                    {sup.phone && <AppText variant="caption" weight="medium" style={{ color: G.fgSecondary }} numberOfLines={1}>{sup.phone}</AppText>}
+                  </View>
+                  {selectedSupplier?.id === sup.id && <Check size={18} color={colors.primary} />}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </SafeAreaView>
+  );
+};
+
+const AddItemFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?: () => void }) => {
+  const { colors, t } = useSettings();
+  const G = getInventoryGlass(colors);
+  const styles = useMemo(() => createStyles(G), [G]);
   const dialog = useDialog();
   const router = useRouter();
   const [step, setStep] = useState(1);
@@ -94,23 +522,21 @@ export const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, o
   const [packPurchasePrice, setPackPurchasePrice] = useState('');
   const [baseSellingPrice, setBaseSellingPrice] = useState('');
   const [packSellingPrice, setPackSellingPrice] = useState('');
-  const [allowSellByBase, setAllowSellByBase] = useState(true);
+  const [allowSellByBase] = useState(true);
   const [allowSellByPack, setAllowSellByPack] = useState(false);
   const [expiryDate, setExpiryDate] = useState('');
   const [qualityGrade, setQualityGrade] = useState('grade1');
-  const [notes, setNotes] = useState('');
+  const [notes] = useState('');
   const [supplierPhone, setSupplierPhone] = useState('');
   const [supplierAccount, setSupplierAccount] = useState('');
-  const [supplierName, setSupplierName] = useState('');
   const [showSupplierModal, setShowSupplierModal] = useState(false);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [selectedSupplier, setSelectedSupplier] = useState<any>(null);
-  const [supplierSearchQuery, setSupplierSearchQuery] = useState('');
   const [showNewSupplierForm, setShowNewSupplierForm] = useState(false);
   const [newSupplierName, setNewSupplierName] = useState('');
   const [newSupplierPhone, setNewSupplierPhone] = useState('');
   const [newSupplierAccount, setNewSupplierAccount] = useState('');
-  const [newSupplierNotes, setNewSupplierNotes] = useState('');
+  const [newSupplierNotes] = useState('');
   const [creditToggle, setCreditToggle] = useState<'Yes' | 'No'>('No');
   const [supplierCallEnabled, setSupplierCallEnabled] = useState<boolean>(false);
 
@@ -119,6 +545,37 @@ export const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, o
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  const draftFormKey = 'inventory-add';
+  const draftFormData = useFormDrafts({
+    screen: 'inventory',
+    formKey: draftFormKey,
+    getPayload: useCallback(() => ({
+      step,
+      itemName,
+      selectedCategory,
+      companyName,
+      purchaseUnit,
+      baseUnit,
+      unitsPerPack,
+      totalPackQuantity,
+      packPurchasePrice,
+      baseSellingPrice,
+      packSellingPrice,
+      allowSellByPack,
+      expiryDate,
+      qualityGrade,
+      creditToggle,
+      supplierPhone,
+      supplierAccount,
+      supplierCallEnabled,
+      hasPacks,
+      recordDate,
+    }), [step, itemName, selectedCategory, companyName, purchaseUnit, baseUnit, unitsPerPack, totalPackQuantity, packPurchasePrice, baseSellingPrice, packSellingPrice, allowSellByPack, expiryDate, qualityGrade, creditToggle, supplierPhone, supplierAccount, supplierCallEnabled, hasPacks, recordDate]),
+    getTitle: useCallback(() => (itemName ? `Inventory - ${itemName}` : 'Add Item Draft'), [itemName]),
+    getSubtitle: useCallback(() => `Step ${step}/4`, [step]),
+    enabled: true,
+  });
+
    const loadSuppliers = () => {
      const sup = getSuppliers();
      setSuppliers(sup);
@@ -126,7 +583,7 @@ export const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, o
 
 useEffect(() => {
 const loadCategories = async () => {
-        const dbCats: any = await getCategories();
+        const dbCats: any = await getUserCategories();
         if (dbCats && dbCats.length > 0) setCategories(dbCats);
       };
      loadCategories();
@@ -178,6 +635,7 @@ const loadCategories = async () => {
       if (step < 4) setStep(step + 1);
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      playBad();
     }
   };
 
@@ -190,13 +648,15 @@ const loadCategories = async () => {
     // Validate all steps before saving
     if (!validateStep(4)) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      playBad();
       return;
     }
     try {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      playNice();
       let finalCategoryId = selectedCategory?.id || 0;
       if (selectedCategory && (!selectedCategory.id || selectedCategory.id > 1000)) {
-        const newId = await insertCategory(selectedCategory.name, selectedCategory.icon || '📦', true);
+        const newId = await insertCategory(selectedCategory.name, selectedCategory.icon || 'ðŸ“¦', true);
         if (newId) finalCategoryId = Number(newId);
       }
 
@@ -232,6 +692,7 @@ const loadCategories = async () => {
         }
       }
       // Call onSuccess/onClose directly instead of showing success modal
+      await draftFormData.clearCurrent();
       if (onSuccess) onSuccess();
       else if (onClose) onClose();
       else if (router.canGoBack()) router.back();
@@ -245,16 +706,16 @@ const loadCategories = async () => {
 
   const renderStepIndicator = () => (
     <View style={styles.stepContainer}>
-      <View style={[styles.stepLine, { backgroundColor: colors.border }]}>
+      <View style={[styles.stepLine, { backgroundColor: G.border }]}>
         <Animated.View 
-          style={[styles.stepProgress, { backgroundColor: colors.text, width: `${(step / 4) * 100}%` }]} 
+          style={[styles.stepProgress, { backgroundColor: G.fg, width: `${(step / 4) * 100}%` }]} 
         />
       </View>
       <View style={styles.stepLabels}>
         {[t('form.identification'), t('form.metrics'), t('form.finance'), t('form.assurance')].map((label, i) => (
           <View key={i} style={styles.stepLabelItem}>
-            <View style={[styles.stepDot, step > i ? { backgroundColor: colors.text } : { backgroundColor: colors.border }]} />
-            <AppText variant="micro" weight="bold" shrink={false} style={[styles.stepLabelText, { color: step > i ? colors.text : colors.textSecondary }]} numberOfLines={1}>{label}</AppText>
+            <View style={[styles.stepDot, step > i ? { backgroundColor: G.fg } : { backgroundColor: G.border }]} />
+            <AppText variant="micro" weight="bold" shrink={false} style={[styles.stepLabelText, { color: step > i ? G.fg : G.fgSecondary }]} numberOfLines={1}>{label}</AppText>
           </View>
         ))}
       </View>
@@ -262,18 +723,22 @@ const loadCategories = async () => {
   );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: G.bg }]}>
+      {/* Ambient glow washes */}
+      <View style={[styles.glowWash1, { backgroundColor: G.mutedLight }]} />
+      <View style={[styles.glowWash2, { backgroundColor: G.mutedLight }]} />
+      <View style={[styles.glowWash3, { backgroundColor: G.mutedLight }]} />
       <View style={styles.header}>
         <TouchableOpacity 
           onPress={() => {
             if (onClose) onClose();
             else if (router.canGoBack()) router.back();
           }} 
-          style={[styles.closeBtn, { borderColor: colors.border }]}
+          style={[styles.closeBtn, { borderColor: G.border }]}
         >
-          <X size={20} color={colors.text} />
+          <X size={20} color={G.fg} />
         </TouchableOpacity>
-        <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: colors.text }]} numberOfLines={2}>{t('form.intelligence_intake')}</AppText>
+        <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{t('form.intelligence_intake')}</AppText>
         <View style={{ width: 40 }} />
       </View>
 
@@ -281,60 +746,92 @@ const loadCategories = async () => {
 
       <KeyboardAvoidingView 
         style={{ flex: 1 }} 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 90}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        {draftFormData.showDrafts && (
+          <DraftSection
+            drafts={draftFormData.drafts}
+            onRestore={async (draft: Draft) => {
+              const d = draft.data;
+              setStep(d.step || 1);
+              setItemName(d.itemName || '');
+              setSelectedCategory(d.selectedCategory || null);
+              setCompanyName(d.companyName || '');
+              setPurchaseUnit(d.purchaseUnit || 'box');
+              setBaseUnit(d.baseUnit || 'pieces');
+              setUnitsPerPack(d.unitsPerPack || '1');
+              setTotalPackQuantity(d.totalPackQuantity || '1');
+              setPackPurchasePrice(d.packPurchasePrice || '');
+              setBaseSellingPrice(d.baseSellingPrice || '');
+              setPackSellingPrice(d.packSellingPrice || '');
+              setAllowSellByPack(d.allowSellByPack || false);
+              setExpiryDate(d.expiryDate || '');
+              setQualityGrade(d.qualityGrade || 'grade1');
+              setCreditToggle(d.creditToggle || 'No');
+              setSupplierPhone(d.supplierPhone || '');
+              setSupplierAccount(d.supplierAccount || '');
+              setSupplierCallEnabled(d.supplierCallEnabled || false);
+              setHasPacks(d.hasPacks || false);
+              setRecordDate(d.recordDate || '');
+              await draftFormData.remove(draft.id);
+            }}
+            onDelete={async (id: string) => {
+              await draftFormData.remove(id);
+            }}
+          />
+        )}
         <Animated.View entering={FadeInDown} key={step} style={styles.stepContent}>
           {step === 1 && (
             <View style={styles.formCard}>
-              <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.cardTitle, { color: colors.textSecondary }]} numberOfLines={1}>{t('form.asset_identification')}</AppText>
+              <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.cardTitle, { color: G.fgSecondary }]} numberOfLines={1}>{t('form.asset_identification')}</AppText>
               
                 <View style={styles.inputNode}>
                   <View style={styles.nodeHeader}>
-                     <Tag size={14} color={colors.textSecondary} />
-                     <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('form.official_name')}</AppText>
-                     <AppText variant="micro" weight="medium" shrink={false} style={{ fontSize: 10, color: colors.textSecondary, marginLeft: 'auto' }} numberOfLines={1}>{itemName.length}/50</AppText>
+                     <Tag size={14} color={G.fgSecondary} />
+                     <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('form.official_name')}</AppText>
+                     <AppText variant="micro" weight="medium" shrink={false} style={{ fontSize: 10, color: G.fgSecondary, marginLeft: 'auto' }} numberOfLines={1}>{itemName.length}/50</AppText>
                   </View>
                   <TextInput 
-                    style={[styles.input, { color: colors.text, borderColor: errors.itemName ? '#FF3B30' : colors.border }]} 
+                    style={[styles.input, { color: G.fg, borderColor: errors.itemName ? colors.error : G.border }]} 
                     placeholder={t('form.search_placeholder_asset')} 
-                    placeholderTextColor={colors.textSecondary}
+                    placeholderTextColor={G.fgSecondary}
                     value={itemName}
                     onChangeText={(val) => { if (val.length <= 50) { setItemName(val); if (errors.itemName) setErrors(prev => ({ ...prev, itemName: '' })); } }}
                     maxLength={50}
                   />
-                  {errors.itemName && <AppText variant="caption" weight="medium" style={styles.errorText} numberOfLines={2}>{errors.itemName}</AppText>}
+                  {errors.itemName && <AppText variant="caption" weight="medium" style={[styles.errorText, { color: colors.error }]} numberOfLines={2}>{errors.itemName}</AppText>}
                 </View>
 
               {/* Category Selector */}
               <View style={styles.inputNode}>
                 <View style={styles.nodeHeader}>
-                   <LayoutGrid size={14} color={colors.textSecondary} />
-                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('form.intel_category')}</AppText>
+                   <LayoutGrid size={14} color={G.fgSecondary} />
+                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('form.intel_category')}</AppText>
                 </View>
                 <TouchableOpacity
-                  style={[styles.input, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderColor: errors.category ? '#FF3B30' : colors.border }]}
+                  style={[styles.input, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderColor: errors.category ? colors.error : G.border }]}
                   onPress={() => setShowCategoryModal(true)}
                 >
-                  <AppText variant="body" weight="medium" style={{ color: selectedCategory ? colors.text : colors.textSecondary }} numberOfLines={1}>
+                  <AppText variant="body" weight="medium" style={{ color: selectedCategory ? G.fg : G.fgSecondary }} numberOfLines={1}>
                     {selectedCategory ? selectedCategory.name : t('form.new_domain')}
                   </AppText>
-                  <ChevronDown size={18} color={colors.textSecondary} />
+                  <ChevronDown size={18} color={G.fgSecondary} />
                 </TouchableOpacity>
-                 {errors.category && <AppText variant="caption" weight="medium" style={styles.errorText} numberOfLines={2}>{errors.category}</AppText>}
+                 {errors.category && <AppText variant="caption" weight="medium" style={[styles.errorText, { color: colors.error }]} numberOfLines={2}>{errors.category}</AppText>}
               </View>
 
               <View style={styles.inputNode}>
                 <View style={styles.nodeHeader}>
-                   <Building2 size={14} color={colors.textSecondary} />
-                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('form.brand')}</AppText>
-                   <AppText variant="micro" weight="medium" shrink={false} style={{ color: colors.textSecondary, marginLeft: 'auto' }} numberOfLines={1}>{companyName.length}/50</AppText>
+                   <Building2 size={14} color={G.fgSecondary} />
+                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('form.brand')}</AppText>
+                   <AppText variant="micro" weight="medium" shrink={false} style={{ color: G.fgSecondary, marginLeft: 'auto' }} numberOfLines={1}>{companyName.length}/50</AppText>
                 </View>
                 <TextInput 
-                  style={[styles.input, { color: colors.text, borderColor: colors.border }]} 
+                  style={[styles.input, { color: G.fg, borderColor: G.border }]} 
                   placeholder={t('form.manufacturer_placeholder')} 
-                  placeholderTextColor={colors.textSecondary}
+                  placeholderTextColor={G.fgSecondary}
                   value={companyName}
                   onChangeText={(val) => { if (val.length <= 50) setCompanyName(val); }}
                   maxLength={50}
@@ -345,82 +842,82 @@ const loadCategories = async () => {
 
           {step === 2 && (
             <View style={styles.formCard}>
-              <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.cardTitle, { color: colors.textSecondary }]} numberOfLines={1}>{t('form.metrics_scaling')}</AppText>
+              <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.cardTitle, { color: G.fgSecondary }]} numberOfLines={1}>{t('form.metrics_scaling')}</AppText>
               
-              <View style={[styles.intelligenceBlock, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={[styles.intelligenceBlock, { backgroundColor: G.bgCard, borderColor: G.border }]}>
                 <View style={styles.blockHeader}>
                    <Package size={20} color={colors.primary} />
-                   <AppText variant="body" weight="bold" style={[styles.blockTitle, { color: colors.text }]} numberOfLines={2}>{t('form.box_roll_config')}</AppText>
+                   <AppText variant="body" weight="bold" style={[styles.blockTitle, { color: G.fg }]} numberOfLines={2}>{t('form.box_roll_config')}</AppText>
                    <TouchableOpacity 
                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setHasPacks(!hasPacks); }}
-                     style={[styles.switch, { backgroundColor: hasPacks ? colors.text : colors.border }]}
+                     style={[styles.switch, { backgroundColor: hasPacks ? G.fg : G.border }]}
                    >
-                     <View style={[styles.switchThumb, { backgroundColor: colors.background, left: hasPacks ? 24 : 2 }]} />
+                     <View style={[styles.switchThumb, { backgroundColor: G.bg, left: hasPacks ? 24 : 2 }]} />
                    </TouchableOpacity>
                 </View>
-                <AppText variant="body-sm" weight="medium" style={[styles.blockSub, { color: colors.textSecondary }]} numberOfLines={2}>{t('form.box_roll_desc')}</AppText>
+                <AppText variant="body-sm" weight="medium" style={[styles.blockSub, { color: G.fgSecondary }]} numberOfLines={2}>{t('form.box_roll_desc')}</AppText>
               </View>
 
               <View style={styles.row}>
                 {hasPacks && (
                   <View style={{ flex: 1, marginRight: 15 }}>
-                     <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('form.bulk_unit')}</AppText>
+                     <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('form.bulk_unit')}</AppText>
                      <TextInput 
-                        style={[styles.input, { color: colors.text, borderColor: colors.border }]} 
+                        style={[styles.input, { color: G.fg, borderColor: G.border }]} 
                         value={purchaseUnit}
                         onChangeText={setPurchaseUnit}
                         placeholder={t('form.bulk_unit')}
-                        placeholderTextColor={colors.textSecondary}
+                        placeholderTextColor={G.fgSecondary}
                      />
                   </View>
                 )}
                 <View style={{ flex: 1 }}>
-                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('form.base_unit')}</AppText>
+                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('form.base_unit')}</AppText>
                    <TextInput 
-                      style={[styles.input, { color: colors.text, borderColor: colors.border }]} 
+                      style={[styles.input, { color: G.fg, borderColor: G.border }]} 
                       value={baseUnit}
                       onChangeText={setBaseUnit}
                       placeholder={t('form.base_unit')}
-                      placeholderTextColor={colors.textSecondary}
+                      placeholderTextColor={G.fgSecondary}
                    />
                 </View>
               </View>
 
               {hasPacks && (
                 <View style={styles.inputNode}>
-                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('form.conversion_ratio')}</AppText>
+                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('form.conversion_ratio')}</AppText>
                    <TextInput 
-                     style={[styles.input, { color: colors.text, borderColor: errors.unitsPerPack ? '#FF3B30' : colors.border, fontFamily: Fonts.bold }]} 
+                     style={[styles.input, { color: G.fg, borderColor: errors.unitsPerPack ? colors.error : G.border, fontFamily: Fonts.bold }]} 
                      value={unitsPerPack}
                      onChangeText={(val) => { setUnitsPerPack(val); if (errors.unitsPerPack) setErrors(prev => ({ ...prev, unitsPerPack: '' })); }}
                      keyboardType="numeric"
                    />
-                   {errors.unitsPerPack && <AppText variant="caption" weight="medium" style={styles.errorText} numberOfLines={2}>{errors.unitsPerPack}</AppText>}
+                   {errors.unitsPerPack && <AppText variant="caption" weight="medium" style={[styles.errorText, { color: colors.error }]} numberOfLines={2}>{errors.unitsPerPack}</AppText>}
                 </View>
               )}
 
               <View style={styles.inputNode}>
-                 <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 8 }]} numberOfLines={2}>{t('form.initial_stock', { unit: hasPacks ? purchaseUnit : baseUnit })}</AppText>
+                 <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={2}>{t('form.initial_stock', { unit: hasPacks ? purchaseUnit : baseUnit })}</AppText>
                  <TextInput 
-                   style={[styles.input, { color: colors.text, borderColor: errors.quantity ? '#FF3B30' : colors.border, fontFamily: Fonts.bold, fontSize: 18 }]} 
+                   style={[styles.input, { color: G.fg, borderColor: errors.quantity ? colors.error : G.border, fontFamily: Fonts.bold, fontSize: 18 }]} 
                    value={totalPackQuantity}
                    onChangeText={(val) => { setTotalPackQuantity(val); if (errors.quantity) setErrors(prev => ({ ...prev, quantity: '' })); }}
                    keyboardType="numeric"
                  />
-                 {errors.quantity && <AppText variant="caption" weight="medium" style={styles.errorText} numberOfLines={2}>{errors.quantity}</AppText>}
+                 {errors.quantity && <AppText variant="caption" weight="medium" style={[styles.errorText, { color: colors.error }]} numberOfLines={2}>{errors.quantity}</AppText>}
               </View>
             </View>
           )}
 
           {step === 3 && (
             <View style={styles.formCard}>
-              <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.cardTitle, { color: colors.textSecondary }]} numberOfLines={1}>{t('form.financial_strategy')}</AppText>
+              <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.cardTitle, { color: G.fgSecondary }]} numberOfLines={1}>{t('form.financial_strategy')}</AppText>
               
               <View style={styles.row}>
                 <View style={{ flex: 1, marginRight: 15 }}>
-                    <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 8 }]} numberOfLines={2}>{hasPacks ? t('form.bulk_cost') : t('form.unit_cost')}</AppText>
+                    <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={2}>{hasPacks ? t('form.bulk_cost') : t('form.unit_cost')}</AppText>
                     <TextInput 
-                      style={[styles.input, { color: colors.text, borderColor: errors.purchasePrice ? '#FF3B30' : colors.border, fontFamily: Fonts.bold }]} 
+                      style={[styles.input, { color: G.fg, borderColor: errors.purchasePrice ? colors.error : G.border, fontFamily: Fonts.bold }]} 
                       placeholder="0.00"
                       value={packPurchasePrice}
                       onChangeText={(val) => { setPackPurchasePrice(val); if (errors.purchasePrice) setErrors(prev => ({ ...prev, purchasePrice: '' })); }}
@@ -428,11 +925,11 @@ const loadCategories = async () => {
                     />
                 </View>
                 <View style={{ flex: 1 }}>
-                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 8 }]} numberOfLines={2}>
+                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={2}>
                      {hasPacks ? t('form.unit_selling_price') : t('form.unit_price')}
                    </AppText>
                    <TextInput 
-                      style={[styles.input, { color: colors.text, borderColor: errors.sellingPrice ? '#FF3B30' : (isLossDetected ? '#FF3B30' : colors.border), fontFamily: Fonts.bold }]} 
+                      style={[styles.input, { color: G.fg, borderColor: errors.sellingPrice ? colors.error : (isLossDetected ? colors.error : G.border), fontFamily: Fonts.bold }]} 
                       placeholder={hasPacks && unitsPerPack ? (Number(packPurchasePrice) / Number(unitsPerPack) * 1.2).toFixed(2) : "0.00"}
                       value={baseSellingPrice}
                       onChangeText={(val) => { setBaseSellingPrice(val); if (errors.sellingPrice) setErrors(prev => ({ ...prev, sellingPrice: '' })); }}
@@ -441,51 +938,47 @@ const loadCategories = async () => {
                 </View>
               </View>
               {(errors.purchasePrice || errors.sellingPrice) && (
-                <AppText variant="caption" weight="medium" style={[styles.errorText, { marginBottom: 10 }]} numberOfLines={2}>
+                <AppText variant="caption" weight="medium" style={[[styles.errorText, { color: colors.error }], { marginBottom: 10 }]} numberOfLines={2}>
                   {errors.purchasePrice || errors.sellingPrice}
                 </AppText>
               )}
 
-              <View style={[styles.financeSummary, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={[styles.financeSummary, { backgroundColor: G.bgCard, borderColor: G.border }]}>
                  <View style={styles.summaryRow}>
-                    <AppText variant="caption" weight="medium" style={[styles.summaryLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('form.profit_per', { unit: baseUnit })}</AppText>
-                    <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.summaryValue, baseMargin > 0 ? { color: '#34C759' } : { color: '#FF3B30' }]} numberOfLines={1}>
-                       {(Number(baseSellingPrice) - baseCostPrice).toFixed(2)} {t('common.etb')}
-                    </AppText>
+                    <AppText variant="caption" weight="medium" style={[styles.summaryLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('form.profit_per', { unit: baseUnit })}</AppText>
+                    <AppNumber value={Number(baseSellingPrice) - baseCostPrice} prefix={t('common.etb') + ' '} size="body-sm" style={styles.summaryValue} />
                  </View>
                  <View style={styles.summaryRow}>
-                    <AppText variant="caption" weight="medium" style={[styles.summaryLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('form.intel_margin')}</AppText>
-                    <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.summaryValue, baseMargin > 0 ? { color: '#34C759' } : { color: '#FF3B30' }]} numberOfLines={1}>
-                       {baseMargin.toFixed(1)}%
-                    </AppText>
+                    <AppText variant="caption" weight="medium" style={[styles.summaryLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('form.intel_margin')}</AppText>
+                    <AppNumber value={baseMargin} suffix="%" size="body-sm" style={styles.summaryValue} />
                  </View>
                  {isLossDetected && (
                    <View style={styles.warningRow}>
-                      <AlertCircle size={14} color="#FF3B30" />
-                      <AppText variant="caption" weight="bold" style={styles.warningText} numberOfLines={2}>{t('form.loss_detected', { cost: baseCostPrice.toFixed(2) })}</AppText>
+                      <AlertCircle size={14} color={colors.error} />
+                       <AppText variant="caption" weight="bold" style={[styles.warningText, { color: colors.error }]} numberOfLines={2}>{t('form.loss_detected', { cost: baseCostPrice.toFixed(2) })}</AppText>
                    </View>
                  )}
               </View>
 
               <TouchableOpacity 
-                 style={[styles.advToggle, { borderColor: colors.border }]}
+                 style={[styles.advToggle, { borderColor: G.border }]}
                  onPress={() => setAllowSellByPack(!allowSellByPack)}
               >
-                 <AppText variant="body-sm" weight="bold" style={[styles.advToggleText, { color: colors.text }]} numberOfLines={2}>{t('form.adv_bulk_selling')}</AppText>
-                 <ChevronDown size={18} color={colors.textSecondary} />
+                 <AppText variant="body-sm" weight="bold" style={[styles.advToggleText, { color: G.fg }]} numberOfLines={2}>{t('form.adv_bulk_selling')}</AppText>
+                 <ChevronDown size={18} color={G.fgSecondary} />
               </TouchableOpacity>
               
               {allowSellByPack && (
                 <Animated.View entering={FadeInDown} style={styles.inputNode}>
-                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('form.bulk_selling_price')}</AppText>
+                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('form.bulk_selling_price')}</AppText>
                    <TextInput 
-                     style={[styles.input, { color: colors.text, borderColor: errors.packSellingPrice ? '#FF3B30' : colors.border, fontFamily: Fonts.bold }]} 
+                     style={[styles.input, { color: G.fg, borderColor: errors.packSellingPrice ? colors.error : G.border, fontFamily: Fonts.bold }]} 
                      placeholder={hasPacks && packPurchasePrice ? (Number(packPurchasePrice) * 1.2).toFixed(2) : "0.00"}
                      value={packSellingPrice}
                      onChangeText={(val) => { setPackSellingPrice(val); if (errors.packSellingPrice) setErrors(prev => ({ ...prev, packSellingPrice: '' })); }}
                      keyboardType="numeric"
                    />
-                   {errors.packSellingPrice && <AppText variant="caption" weight="medium" style={styles.errorText} numberOfLines={2}>{errors.packSellingPrice}</AppText>}
+                   {errors.packSellingPrice && <AppText variant="caption" weight="medium" style={[styles.errorText, { color: colors.error }]} numberOfLines={2}>{errors.packSellingPrice}</AppText>}
                 </Animated.View>
               )}
             </View>
@@ -493,60 +986,60 @@ const loadCategories = async () => {
 
           {step === 4 && (
             <View style={styles.formCard}>
-              <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.cardTitle, { color: colors.textSecondary }]} numberOfLines={1}>{t('form.asset_assurance')}</AppText>
+              <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.cardTitle, { color: G.fgSecondary }]} numberOfLines={1}>{t('form.asset_assurance')}</AppText>
 
               {/* Record Date */}
               <TouchableOpacity 
-                style={[styles.inputNode, { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.border, marginBottom: 15 }]}
+                style={[styles.inputNode, { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: G.border, marginBottom: 15 }]}
                 onPress={() => setShowDatePicker(true)}
               >
                 <Calendar size={18} color={colors.primary} style={{ marginRight: 10 }} />
                 <View style={{ flex: 1 }}>
-                  <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 2 }]} numberOfLines={1}>{t('common.record_date')}</AppText>
-                  <AppText variant="body" weight="bold" style={{ color: recordDate ? colors.text : colors.textSecondary }} numberOfLines={1}>
+                  <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 2 }]} numberOfLines={1}>{t('common.record_date')}</AppText>
+                  <AppText variant="body" weight="bold" style={{ color: recordDate ? G.fg : G.fgSecondary }} numberOfLines={1}>
                     {recordDate || t('common.today')}
                   </AppText>
                 </View>
-                <ChevronDown size={18} color={colors.textSecondary} />
+                <ChevronDown size={18} color={G.fgSecondary} />
               </TouchableOpacity>
               
               <View style={styles.inputNode}>
                 <View style={styles.nodeHeader}>
-                   <Calendar size={14} color={colors.textSecondary} />
-                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('form.expiration_archive')}</AppText>
+                   <Calendar size={14} color={G.fgSecondary} />
+                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('form.expiration_archive')}</AppText>
                 </View>
                 <TextInput 
-                  style={[styles.input, { color: colors.text, borderColor: errors.expiryDate ? '#FF3B30' : colors.border }]} 
+                  style={[styles.input, { color: G.fg, borderColor: errors.expiryDate ? colors.error : G.border }]} 
                   placeholder={t('inv.date_format')} 
-                  placeholderTextColor={colors.textSecondary}
+                  placeholderTextColor={G.fgSecondary}
                   value={expiryDate}
                   onChangeText={(val) => { setExpiryDate(val); if (errors.expiryDate) setErrors(prev => ({ ...prev, expiryDate: '' })); }}
                 />
-                 {errors.expiryDate && <AppText variant="caption" weight="medium" style={styles.errorText} numberOfLines={2}>{errors.expiryDate}</AppText>}
+                 {errors.expiryDate && <AppText variant="caption" weight="medium" style={[styles.errorText, { color: colors.error }]} numberOfLines={2}>{errors.expiryDate}</AppText>}
               </View>
 
-              <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 12 }]} numberOfLines={1}>{t('form.quality_classification')}</AppText>
+              <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 12 }]} numberOfLines={1}>{t('form.quality_classification')}</AppText>
               <View style={styles.gradeGrid}>
                  {QUALITY_GRADES.map(g => (
                    <TouchableOpacity 
                      key={g} 
-                     style={[styles.gradeChip, { backgroundColor: colors.card, borderColor: qualityGrade === g ? colors.primary : colors.border }]}
+                     style={[styles.gradeChip, { backgroundColor: G.bgCard, borderColor: qualityGrade === g ? colors.primary : G.border }]}
                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setQualityGrade(g); }}
                    >
-                     <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.gradeText, { color: qualityGrade === g ? colors.primary : colors.textSecondary }]} numberOfLines={1}>{t(`form.${g}`)}</AppText>
+                     <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.gradeText, { color: qualityGrade === g ? colors.primary : G.fgSecondary }]} numberOfLines={1}>{t(`form.${g}`)}</AppText>
                    </TouchableOpacity>
                  ))}
               </View>
 
               {/* Supplier Selection */}
               <TouchableOpacity
-                style={[styles.intelligenceBlock, { backgroundColor: colors.card, borderColor: colors.border, flexDirection: 'row', alignItems: 'center' }]}
+                style={[styles.intelligenceBlock, { backgroundColor: G.bgCard, borderColor: G.border, flexDirection: 'row', alignItems: 'center' }]}
                 onPress={() => { loadSuppliers(); setShowSupplierModal(true); }}
               >
                 <Truck size={20} color={colors.primary} />
                 <View style={{ flex: 1, marginLeft: 10 }}>
-                  <AppText variant="body" weight="bold" style={[styles.blockTitle, { color: colors.text }]} numberOfLines={2}>{t('form.supplier_label')}</AppText>
-                  <AppText variant="body-sm" weight="medium" style={[styles.blockSub, { color: colors.textSecondary }]} numberOfLines={2}>
+                  <AppText variant="body" weight="bold" style={[styles.blockTitle, { color: G.fg }]} numberOfLines={2}>{t('form.supplier_label')}</AppText>
+                  <AppText variant="body-sm" weight="medium" style={[styles.blockSub, { color: G.fgSecondary }]} numberOfLines={2}>
                     {selectedSupplier ? selectedSupplier.fullName : t('form.tap_select_supplier')}
                   </AppText>
                   {selectedSupplier?.phone && supplierCallEnabled && (
@@ -573,29 +1066,29 @@ const loadCategories = async () => {
                     <PhoneCall size={18} color={colors.primary} />
                   </TouchableOpacity>
                 ) : (
-                  <ChevronDown size={18} color={colors.textSecondary} />
+                  <ChevronDown size={18} color={G.fgSecondary} />
                 )}
               </TouchableOpacity>
 
-              <View style={[styles.intelligenceBlock, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={[styles.intelligenceBlock, { backgroundColor: G.bgCard, borderColor: G.border }]}>
                 <View style={styles.blockHeader}>
                    <PhoneCall size={20} color={colors.primary} />
                    <View style={{ flex: 1 }}>
-                     <AppText variant="body" weight="bold" style={[styles.blockTitle, { color: colors.text }]} numberOfLines={2}>{t('form.supplier_call_title')}</AppText>
-                      <AppText variant="micro" weight="medium" style={{ color: colors.textSecondary, marginTop: 2 }} numberOfLines={2}>
+                     <AppText variant="body" weight="bold" style={[styles.blockTitle, { color: G.fg }]} numberOfLines={2}>{t('form.supplier_call_title')}</AppText>
+                      <AppText variant="micro" weight="medium" style={{ color: G.fgSecondary, marginTop: 2 }} numberOfLines={2}>
                         {t('form.supplier_call_sub')}
                       </AppText>
                    </View>
                    <TouchableOpacity
                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setSupplierCallEnabled(!supplierCallEnabled); }}
-                     style={[styles.switch, { backgroundColor: supplierCallEnabled ? colors.text : colors.border }]}
+                     style={[styles.switch, { backgroundColor: supplierCallEnabled ? G.fg : G.border }]}
                    >
-                     <View style={[styles.switchThumb, { backgroundColor: colors.background, left: supplierCallEnabled ? 24 : 2 }]} />
+                     <View style={[styles.switchThumb, { backgroundColor: G.bg, left: supplierCallEnabled ? 24 : 2 }]} />
                    </TouchableOpacity>
                 </View>
                 {supplierCallEnabled && (
                   <Animated.View entering={FadeInDown} style={{ marginTop: 12, gap: 8 }}>
-                    <AppText variant="micro" weight="medium" style={{ color: colors.textSecondary, lineHeight: 16 }} numberOfLines={4}>
+                    <AppText variant="micro" weight="medium" style={{ color: G.fgSecondary, lineHeight: 16 }} numberOfLines={4}>
                       {t('form.supplier_call_help')}
                     </AppText>
                     {!selectedSupplier && (
@@ -613,15 +1106,15 @@ const loadCategories = async () => {
                 )}
               </View>
 
-              <View style={[styles.intelligenceBlock, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={[styles.intelligenceBlock, { backgroundColor: G.bgCard, borderColor: G.border }]}>
                 <View style={styles.blockHeader}>
                    <CreditCard size={20} color={colors.primary} />
-                   <AppText variant="body" weight="bold" style={[styles.blockTitle, { color: colors.text }]} numberOfLines={2}>{t('form.supplier_credit')}</AppText>
+                   <AppText variant="body" weight="bold" style={[styles.blockTitle, { color: G.fg }]} numberOfLines={2}>{t('form.supplier_credit')}</AppText>
                    <TouchableOpacity
                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setCreditToggle(creditToggle === 'Yes' ? 'No' : 'Yes'); }}
-                     style={[styles.switch, { backgroundColor: creditToggle === 'Yes' ? colors.text : colors.border }]}
+                     style={[styles.switch, { backgroundColor: creditToggle === 'Yes' ? G.fg : G.border }]}
                    >
-                     <View style={[styles.switchThumb, { backgroundColor: colors.background, left: creditToggle === 'Yes' ? 24 : 2 }]} />
+                     <View style={[styles.switchThumb, { backgroundColor: G.bg, left: creditToggle === 'Yes' ? 24 : 2 }]} />
                    </TouchableOpacity>
                 </View>
               </View>
@@ -629,24 +1122,24 @@ const loadCategories = async () => {
               {creditToggle === 'Yes' && (
                 <Animated.View entering={FadeInDown} style={styles.row}>
                    <View style={{ flex: 1, marginRight: 15 }}>
-                      <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('common.phone')}</AppText>
+                      <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('common.phone')}</AppText>
                       <TextInput 
-                        style={[styles.input, { color: colors.text, borderColor: errors.supplierPhone ? '#FF3B30' : colors.border }]} 
+                        style={[styles.input, { color: G.fg, borderColor: errors.supplierPhone ? colors.error : G.border }]} 
                         value={supplierPhone}
                         onChangeText={(val) => { setSupplierPhone(val); if (errors.supplierPhone) setErrors(prev => ({ ...prev, supplierPhone: '' })); }}
                         keyboardType="phone-pad"
                       />
-                      {errors.supplierPhone && <AppText variant="caption" weight="medium" style={styles.errorText} numberOfLines={2}>{errors.supplierPhone}</AppText>}
+                      {errors.supplierPhone && <AppText variant="caption" weight="medium" style={[styles.errorText, { color: colors.error }]} numberOfLines={2}>{errors.supplierPhone}</AppText>}
                    </View>
                    <View style={{ flex: 1 }}>
-                      <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: colors.textSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('common.account')}</AppText>
+                      <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('common.account')}</AppText>
                       <TextInput 
-                        style={[styles.input, { color: colors.text, borderColor: errors.supplierAccount ? '#FF3B30' : colors.border }]} 
+                        style={[styles.input, { color: G.fg, borderColor: errors.supplierAccount ? colors.error : G.border }]} 
                         value={supplierAccount}
                         onChangeText={(val) => { setSupplierAccount(val); if (errors.supplierAccount) setErrors(prev => ({ ...prev, supplierAccount: '' })); }}
                         keyboardType="numeric"
                       />
-                      {errors.supplierAccount && <AppText variant="caption" weight="medium" style={styles.errorText} numberOfLines={2}>{errors.supplierAccount}</AppText>}
+                      {errors.supplierAccount && <AppText variant="caption" weight="medium" style={[styles.errorText, { color: colors.error }]} numberOfLines={2}>{errors.supplierAccount}</AppText>}
                    </View>
                 </Animated.View>
               )}
@@ -656,18 +1149,18 @@ const loadCategories = async () => {
           {/* Action Dock */}
           <View style={styles.actionDock}>
              {step > 1 && (
-               <TouchableOpacity style={[styles.backBtn, { borderColor: colors.border }]} onPress={handleBack}>
-                 <ChevronLeft size={20} color={colors.text} />
+               <TouchableOpacity style={[styles.backBtn, { borderColor: G.border }]} onPress={handleBack}>
+                 <ChevronLeft size={20} color={G.fg} />
                </TouchableOpacity>
              )}
              <TouchableOpacity 
-               style={[styles.nextBtn, { backgroundColor: colors.text, flex: 1 }]} 
+               style={[styles.nextBtn, { backgroundColor: G.fg, flex: 1 }]} 
                onPress={step < 4 ? handleNext : handleFinish}
              >
-                 <AppText variant="body" weight="bold" shrink={false} style={[styles.nextBtnText, { color: colors.background }]} numberOfLines={1}>
+                 <AppText variant="body" weight="bold" shrink={false} style={[styles.nextBtnText, { color: G.bg }]} numberOfLines={1}>
                  {step < 4 ? t('form.continue_intake') : t('form.initialize_asset')}
                </AppText>
-               <ArrowRight size={18} color={colors.background} />
+               <ArrowRight size={18} color={G.bg} />
              </TouchableOpacity>
           </View>
         </Animated.View>
@@ -683,27 +1176,27 @@ const loadCategories = async () => {
 
       <Modal visible={showCategoryModal} transparent animationType="slide">
         <Pressable style={styles.modalOverlay} onPress={() => setShowCategoryModal(false)}>
-          <View style={[styles.categorySheet, { backgroundColor: colors.background }]}>
+          <View style={[styles.categorySheet, { backgroundColor: G.bg }]}>
             <View style={styles.modalHandleRow}>
-              <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+              <View style={[styles.modalHandle, { backgroundColor: G.border }]} />
             </View>
             <View style={styles.modalHeader}>
-               <AppText variant="title" weight="bold" style={[styles.modalTitle, { color: colors.text }]} numberOfLines={2}>{t('form.category_intel')}</AppText>
+               <AppText variant="title" weight="bold" style={[styles.modalTitle, { color: G.fg }]} numberOfLines={2}>{t('form.category_intel')}</AppText>
                <TouchableOpacity onPress={() => setShowNewCategory(!showNewCategory)}>
-                  <Plus size={24} color={colors.text} />
+                  <Plus size={24} color={G.fg} />
                </TouchableOpacity>
             </View>
             
             {showNewCategory && (
               <View style={styles.newCatInput}>
                  <TextInput 
-                    style={[styles.input, { flex: 1, marginRight: 10, borderColor: colors.border, color: colors.text }]}
+                    style={[styles.input, { flex: 1, marginRight: 10, borderColor: G.border, color: G.fg }]}
                     placeholder={t('form.new_domain')}
                     value={newCategoryName}
                     onChangeText={setNewCategoryName}
                  />
                   <TouchableOpacity
-                    style={[styles.addBtn, { backgroundColor: colors.text }]}
+                    style={[styles.addBtn, { backgroundColor: G.fg }]}
                     onPress={async () => {
                       const name = newCategoryName.trim();
                       if (!name) return;
@@ -712,7 +1205,7 @@ const loadCategories = async () => {
                         await dialog.alert({ title: t('common.error'), message: t('form.category_exists'), iconType: 'danger' });
                         return;
                       }
-                      const newCat = { id: Date.now(), name, icon: '📦' };
+                      const newCat = { id: Date.now(), name, icon: 'ðŸ“¦' };
                       setCategories([...categories, newCat]);
                       setSelectedCategory(newCat);
                       setNewCategoryName('');
@@ -720,7 +1213,7 @@ const loadCategories = async () => {
                       setShowCategoryModal(false);
                     }}
                   >
-                   <Check size={20} color={colors.background} />
+                   <Check size={20} color={G.bg} />
                  </TouchableOpacity>
               </View>
             )}
@@ -729,11 +1222,11 @@ const loadCategories = async () => {
               {categories.map(cat => (
                 <TouchableOpacity 
                   key={cat.id} 
-                  style={[styles.catItem, { borderColor: colors.border }]}
+                  style={[styles.catItem, { borderColor: G.border }]}
                   onPress={() => { setSelectedCategory(cat); setShowCategoryModal(false); Haptics.selectionAsync(); }}
                 >
                   <AppText variant="heading" shrink={false} style={styles.catIcon}>{cat.icon}</AppText>
-                  <AppText variant="body" weight="bold" style={[styles.catName, { color: colors.text }]} numberOfLines={2}>{cat.name.includes('category.') ? t(cat.name) : cat.name}</AppText>
+                  <AppText variant="body" weight="bold" style={[styles.catName, { color: G.fg }]} numberOfLines={2}>{cat.name.includes('category.') ? t(cat.name) : cat.name}</AppText>
                   {selectedCategory?.id === cat.id && <Check size={18} color={colors.primary} />}
                 </TouchableOpacity>
               ))}
@@ -745,15 +1238,15 @@ const loadCategories = async () => {
       {/* Supplier Selection Modal */}
       <Modal visible={showSupplierModal} transparent animationType="slide">
         <Pressable style={styles.modalOverlay} onPress={() => { setShowSupplierModal(false); setShowNewSupplierForm(false); }}>
-          <Pressable style={[styles.categorySheet, { backgroundColor: colors.background }]}>
+          <Pressable style={[styles.categorySheet, { backgroundColor: G.bg }]}>
             <View style={styles.modalHandleRow}>
-              <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+              <View style={[styles.modalHandle, { backgroundColor: G.border }]} />
             </View>
             
             <View style={styles.modalHeader}>
-              <AppText variant="title" weight="bold" style={[styles.modalTitle, { color: colors.text }]} numberOfLines={2}>Select Supplier</AppText>
+               <AppText variant="title" weight="bold" style={[styles.modalTitle, { color: G.fg }]} numberOfLines={2}>{t('inv.select_supplier')}</AppText>
               <TouchableOpacity onPress={() => { setShowNewSupplierForm(!showNewSupplierForm); }}>
-                <Plus size={24} color={colors.text} />
+                <Plus size={24} color={G.fg} />
               </TouchableOpacity>
             </View>
 
@@ -761,30 +1254,30 @@ const loadCategories = async () => {
             {showNewSupplierForm && (
               <View style={{ paddingHorizontal: 25, marginBottom: 20, gap: 12 }}>
                 <TextInput
-                  style={[styles.input, { color: colors.text, borderColor: colors.border }]}
+                  style={[styles.input, { color: G.fg, borderColor: G.border }]}
                   placeholder={t('common.supplier_name_ph')}
-                  placeholderTextColor={colors.textSecondary}
+                  placeholderTextColor={G.fgSecondary}
                   value={newSupplierName}
                   onChangeText={setNewSupplierName}
                 />
                 <TextInput
-                  style={[styles.input, { color: colors.text, borderColor: colors.border }]}
+                  style={[styles.input, { color: G.fg, borderColor: G.border }]}
                   placeholder={t('contacts.phone_ph')}
-                  placeholderTextColor={colors.textSecondary}
+                  placeholderTextColor={G.fgSecondary}
                   value={newSupplierPhone}
                   onChangeText={setNewSupplierPhone}
                   keyboardType="phone-pad"
                 />
                 <TextInput
-                  style={[styles.input, { color: colors.text, borderColor: colors.border }]}
+                  style={[styles.input, { color: G.fg, borderColor: G.border }]}
                   placeholder={t('common.account_number_ph')}
-                  placeholderTextColor={colors.textSecondary}
+                  placeholderTextColor={G.fgSecondary}
                   value={newSupplierAccount}
                   onChangeText={setNewSupplierAccount}
                   keyboardType="numeric"
                 />
                 <TouchableOpacity
-                  style={[styles.addBtn, { backgroundColor: colors.text, alignSelf: 'flex-end' }]}
+                  style={[styles.addBtn, { backgroundColor: G.fg, alignSelf: 'flex-end' }]}
                   onPress={async () => {
                     if (!newSupplierName.trim()) {
                       await dialog.alert({ title: 'Error', message: 'Supplier name is required', iconType: 'danger' });
@@ -808,9 +1301,10 @@ const loadCategories = async () => {
                       setNewSupplierAccount('');
                     }
                     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    playNice();
                   }}
                 >
-                  <Check size={20} color={colors.background} />
+                  <Check size={20} color={G.bg} />
                 </TouchableOpacity>
               </View>
             )}
@@ -818,19 +1312,19 @@ const loadCategories = async () => {
             <ScrollView contentContainerStyle={styles.catScroll}>
               {suppliers.length === 0 && !showNewSupplierForm && (
                 <View style={{ padding: 30, alignItems: 'center' }}>
-                  <AppText variant="body" weight="medium" align="center" style={[styles.catName, { color: colors.textSecondary }]} numberOfLines={2}>No suppliers yet. Tap + to add one.</AppText>
+                   <AppText variant="body" weight="medium" align="center" style={[styles.catName, { color: G.fgSecondary }]} numberOfLines={2}>{t('inv.no_suppliers_add')}</AppText>
                 </View>
               )}
               {suppliers.map((sup) => (
                 <TouchableOpacity
                   key={sup.id}
-                  style={[styles.catItem, { borderColor: colors.border }]}
+                  style={[styles.catItem, { borderColor: G.border }]}
                   onPress={() => { setSelectedSupplier(sup); setShowSupplierModal(false); Haptics.selectionAsync(); }}
                 >
-                    <AppText variant="heading" shrink={false} style={styles.catIcon}>🚚</AppText>
+                    <AppText variant="heading" shrink={false} style={styles.catIcon}>ðŸšš</AppText>
                     <View style={{ marginLeft: 12, flex: 1 }}>
-                      <AppText variant="body" weight="bold" style={[styles.catName, { color: colors.text }]} numberOfLines={1}>{sup.fullName}</AppText>
-                      {sup.phone && <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }} numberOfLines={1}>{sup.phone}</AppText>}
+                      <AppText variant="body" weight="bold" style={[styles.catName, { color: G.fg }]} numberOfLines={1}>{sup.fullName}</AppText>
+                      {sup.phone && <AppText variant="caption" weight="medium" style={{ color: G.fgSecondary }} numberOfLines={1}>{sup.phone}</AppText>}
                   </View>
                   {selectedSupplier?.id === sup.id && <Check size={18} color={colors.primary} />}
                 </TouchableOpacity>
@@ -844,52 +1338,52 @@ const loadCategories = async () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (G: any) => StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 25, paddingVertical: 15 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 25, paddingVertical: 10 },
   closeBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
   headerTitle: { fontSize: 18, fontFamily: Fonts.bold },
-  stepContainer: { paddingHorizontal: 25, marginVertical: 15 },
+  stepContainer: { paddingHorizontal: 25, marginVertical: 10 },
   stepLine: { height: 4, borderRadius: 2, width: '100%', overflow: 'hidden' },
   stepProgress: { height: '100%' },
-  stepLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 15 },
+  stepLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
   stepLabelItem: { alignItems: 'center' },
   stepDot: { width: 8, height: 8, borderRadius: 4, marginBottom: 8 },
   stepLabelText: { fontSize: 10, fontFamily: Fonts.bold, textTransform: 'uppercase' },
-  scrollContent: { padding: 25 },
+  scrollContent: { padding: 20 },
   stepContent: { flex: 1 },
-  formCard: { gap: 25 },
-  cardTitle: { fontSize: 13, fontFamily: Fonts.bold, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 10 },
-  inputNode: { gap: 10 },
+  formCard: { gap: 16, overflow: 'hidden' },
+  cardTitle: { fontSize: 13, fontFamily: Fonts.bold, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 6 },
+  inputNode: { gap: 6 },
   nodeHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 5 },
   nodeLabel: { fontSize: 11, fontFamily: Fonts.bold, letterSpacing: 0.5 },
-  input: { height: 60, borderRadius: 18, borderWidth: 1, paddingHorizontal: 20, fontSize: 16, fontFamily: Fonts.medium },
+  input: { height: 52, borderRadius: 16, borderWidth: 1, paddingHorizontal: 16, fontSize: 15, fontFamily: Fonts.medium, backgroundColor: G.bgCard },
   inputText: { fontSize: 16, fontFamily: Fonts.medium },
-  intelligenceBlock: { borderRadius: 24, padding: 20, borderWidth: 1, gap: 10 },
+  intelligenceBlock: { borderRadius: 20, padding: 14, borderWidth: 1, gap: 8, overflow: 'hidden' },
   blockHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   blockTitle: { flex: 1, fontSize: 15, fontFamily: Fonts.bold },
   blockSub: { fontSize: 12, fontFamily: Fonts.medium, lineHeight: 18 },
   switch: { width: 50, height: 28, borderRadius: 14, padding: 2, position: 'relative' },
   switchThumb: { width: 24, height: 24, borderRadius: 12, position: 'absolute', top: 2 },
   row: { flexDirection: 'row', alignItems: 'center' },
-  financeSummary: { borderRadius: 24, padding: 20, borderWidth: 1, gap: 12 },
+  financeSummary: { borderRadius: 20, padding: 14, borderWidth: 1, gap: 8, overflow: 'hidden' },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   summaryLabel: { fontSize: 13, fontFamily: Fonts.bold },
   summaryValue: { fontSize: 16, fontFamily: Fonts.bold },
   warningRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 5 },
-  warningText: { fontSize: 11, fontFamily: Fonts.bold, color: '#FF3B30' },
-  errorText: { fontSize: 10, fontFamily: Fonts.semibold, color: '#FF3B30', marginTop: 4, marginLeft: 5 },
+  warningText: { fontSize: 11, fontFamily: Fonts.bold },
+  errorText: { fontSize: 10, fontFamily: Fonts.semibold, marginTop: 4, marginLeft: 5 },
   advToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 15, borderRadius: 18, borderStyle: 'dashed', borderWidth: 1 },
   advToggleText: { fontSize: 14, fontFamily: Fonts.bold },
   inlineCategoryRow: { flexDirection: 'row', paddingVertical: 8, gap: 8 },
   inlineCategoryChip: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 14, borderWidth: 1, gap: 6 },
   inlineCategoryText: { fontSize: 13, fontFamily: Fonts.medium },
   gradeGrid: { flexDirection: 'row', gap: 10 },
-  gradeChip: { flex: 1, paddingVertical: 12, borderRadius: 12, borderWidth: 1, alignItems: 'center' },
+  gradeChip: { flex: 1, paddingVertical: 12, borderRadius: 12, borderWidth: 1, alignItems: 'center', overflow: 'hidden' },
   gradeText: { fontSize: 13, fontFamily: Fonts.bold },
-  actionDock: { flexDirection: 'row', gap: 15, marginTop: 40 },
-  backBtn: { width: 65, height: 65, borderRadius: 20, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
-  nextBtn: { height: 65, borderRadius: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
+  actionDock: { flexDirection: 'row', gap: 12, marginTop: 24 },
+  backBtn: { width: 56, height: 56, borderRadius: 18, borderWidth: 1, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  nextBtn: { height: 56, borderRadius: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, overflow: 'hidden' },
   nextBtnText: { fontSize: 16, fontFamily: Fonts.bold },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   categorySheet: { borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingBottom: 40, maxHeight: '80%' },
@@ -898,20 +1392,49 @@ const styles = StyleSheet.create({
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 25, marginBottom: 20 },
   modalTitle: { fontSize: 18, fontFamily: Fonts.bold },
   newCatInput: { flexDirection: 'row', paddingHorizontal: 25, marginBottom: 20 },
-  addBtn: { width: 60, height: 60, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
+  addBtn: { width: 60, height: 60, borderRadius: 18, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
   catScroll: { paddingHorizontal: 25 },
   catItem: { flexDirection: 'row', alignItems: 'center', padding: 18, borderBottomWidth: 1, gap: 15 },
   catIcon: { fontSize: 22 },
   catName: { flex: 1, fontSize: 16, fontFamily: Fonts.bold },
   successOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  successCard: { width: '85%', borderRadius: 32, padding: 35, alignItems: 'center', borderWidth: 1 },
+  successCard: { width: '85%', borderRadius: 32, padding: 35, alignItems: 'center', borderWidth: 1, overflow: 'hidden' },
   successIconCircle: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
   successTitle: { fontSize: 24, fontFamily: Fonts.bold, marginBottom: 8 },
   successSub: { fontSize: 14, textAlign: 'center', lineHeight: 20, marginBottom: 30 },
   vaultBtn: { width: '100%', height: 60, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
   vaultBtnText: { fontSize: 16, fontFamily: Fonts.bold },
   addMoreBtn: { width: '100%', height: 60, borderRadius: 18, borderWidth: 1.5, justifyContent: 'center', alignItems: 'center' },
-  addMoreText: { fontSize: 16, fontFamily: Fonts.bold }
+  addMoreText: { fontSize: 16, fontFamily: Fonts.bold },
+  modeCard: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 18, borderWidth: 1, gap: 12, overflow: 'hidden' },
+  modeIcon: { width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+  glowWash1: {
+    position: 'absolute',
+    top: -80,
+    left: -60,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    opacity: 0.5,
+  },
+  glowWash2: {
+    position: 'absolute',
+    top: 120,
+    right: -80,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    opacity: 0.4,
+  },
+  glowWash3: {
+    position: 'absolute',
+    bottom: 100,
+    left: -40,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    opacity: 0.35,
+  },
 });
 
 export default AddAssetFlow;

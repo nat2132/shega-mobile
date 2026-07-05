@@ -4,7 +4,7 @@
     "slug": "Shega",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./src/assets/images/shega.png",
+    "icon": "./src/assets/images/logo.png",
     "scheme": "shega",
     "userInterfaceStyle": "automatic",
     "ios": {
@@ -18,8 +18,7 @@
         "monochromeImage": "./src/assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.nat1.Shega",
-      "usesCleartextTraffic": true
+      "package": "com.nat1.Shega"
     },
     "web": {
       "output": "static",
@@ -44,7 +43,9 @@
       "expo-image",
       "expo-web-browser",
       "expo-sharing",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-video",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true,

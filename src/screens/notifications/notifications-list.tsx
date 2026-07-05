@@ -1,4 +1,4 @@
-﻿// Notification center
+// Notification center
 // Persistent list of all in-app notifications with:
 // - Read / unread grouping
 // - Mark as read (single + bulk)
@@ -7,9 +7,8 @@
 // - Tap to open detail bottom sheet
 // - Deep link routing on view
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
-  Modal,
   RefreshControl,
   StyleSheet,
   TextInput,
@@ -24,7 +23,6 @@ import {
   Check,
   CheckCheck,
   ChevronLeft,
-  ChevronRight,
   Package,
   Handshake,
   Wallet,
@@ -38,9 +36,16 @@ import {
   Search,
   Calendar,
   PhoneCall,
+  TrendingUp,
+  Repeat,
+  Clock,
+  Megaphone,
+  Percent,
+  Receipt,
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { playNice } from '@/services/soundService';
 import Animated, { FadeInDown, Layout } from 'react-native-reanimated';
 import { Fonts } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
@@ -59,7 +64,8 @@ import {
   resolveNotificationTitle,
   resolveNotificationMessage,
 } from '@/utils/notification-display';
-import { AppText, AppListItem, AppRow, AppCard } from '@/components/ui';
+import { AppText, AppNumber} from '@/components/ui';
+import { getNotifGlass } from './glass-notifications';
 const iconFor = (name: NotificationIcon, color: string, size = 20) => {
   switch (name) {
     case 'package': return <Package size={size} color={color} />;
@@ -73,6 +79,12 @@ const iconFor = (name: NotificationIcon, color: string, size = 20) => {
     case 'shield': return <Shield size={size} color={color} />;
     case 'truck': return <Truck size={size} color={color} />;
     case 'calendar': return <Calendar size={size} color={color} />;
+    case 'trending-up': return <TrendingUp size={size} color={color} />;
+    case 'repeat': return <Repeat size={size} color={color} />;
+    case 'clock': return <Clock size={size} color={color} />;
+    case 'megaphone': return <Megaphone size={size} color={color} />;
+    case 'percent': return <Percent size={size} color={color} />;
+    case 'receipt': return <Receipt size={size} color={color} />;
     default: return <Bell size={size} color={color} />;
   }
 };
@@ -82,6 +94,8 @@ const categoryColor = (cat: NotificationCategory) => {
     case 'inventory': return '#FF9500';
     case 'sales': return '#34C759';
     case 'expense': return '#FF3B30';
+    case 'budget': return '#AF52DE';
+    case 'recurring': return '#FF9500';
     case 'customer': return '#5856D6';
     case 'supplier': return '#8E8E93';
     case 'system': return '#007AFF';
@@ -104,11 +118,177 @@ const formatRelativeTime = (iso: string, t: (key: string, params?: Record<string
   return new Date(iso).toLocaleDateString();
 };
 
-const CATEGORIES: Array<{ key: 'all' | NotificationCategory; labelKey: string }> = [
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  headerNode: {
+    paddingHorizontal: 25,
+    paddingTop: 60,
+    paddingBottom: 12,
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  headerSub: {
+    fontFamily: Fonts.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    marginBottom: 4,
+  },
+  headerTitle: {
+    fontFamily: Fonts.bold,
+  },
+  headerCount: {
+    fontFamily: Fonts.bold,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    height: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    gap: 10,
+    marginBottom: 14,
+  },
+  searchInput: {
+    flex: 1,
+    fontFamily: Fonts.medium,
+  },
+  chipsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingBottom: 12,
+  },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  chipText: {
+    fontFamily: Fonts.bold,
+  },
+  bulkRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingBottom: 12,
+  },
+  bulkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 6,
+  },
+  bulkText: {
+    fontFamily: Fonts.semibold,
+  },
+  listContent: {
+    paddingHorizontal: 25,
+    paddingBottom: 40,
+  },
+  notificationNode: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 22,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderLeftWidth: 4,
+    overflow: 'hidden',
+  },
+  iconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  infoArea: {
+    flex: 1,
+  },
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 3,
+  },
+  nodeTitle: {
+    flex: 1,
+  },
+  timeLabel: {
+    fontFamily: Fonts.medium,
+    marginLeft: 8,
+  },
+  nodeMessage: {
+    fontFamily: Fonts.medium,
+    lineHeight: 18,
+    marginBottom: 6,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  categoryPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  categoryPillText: {
+    fontFamily: Fonts.bold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  priorityDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginLeft: 'auto',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 80,
+    paddingHorizontal: 40,
+  },
+  emptyIconCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  emptyTitle: {
+    fontFamily: Fonts.bold,
+    marginTop: 20,
+  },
+  emptySub: {
+    fontFamily: Fonts.medium,
+    textAlign: 'center',
+    marginTop: 8,
+  },
+});
+
+const CATEGORIES: { key: 'all' | NotificationCategory; labelKey: string }[] = [
   { key: 'all', labelKey: 'common.all' },
+  { key: 'budget', labelKey: 'notif.cat.budget' },
+  { key: 'expense', labelKey: 'notif.cat.expense' },
+  { key: 'recurring', labelKey: 'notif.cat.recurring' },
+  { key: 'reminder', labelKey: 'notif.cat.reminder' },
   { key: 'inventory', labelKey: 'notif.cat.inventory' },
   { key: 'sales', labelKey: 'notif.cat.sales' },
-  { key: 'expense', labelKey: 'notif.cat.expense' },
   { key: 'customer', labelKey: 'notif.cat.customer' },
   { key: 'supplier', labelKey: 'notif.cat.supplier' },
   { key: 'system', labelKey: 'notif.cat.system' },
@@ -129,6 +309,7 @@ const NotificationRow = React.memo(({
   onPress: (n: AppNotification) => void;
 }) => {
   const { colors, t } = useSettings();
+  const G = getNotifGlass(colors);
   const dialog = useDialog();
   const { markRead } = useNotificationCenter();
   const iconColor = categoryColor(item.category);
@@ -151,16 +332,16 @@ const NotificationRow = React.memo(({
         style={[
           styles.notificationNode,
           {
-            backgroundColor: colors.card,
-            borderColor: item.isRead ? colors.border : iconColor + '40',
-            borderLeftColor: item.isRead ? colors.border : iconColor,
+            backgroundColor: G.bgCard,
+            borderColor: item.isRead ? G.border : iconColor + '40',
+            borderLeftColor: item.isRead ? G.border : iconColor,
           },
           !item.isRead && { backgroundColor: iconColor + '08' },
         ]}
         activeOpacity={0.7}
         onPress={() => onPress(item)}
       >
-        <View style={[styles.iconBox, { backgroundColor: iconColor + '15' }]}>
+        <View style={[styles.iconBox, { backgroundColor: G.bgCard }]}>
           {iconFor(item.icon, iconColor)}
         </View>
         <View style={styles.infoArea}>
@@ -170,17 +351,17 @@ const NotificationRow = React.memo(({
               weight={item.isRead ? 'semibold' : 'bold'}
               style={[
                 styles.nodeTitle,
-                { color: colors.text },
+                { color: G.fg },
               ]}
               numberOfLines={1}
             >
               {resolveNotificationTitle(item, t)}
             </AppText>
-            <AppText variant="caption" weight="medium" style={[styles.timeLabel, { color: colors.textSecondary }]} numberOfLines={1}>
+            <AppText variant="caption" weight="medium" style={[styles.timeLabel, { color: G.fgSecondary }]} numberOfLines={1}>
               {formatRelativeTime(item.createdAt, t)}
             </AppText>
           </View>
-          <AppText variant="body-sm" weight="medium" style={[styles.nodeMessage, { color: colors.textSecondary }]} numberOfLines={2}>
+          <AppText variant="body-sm" weight="medium" style={[styles.nodeMessage, { color: G.fgSecondary }]} numberOfLines={2}>
             {resolveNotificationMessage(item, t)}
           </AppText>
           <View style={styles.metaRow}>
@@ -220,6 +401,48 @@ const NotificationRow = React.memo(({
               </AppText>
             </TouchableOpacity>
           ) : null}
+          {(item.type === 'budget_created' || item.type === 'budget_approaching_limit' || item.type === 'budget_limit_reached' || item.type === 'budget_category_exceeded') ? (
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                alignSelf: 'flex-start',
+                gap: 6,
+                marginTop: 8,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 10,
+                backgroundColor: iconColor + '18',
+              }}
+              onPress={() => onPress(item)}
+            >
+              <Info size={14} color={iconColor} />
+              <AppText variant="caption" weight="bold" shrink={false} style={{ color: iconColor }} numberOfLines={1}>
+                {t('notif.view_budget')}
+              </AppText>
+            </TouchableOpacity>
+          ) : null}
+          {item.type === 'recurring_due' || item.type === 'recurring_due_tomorrow' ? (
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                alignSelf: 'flex-start',
+                gap: 6,
+                marginTop: 8,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 10,
+                backgroundColor: colors.success + '18',
+              }}
+              onPress={() => onPress(item)}
+            >
+              <Check size={14} color={colors.success} />
+              <AppText variant="caption" weight="bold" shrink={false} style={{ color: colors.success }} numberOfLines={1}>
+                {t('notif.mark_paid')}
+              </AppText>
+            </TouchableOpacity>
+          ) : null}
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -229,6 +452,7 @@ NotificationRow.displayName = 'NotificationRow';
 
 export const NotificationsListScreen: React.FC = () => {
   const { colors, t } = useSettings();
+  const G = getNotifGlass(colors);
   const dialog = useDialog();
   const router = useRouter();
   const {
@@ -274,7 +498,7 @@ export const NotificationsListScreen: React.FC = () => {
         publishIntent({ kind: 'subscription', at: Date.now() });
       }
       router.replace(n.deepLink as any);
-    } catch (e) {
+    } catch {
       router.replace('/(tabs)/dashboard' as any);
     }
   }, [publishIntent, router]);
@@ -313,8 +537,48 @@ export const NotificationsListScreen: React.FC = () => {
 
   const keyExtractor = useCallback((item: AppNotification) => `notif-${item.id}`, []);
 
+  const glowStyles = useMemo(() => ({
+    glowTopRight: {
+      position: 'absolute' as const,
+      top: -100,
+      right: -100,
+      width: 300,
+      height: 300,
+      borderRadius: 150,
+      backgroundColor: G.mutedLight,
+      opacity: 0.4,
+      pointerEvents: 'none' as const,
+    },
+    glowBottomLeft: {
+      position: 'absolute' as const,
+      bottom: -80,
+      left: -120,
+      width: 280,
+      height: 280,
+      borderRadius: 140,
+      backgroundColor: G.mutedLight,
+      opacity: 0.25,
+      pointerEvents: 'none' as const,
+    },
+    glowCenter: {
+      position: 'absolute' as const,
+      top: '40%' as const,
+      alignSelf: 'center' as const,
+      width: 200,
+      height: 200,
+      borderRadius: 100,
+      backgroundColor: G.mutedLight,
+      opacity: 0.15,
+      pointerEvents: 'none' as const,
+    },
+  }), [G]);
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: G.bg }]}>
+      {/* Ambient glow washes */}
+      <View style={glowStyles.glowTopRight} />
+      <View style={glowStyles.glowBottomLeft} />
+      <View style={glowStyles.glowCenter} />
       {/* Header */}
       <View style={styles.headerNode}>
         <View style={styles.headerTopRow}>
@@ -328,17 +592,17 @@ export const NotificationsListScreen: React.FC = () => {
             }}
             style={{ marginRight: 15, padding: 4 }}
           >
-            <ChevronLeft size={28} color={colors.text} />
+            <ChevronLeft size={28} color={G.fg} />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
-            <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.headerSub, { color: colors.textSecondary }]} numberOfLines={1}>
+            <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.headerSub, { color: G.fgSecondary }]} numberOfLines={1}>
               {t('notif.diagnostics')}
             </AppText>
-            <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: colors.text }]} numberOfLines={2}>
+            <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>
               {t('notif.sys_pulse')}
               {unreadCount > 0 && (
                 <AppText variant="display" weight="bold" shrink={false} style={[styles.headerCount, { color: colors.primary }]} numberOfLines={1}>
-                  {' '}({unreadCount})
+                  {' '}(<AppNumber value={unreadCount} size="display" color={colors.primary} />)
                 </AppText>
               )}
             </AppText>
@@ -346,18 +610,18 @@ export const NotificationsListScreen: React.FC = () => {
         </View>
 
         {/* Search */}
-        <View style={[styles.searchBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Search size={18} color={colors.textSecondary} />
+        <View style={[styles.searchBar, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+          <Search size={18} color={G.fgSecondary} />
           <TextInput
-            style={[styles.searchInput, { color: colors.text }]}
+            style={[styles.searchInput, { color: G.fg }]}
             placeholder={t('notif.search_placeholder')}
-            placeholderTextColor={colors.textSecondary + '80'}
+            placeholderTextColor={G.fgSecondary + '80'}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <X size={16} color={colors.textSecondary} />
+              <X size={16} color={G.fgSecondary} />
             </TouchableOpacity>
           )}
         </View>
@@ -370,15 +634,15 @@ export const NotificationsListScreen: React.FC = () => {
         >
           {CATEGORIES.map((cat) => {
             const isActive = activeCategory === cat.key;
-            const accent = cat.key === 'all' ? colors.text : categoryColor(cat.key);
+            const accent = cat.key === 'all' ? G.fg : categoryColor(cat.key);
             return (
               <TouchableOpacity
                 key={cat.key}
                 style={[
                   styles.chip,
                   {
-                    backgroundColor: isActive ? accent : colors.card,
-                    borderColor: isActive ? accent : colors.border,
+                    backgroundColor: isActive ? accent : G.bgCard,
+                    borderColor: isActive ? accent : G.border,
                   },
                 ]}
                 onPress={() => setActiveCategory(cat.key)}
@@ -390,7 +654,7 @@ export const NotificationsListScreen: React.FC = () => {
                   shrink={false}
                   style={[
                     styles.chipText,
-                    { color: isActive ? colors.background : colors.text },
+                    { color: isActive ? G.bg : G.fg },
                   ]}
                   numberOfLines={1}
                 >
@@ -405,18 +669,18 @@ export const NotificationsListScreen: React.FC = () => {
         {filtered.length > 0 && (
           <View style={styles.bulkRow}>
             <TouchableOpacity
-              style={[styles.bulkBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+              style={[styles.bulkBtn, { backgroundColor: G.bgCard, borderColor: G.border }]}
               onPress={markAllRead}
             >
-              <CheckCheck size={14} color={colors.text} />
-              <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.bulkText, { color: colors.text }]} numberOfLines={1}>{t('notif.mark_all_read')}</AppText>
+              <CheckCheck size={14} color={G.fg} />
+              <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.bulkText, { color: G.fg }]} numberOfLines={1}>{t('notif.mark_all_read')}</AppText>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.bulkBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+              style={[styles.bulkBtn, { backgroundColor: G.bgCard, borderColor: G.border }]}
               onPress={clearAll}
             >
-              <Trash2 size={14} color={colors.textSecondary} />
-              <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.bulkText, { color: colors.textSecondary }]} numberOfLines={1}>{t('notif.clear_all')}</AppText>
+              <Trash2 size={14} color={G.fgSecondary} />
+              <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.bulkText, { color: G.fgSecondary }]} numberOfLines={1}>{t('notif.clear_all')}</AppText>
             </TouchableOpacity>
           </View>
         )}
@@ -442,17 +706,17 @@ export const NotificationsListScreen: React.FC = () => {
           removeClippedSubviews={true}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.text} />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={G.fg} />
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <View style={[styles.emptyIconCircle, { backgroundColor: colors.success + '10' }]}>
-                <Activity size={48} color={colors.success} strokeWidth={1} />
+              <View style={[styles.emptyIconCircle, { backgroundColor: G.bgCard }]}>
+                <Activity size={48} color={G.success} strokeWidth={1} />
               </View>
-              <AppText variant="title" weight="bold" align="center" style={[styles.emptyTitle, { color: colors.text }]} numberOfLines={2}>
+              <AppText variant="title" weight="bold" align="center" style={[styles.emptyTitle, { color: G.fg }]} numberOfLines={2}>
                 {t('notif.pulse_nominal')}
               </AppText>
-              <AppText variant="body" weight="medium" align="center" style={[styles.emptySub, { color: colors.textSecondary }]} numberOfLines={3}>
+              <AppText variant="body" weight="medium" align="center" style={[styles.emptySub, { color: G.fgSecondary }]} numberOfLines={3}>
                 {t('notif.empty_sub')}
               </AppText>
             </View>
@@ -465,8 +729,8 @@ export const NotificationsListScreen: React.FC = () => {
         notification={selected}
         onClose={() => setSelected(null)}
         onView={handleView}
-        onResolve={(n) => resolve(n.id)}
-        onDismiss={(n) => dismiss(n.id)}
+        onResolve={(n) => { resolve(n.id); }}
+        onDismiss={(n) => { playNice(); dismiss(n.id); }}
         onCallSupplier={async (n) => {
           const phone = (n.data as any)?.supplierPhone;
           if (phone) {
@@ -481,179 +745,5 @@ export const NotificationsListScreen: React.FC = () => {
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  headerNode: {
-    paddingHorizontal: 25,
-    paddingTop: 60,
-    paddingBottom: 12,
-  },
-  headerTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 18,
-  },
-  headerSub: {
-
-    fontFamily: Fonts.semibold,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    marginBottom: 4,
-  },
-  headerTitle: {
-
-    fontFamily: Fonts.bold,
-  },
-  headerCount: {
-
-    fontFamily: Fonts.bold,
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    height: 44,
-    borderRadius: 14,
-    borderWidth: 1,
-    gap: 10,
-    marginBottom: 14,
-  },
-  searchInput: {
-    flex: 1,
-
-    fontFamily: Fonts.medium,
-  },
-  chipsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingBottom: 12,
-  },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-  chipText: {
-
-    fontFamily: Fonts.bold,
-  },
-  bulkRow: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingBottom: 12,
-  },
-  bulkBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 6,
-  },
-  bulkText: {
-
-    fontFamily: Fonts.semibold,
-  },
-  listContent: {
-    paddingHorizontal: 25,
-    paddingBottom: 40,
-  },
-  notificationNode: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 22,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderLeftWidth: 4,
-  },
-  iconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 14,
-  },
-  infoArea: {
-    flex: 1,
-  },
-  topRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 3,
-  },
-  nodeTitle: {
-
-    flex: 1,
-  },
-  timeLabel: {
-
-    fontFamily: Fonts.medium,
-    marginLeft: 8,
-  },
-  nodeMessage: {
-
-    fontFamily: Fonts.medium,
-    lineHeight: 18,
-    marginBottom: 6,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  categoryPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  categoryPillText: {
-
-    fontFamily: Fonts.bold,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  priorityDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginLeft: 'auto',
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 80,
-    paddingHorizontal: 40,
-  },
-  emptyIconCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  emptyTitle: {
-
-    fontFamily: Fonts.bold,
-    marginTop: 20,
-  },
-  emptySub: {
-
-    fontFamily: Fonts.medium,
-    textAlign: 'center',
-    marginTop: 8,
-  },
-});
 
 export default NotificationsListScreen;

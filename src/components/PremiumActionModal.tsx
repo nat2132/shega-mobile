@@ -1,4 +1,4 @@
-﻿import React, { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { 
   View, 
   StyleSheet, 
@@ -14,14 +14,12 @@ import Animated, {
 } from 'react-native-reanimated';
 import { 
   AlertTriangle, 
-  Trash2,
-  X
-} from 'lucide-react-native';
-import { BlurView } from 'expo-blur';
+  Trash2} from 'lucide-react-native';
+
 import * as Haptics from 'expo-haptics';
 import { useSettings } from '@/context/SettingsContext';
 import { Fonts } from '@/constants/theme';
-import { AppText, AppCard, AppButton } from '@/components/ui';
+import { AppText} from '@/components/ui';
 const { width } = Dimensions.get('window');
 
 interface PremiumActionModalProps {
@@ -51,7 +49,7 @@ const PremiumActionModal: React.FC<PremiumActionModalProps> = ({
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     ringScale.value = withSpring(1, { damping: 10, stiffness: 100 });
     iconScale.value = withDelay(200, withSpring(1, { damping: 8, stiffness: 120 }));
-  }, []);
+  }, [iconScale, ringScale]);
 
   const animatedIconStyle = useAnimatedStyle(() => ({
     transform: [{ scale: iconScale.value }]
@@ -67,13 +65,13 @@ const PremiumActionModal: React.FC<PremiumActionModalProps> = ({
     return <AlertTriangle size={40} color="#FFF" strokeWidth={2.5} />;
   };
 
-  const themeColor = iconType === 'danger' ? '#FF3B30' : '#FF9500';
+  const themeColor = iconType === 'danger' ? colors.error : colors.warning;
 
   return (
     <View style={styles.overlay}>
-      <BlurView intensity={theme === 'dark' ? 100 : 80} tint={theme === 'dark' ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
-      
-      <View style={styles.container}>
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.50)' }]} />
+
+      <View style={[styles.container, { backgroundColor: colors.background, borderColor: colors.border }]}>
         <View style={styles.iconContainer}>
           <Animated.View style={[styles.dangerRing, { borderColor: themeColor + '40' }, animatedRingStyle]} />
           <Animated.View style={[styles.iconCircle, { backgroundColor: themeColor }, animatedIconStyle]}>
@@ -126,8 +124,6 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 32,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: 'rgba(0,0,0,0.02)',
   },
   iconContainer: {
     width: 120,
@@ -150,11 +146,7 @@ const styles = StyleSheet.create({
     borderRadius: 35,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
+    elevation: 2,
   },
   content: {
     width: '100%',
@@ -187,13 +179,7 @@ const styles = StyleSheet.create({
   cancelBtn: {
     borderWidth: 1,
   },
-  confirmBtn: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
+  confirmBtn: {},
   cancelBtnText: {
     fontFamily: Fonts.bold,
   },

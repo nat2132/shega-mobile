@@ -1,348 +1,255 @@
-﻿import { Fonts } from '@/constants/theme';
+import { Fonts } from '@/constants/theme';
 import { PROFILE_IMAGES, useSettings } from '@/context/SettingsContext';
 import { useSidebar } from '@/context/SidebarContext';
-import { useDialog } from '@/context/DialogContext';
 import {
   getCapitalSummary,
   getExpenseChartData,
   getTodaysExpenses,
-  updateMonthlyBudget,
-  getExpenseHealth,
-  getOverdueExpenses,
-  markRecurringAsPaid
+  markRecurringAsPaid,
+  getRecurringExpensesDueToday,
+  getUpcomingRecurringExpenses,
+  getRecurringTemplates,
+  getMonthlyBudgetSummary,
+  getBudgets,
+  getBudgetWithCategoryProgress,
 } from '@/database/db';
+import { notifyRecurringMarkedPaid } from '@/services/notificationService';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useFocusEffect } from '@react-navigation/native';
-import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import {
   Bell,
+  Plus,
+  Search,
+  Calendar,
+  ChevronRight,
+  DollarSign,
+  X,
+  Receipt,
+  Check,
+  Wallet,
   Eye,
   EyeOff,
-  Layers,
-  Pencil,
-  Plus,
-  Receipt,
-  Search,
-  TrendingDown,
-  Calendar,
-  ChevronLeft,
-  ChevronRight,
-  AlertTriangle,
-  List,
-  FileMinus,
-  X,
-  ShieldCheck
 } from 'lucide-react-native';
-import { formatDate, formatShortDate, getDayName, getFriendlyDate } from '@/utils/date-utils';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Dimensions,
   Image,
-  Keyboard,
   Modal,
-  Platform,
   ScrollView,
   StyleSheet,
   TextInput,
   TouchableOpacity,
   View,
-  FlatList
 } from 'react-native';
-import { LineChart, BarChart } from 'react-native-gifted-charts';
-import Animated, {
-    FadeIn,
-    FadeInDown,
-    FadeInUp,
-    FadeOut,
-    useAnimatedStyle,
-    useSharedValue,
-    withSpring
-} from 'react-native-reanimated';
-import Svg, { Circle, Path } from 'react-native-svg';
+import { LineChart } from 'react-native-gifted-charts';
+import Animated, { FadeIn, FadeInDown, FadeOut, useSharedValue, withSpring, useAnimatedStyle } from 'react-native-reanimated';
 import ExpenseDetailsScreen from './expense-details';
 import ExpenseFormScreen from './expense-form';
 import ExpenseListScreen from './expense-list';
-import ExpenseLossScreen from './expense-loss';
-import { BarChartSkeleton, LineChartSkeleton, RingSkeleton } from '@/components/ChartSkeleton';
+import { getExpenseGlass } from './glass-expense';
+import { LineChartSkeleton} from '@/components/ChartSkeleton';
 import { ChartEmpty } from '@/components/ChartStateView';
-import { AppText, AppListItem, AppRow, AppCard } from '@/components/ui';
-const SparklineChart = React.memo(() => {
-  const { colors } = useSettings();
-  const d = "M0 35 C15 35, 25 5, 40 20 C55 35, 75 15, 100 5";
-  return (
-    <Svg width="80" height="30" viewBox="0 0 100 40">
-      <Path
-        d={d}
-        stroke={colors.primary} strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round"
-      />
-    </Svg>
-  );
-});
-SparklineChart.displayName = 'SparklineChart';
+import { AppNumber, AppText } from '@/components/ui';
 
-const BudgetRing = React.memo(({ progress }: { progress: number | undefined | null }) => {
-  const { colors } = useSettings();
-  const radius = 35;
-  const circumference = 2 * Math.PI * radius;
-  const numericProgress = Number(progress) || 0;
-  // Visual cap at 100% — a ring can only fill once. We still display
-  // the real percentage (e.g. 150%) and switch to red so an over-budget
-  // state is visible.
-  const isOver = numericProgress > 100;
-  const visualProgress = Math.max(0, Math.min(100, numericProgress));
-  const strokeDashoffset = circumference - (visualProgress / 100) * circumference;
-  const strokeColor = isOver ? '#FF3B30' : colors.primary;
-
-  if (progress == null || Number.isNaN(numericProgress)) {
-    return <RingSkeleton size={100} />;
-  }
-
-  return (
-    <Svg width="100" height="100" viewBox="0 0 100 100">
-      <Circle cx="50" cy="50" r={radius} stroke={colors.border} strokeWidth="8" fill="none" opacity={0.3} />
-      <Circle
-        cx="50" cy="50" r={radius}
-        stroke={strokeColor} strokeWidth="8" fill="none"
-        strokeDasharray={circumference} strokeDashoffset={strokeDashoffset}
-        strokeLinecap="round" transform="rotate(-90 50 50)"
-      />
-      <View style={styles.ringLabelContainer}>
-        <AppText variant="heading" weight="bold" shrink={false} style={[styles.ringPercent, { color: isOver ? '#FF3B30' : colors.text }]} numberOfLines={1}>{Math.round(numericProgress)}%</AppText>
-      </View>
-    </Svg>
-  );
-});
-BudgetRing.displayName = 'BudgetRing';
-
-const ExpenseLedgerItem = React.memo(({ item, onPress }: { item: any, onPress: () => void }) => {
-  const { colors, t } = useSettings();
-  const safeName = item?.name || t('common.untitled');
-  const safeAmount = Number(item?.amount) || 0;
-
-  return (
-    <TouchableOpacity
-      style={[styles.ledgerItem, { borderBottomColor: colors.border }]}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <View style={[styles.ledgerIconCircle, { backgroundColor: colors.surface }]}>
-        <Receipt size={22} color={colors.textSecondary} />
-      </View>
-      <View style={styles.ledgerMain}>
-        <AppText variant="body" weight="bold" style={[styles.ledgerName, { color: colors.text }]} numberOfLines={1}>
-          {safeName}
-        </AppText>
-        <AppText variant="caption" weight="medium" style={[styles.ledgerCategory, { color: colors.textSecondary }]} numberOfLines={1}>
-          {item?.category || t('common.general')} • {item?.date || t('common.na')}
-        </AppText>
-      </View>
-      <View style={styles.ledgerEnd}>
-        <AppText variant="body" weight="bold" shrink={false} style={[styles.ledgerAmount, { color: colors.text }]} numberOfLines={1}>
-          - {safeAmount.toLocaleString()}
-        </AppText>
-        <AppText variant="caption" weight="bold" shrink={false} style={[styles.ledgerCurrency, { color: colors.textSecondary }]} numberOfLines={1}>{t('common.etb')}</AppText>
-      </View>
-    </TouchableOpacity>
-  );
-});
-ExpenseLedgerItem.displayName = 'ExpenseLedgerItem';
-
-/**
- * Stable tooltip renderer for the spending-pulse LineChart.
- * Defined at module scope (not inline in `pointerConfig`) so that
- * gifted-charts doesn't recreate the tooltip on every parent render
- * — which would briefly flash an empty tooltip box. We read theme
- * colours via context here so the component stays in sync with the
- * active theme.
- */
+const _tooltipCtx = { colors: null as any, t: null as any, G: null as any };
 const PointerLabel = (items: any) => {
-  const { colors } = useSettings();
-  const { t } = useSettings();
+  const { t, G } = _tooltipCtx;
   const itemsArr = Array.isArray(items) ? items : [items];
   const value = Number(itemsArr?.[0]?.value) || 0;
   return (
-    <View style={[styles.tooltipBox, { backgroundColor: colors.card, shadowColor: '#000', elevation: 5 }]}>
-      <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.tooltipText, { color: colors.text }]} numberOfLines={1}>
-        {value.toLocaleString()} {t('common.etb')}
-      </AppText>
+    <View style={[styles.tooltipBox, { backgroundColor: G?.bgCard, borderColor: G?.border, borderWidth: 1, elevation: 10 }]}>
+      <AppNumber value={value} size="body-sm" weight="bold" prefix={(t?.('common.etb') || 'ETB') + ' '} />
     </View>
   );
 };
 
-const CapitalHub = () => {
-  const { openSidebar } = useSidebar();
-  const { userProfile, colors, t, theme, calendarType, language, timeSystem } = useSettings();
-  const { notifCount } = useNotifications();
-  const router = useRouter();
-  const dialog = useDialog();
-  const [dateFilterMode, setDateFilterMode] = useState('this_month');
-  const [dateFilterLabel, setDateFilterLabel] = useState(t('expense.this_month'));
-  const [showExpenseList, setShowExpenseList] = useState(false);
-  const [showExpenseForm, setShowExpenseForm] = useState(false);
-  const [showExpenseLoss, setShowExpenseLoss] = useState(false);
-  const [showExpenseDetails, setShowExpenseDetails] = useState(false);
-  const [selectedExpense, setSelectedExpense] = useState<any>(null);
-  const [hideMetrics, setHideMetrics] = useState(false);
-  const [summary, setSummary] = useState<any>(null);
-  const [chartData, setChartData] = useState<any[]>([]);
-  const [chartLoading, setChartLoading] = useState(true);
-  const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
-  const [isBarExpanded, setIsBarExpanded] = useState(false);
-  const [showBudgetModal, setShowBudgetModal] = useState(false);
-  const [budgetInput, setBudgetInput] = useState('');
-  const [showHealthModal, setShowHealthModal] = useState(false);
-  const [overdueExpenses, setOverdueExpenses] = useState<any[]>([]);
-  const [expenseHealthData, setExpenseHealthData] = useState<any>({ expenseHealth: 100, totalCount: 0, problemCount: 0 });
+  const CapitalHub = ({ filterCategory }: { filterCategory?: string }) => {
+    const { openSidebar } = useSidebar();
+    const { userProfile, colors, t, language, timeSystem } = useSettings();
+    const G = getExpenseGlass(colors);
+    const { notifCount } = useNotifications();
+    _tooltipCtx.colors = colors;
+    _tooltipCtx.t = t;
+    _tooltipCtx.G = G;
+    const router = useRouter();
 
-  const handleBudgetSave = async () => {
-    const amount = parseFloat(budgetInput.replace(/,/g, ''));
-    if (isNaN(amount) || amount <= 0) {
-      await dialog.alert({ title: t('expense.invalid_budget_title'), message: t('expense.invalid_budget_message'), iconType: 'warning' });
-      return;
+    const [dateFilterMode, setDateFilterMode] = useState('this_month');
+    const [summary, setSummary] = useState<any>(null);
+    const [chartData, setChartData] = useState<any[]>([]);
+    const [chartLoading, setChartLoading] = useState(true);
+    const [transactions, setTransactions] = useState<any[]>([]);
+    const [overdueItems, setOverdueItems] = useState<any[]>([]);
+    const [showExpenseForm, setShowExpenseForm] = useState(false);
+    const [showExpenseList, setShowExpenseList] = useState(false);
+    const [showExpenseDetails, setShowExpenseDetails] = useState(false);
+    const [selectedExpense, setSelectedExpense] = useState<any>(null);
+    const [recurringTemplates, setRecurringTemplates] = useState<any[]>([]);
+    const [upcomingRecurring, setUpcomingRecurring] = useState<any[]>([]);
+    const [hideMetrics, setHideMetrics] = useState(false);
+    const [monthSummary, setMonthSummary] = useState<any>(null);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [showSearch, setShowSearch] = useState(false);
+    const [activeFilterCategory, setActiveFilterCategory] = useState<string | undefined>(filterCategory);
+    const [allBudgets, setAllBudgets] = useState<any[]>([]);
+    const [expenseBudgetId, setExpenseBudgetId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (filterCategory) {
+      setActiveFilterCategory(filterCategory);
+      setShowExpenseList(true);
     }
-    updateMonthlyBudget(amount);
-    setShowBudgetModal(false);
-    loadAllData();
-  };
+  }, [filterCategory]);
+
+  const loadAllData = useCallback(async () => {
+    setChartLoading(true);
+    setSummary(getCapitalSummary(dateFilterMode));
+    setTransactions(getTodaysExpenses());
+    const chart = getExpenseChartData(dateFilterMode, language, undefined, timeSystem);
+    setChartData(chart || []);
+    setChartLoading(false);
+    setOverdueItems(getRecurringExpensesDueToday());
+    setRecurringTemplates(getRecurringTemplates(true));
+    setUpcomingRecurring(getUpcomingRecurringExpenses(10));
+
+    setAllBudgets(getBudgets({ status: 'active' }));
+    const now = new Date();
+    const baseSummary = getMonthlyBudgetSummary(now.getFullYear(), now.getMonth() + 1);
+    if (expenseBudgetId) {
+      const budgetDetail = getBudgetWithCategoryProgress(expenseBudgetId);
+      if (budgetDetail) {
+        setMonthSummary({
+          hasBudget: true,
+          budgetId: budgetDetail.id,
+          budgetName: budgetDetail.name,
+          totalPlanned: budgetDetail.totalPlanned,
+          totalSpent: budgetDetail.totalSpent,
+          remaining: budgetDetail.remaining,
+          percentUsed: budgetDetail.percentUsed,
+          projectedRemaining: 0,
+          projectedPercent: 0,
+          recurringMonthlyProjection: 0,
+          recurringTemplateCount: 0,
+          byCategory: [],
+        });
+      } else {
+        setMonthSummary(baseSummary);
+      }
+    } else {
+      setMonthSummary(baseSummary);
+    }
+  }, [dateFilterMode, language, expenseBudgetId, timeSystem]);
+
+  useFocusEffect(useCallback(() => { loadAllData(); }, [loadAllData]));
 
   const { width } = Dimensions.get('window');
+
+  const [isBarExpanded, setIsBarExpanded] = useState(false);
   const expandedWidth = useSharedValue(56);
   useEffect(() => {
     expandedWidth.value = withSpring(isBarExpanded ? width - 50 : 56, { damping: 15, stiffness: 100 });
-  }, [isBarExpanded, width]);
-
+  }, [isBarExpanded, width, expandedWidth]);
   const expandStyle = useAnimatedStyle(() => ({
     width: expandedWidth.value,
   }));
 
-  const loadAllData = useCallback(async () => {
-    setChartLoading(true);
-    const capitalSummary = getCapitalSummary(dateFilterMode);
-    setSummary(capitalSummary);
-
-    const transactions = await getTodaysExpenses();
-    setRecentTransactions(transactions);
-
-    const expenseChartData = getExpenseChartData(dateFilterMode, language, undefined, timeSystem);
-    if (expenseChartData && expenseChartData.length > 0) {
-      setChartData(expenseChartData);
-    } else {
-      setChartData([]);
-    }
-    setChartLoading(false);
-
-    const health = getExpenseHealth();
-    setExpenseHealthData(health);
-
-    const overdue = getOverdueExpenses();
-    setOverdueExpenses(overdue);
-  }, [dateFilterMode, language]);
-
-  useFocusEffect(
-    useCallback(() => {
-      loadAllData();
-    }, [loadAllData])
-  );
-
-  // Sanitised chart data. Filters out placeholder `no_data` rows and
-  // ensures `value` is a finite, non-negative number before we hand
-  // it to react-native-gifted-charts. Without this, an empty
-  // `expenseChartData` from SQLite could produce a 0-value point and
-  // a line segment to it.
   const sanitizedChartData = useMemo(() => {
     return (chartData || [])
       .map((p: any) => ({
         ...p,
-        value: Number.isFinite(Number(p?.value)) && !Number.isNaN(Number(p?.value))
-          ? Math.max(0, Number(p.value))
-          : 0,
+        value: Number.isFinite(Number(p?.value)) ? Math.max(0, Number(p.value)) : 0,
       }))
       .filter((p: any) => p.label !== t('common.no_data'));
   }, [chartData, t]);
 
   const chartPointCount = sanitizedChartData.length || 1;
-  const chartSpacing = useMemo(
-    () => (chartPointCount > 10 ? 70 : chartPointCount > 6 ? 80 : 90),
-    [chartPointCount],
-  );
-  const chartWidth = useMemo(
-    () => Math.max(width - 50, chartPointCount * chartSpacing + 40),
-    [width, chartPointCount, chartSpacing],
-  );
+  const chartWidth = useMemo(() => Math.max(width - 50, chartPointCount * 80 + 40), [width, chartPointCount]);
 
-  // Stable tooltip component. We previously defined this inline in
-  // `pointerConfig`, which forced gifted-charts to remount the
-  // tooltip on every render of the parent. Now the component lives
-  // at module scope (below) and is passed by reference here.
-  const pointerConfig = useMemo(
-    () => ({
-      pointerStripHeight: 130,
-      pointerStripColor: colors.border,
-      pointerStripWidth: 2,
-      pointerStripUptoDataPoint: true,
-      strokeDashArray: [4, 4],
-      pointerColor: colors.primary,
-      radius: 6,
-      pointerLabelWidth: 80,
-      pointerLabelHeight: 30,
-      activatePointersOnLongPress: false,
-      autoAdjustPointerLabelPosition: true,
-      pointerLabelComponent: PointerLabel,
-    }),
-    [colors.border, colors.primary],
-  );
+  const pointerConfig = useMemo(() => ({
+    pointerStripHeight: 130,
+    pointerStripColor: colors.border,
+    pointerStripWidth: 2,
+    pointerStripUptoDataPoint: true,
+    strokeDashArray: [4, 4],
+    pointerColor: colors.primary,
+    radius: 6,
+    pointerLabelWidth: 80,
+    pointerLabelHeight: 30,
+    activatePointersOnLongPress: false,
+    autoAdjustPointerLabelPosition: true,
+    pointerLabelComponent: PointerLabel,
+  }), [colors.border, colors.primary]);
+
+  const handleMarkPaid = async (id: number) => {
+    const expense = (transactions as any[]).find((e: any) => e.id === id) || (overdueItems as any[]).find((e: any) => e.id === id);
+    markRecurringAsPaid(id);
+    if (expense) {
+      notifyRecurringMarkedPaid({
+        id: expense.id,
+        name: expense.name,
+        amount: expense.amount,
+        nextBillingDate: expense.nextBillingDate,
+      });
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    loadAllData();
+  };
 
   const toggleMetrics = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setHideMetrics(!hideMetrics);
   };
 
+  const budgetSummary = monthSummary;
+
   return (
-    <View style={[styles.screenWrapper, { backgroundColor: colors.background }]}>
-      {/* Background Decor */}
+    <View style={[styles.screenWrapper, { backgroundColor: G.bg }]}>
       <View style={StyleSheet.absoluteFill}>
-        <View style={[styles.bgWash, { top: -100, right: -100, backgroundColor: colors.primary, opacity: 0.05 }]} />
+        <View style={[styles.bgWash, { top: -120, right: -80, backgroundColor: '#FFFFFF', opacity: 0.03 }]} />
+        <View style={[styles.bgWash, { top: 200, left: -60, backgroundColor: '#FFFFFF', opacity: 0.02 }]} />
+        <View style={[styles.bgWash, { top: 600, right: -40, backgroundColor: '#FFFFFF', opacity: 0.015 }]} />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-
-        {/* Top Navigation Bar */}
+        {/* Top Bar */}
         <View style={styles.topBar}>
           <View style={{ flex: 1 }}>
-            <TouchableOpacity
-              style={[styles.headerAvatarBox, { borderColor: colors.border }]}
-              onPress={openSidebar}
-            >
-              <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={styles.headerAvatar} />
+            <TouchableOpacity style={[styles.avatarBox, { borderColor: G.border, backgroundColor: G.bgCard }]} onPress={openSidebar}>
+              <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={styles.avatar} />
             </TouchableOpacity>
           </View>
-
           <View style={styles.headerActions}>
-            <TouchableOpacity
-              onPress={() => router.push('/notifications')}
-              style={[styles.headerIconBtn, { borderColor: colors.border }]}
-            >
-              <Bell size={22} color={colors.text} />
+            <TouchableOpacity style={[styles.iconBtn, { borderColor: G.border, backgroundColor: G.bgCard }]} onPress={() => router.push('/(tabs)/budget')}>
+              <DollarSign size={22} color={G.fgSecondary} />
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.iconBtn, { borderColor: G.border, backgroundColor: G.bgCard }]} onPress={() => setShowSearch(!showSearch)}>
+              <Search size={22} color={G.fgSecondary} />
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.iconBtn, { borderColor: G.border, backgroundColor: G.bgCard }]} onPress={() => router.push('/notifications')}>
+              <Bell size={22} color={G.fg} />
               {notifCount > 0 && (
-                <View style={[styles.notifBadge, { backgroundColor: colors.primary }]}>
-                  <AppText variant="micro" weight="bold" shrink={false} style={styles.notifBadgeText} numberOfLines={1}>{notifCount}</AppText>
+                <View style={[styles.notifBadge, { backgroundColor: '#FFFFFF' }]}>
+                  <AppText variant="micro" weight="bold" style={[styles.notifBadgeText, { color: '#0B0B0B' }]}>{notifCount}</AppText>
                 </View>
               )}
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Hero Page Header */}
+        {/* Header */}
         <Animated.View entering={FadeInDown.duration(600)} style={styles.screenHeader}>
-          <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.headerLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('expense.financial_disbursement')}</AppText>
-          <AppText variant="title" weight="bold" style={[styles.headerTitle, { color: colors.text }]} numberOfLines={2}>{t('expense.capital_hub')}</AppText>
+          <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.headerLabel, { color: G.muted }]}>
+            {t('expense.financial_disbursement')}
+          </AppText>
+          <AppText variant="title" weight="bold" style={[styles.headerTitle, { color: G.fg }]}>
+            {t('expense.capital_hub')}
+          </AppText>
         </Animated.View>
 
-        {/* Global Date Filter Bar */}
+        {/* Date Filter */}
         <Animated.View entering={FadeInDown.delay(100)} style={styles.dateFilterBar}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 25, paddingBottom: 15 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 24, paddingBottom: 8 }}>
             {[
               { label: t('expense.today'), value: 'today' },
               { label: t('expense.yesterday'), value: 'yesterday' },
@@ -354,94 +261,112 @@ const CapitalHub = () => {
               return (
                 <TouchableOpacity
                   key={period.value}
-                  style={[styles.dateChip, { backgroundColor: isActive ? colors.text : colors.card, borderColor: colors.border }]}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setDateFilterMode(period.value);
-                    setDateFilterLabel(period.label);
-                  }}
+                  style={[styles.dateChip, { backgroundColor: isActive ? G.fg : G.bgCard, borderColor: isActive ? G.borderLight : G.border }]}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setDateFilterMode(period.value); }}
                 >
-                  <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.dateChipText, { color: isActive ? colors.background : colors.text }]} numberOfLines={1}>{period.label}</AppText>
+                  <AppText variant="body-sm" weight="bold" style={[styles.dateChipText, { color: isActive ? G.bg : G.fg }]}>
+                    {period.label}
+                  </AppText>
                 </TouchableOpacity>
               );
             })}
           </ScrollView>
+
+          {/* Budget Selector */}
+          {allBudgets.length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 24 }}>
+              <TouchableOpacity
+                style={[styles.budgetChip, { backgroundColor: expenseBudgetId === null ? G.fg : G.bgCard, borderColor: G.border }]}
+                onPress={() => setExpenseBudgetId(null)}
+              >
+                <AppText variant="body-sm" weight="bold" style={[styles.budgetChipText, { color: expenseBudgetId === null ? G.bg : G.fg }]} numberOfLines={1}>
+                  All Budgets
+                </AppText>
+              </TouchableOpacity>
+              {allBudgets.map((b) => (
+                <TouchableOpacity
+                  key={b.id}
+                  style={[styles.budgetChip, {
+                    backgroundColor: expenseBudgetId === b.id ? G.fg : G.bgCard,
+                    borderColor: expenseBudgetId === b.id ? G.fg : G.border,
+                  }]}
+                  onPress={() => setExpenseBudgetId(b.id)}
+                >
+                  <AppText variant="body-sm" weight="bold" style={[styles.budgetChipText, { color: expenseBudgetId === b.id ? G.bg : G.fg }]} numberOfLines={1}>
+                    {b.name}
+                  </AppText>
+                  <AppText variant="micro" style={{ color: expenseBudgetId === b.id ? G.bg + 'CC' : G.muted }} numberOfLines={1}>
+                    {b.type}
+                  </AppText>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
         </Animated.View>
 
-        {/* Disbursement Hero */}
-        <Animated.View entering={FadeInDown.delay(200).duration(600)} style={styles.heroSection}>
-          <View style={[styles.disbursementCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.heroTopRow}>
-              <View>
-                <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.heroLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('expense.total_disbursement')}</AppText>
-                <View style={styles.valueRow}>
-                  <AppText variant="display-lg" weight="black" shrink={false} style={[styles.heroValue, { color: colors.text, fontFamily: Fonts.black }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-                    {hideMetrics ? '••••••' : `${summary?.monthlyDisbursement?.toLocaleString() || 0}`}
+        {/* Disbursement Hero Card */}
+        <Animated.View entering={FadeInDown.delay(200)} style={[styles.heroCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+          <View style={styles.heroTop}>
+            <View>
+              <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.heroLabel, { color: G.muted }]}>
+                {t('expense.total_disbursement')}
+              </AppText>
+              <View style={styles.heroValueRow}>
+                {hideMetrics ? (
+                  <AppText variant="display" weight="bold" style={[styles.heroValue, { color: G.fg }]}>
+                    {'••••••'}
                   </AppText>
-                  <AppText variant="heading" weight="medium" shrink={false} style={[styles.heroCurrency, { color: colors.textSecondary }]} numberOfLines={1}>{t('common.etb')}</AppText>
-                  <TouchableOpacity onPress={toggleMetrics} style={styles.eyeBtn}>
-                    {hideMetrics ? <Eye size={18} color={colors.textSecondary} /> : <EyeOff size={18} color={colors.textSecondary} />}
-                  </TouchableOpacity>
-                </View>
+                ) : (
+                  <AppNumber value={summary?.monthlyDisbursement} size="display" prefix={t('common.etb') + ' '} fallback="0" />
+                )}
+                <TouchableOpacity onPress={toggleMetrics} style={{ marginLeft: 8 }}>
+                  {hideMetrics ? <Eye size={18} color={G.muted} /> : <EyeOff size={18} color={G.muted} />}
+                </TouchableOpacity>
               </View>
-              <BudgetRing progress={summary?.budgetProgress || 0} />
-            </View>
-            <View style={[styles.heroFooter, { borderTopColor: colors.border }]}>
-              <View style={styles.budgetStat}>
-                <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('expense.budget')}</AppText>
-                <View style={styles.budgetValueRow}>
-                  <AppText variant="body-sm" weight="bold" style={[styles.statValue, { color: colors.text }]} numberOfLines={1}>{summary?.budget?.toLocaleString()} {t('common.etb')}</AppText>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setBudgetInput(String(summary?.budget || 50000));
-                      setShowBudgetModal(true);
-                    }}
-                    style={[styles.editBudgetBtn, { backgroundColor: colors.surface }]}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Pencil size={11} color={colors.textSecondary} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-              <TouchableOpacity
-                onPress={() => setShowHealthModal(true)}
-                style={styles.budgetStat}
-              >
-                <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('expense.status')}</AppText>
-                {(() => {
-                  // When the user is over the monthly budget, surface that
-                  // here instead of the (always 0–100) expense health
-                  // percentage — otherwise the badge lies about a 150%
-                  // burn by saying "100%".
-                  const disbursed = summary?.monthlyDisbursement || 0;
-                  const budget = summary?.budget || 0;
-                  const actualBudgetPct = budget > 0 ? (disbursed / budget) * 100 : 0;
-                  const isOverBudget = actualBudgetPct > 100;
-                  const expenseHealth = expenseHealthData?.expenseHealth ?? 100;
-                  const value = isOverBudget ? Math.round(actualBudgetPct) : expenseHealth;
-                  const isRed = isOverBudget || expenseHealth < 100;
-                  return (
-                    <View style={[styles.statusBadge, { backgroundColor: isRed ? '#FF3B3015' : colors.success + '15' }]}>
-                      <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.statusText, { color: isRed ? '#FF3B30' : colors.success }]} numberOfLines={1}>
-                        {value}%
-                      </AppText>
-                    </View>
-                  );
-                })()}
-              </TouchableOpacity>
             </View>
           </View>
+
+          {/* Budget Summary Row */}
+          {budgetSummary && budgetSummary.hasBudget && (
+            <TouchableOpacity
+              style={[styles.budgetSummaryRow, { borderTopColor: G.border }]}
+              onPress={() => router.push('/(tabs)/budget')}
+            >
+              <View style={{ flex: 1 }}>
+                <View style={styles.budgetSummaryHeader}>
+                  <DollarSign size={16} color={G.muted} />
+                  <AppText variant="caption" weight="bold" style={{ color: G.fgSecondary, marginLeft: 6 }}>
+                    {budgetSummary.budgetName || 'Budget'}
+                  </AppText>
+                </View>
+                <View style={styles.budgetBar}>
+                  <View style={[styles.budgetBarBg, { backgroundColor: G.border }]}>
+                    <View style={[styles.budgetBarFill, {
+                      width: `${Math.min(budgetSummary.percentUsed, 100)}%`,
+                      backgroundColor: budgetSummary.percentUsed >= 100 ? colors.error : budgetSummary.percentUsed >= 80 ? colors.warning : colors.success
+                    }]} />
+                  </View>
+                </View>
+                <View style={styles.budgetStatsRow}>
+                  <AppNumber value={budgetSummary.totalSpent} size="caption" prefix={t('common.etb') + ' '} />
+                  <AppNumber value={budgetSummary.percentUsed} size="caption" suffix="%" />
+                  <AppNumber value={budgetSummary.remaining} size="caption" prefix={t('common.etb') + ' '} suffix=" left" />
+                </View>
+              </View>
+              <ChevronRight size={20} color={G.muted} />
+            </TouchableOpacity>
+          )}
         </Animated.View>
 
-        {/* Spending Intelligence Bento */}
-        <View style={styles.bentoSection}>
-          {/* Main Chart Card */}
-          <Animated.View entering={FadeInDown.delay(400).duration(600)} style={[styles.chartBento, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        {/* Spending Pulse Chart */}
+        {dateFilterMode !== 'today' && dateFilterMode !== 'yesterday' && (
+          <Animated.View entering={FadeInDown.delay(300)} style={[styles.chartCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
             <View style={styles.chartHeader}>
-              <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.bentoLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('expense.spending_pulse')}</AppText>
-              <AppText variant="caption" weight="medium" style={[styles.dateRangeLabel, { color: colors.textSecondary }]} numberOfLines={1}>{dateFilterLabel}</AppText>
+              <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.chartLabel, { color: G.muted }]}>
+                {t('expense.spending_pulse')}
+              </AppText>
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chartScrollWrapper}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chartScroll}>
               {chartLoading ? (
                 <LineChartSkeleton height={130} width={width - 50} />
               ) : sanitizedChartData.length === 0 ? (
@@ -449,709 +374,294 @@ const CapitalHub = () => {
               ) : (
                 <LineChart
                   data={sanitizedChartData}
-                  areaChart curved hideRules hideYAxisText hideAxesAndRules={true}
-                  color={colors.primary} startFillColor={colors.primary} endFillColor={colors.primary}
-                  startOpacity={0.2} endOpacity={0.0}
+                  areaChart curved hideRules hideYAxisText hideAxesAndRules
+                  color={G.fg}
+                  startFillColor={G.fg} endFillColor={G.fg}
+                  startOpacity={0.12} endOpacity={0.0}
                   height={130} thickness={3}
-                  spacing={chartSpacing}
+                  spacing={80}
                   initialSpacing={20}
                   endSpacing={20}
                   hideDataPoints
-                  xAxisLabelTextStyle={{
-                    color: colors.textSecondary,
-                    fontFamily: Fonts.medium,
-                    width: 65,
-                    textAlign: 'center'
-                  }}
                   pointerConfig={pointerConfig}
                   width={chartWidth}
                 />
               )}
             </ScrollView>
           </Animated.View>
+        )}
 
+        {/* Overdue / Due Today */}
+        {overdueItems.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(350)} style={styles.overdueSection}>
+            <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.sectionLabel, { color: G.muted }]}>
+              {t('expense.due_today')}
+            </AppText>
+            {overdueItems.slice(0, 3).map((item: any) => (
+              <View key={item.id} style={[styles.overdueItem, { backgroundColor: G.bgCard, borderColor: colors.error + '40' }]}>
+                <View style={{ flex: 1 }}>
+                  <AppText variant="body-sm" weight="bold" style={{ color: G.fg }}>{item.name}</AppText>
+                  <AppNumber value={item.amount} size="caption" prefix={t('common.etb') + ' '} />
+                </View>
+                <TouchableOpacity style={[styles.payBtn, { backgroundColor: G.fg }]} onPress={() => handleMarkPaid(item.id)}>
+                  <Check size={16} color={G.bg} />
+                   <AppText variant="caption" weight="bold" style={{ color: G.bg, marginLeft: 4 }}>{t('expense.paid')}</AppText>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </Animated.View>
+        )}
 
-          {/* No sub bento rows - removed loss/leakage and top outflow */}
-        </View>
+        {/* Upcoming Recurring */}
+        {upcomingRecurring.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(370)} style={styles.overdueSection}>
+            <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.sectionLabel, { color: G.muted, marginBottom: 10 }]}>
+              {t('expense.upcoming_recurring')}
+            </AppText>
+            {upcomingRecurring.filter((u: any) => !overdueItems.find((o: any) => o.id === u.id)).slice(0, 3).map((item: any) => (
+              <View key={item.id} style={[styles.overdueItem, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+                <View style={{ flex: 1 }}>
+                  <AppText variant="body-sm" weight="bold" style={{ color: G.fg }}>{item.name}</AppText>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <AppNumber value={item.amount} size="caption" prefix={t('common.etb') + ' '} />
+                    <AppText variant="caption" style={{ color: G.muted }}> · due {item.nextBillingDate}</AppText>
+                  </View>
+                </View>
+                <Calendar size={16} color={G.muted} />
+              </View>
+            ))}
+          </Animated.View>
+        )}
 
-        {/* The Expense Ledger */}
-        <View style={styles.ledgerSection}>
-          <View style={styles.sectionHeader}>
-            <View>
-              <AppText variant="title" weight="bold" style={[styles.sectionTitle, { color: colors.text }]} numberOfLines={2}>{t('expense.ledger_title')}</AppText>
-              <AppText variant="body-sm" weight="medium" style={[styles.sectionSub, { color: colors.textSecondary }]} numberOfLines={2}>{t('expense.ledger_subtitle')}</AppText>
+        {/* Recurring Templates */}
+        {recurringTemplates.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(380)} style={styles.overdueSection}>
+            <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.sectionLabel, { color: G.muted, marginBottom: 10 }]}>
+              {t('expense.recurring_expenses')}
+            </AppText>
+            {recurringTemplates.slice(0, 3).map((tmpl: any) => (
+              <View key={tmpl.id} style={[styles.overdueItem, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+                <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <Calendar size={16} color={G.muted} />
+                  <View>
+                    <AppText variant="body-sm" weight="bold" style={{ color: G.fg }}>{tmpl.name}</AppText>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <AppText variant="caption" style={{ color: G.muted }}>{tmpl.category} · </AppText>
+                      <AppNumber value={tmpl.amount} size="caption" prefix={t('common.etb') + ' '} />
+                      <AppText variant="caption" style={{ color: G.muted }}> · {tmpl.frequency}</AppText>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </Animated.View>
+        )}
+
+        {/* Search (expandable) */}
+        {showSearch && (
+          <Animated.View entering={FadeIn} style={styles.searchSection}>
+            <View style={[styles.searchBox, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+              <Search size={18} color={G.muted} />
+              <TextInput
+                style={[styles.searchInput, { color: G.fg }]}
+                placeholder={t('expense.search_ph')}
+                placeholderTextColor={G.muted}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
             </View>
+          </Animated.View>
+        )}
+
+        {/* Recent Expenses Ledger */}
+        <View style={styles.ledgerSection}>
+          <View style={styles.ledgerHeader}>
+            <AppText variant="body" weight="bold" style={{ color: G.fg }}>{t('expense.recent')}</AppText>
             <TouchableOpacity onPress={() => setShowExpenseList(true)}>
-              <AppText variant="body-sm" weight="bold" style={[styles.viewAllBtn, { color: colors.primary }]} numberOfLines={1}>{t('common.view_all')}</AppText>
+              <AppText variant="body-sm" weight="bold" style={{ color: G.fgSecondary }}>{t('expense.view_all')}</AppText>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.ledgerList}>
-            {recentTransactions.map((item, index) => (
-              <Animated.View key={item.id} entering={FadeInDown.delay(600 + index * 100).duration(400)}>
-                <ExpenseLedgerItem
-                  item={item}
-                  onPress={() => {
-                    setSelectedExpense(item);
-                    setShowExpenseDetails(true);
-                  }}
-                />
-              </Animated.View>
-            ))}
-          </View>
+          {(searchQuery
+            ? transactions.filter((t: any) =>
+                (t.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (t.category || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                String(t.amount || '').includes(searchQuery)
+              )
+            : transactions
+          ).slice(0, 5).map((item, index) => (
+            <Animated.View key={item.id} entering={FadeInDown.delay(400 + index * 80)}>
+              <TouchableOpacity
+                style={[styles.ledgerItem, { borderBottomColor: G.border }]}
+                onPress={() => { setSelectedExpense(item); setShowExpenseDetails(true); }}
+              >
+                <View style={[styles.ledgerIcon, { backgroundColor: G.accentGlass }]}>
+                  <Receipt size={20} color={G.muted} />
+                </View>
+                <View style={{ flex: 1, marginLeft: 14 }}>
+                  <AppText variant="body-sm" weight="bold" style={{ color: G.fg }} numberOfLines={1}>
+                    {item.name || item.category}
+                  </AppText>
+                  <AppText variant="caption" style={{ color: G.muted }}>
+                    {item.category} Â· {item.date}
+                  </AppText>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <AppNumber value={-Math.abs(Number(item.amount))} size="body-sm" prefix={t('common.etb') + ' '} />
+                </View>
+              </TouchableOpacity>
+            </Animated.View>
+          ))}
+
+          {transactions.length === 0 && (
+            <View style={styles.emptyState}>
+              <View style={[styles.ledgerIcon, { backgroundColor: G.accentGlass, width: 56, height: 56, borderRadius: 20, marginBottom: 16 }]}>
+                <Wallet size={28} color={G.muted} />
+              </View>
+              <AppText variant="body" weight="bold" style={{ color: G.muted, marginTop: 12 }}>
+                {t('expense.no_expenses')}
+              </AppText>
+              <TouchableOpacity style={[styles.emptyAddBtn, { backgroundColor: G.fg, marginTop: 16 }]} onPress={() => setShowExpenseForm(true)}>
+                <Plus size={20} color={G.bg} />
+                <AppText variant="body" weight="bold" style={{ color: G.bg, marginLeft: 8 }}>
+                  {t('expense.record_expense')}
+                </AppText>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
+        <View style={{ height: 140 }} />
       </ScrollView>
 
-      {/* Dashboard-style Expanding Smart FAB */}
+      {/* Expanding Smart FAB */}
       <View style={styles.dockedBarWrapper}>
-        <Animated.View style={[expandStyle, { height: 56, borderRadius: 28, overflow: 'hidden' }]}>
-          <BlurView intensity={80} tint={theme !== 'light' ? 'dark' : 'light'} style={[styles.dockedBar, { borderColor: colors.border, paddingHorizontal: isBarExpanded ? 10 : 0 }]}>
+        <Animated.View style={[expandStyle, { height: 60, borderRadius: 30, overflow: 'hidden' }]}>
+          <View style={[styles.dockedBar, { borderColor: G.borderLight, backgroundColor: G.bgCardStrong, paddingHorizontal: isBarExpanded ? 12 : 0 }]}>
             {isBarExpanded && (
               <Animated.View entering={FadeIn.delay(100)} exiting={FadeOut.duration(100)}>
                 <TouchableOpacity style={styles.dockBtn} onPress={() => { setShowExpenseForm(true); setIsBarExpanded(false); }}>
-                  <Plus size={22} color={colors.textSecondary} />
+                  <Plus size={22} color={G.muted} />
                 </TouchableOpacity>
               </Animated.View>
             )}
             
             <TouchableOpacity 
-              style={[styles.dockMainBtn, { backgroundColor: isBarExpanded ? colors.text : colors.text }]} 
+              style={[styles.dockMainBtn, { backgroundColor: G.fg }]} 
               activeOpacity={0.8}
               onPress={() => setIsBarExpanded(!isBarExpanded)}
             >
-              <Plus size={24} color={colors.background} />
+              {isBarExpanded ? <X size={24} color={G.bg} /> : <Plus size={24} color={G.bg} />}
             </TouchableOpacity>
             
             {isBarExpanded && (
-              <>
-                <Animated.View entering={FadeIn.delay(100)} exiting={FadeOut.duration(100)}>
-                  <TouchableOpacity style={styles.dockBtn} onPress={() => { setShowExpenseList(true); setIsBarExpanded(false); }}>
-                    <Search size={22} color={colors.textSecondary} />
-                  </TouchableOpacity>
-                </Animated.View>
-              </>
-            )}
-
-            {isBarExpanded && (
               <Animated.View entering={FadeIn.delay(100)} exiting={FadeOut.duration(100)}>
-                <TouchableOpacity style={styles.dockBtn} onPress={() => { setShowExpenseLoss(true); setIsBarExpanded(false); }}>
-                  <FileMinus size={22} color={colors.textSecondary} />
+                <TouchableOpacity style={styles.dockBtn} onPress={() => { setShowExpenseList(true); setIsBarExpanded(false); }}>
+                  <Receipt size={22} color={G.muted} />
                 </TouchableOpacity>
               </Animated.View>
             )}
-          </BlurView>
+          </View>
         </Animated.View>
       </View>
 
-      {/* Modals - Standard consistency */}
-      <Modal visible={showExpenseList} transparent animationType="slide" onRequestClose={() => setShowExpenseList(false)}>
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowExpenseList(false)} />
-          <View style={[styles.bottomSheetContainer, { backgroundColor: colors.background, height: Dimensions.get('window').height * 0.88 }]}>
-            <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
-            <ExpenseListScreen />
-          </View>
-        </View>
-      </Modal>
-
+      {/* Expense Form Modal */}
       <Modal visible={showExpenseForm} transparent animationType="slide" onRequestClose={() => setShowExpenseForm(false)}>
         <View style={styles.modalOverlay}>
           <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowExpenseForm(false)} />
-          <View style={[styles.bottomSheetContainer, { backgroundColor: colors.background, height: Dimensions.get('window').height * 0.88 }]}>
-            <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
-            <ExpenseFormScreen onSaveSuccess={() => {
-              setShowExpenseForm(false);
-              loadAllData();
-            }} />
+          <View style={[styles.bottomSheet, { backgroundColor: G.bg, borderTopWidth: 1, borderTopColor: G.border, height: Dimensions.get('window').height * 0.92 }]}>
+            <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: G.mutedLight }]} /></View>
+            <ExpenseFormScreen onSaveSuccess={() => { setShowExpenseForm(false); loadAllData(); }} />
           </View>
         </View>
       </Modal>
 
-      <Modal visible={showExpenseLoss} transparent animationType="slide" onRequestClose={() => setShowExpenseLoss(false)}>
+      {/* Expense List Modal */}
+      <Modal visible={showExpenseList} transparent animationType="slide" onRequestClose={() => setShowExpenseList(false)}>
         <View style={styles.modalOverlay}>
-          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowExpenseLoss(false)} />
-          <View style={[styles.bottomSheetContainer, { backgroundColor: colors.background, height: Dimensions.get('window').height * 0.88 }]}>
-            <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
-            <ExpenseLossScreen />
+          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowExpenseList(false)} />
+          <View style={[styles.bottomSheet, { backgroundColor: G.bg, borderTopWidth: 1, borderTopColor: G.border, height: Dimensions.get('window').height * 0.92 }]}>
+            <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: G.mutedLight }]} /></View>
+            <ExpenseListScreen filterCategory={activeFilterCategory} />
           </View>
         </View>
       </Modal>
 
+      {/* Expense Details Modal */}
       <Modal visible={showExpenseDetails} transparent animationType="slide" onRequestClose={() => setShowExpenseDetails(false)}>
         <View style={styles.modalOverlay}>
           <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowExpenseDetails(false)} />
-          <View style={[styles.bottomSheetContainer, { backgroundColor: colors.card, height: Dimensions.get('window').height * 0.88 }]}>
-            <View style={[styles.modalHeader, { backgroundColor: colors.card }]}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <ExpenseDetailsScreen expense={selectedExpense} onClose={() => setShowExpenseDetails(false)} />
-            </ScrollView>
+          <View style={[styles.detailSheet, { backgroundColor: G.bgCard, borderTopWidth: 1, borderTopColor: G.border }]}>
+            <ExpenseDetailsScreen expense={selectedExpense} onClose={() => { setShowExpenseDetails(false); loadAllData(); }} />
           </View>
         </View>
       </Modal>
 
-      {/* Expense Health Modal */}
-      <Modal
-        visible={showHealthModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowHealthModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowHealthModal(false)} />
-          <View style={[styles.bottomSheetContainer, { backgroundColor: colors.background, height: Dimensions.get('window').height * 0.8 }]}>
-            <View style={styles.modalHeader}>
-              <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
-            </View>
-            
-            <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 10 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                <AppText variant="title" weight="bold" style={{ color: colors.text }} numberOfLines={2}>{t('expense.health_title')}</AppText>
-                <TouchableOpacity onPress={() => setShowHealthModal(false)}>
-                  <X size={24} color={colors.text} />
-                </TouchableOpacity>
-              </View>
-
-              <View style={{ alignItems: 'center', marginVertical: 20, padding: 20, borderRadius: 16, backgroundColor: colors.surface }}>
-                <AppText variant="display" weight="bold" shrink={false} style={{ color: (expenseHealthData?.expenseHealth || 100) === 100 ? colors.success : colors.primary }} numberOfLines={1}>
-                  {expenseHealthData?.expenseHealth || 100}%
-                </AppText>
-                <AppText variant="body" weight="bold" style={{ color: colors.text, marginTop: 8 }} numberOfLines={2}>
-                  {(expenseHealthData?.expenseHealth || 100) === 100 ? t('expense.health_all_good') : t('expense.health_action_needed')}
-                </AppText>
-                <AppText variant="body-sm" weight="medium" align="center" style={{ color: colors.textSecondary, marginTop: 8, paddingHorizontal: 10 }} numberOfLines={3}>
-                  {t('expense.health_description')}
-                </AppText>
-              </View>
-
-              <AppText variant="body" weight="bold" style={{ color: colors.text, marginBottom: 12 }} numberOfLines={1}>
-                {t('expense.overdue_bills', { count: String(overdueExpenses.length) })}
-              </AppText>
-
-              <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, marginBottom: 20 }}>
-                {overdueExpenses.map((item) => (
-                  <View key={item.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, borderRadius: 12, backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, marginBottom: 8 }}>
-                    <View style={{ flex: 1, marginRight: 12 }}>
-                      <AppText variant="body-sm" weight="bold" style={{ color: colors.text }} numberOfLines={1}>
-                        {item.name}
-                      </AppText>
-                      <AppText variant="caption" weight="medium" style={{ color: colors.primary, marginTop: 2 }} numberOfLines={1}>
-                        {item.amount?.toLocaleString()} {t('common.etb')} • {t('expense.overdue_days', { days: String(item.overdueDays || 0) })}
-                      </AppText>
-                    </View>
-                    <TouchableOpacity
-                      style={{ backgroundColor: colors.text, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}
-                      onPress={async () => {
-                        markRecurringAsPaid(item.id);
-                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                        await loadAllData();
-                      }}
-                    >
-                      <AppText variant="caption" weight="bold" shrink={false} style={{ color: colors.background }} numberOfLines={1}>{t('expense.pay_bill')}</AppText>
-                    </TouchableOpacity>
-                  </View>
-                ))}
-                {overdueExpenses.length === 0 && (
-                  <View style={{ alignItems: 'center', paddingVertical: 40 }}>
-                    <ShieldCheck size={48} color={colors.success} />
-                    <AppText variant="body" weight="bold" align="center" style={{ color: colors.text, marginTop: 12 }} numberOfLines={1}>{t('expense.all_paid')}</AppText>
-                  </View>
-                )}
-              </ScrollView>
-            </View>
-          </View>
-        </View>
-      </Modal>
-      
-
-
-      {/* Budget Edit Modal */}
-      <Modal
-        visible={showBudgetModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowBudgetModal(false)}
-        statusBarTranslucent
-      >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity
-            style={styles.modalBackdrop}
-            activeOpacity={1}
-            onPress={() => { Keyboard.dismiss(); setShowBudgetModal(false); }}
-          />
-          <View style={[styles.budgetSheet, { backgroundColor: colors.card }]}>
-            <View style={styles.modalHeader}>
-              <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
-            </View>
-
-            <AppText variant="title" weight="bold" style={[styles.budgetSheetTitle, { color: colors.text }]} numberOfLines={1}>{t('expense.set_budget')}</AppText>
-            <AppText variant="body-sm" weight="medium" style={[styles.budgetSheetSub, { color: colors.textSecondary }]} numberOfLines={2}>
-              {t('expense.budget_description')}
-            </AppText>
-
-            <View style={[styles.budgetInputBox, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-              <AppText variant="heading" weight="bold" shrink={false} style={[styles.budgetCurrencyPrefix, { color: colors.textSecondary }]} numberOfLines={1}>{t('common.etb')}</AppText>
-              <TextInput
-                style={[styles.budgetTextInput, { color: colors.text }]}
-                value={budgetInput}
-                onChangeText={setBudgetInput}
-                keyboardType="numeric"
-                placeholder={t('expense.budget_placeholder')}
-                placeholderTextColor={colors.textSecondary}
-                autoFocus
-                selectTextOnFocus
-              />
-            </View>
-
-            <View style={styles.budgetActions}>
-              <TouchableOpacity
-                style={[styles.budgetCancelBtn, { borderColor: colors.border }]}
-                onPress={() => setShowBudgetModal(false)}
-              >
-                <AppText variant="body" weight="bold" style={[styles.budgetCancelText, { color: colors.textSecondary }]} numberOfLines={1}>{t('common.cancel')}</AppText>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.budgetSaveBtn, { backgroundColor: colors.text }]}
-                onPress={handleBudgetSave}
-              >
-                <AppText variant="body" weight="bold" style={[styles.budgetSaveText, { color: colors.background }]} numberOfLines={1}>{t('expense.save_budget')}</AppText>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  screenWrapper: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 220,
-    paddingTop: 10,
-  },
-  bgWash: {
-    position: 'absolute',
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    transform: [{ scale: 1.5 }],
-    opacity: 0.2,
-  },
-  topBar: {
-    paddingHorizontal: 25,
-    paddingTop: 60,
-    paddingBottom: 5,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  screenHeader: {
-    paddingHorizontal: 25,
-    paddingTop: 15,
-    paddingBottom: 35,
-  },
-  headerLabel: { 
-    fontFamily: Fonts.bold, 
-    textTransform: 'uppercase', 
-    letterSpacing: 1.5, 
-    marginBottom: 12,
-    opacity: 0.7
-  },
-  headerTitle: { 
-    fontFamily: Fonts.bold, 
-    letterSpacing: -1,
-    lineHeight: 46,
-  },
-  headerIconBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  notifBadge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-    borderWidth: 2,
-    borderColor: '#FFF',
-  },
-  notifBadgeText: {
-    color: '#FFF',
-    fontFamily: Fonts.bold,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 15,
-  },
-  heroSection: {
-    paddingHorizontal: 25,
-    marginBottom: 25,
-  },
-  disbursementCard: {
-    borderRadius: 30,
-    padding: 25,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  heroTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 25,
-  },
-  heroLabel: {
-    fontFamily: Fonts.semibold,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  valueRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 6,
-  },
-  heroValue: {
-    fontFamily: Fonts.extrabold,
-    letterSpacing: -0.5,
-  },
-  heroCurrency: {
-    fontFamily: Fonts.bold,
-    marginBottom: 6,
-  },
-  eyeBtn: {
-    marginLeft: 10,
-    marginBottom: 8,
-  },
-  ringLabelContainer: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  ringPercent: {
-    fontFamily: Fonts.bold,
-  },
-  heroFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingTop: 20,
-    borderTopWidth: 1,
-  },
-  budgetStat: {
-    gap: 4,
-  },
-  statLabel: {
-    fontFamily: Fonts.semibold,
-    textTransform: 'uppercase',
-  },
-  statValue: {
-    fontFamily: Fonts.bold,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-  },
-  statusText: {
-    fontFamily: Fonts.bold,
-    textTransform: 'uppercase',
-  },
-  bentoSection: {
-    paddingHorizontal: 25,
-    marginBottom: 30,
-    gap: 12,
-  },
-  chartBento: {
-    borderRadius: 24,
-    padding: 24,
-    borderWidth: 1,
-    overflow: 'visible',
-  },
-  chartHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  bentoLabel: {
-    fontFamily: Fonts.semibold,
-    textTransform: 'uppercase',
-    marginBottom: 4,
-  },
-  chartScrollWrapper: {
-    height: 160,
-    marginLeft: -15,
-    marginRight: -5,
-  },
-  ledgerSection: {
-    paddingHorizontal: 25,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontFamily: Fonts.bold,
-  },
-  sectionSub: {
-    fontFamily: Fonts.medium,
-    marginTop: 4,
-  },
-  viewAllBtn: {
-    fontFamily: Fonts.bold,
-  },
-  ledgerList: {
-    gap: 4,
-  },
-  ledgerItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-  },
-  ledgerIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 15,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  ledgerMain: {
-    flex: 1,
-  },
-  ledgerName: {
-    fontFamily: Fonts.bold,
-    marginBottom: 4,
-  },
-  ledgerCategory: {
-    fontFamily: Fonts.medium,
-  },
-  ledgerEnd: {
-    alignItems: 'flex-end',
-    minWidth: 90,
-    marginLeft: 10,
-  },
-  ledgerAmount: {
-    fontFamily: Fonts.bold,
-    marginBottom: 2,
-  },
-  ledgerCurrency: {
-    fontFamily: Fonts.bold,
-    textTransform: 'uppercase',
-  },
-  // ── Dashboard-style Expanding FAB ─────────────────────────
-  dockedBarWrapper: {
-    position: 'absolute',
-    bottom: 120,
-    alignSelf: 'center',
-    zIndex: 1000,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dockedBar: {
-    flex: 1,
-    borderRadius: 35,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-evenly',
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 10,
-  },
-  dockBtn: {
-    width: 50,
-    height: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  dockMainBtn: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 6,
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  bottomSheetContainer: {
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    paddingBottom: 40,
-    overflow: 'hidden',
-  },
-  modalHeader: {
-    alignItems: 'center',
-    paddingTop: 15,
-    paddingBottom: 10,
-  },
-  modalHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-  },
-  tooltipBox: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    backgroundColor: 'white',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  tooltipText: {
-    fontFamily: Fonts.bold,
-  },
-  headerAvatarBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 1,
-    padding: 3,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerAvatar: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 20,
-  },
+  screenWrapper: { flex: 1 },
+  scrollContent: { paddingBottom: 220, paddingTop: 10 },
+  bgWash: { position: 'absolute', width: 300, height: 300, borderRadius: 150, transform: [{ scale: 1.5 }] },
+  topBar: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 5, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  avatarBox: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, padding: 2, justifyContent: 'center', alignItems: 'center' },
+  avatar: { width: '100%', height: '100%', borderRadius: 18 },
+  headerActions: { flexDirection: 'row', gap: 12 },
+  iconBtn: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, justifyContent: 'center', alignItems: 'center', position: 'relative' },
+  notifBadge: { position: 'absolute', top: -2, right: -2, minWidth: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4, borderWidth: 2, borderColor: '#FFF' },
+  notifBadgeText: { fontFamily: Fonts.bold },
+  screenHeader: { paddingHorizontal: 24, paddingTop: 15, paddingBottom: 20 },
+  headerLabel: { fontSize: 12, letterSpacing: 1.5, marginBottom: 8 },
+  headerTitle: { fontSize: 32, letterSpacing: -1 },
+  dateFilterBar: { marginBottom: 5 },
+  dateChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16, borderWidth: 1 },
+  dateChipText: { fontSize: 13 },
+  budgetChip: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, borderWidth: 1, marginBottom: 10 },
+  budgetChipText: { fontSize: 13 },
+  heroCard: { marginHorizontal: 24, borderRadius: 28, padding: 24, borderWidth: 1, marginBottom: 16 },
+  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
+  heroLabel: { fontSize: 10, letterSpacing: 0.5, marginBottom: 6 },
+  heroValueRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
+  heroValue: { fontSize: 32, letterSpacing: -0.5 },
+  heroCurrency: { fontSize: 16, marginBottom: 4 },
+  budgetSummaryRow: { flexDirection: 'row', alignItems: 'center', paddingTop: 16, borderTopWidth: 1 },
+  budgetSummaryHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  budgetBar: { marginBottom: 8 },
+  budgetBarBg: { height: 6, borderRadius: 3, overflow: 'hidden' },
+  budgetBarFill: { height: '100%', borderRadius: 3 },
+  budgetStatsRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  chartCard: { marginHorizontal: 24, borderRadius: 24, padding: 24, borderWidth: 1, marginBottom: 16 },
+  chartHeader: { marginBottom: 16 },
+  chartLabel: { fontSize: 11, letterSpacing: 1 },
+  chartScroll: { height: 160, marginLeft: -15, marginRight: -5 },
+  overdueSection: { paddingHorizontal: 24, marginBottom: 16 },
+  sectionLabel: { fontSize: 10, letterSpacing: 1.5, marginBottom: 10 },
+  overdueItem: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 16, borderWidth: 1, marginBottom: 8 },
+  payBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
+  searchSection: { paddingHorizontal: 24, marginBottom: 16 },
+  searchBox: { flexDirection: 'row', alignItems: 'center', height: 48, borderRadius: 16, borderWidth: 1, paddingHorizontal: 14 },
+  searchInput: { flex: 1, marginLeft: 10, fontFamily: Fonts.medium, fontSize: 15 },
+  ledgerSection: { paddingHorizontal: 24 },
+  ledgerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  ledgerItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1 },
+  ledgerIcon: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+  emptyState: { alignItems: 'center', paddingVertical: 40 },
+  emptyAddBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 14 },
+  dockedBarWrapper: { position: 'absolute', bottom: 120, alignSelf: 'center', zIndex: 1000, alignItems: 'center', justifyContent: 'center' },
+  dockedBar: { flex: 1, borderRadius: 35, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly', paddingHorizontal: 10, borderWidth: 1, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 10 },
+  dockBtn: { width: 50, height: 50, justifyContent: 'center', alignItems: 'center' },
+  dockMainBtn: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 },
+  tooltipBox: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
+  tooltipText: { fontFamily: Fonts.bold },
 
-  // ── Budget edit ──────────────────────────────────────────────
-  budgetValueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 2,
-  },
-  editBudgetBtn: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  // ── Budget modal sheet ───────────────────────────────────────
-  budgetSheet: {
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    paddingHorizontal: 28,
-    paddingBottom: 40,
-  },
-  budgetSheetTitle: {
-    fontFamily: Fonts.bold,
-    marginBottom: 6,
-  },
-  budgetSheetSub: {
-    fontFamily: Fonts.medium,
-    marginBottom: 28,
-    lineHeight: 20,
-  },
-  budgetInputBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 58,
-    borderWidth: 1.5,
-    borderRadius: 16,
-    paddingHorizontal: 18,
-    marginBottom: 24,
-    gap: 10,
-  },
-  budgetCurrencyPrefix: {
-    fontFamily: Fonts.bold,
-    letterSpacing: 0.5,
-  },
-  budgetTextInput: {
-    flex: 1,
-    fontFamily: Fonts.bold,
-    letterSpacing: -0.5,
-  },
-  budgetActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  budgetCancelBtn: {
-    flex: 1,
-    height: 52,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  budgetCancelText: {
-    fontFamily: Fonts.semibold,
-  },
-  budgetSaveBtn: {
-    flex: 2,
-    height: 52,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  budgetSaveText: {
-    fontFamily: Fonts.bold,
-  },
-
-  // ── Date filter bar ─────────────────────────────────────────
-  dateFilterBar: {
-    marginBottom: 5,
-    paddingVertical: 5,
-  },
-  dateChip: { 
-    paddingHorizontal: 16, 
-    paddingVertical: 8, 
-    borderRadius: 16, 
-    borderWidth: 1,
-  },
-  dateChipText: { 
-    fontFamily: Fonts.bold,
-  },
-  dateRangeLabel: {
-    fontFamily: Fonts.bold,
-  },
+  modalOverlay: { flex: 1, justifyContent: 'flex-end' },
+  modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.65)' },
+  bottomSheet: { borderTopLeftRadius: 30, borderTopRightRadius: 30, paddingBottom: 40 },
+  detailSheet: { borderTopLeftRadius: 30, borderTopRightRadius: 30, maxHeight: Dimensions.get('window').height * 0.90 },
+  modalHeader: { alignItems: 'center', paddingTop: 15, paddingBottom: 10 },
+  modalHandle: { width: 40, height: 4, borderRadius: 2 },
 });
 
 export default CapitalHub;

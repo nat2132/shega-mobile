@@ -1,16 +1,9 @@
-﻿import React from 'react';
-import { View, TouchableOpacity, StyleSheet, Platform } from 'react-native';
-import { BlurView } from 'expo-blur';
+import React from 'react';
+import { View, TouchableOpacity, StyleSheet} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Home, TrendingUp, Package, Settings } from 'lucide-react-native';
-import { Fonts } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
 import { AppText } from '@/components/ui';
-/**
- * BottomBar — Reference component showing the 4-tab layout.
- * The active tab bar used in the app is CustomTabBar.tsx (powered by Expo Router).
- * This component can be used as a standalone bottom navigation if needed.
- */
 
 const TABS = [
   { name: 'Home', icon: Home },
@@ -26,22 +19,11 @@ interface BottomBarProps {
 
 const BottomBar: React.FC<BottomBarProps> = ({ activeTab = 'Home', onTabPress }) => {
   const insets = useSafeAreaInsets();
-  const { colors, theme } = useSettings();
+  const { colors } = useSettings();
 
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom + 10 }]}>
-      <BlurView
-        intensity={80}
-        tint={theme !== 'light' ? 'dark' : 'light'}
-        style={[
-          styles.blurBar,
-          {
-            backgroundColor:
-              theme !== 'light' ? 'rgba(28,28,30,0.85)' : 'rgba(255,255,255,0.85)',
-            borderColor: colors.border,
-          },
-        ]}
-      >
+      <View style={[styles.bar, { backgroundColor: colors.tabBar, borderColor: colors.border }]}>
         {TABS.map((tab) => {
           const isFocused = activeTab === tab.name;
           const IconComponent = tab.icon;
@@ -54,7 +36,7 @@ const BottomBar: React.FC<BottomBarProps> = ({ activeTab = 'Home', onTabPress })
             >
               <IconComponent
                 size={24}
-                color={isFocused ? colors.text : colors.textSecondary}
+                color={isFocused ? colors.tint : colors.textSecondary}
                 strokeWidth={isFocused ? 2.5 : 1.8}
               />
               <AppText
@@ -63,19 +45,19 @@ const BottomBar: React.FC<BottomBarProps> = ({ activeTab = 'Home', onTabPress })
                 ellipsizeMode="tail"
                 style={[
                   styles.label,
-                  { color: isFocused ? colors.text : colors.textSecondary },
+                  { color: isFocused ? colors.tint : colors.textSecondary },
                   isFocused && styles.labelActive,
                 ]}
               >
                 {tab.name}
               </AppText>
               {isFocused && (
-                <View style={[styles.activeDot, { backgroundColor: colors.text }]} />
+                <View style={[styles.activeDot, { backgroundColor: colors.tint }]} />
               )}
             </TouchableOpacity>
           );
         })}
-      </BlurView>
+      </View>
     </View>
   );
 };
@@ -89,18 +71,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     zIndex: 100,
   },
-  blurBar: {
+  bar: {
     flexDirection: 'row',
-    borderRadius: 35,
+    borderRadius: 24,
     borderWidth: 1,
-    overflow: 'hidden',
     paddingVertical: 12,
     paddingHorizontal: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 12,
   },
   tabItem: {
     flex: 1,
@@ -110,11 +86,9 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   label: {
-    fontFamily: Fonts.medium,
     fontWeight: '500',
   },
   labelActive: {
-    fontFamily: Fonts.bold,
     fontWeight: '700',
   },
   activeDot: {

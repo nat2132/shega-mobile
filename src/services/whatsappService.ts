@@ -1,6 +1,8 @@
 // WhatsApp Business notification hook (future / premium feature)
 // Stub contract for sending business updates via WhatsApp Business API.
 
+import { formatNumber } from '@/utils/formatNumber';
+
 export interface WhatsAppMessage {
   recipient: string; // phone number with country code
   body: string;
@@ -21,7 +23,7 @@ export const sendWhatsAppMessage = async (msg: WhatsAppMessage): Promise<{ succe
 export const sendDailySalesSummary = (recipient: string, data: { total: number; date: string }) =>
   sendWhatsAppMessage({
     recipient,
-    body: `Today's Sales (${data.date}): ${data.total.toLocaleString()} Birr`,
+    body: `Today's Sales (${data.date}): ${formatNumber(data.total)} Birr`,
     templateName: 'daily_sales_summary',
     variables: { total: String(data.total), date: data.date },
   });
@@ -37,7 +39,7 @@ export const sendLowStockAlert = (recipient: string, data: { item: string; qty: 
 export const sendPaymentReminder = (recipient: string, data: { customer: string; amount: number }) =>
   sendWhatsAppMessage({
     recipient,
-    body: `Payment Reminder: ${data.customer} owes ${data.amount.toLocaleString()} Birr.`,
+    body: `Payment Reminder: ${data.customer} owes ${formatNumber(data.amount)} Birr.`,
     templateName: 'payment_reminder',
     variables: { customer: data.customer, amount: String(data.amount) },
   });
@@ -45,7 +47,7 @@ export const sendPaymentReminder = (recipient: string, data: { customer: string;
 export const sendPerformanceSummary = (recipient: string, data: { revenue: number; profit: number }) =>
   sendWhatsAppMessage({
     recipient,
-    body: `Business Update: Revenue ${data.revenue.toLocaleString()} Birr, Profit ${data.profit.toLocaleString()} Birr.`,
+    body: `Business Update: Revenue ${formatNumber(data.revenue)} Birr, Profit ${formatNumber(data.profit)} Birr.`,
     templateName: 'performance_summary',
     variables: { revenue: String(data.revenue), profit: String(data.profit) },
   });

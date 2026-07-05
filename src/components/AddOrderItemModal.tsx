@@ -1,22 +1,20 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   StyleSheet,
   TouchableOpacity,
   Modal,
   TextInput,
-  Dimensions,
   Platform,
   KeyboardAvoidingView
 } from 'react-native';
-import { Plus, X, Package, Sparkles, Minus } from 'lucide-react-native';
-import { BlurView } from 'expo-blur';
+import { Plus, X, Sparkles, Minus } from 'lucide-react-native';
+
 import * as Haptics from 'expo-haptics';
 import Animated, { SlideInDown } from 'react-native-reanimated';
 import { Fonts } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
-import { AppCard, AppButton, AppText } from '@/components/ui';
-const { height } = Dimensions.get('window');
+import { AppText, AppNumber } from '@/components/ui';
 
 interface AddOrderItemModalProps {
   visible: boolean;
@@ -75,13 +73,11 @@ export const AddOrderItemModal: React.FC<AddOrderItemModalProps> = ({ visible, o
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
       <View style={styles.overlay}>
-        <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={handleClose}>
-          <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFill} />
-        </TouchableOpacity>
+        <TouchableOpacity style={[styles.backdrop, { backgroundColor: 'rgba(0,0,0,0.50)' }]} activeOpacity={1} onPress={handleClose} />
 
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <Animated.View
-            entering={SlideInDown.springify().damping(18)}
+            entering={SlideInDown.springify().damping(28).stiffness(250)}
             style={[styles.sheet, { backgroundColor: colors.background, borderTopColor: colors.border }]}
           >
             <View style={styles.header}>
@@ -154,7 +150,7 @@ export const AddOrderItemModal: React.FC<AddOrderItemModalProps> = ({ visible, o
                     <Minus size={18} color={colors.text} />
                   </TouchableOpacity>
                   <View style={[styles.qtyValueBox, { backgroundColor: colors.card, borderColor: errors.orderQty ? '#FF3B30' : colors.border }]}>
-                    <AppText variant="body" weight="bold" numberOfLines={1} style={[styles.qtyValue, { color: colors.text }]}>{orderQty}</AppText>
+                    <AppNumber value={orderQty} size="body" style={[styles.qtyValue, { color: colors.text }]} />
                   </View>
                   <TouchableOpacity
                     style={[styles.qtyBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
@@ -212,11 +208,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 36,
     borderTopWidth: 1,
     paddingBottom: Platform.OS === 'ios' ? 44 : 30,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 15,
-    elevation: 24,
+    elevation: 8,
   },
   header: {
     paddingHorizontal: 25,

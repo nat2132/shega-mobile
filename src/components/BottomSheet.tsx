@@ -1,33 +1,29 @@
-﻿// Generic bottom sheet used for notification details, quick actions, etc.
-// Uses Modal + Reanimated for the slide-in animation.
-
 import React, { useEffect, useRef } from 'react';
-import { Modal, Pressable, StyleSheet, TouchableOpacity, View, ViewStyle } from 'react-native';
+import { Dimensions, Modal, Pressable, ScrollView, StyleSheet, TouchableOpacity, View, ViewStyle } from 'react-native';
 import Animated, {
   Easing,
+  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
-  runOnJS,
 } from 'react-native-reanimated';
-import { BlurView } from 'expo-blur';
-import { Platform } from 'react-native';
-import { X } from 'lucide-react-native';
-import { Fonts } from '@/constants/theme';
-import { useSettings } from '@/context/SettingsContext';
+
 import { AppText } from '@/components/ui';
+import { useSettings } from '@/context/SettingsContext';
+import { X } from 'lucide-react-native';
+import { Keyboard, Platform } from 'react-native';
 interface BottomSheetProps {
   visible: boolean;
   onClose: () => void;
   title?: string;
   subtitle?: string;
   children?: React.ReactNode;
-  actions?: Array<{
+  actions?: {
     label: string;
     onPress: () => void;
     variant?: 'primary' | 'secondary' | 'destructive';
     icon?: React.ReactNode;
-  }>;
+  }[];
   height?: number | string;
   contentStyle?: ViewStyle;
 }
@@ -42,9 +38,10 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
   height = 'auto',
   contentStyle,
 }) => {
-  const { colors, theme } = useSettings();
+  const { colors } = useSettings();
   const [mounted, setMounted] = React.useState(visible);
   const progress = useRef(useSharedValue(0)).current;
+  const [keyboardHeight, setKeyboardHeight] = React.useState(0);
 
   useEffect(() => {
     if (visible) {
@@ -59,9 +56,42 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
     }
   }, [visible, mounted, progress]);
 
+  useEffect(() => {
+    const keyboardWillShow = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const keyboardWillHide = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    
+    const showSubscription = Keyboard.addListener(keyboardWillShow, (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    
+    const hideSubscription = Keyboard.addListener(keyboardWillHide, () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+
   const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: (1 - progress.value) * 800 }],
+    transform: [{
+      translateY: (1 - progress.value) * (Dimensions.get('window').height + 200)
+    }],
   }));
+  
+  const adjustedSheetStyle = useAnimatedStyle(() => {
+    const adjustment = keyboardHeight > 0 ? Math.min(keyboardHeight * 0.3, 100) : 0;
+    return {
+      transform: [{
+        translateY: (1 - progress.value) * (Dimensions.get('window').height + 200) - adjustment
+      }],
+    };
+  });
+
+  const contentPaddingBottom = keyboardHeight > 0
+    ? (Platform.OS === 'ios' ? 34 : 16) + keyboardHeight * 0.1
+    : (Platform.OS === 'ios' ? 34 : 16);
 
   const overlayStyle = useAnimatedStyle(() => ({
     opacity: progress.value,
@@ -73,16 +103,10 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
     <Modal visible={mounted} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
       <View style={StyleSheet.absoluteFill}>
         <Animated.View style={[StyleSheet.absoluteFill, overlayStyle]}>
-          {Platform.OS === 'ios' ? (
-            <BlurView tint="dark" intensity={40} style={StyleSheet.absoluteFill}>
-              <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-            </BlurView>
-          ) : (
-            <Pressable
-              style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.55)' }]}
-              onPress={onClose}
-            />
-          )}
+          <Pressable
+            style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.50)' }]}
+            onPress={onClose}
+          />
         </Animated.View>
 
         <Animated.View
@@ -91,10 +115,8 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
             {
               backgroundColor: colors.background,
               borderColor: colors.border,
-              height: height as any,
-              maxHeight: '85%',
             },
-            sheetStyle,
+            adjustedSheetStyle,
             contentStyle,
           ]}
         >
@@ -120,16 +142,24 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
             </View>
           )}
 
-          {/* Body */}
-          <View style={styles.body}>{children}</View>
+          {/* Body - scrollable */}
+          <ScrollView
+            style={styles.bodyScroll}
+            contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: contentPaddingBottom, flexGrow: 1 }}
+            showsVerticalScrollIndicator={false}
+            nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
+          >
+            {children}
+          </ScrollView>
 
           {/* Action buttons */}
           {actions.length > 0 && (
             <View style={styles.actions}>
               {actions.map((action, idx) => {
                 const bg =
-                  action.variant === 'primary' ? colors.text :
-                  action.variant === 'destructive' ? '#FF3B30' :
+                  action.variant === 'primary' ? colors.tint :
+                  action.variant === 'destructive' ? colors.error :
                   colors.card;
                 const fg =
                   action.variant === 'primary' ? colors.background :
@@ -172,7 +202,9 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 28,
     borderWidth: 1,
     paddingBottom: 32,
-    elevation: 20,
+    maxHeight: '90%',
+    minHeight: 120,
+    flexDirection: 'column',
   },
   handleRow: {
     alignItems: 'center',
@@ -192,18 +224,16 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
   },
   title: {
-
-    fontFamily: Fonts.bold,
     marginBottom: 2,
   },
-  subtitle: {
-
-    fontFamily: Fonts.medium,
-  },
+  subtitle: {},
   closeBtn: {
     padding: 6,
   },
-  body: {
+  bodyScroll: {
+    flexGrow: 0,
+  },
+  bodyContent: {
     paddingHorizontal: 24,
   },
   actions: {
@@ -224,8 +254,5 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     minWidth: 110,
   },
-  actionText: {
-
-    fontFamily: Fonts.bold,
-  },
+  actionText: {},
 });

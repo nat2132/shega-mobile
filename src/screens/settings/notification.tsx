@@ -1,4 +1,4 @@
-﻿// Notification settings screen
+// Notification settings screen
 // Lets the user configure:
 //   - Per-category enable / disable
 //   - Push notification sound
@@ -8,7 +8,6 @@
 
 import React, { useEffect } from 'react';
 import {
-  Alert,
   Platform,
   ScrollView,
   StyleSheet,
@@ -29,18 +28,35 @@ import {
   MessageSquare,
   Package,
   Shield,
-  Truck,
   Volume2,
   Wallet,
+  TrendingUp,
+  Repeat,
+  Receipt,
+  Megaphone,
 } from 'lucide-react-native';
 import { Fonts } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
 import { useToast } from '@/context/ToastContext';
 import { useNotificationCenter } from '@/context/NotificationContext';
 import { useRouter } from 'expo-router';
-import { AppText, AppCard, AppButton, AppListItem, AppRow } from '@/components/ui';
+import { AppText, AppNumber} from '@/components/ui';
+import { getSettingsGlass } from './glass-settings';
+let Notifications: any;
+try {
+  Notifications = require('expo-notifications');
+} catch {
+  Notifications = {
+    setNotificationHandler: async () => {},
+    getPermissionsAsync: async () => ({ status: 'undetermined' }),
+    requestPermissionsAsync: async () => ({ status: 'undetermined' }),
+    scheduleNotificationAsync: async () => 'noop',
+    SchedulableTriggerInputTypes: { TIME_INTERVAL: 'timeInterval' },
+  };
+}
 const NotificationSettings = () => {
   const { notifications, setNotifications, colors, t } = useSettings();
+  const G = getSettingsGlass(colors);
   const { showToast } = useToast();
   const { preferences, updatePreference, reminders } = useNotificationCenter();
   const router = useRouter();
@@ -61,13 +77,13 @@ const NotificationSettings = () => {
       if (isExpoGo && Platform.OS === 'android') {
         return;
       }
-      const Notifications = require('expo-notifications');
       Notifications.setNotificationHandler({
-        handleNotification: async () => ({
-          shouldShowAlert: true,
-          shouldPlaySound: true,
-          shouldSetBadge: true,
-        }),
+        handleNotification: async () =>
+          ({
+            shouldShowAlert: true,
+            shouldPlaySound: true,
+            shouldSetBadge: true,
+          } as any),
       });
       const { status } = await Notifications.getPermissionsAsync();
       if (status !== 'granted') {
@@ -85,14 +101,13 @@ const NotificationSettings = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const isExpoGo = Constants.appOwnership === 'expo';
     if (isExpoGo && Platform.OS === 'android') {
-      showToast('Push notifications are disabled in Expo Go on Android.', 'error');
+      showToast(t('notif.push_disabled'), 'error');
       return;
     }
-    const Notifications = require('expo-notifications');
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: 'System Alert 🔔',
-        body: 'This is a test push notification from Shega OS.',
+        title: t('notif.test_alert_title'),
+        body: t('notif.test_push_msg'),
         sound: true,
       },
       trigger: {
@@ -100,26 +115,26 @@ const NotificationSettings = () => {
         seconds: 2,
       },
     });
-    showToast('Test push scheduled (2s)', 'success');
+    showToast({ title: t('notif.test_scheduled_title'), message: t('notif.test_scheduled'), type: 'success' });
   };
 
   const triggerPopupNotification = () => {
-    showToast('This is a global pop-up notification!', 'info');
+    showToast({ title: t('notif.test_popup_title'), message: t('notif.test_popup_msg'), type: 'info' });
   };
 
   const AlertCard = ({ title, subtitle, value, onValueChange, icon: Icon }: any) => (
-    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <View style={[styles.cardIcon, { backgroundColor: colors.text + '08' }]}>
-        {Icon ? <Icon size={18} color={colors.text} /> : null}
+    <View style={[styles.card, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+      <View style={[styles.cardIcon, { backgroundColor: G.fg + '08' }]}>
+        {Icon ? <Icon size={18} color={G.fg} /> : null}
       </View>
       <View style={styles.cardText}>
-        <AppText variant="body" weight="bold" style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>{title}</AppText>
-        <AppText variant="body-sm" weight="medium" style={[styles.cardSubtitle, { color: colors.textSecondary }]} numberOfLines={2}>{subtitle}</AppText>
+        <AppText variant="body" weight="bold" style={[styles.cardTitle, { color: G.fg }]} numberOfLines={1}>{title}</AppText>
+        <AppText variant="body-sm" weight="medium" style={[styles.cardSubtitle, { color: G.fgSecondary }]} numberOfLines={2}>{subtitle}</AppText>
       </View>
       <Switch
         value={value}
         onValueChange={onValueChange}
-        trackColor={{ false: '#E5E5EA', true: colors.text }}
+        trackColor={{ false: '#E5E5EA', true: G.fg }}
         thumbColor="#FFF"
       />
     </View>
@@ -131,60 +146,65 @@ const NotificationSettings = () => {
   const quietHoursPref = getPref('quiet_hours');
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: G.bg }]}>
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <View style={[styles.glowWash, { backgroundColor: G.mutedLight, top: -80, left: -60, width: 200, height: 200, borderRadius: 100 }]} />
+        <View style={[styles.glowWash, { backgroundColor: G.mutedLight, bottom: -40, right: -30, width: 160, height: 160, borderRadius: 80 }]} />
+        <View style={[styles.glowWash, { backgroundColor: G.mutedLight, top: '40%', right: -50, width: 140, height: 140, borderRadius: 70 }]} />
+      </View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-        <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.headerLabel, { color: colors.textSecondary }]} numberOfLines={2}>
+        <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.headerLabel, { color: G.fgSecondary }]} numberOfLines={2}>
           {t('settings.notification_settings')}
         </AppText>
-        <AppText variant="display" weight="bold" style={[styles.mainTitle, { color: colors.text }]} numberOfLines={2}>{t('settings.notifications')}</AppText>
+        <AppText variant="display" weight="bold" style={[styles.mainTitle, { color: G.fg }]} numberOfLines={2}>{t('settings.notifications')}</AppText>
 
         {/* Test buttons */}
         <View style={styles.testButtonsContainer}>
           <TouchableOpacity
-            style={[styles.testButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+            style={[styles.testButton, { backgroundColor: G.bgCard, borderColor: G.border }]}
             onPress={triggerPopupNotification}
           >
-            <MessageSquare size={18} color={colors.text} />
-            <AppText variant="body" weight="bold" style={[styles.testButtonText, { color: colors.text }]} numberOfLines={1}>Test Pop-up</AppText>
+            <MessageSquare size={18} color={G.fg} />
+            <AppText variant="body" weight="bold" style={[styles.testButtonText, { color: G.fg }]} numberOfLines={1}>{t('notif.test_pop_up')}</AppText>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.testButton, { backgroundColor: colors.text, borderColor: colors.text }]}
+            style={[styles.testButton, { backgroundColor: G.fg, borderColor: G.fg }]}
             onPress={triggerPushNotification}
           >
-            <BellRing size={18} color={colors.background} />
-            <AppText variant="body" weight="bold" style={[styles.testButtonText, { color: colors.background }]} numberOfLines={1}>Test Push</AppText>
+            <BellRing size={18} color={G.bg} />
+            <AppText variant="body" weight="bold" style={[styles.testButtonText, { color: G.bg }]} numberOfLines={1}>{t('notif.test_push')}</AppText>
           </TouchableOpacity>
         </View>
 
         {/* Global delivery */}
         <View style={styles.sectionHeader}>
-          <Shield size={20} color={colors.text} />
-          <AppText variant="subtitle" weight="bold" style={[styles.sectionTitle, { color: colors.text }]} numberOfLines={1}>Global Delivery</AppText>
+          <Shield size={20} color={G.fg} />
+          <AppText variant="subtitle" weight="bold" style={[styles.sectionTitle, { color: G.fg }]} numberOfLines={1}>{t('notif.global_delivery')}</AppText>
         </View>
         <AlertCard
-          title="Push Notifications"
-          subtitle="Send notifications to your device"
+          title={t('notif.push_notifications')}
+          subtitle={t('notif.push_desc')}
           value={pushPref.enabled}
           onValueChange={(v: boolean) => updatePreference('push', { enabled: v })}
           icon={Bell}
         />
         <AlertCard
-          title="Sound"
-          subtitle="Play a sound when a notification arrives"
+          title={t('notif.sound')}
+          subtitle={t('notif.sound_desc')}
           value={soundPref.enabled}
           onValueChange={(v: boolean) => updatePreference('sound', { enabled: v })}
           icon={Volume2}
         />
         <AlertCard
-          title="Vibration"
-          subtitle="Vibrate on new notifications"
+          title={t('notif.vibration')}
+          subtitle={t('notif.vibration_desc')}
           value={vibrationPref.enabled}
           onValueChange={(v: boolean) => updatePreference('vibration', { enabled: v })}
           icon={Clock}
         />
         <AlertCard
-          title="Quiet Hours"
-          subtitle="Mute notifications during set times"
+          title={t('notif.quiet_hours')}
+          subtitle={t('notif.quiet_hours_desc')}
           value={!!quietHoursPref.quietStart}
           onValueChange={(v: boolean) =>
             updatePreference('quiet_hours', { quietStart: v ? '22:00' : null, quietEnd: v ? '07:00' : null })
@@ -192,30 +212,30 @@ const NotificationSettings = () => {
           icon={Calendar}
         />
         {quietHoursPref.quietStart && (
-          <View style={[styles.quietHoursRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <AppText variant="caption" weight="bold" style={[styles.quietHoursLabel, { color: colors.textSecondary }]} numberOfLines={1}>From</AppText>
+          <View style={[styles.quietHoursRow, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+            <AppText variant="caption" weight="bold" style={[styles.quietHoursLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('notif.from')}</AppText>
             <TextInput
-              style={[styles.quietHoursInput, { color: colors.text, borderColor: colors.border }]}
+              style={[styles.quietHoursInput, { color: G.fg, borderColor: G.border }]}
               value={quietHoursPref.quietStart || ''}
               onChangeText={(v) => updatePreference('quiet_hours', { quietStart: v })}
               placeholder="22:00"
-              placeholderTextColor={colors.textSecondary}
+              placeholderTextColor={G.fgSecondary}
             />
-            <AppText variant="caption" weight="bold" style={[styles.quietHoursLabel, { color: colors.textSecondary }]} numberOfLines={1}>To</AppText>
+            <AppText variant="caption" weight="bold" style={[styles.quietHoursLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('notif.to')}</AppText>
             <TextInput
-              style={[styles.quietHoursInput, { color: colors.text, borderColor: colors.border }]}
+              style={[styles.quietHoursInput, { color: G.fg, borderColor: G.border }]}
               value={quietHoursPref.quietEnd || ''}
               onChangeText={(v) => updatePreference('quiet_hours', { quietEnd: v })}
               placeholder="07:00"
-              placeholderTextColor={colors.textSecondary}
+              placeholderTextColor={G.fgSecondary}
             />
           </View>
         )}
 
         {/* Per category */}
         <View style={styles.sectionHeader}>
-          <Package size={20} color={colors.text} />
-          <AppText variant="subtitle" weight="bold" style={[styles.sectionTitle, { color: colors.text }]} numberOfLines={2}>
+          <Package size={20} color={G.fg} />
+          <AppText variant="subtitle" weight="bold" style={[styles.sectionTitle, { color: G.fg }]} numberOfLines={2}>
             {t('settings.inventory_alerts')}
           </AppText>
         </View>
@@ -224,17 +244,19 @@ const NotificationSettings = () => {
           subtitle={t('settings.stock_shortage_desc')}
           value={notifications.stock}
           onValueChange={() => toggle('stock')}
+          icon={Package}
         />
         <AlertCard
           title={t('settings.expiration_status')}
           subtitle={t('settings.expiration_status_desc')}
           value={notifications.expiration}
           onValueChange={() => toggle('expiration')}
+          icon={Clock}
         />
 
         <View style={styles.sectionHeader}>
-          <LineChart size={20} color={colors.text} />
-          <AppText variant="subtitle" weight="bold" style={[styles.sectionTitle, { color: colors.text }]} numberOfLines={2}>
+          <LineChart size={20} color={G.fg} />
+          <AppText variant="subtitle" weight="bold" style={[styles.sectionTitle, { color: G.fg }]} numberOfLines={2}>
             {t('settings.sales_alerts')}
           </AppText>
         </View>
@@ -243,11 +265,12 @@ const NotificationSettings = () => {
           subtitle={t('settings.daily_summary_desc')}
           value={notifications.daily}
           onValueChange={() => toggle('daily')}
+          icon={LineChart}
         />
 
         <View style={styles.sectionHeader}>
-          <Wallet size={20} color={colors.text} />
-          <AppText variant="subtitle" weight="bold" style={[styles.sectionTitle, { color: colors.text }]} numberOfLines={2}>
+          <Wallet size={20} color={G.fg} />
+          <AppText variant="subtitle" weight="bold" style={[styles.sectionTitle, { color: G.fg }]} numberOfLines={2}>
             {t('settings.credit_debt')}
           </AppText>
         </View>
@@ -256,32 +279,105 @@ const NotificationSettings = () => {
           subtitle={t('settings.credit_status_desc')}
           value={notifications.credit}
           onValueChange={() => toggle('credit')}
+          icon={Wallet}
         />
         <AlertCard
           title={t('settings.debt_status')}
           subtitle={t('settings.debt_status_desc')}
           value={notifications.debt}
           onValueChange={() => toggle('debt')}
+          icon={CheckCircle2}
         />
 
-        <AppText variant="caption" weight="medium" style={[styles.persistNote, { color: colors.textSecondary }]} numberOfLines={2}>
+        {/* Budget Alerts */}
+        <View style={styles.sectionHeader}>
+          <TrendingUp size={20} color={G.fg} />
+          <AppText variant="subtitle" weight="bold" style={[styles.sectionTitle, { color: G.fg }]} numberOfLines={2}>
+            {t('notif.budget_alerts')}
+          </AppText>
+        </View>
+        <AlertCard
+          title={t('notif.budget_limit_warnings')}
+          subtitle={t('notif.budget_limit_desc')}
+          value={notifications.budget ?? true}
+          onValueChange={() => toggle('budget')}
+          icon={TrendingUp}
+        />
+        <AlertCard
+          title={t('notif.budget_status')}
+          subtitle={t('notif.budget_status_desc')}
+          value={notifications.budgetStatus ?? true}
+          onValueChange={() => toggle('budgetStatus')}
+          icon={Megaphone}
+        />
+
+        {/* Expense Alerts */}
+        <View style={styles.sectionHeader}>
+          <Receipt size={20} color={G.fg} />
+          <AppText variant="subtitle" weight="bold" style={[styles.sectionTitle, { color: G.fg }]} numberOfLines={2}>
+            {t('notif.expense_alerts')}
+          </AppText>
+        </View>
+        <AlertCard
+          title={t('notif.expense_confirmations')}
+          subtitle={t('notif.expense_confirm_desc')}
+          value={notifications.expense ?? true}
+          onValueChange={() => toggle('expense')}
+          icon={Receipt}
+        />
+        <AlertCard
+          title={t('notif.large_expense_alerts')}
+          subtitle={t('notif.large_expense_desc')}
+          value={notifications.largeExpense ?? true}
+          onValueChange={() => toggle('largeExpense')}
+          icon={Bell}
+        />
+
+        {/* Recurring Expense Reminders */}
+        <View style={styles.sectionHeader}>
+          <Repeat size={20} color={G.fg} />
+          <AppText variant="subtitle" weight="bold" style={[styles.sectionTitle, { color: G.fg }]} numberOfLines={2}>
+            {t('notif.recurring_reminders')}
+          </AppText>
+        </View>
+        <AlertCard
+          title={t('notif.due_today_tomorrow')}
+          subtitle={t('notif.due_desc')}
+          value={notifications.recurring ?? true}
+          onValueChange={() => toggle('recurring')}
+          icon={Repeat}
+        />
+        <AlertCard
+          title={t('notif.weekly_summary')}
+          subtitle={t('notif.weekly_summary_desc')}
+          value={notifications.weeklySummary ?? true}
+          onValueChange={() => toggle('weeklySummary')}
+          icon={LineChart}
+        />
+        <AlertCard
+          title={t('notif.monthly_summary')}
+          subtitle={t('notif.monthly_summary_desc')}
+          value={notifications.monthlySummary ?? true}
+          onValueChange={() => toggle('monthlySummary')}
+          icon={Calendar}
+        />
+
+        <AppText variant="caption" weight="medium" style={[styles.persistNote, { color: G.fgSecondary }]} numberOfLines={2}>
           {t('settings.auto_save')}
         </AppText>
 
         {/* Scheduled reminders shortcut */}
         <TouchableOpacity
-          style={[styles.remindersBtn, { backgroundColor: colors.text, borderColor: colors.text }]}
+          style={[styles.remindersBtn, { backgroundColor: G.fg, borderColor: G.fg }]}
           onPress={() => router.push('/reminders' as any)}
         >
-          <Calendar size={18} color={colors.background} />
-          <AppText variant="body" weight="bold" style={[styles.remindersBtnText, { color: colors.background }]} numberOfLines={1}>
-            Manage Reminders
+          <Calendar size={18} color={G.bg} />
+          <AppText variant="body" weight="bold" style={[styles.remindersBtnText, { color: G.bg }]} numberOfLines={1}>
+            {t('notif.manage_reminders')}
           </AppText>
           {reminders.length > 0 && (
-            <View style={[styles.reminderBadge, { backgroundColor: colors.background }]}>
-              <AppText variant="caption" weight="bold" style={[styles.reminderBadgeText, { color: colors.text }]} numberOfLines={1}>
-                {reminders.length}
-              </AppText>
+            <View style={[styles.reminderBadge, { backgroundColor: G.bg }]}>
+              <AppNumber value={reminders.length} size="caption" style={[styles.reminderBadgeText, { color: G.fg }]} />
             </View>
           )}
         </TouchableOpacity>
@@ -291,17 +387,14 @@ const NotificationSettings = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFF', paddingHorizontal: 25 },
+  container: { flex: 1, paddingHorizontal: 25 },
   headerLabel: {
-
     fontFamily: Fonts.bold,
     fontWeight: '700',
     letterSpacing: 1.5,
     marginTop: 20,
-    color: '#888',
   },
   mainTitle: {
-
     fontFamily: Fonts.bold,
     fontWeight: '700',
     marginTop: 8,
@@ -334,13 +427,12 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FAFAFA',
     padding: 14,
     borderRadius: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#F2F2F7',
     gap: 12,
+    overflow: 'hidden',
   },
   cardIcon: {
     width: 36,
@@ -351,11 +443,9 @@ const styles = StyleSheet.create({
   },
   cardText: { flex: 1 },
   cardTitle: { fontSize: 15, fontFamily: Fonts.bold, fontWeight: '700', marginBottom: 3 },
-  cardSubtitle: { fontSize: 12, color: '#8E8E93', fontFamily: Fonts.medium },
+  cardSubtitle: { fontSize: 12, fontFamily: Fonts.medium },
   persistNote: {
     textAlign: 'center',
-    color: '#C0C0C0',
-
     fontFamily: Fonts.medium,
     marginTop: 20,
     marginBottom: 20,
@@ -369,6 +459,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     marginTop: -6,
     gap: 8,
+    overflow: 'hidden',
   },
   quietHoursLabel: { fontSize: 12, fontFamily: Fonts.medium },
   quietHoursInput: {
@@ -404,10 +495,10 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   reminderBadgeText: {
-
     fontFamily: Fonts.bold,
     lineHeight: 14,
   },
+  glowWash: { position: 'absolute' },
 });
 
 export default NotificationSettings;
