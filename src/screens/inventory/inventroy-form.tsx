@@ -1,63 +1,63 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { CustomDatePicker } from '@/components/CustomDatePicker';
+import { DraftSection } from '@/components/DraftSection';
+import { AppNumber, AppText } from '@/components/ui';
+import { Fonts } from '@/constants/theme';
+import { useDialog } from '@/context/DialogContext';
+import { useSettings } from '@/context/SettingsContext';
 import {
-  View,
+  getItems,
+  getSuppliers,
+  getUserCategories,
+  insertCategory,
+  insertContact,
+  insertItem,
+  insertPack,
+  updateItem
+} from '@/database/db';
+import { useFormDrafts } from '@/hooks/useFormDrafts';
+import { Draft } from '@/services/draftService';
+import { playBad, playNice } from '@/services/soundService';
+import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
+import {
+  AlertCircle,
+  ArrowRight,
+  Building2,
+  Calendar,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  CreditCard,
+  LayoutGrid,
+  Package,
+  Phone,
+  PhoneCall,
+  Plus,
+  RefreshCw,
+  Search,
+  Tag,
+  Truck,
+  X
+} from 'lucide-react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  FlatList,
+  KeyboardAvoidingView,
+  Linking,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  ScrollView,
-  Modal,
-  Pressable,
-  Platform,
-  KeyboardAvoidingView,
-  Linking,
-  FlatList
+  View
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   FadeInDown
 } from 'react-native-reanimated';
-import {
-  ChevronDown,
-  Calendar,
-  ArrowRight,
-  X,
-  Check,
-  Plus,
-  Package,
-  Building2,
-  Tag,
-  AlertCircle,
-  Truck,
-  CreditCard,
-  ChevronLeft,
-  LayoutGrid,
-  Phone,
-  PhoneCall,
-  Search,
-  RefreshCw
-} from 'lucide-react-native';
-import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
-import { playNice, playBad } from '@/services/soundService';
-import {
-   insertItem,
-   insertCategory,
-   getUserCategories,
-   insertPack,
-   getSuppliers,
-   insertContact,
-   getItems,
-   updateItem
-} from '@/database/db';
-import { useSettings } from '@/context/SettingsContext';
-import { useDialog } from '@/context/DialogContext';
-import { Fonts } from '@/constants/theme';
-import { CustomDatePicker } from '@/components/CustomDatePicker';
-import { AppNumber, AppText} from '@/components/ui';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { getInventoryGlass } from './glass-inventory';
-import { useFormDrafts } from '@/hooks/useFormDrafts';
-import { DraftSection } from '@/components/DraftSection';
-import { Draft } from '@/services/draftService';
 const QUALITY_GRADES = ['grade1', 'grade2', 'grade3'];
 
 export const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?: () => void }) => {
@@ -150,6 +150,10 @@ const RestockFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?:
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [showSupplierModal, setShowSupplierModal] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<any>(null);
+  
+  // Success modal state
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   const draftFormKeyRestock = 'inventory-restock';
   const draftFormDataRestock = useFormDrafts({
@@ -225,12 +229,18 @@ const RestockFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?:
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       playNice();
       await draftFormDataRestock.clearCurrent();
-      if (onSuccess) onSuccess();
-      else if (onClose) onClose();
-      else if (router.canGoBack()) router.back();
+      setSuccessMessage(t('inventory.restock_success', { name: selectedItem.name }));
+      setShowSuccessModal(true);
     } else {
       await dialog.alert({ title: t('common.error'), message: t('inventory.failed_to_save'), iconType: 'danger' });
     }
+  };
+
+  const handleSuccessDone = () => {
+    setShowSuccessModal(false);
+    if (onSuccess) onSuccess();
+    else if (onClose) onClose();
+    else if (router.canGoBack()) router.back();
   };
 
   if (!selectedItem) {
@@ -494,6 +504,27 @@ const RestockFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?:
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Success Modal */}
+      <Modal visible={showSuccessModal} transparent animationType="fade">
+        <Pressable style={styles.successOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowSuccessModal(false)} />
+          <View style={[styles.successCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+            <View style={[styles.successIconCircle, { backgroundColor: colors.success }]}>
+              <Check size={48} color={G.bg} />
+            </View>
+            <AppText variant="heading" weight="bold" style={[styles.successTitle, { color: G.fg }]} numberOfLines={2}>{t('common.success')}</AppText>
+            <AppText variant="body" weight="medium" style={[styles.successSub, { color: G.fgSecondary }]} numberOfLines={3}>{successMessage}</AppText>
+            <TouchableOpacity
+              style={[styles.finishBtn, { backgroundColor: G.fg }]}
+              onPress={handleSuccessDone}
+            >
+              <AppText variant="body" weight="bold" shrink={false} style={[styles.finishBtnText, { color: G.bg }]} numberOfLines={1}>{t('common.done')}</AppText>
+              <ArrowRight size={18} color={G.bg} />
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -544,6 +575,10 @@ const AddItemFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?:
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  
+  // Success modal state
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   const draftFormKey = 'inventory-add';
   const draftFormData = useFormDrafts({
@@ -1333,7 +1368,6 @@ const loadCategories = async () => {
           </Pressable>
         </Pressable>
       </Modal>
-
     </SafeAreaView>
   );
 };
@@ -1402,6 +1436,8 @@ const createStyles = (G: any) => StyleSheet.create({
   successIconCircle: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
   successTitle: { fontSize: 24, fontFamily: Fonts.bold, marginBottom: 8 },
   successSub: { fontSize: 14, textAlign: 'center', lineHeight: 20, marginBottom: 30 },
+  finishBtn: { width: '100%', height: 56, borderRadius: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, overflow: 'hidden' },
+  finishBtnText: { fontSize: 16, fontFamily: Fonts.bold },
   vaultBtn: { width: '100%', height: 60, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
   vaultBtnText: { fontSize: 16, fontFamily: Fonts.bold },
   addMoreBtn: { width: '100%', height: 60, borderRadius: 18, borderWidth: 1.5, justifyContent: 'center', alignItems: 'center' },

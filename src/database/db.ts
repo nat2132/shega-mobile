@@ -1,13 +1,71 @@
 import { fromEthiopianToDate, getEthiopianDaysInMonth, toEthiopianDate } from '@/utils/date-utils';
 import * as SQLite from 'expo-sqlite';
 
+const GLOBAL_DB_KEY = '__shega_db';
+const DB_NAME = 'shegabe.db';
+
 let db: SQLite.SQLiteDatabase | null = null;
+let dbReady = false;
+
+const openDB = (useNew = false) => {
+  const opened = SQLite.openDatabaseSync(DB_NAME, useNew ? { useNewConnection: true } : undefined);
+  try { opened.execSync('ROLLBACK'); } catch {}
+  opened.execSync('PRAGMA journal_mode=WAL');
+  opened.execSync('PRAGMA busy_timeout=5000');
+  return opened;
+};
+
+const recoverDB = () => {
+  try { db?.closeSync(); } catch {}
+  (globalThis as any)[GLOBAL_DB_KEY] = null;
+  try {
+    SQLite.deleteDatabaseSync(DB_NAME);
+  } catch {}
+  db = null;
+  dbReady = false;
+  db = openDB();
+  (globalThis as any)[GLOBAL_DB_KEY] = db;
+  dbReady = true;
+  return db;
+};
+
+const getDBCached = (): SQLite.SQLiteDatabase => {
+  const cached = (globalThis as any)[GLOBAL_DB_KEY];
+  if (cached) {
+    try {
+      try { cached.execSync('ROLLBACK'); } catch {}
+      cached.execSync('PRAGMA journal_mode=WAL');
+      cached.execSync('PRAGMA busy_timeout=5000');
+      return cached;
+    } catch {
+      try { cached.closeSync(); } catch {}
+      (globalThis as any)[GLOBAL_DB_KEY] = null;
+    }
+  }
+  try {
+    db = openDB();
+  } catch {
+    return recoverDB();
+  }
+  (globalThis as any)[GLOBAL_DB_KEY] = db;
+  return db;
+};
 
 export const getDB = () => {
-  if (!db) {
-    db = SQLite.openDatabaseSync('shegabe.db');
+  if (db && dbReady) {
+    return db;
   }
+  db = getDBCached();
+  dbReady = true;
   return db;
+};
+
+export const resetDatabase = () => {
+  db = null;
+  dbReady = false;
+  (globalThis as any)[GLOBAL_DB_KEY] = null;
+  try { SQLite.deleteDatabaseSync(DB_NAME); } catch {}
+  return getDB();
 };
 
 const migrateItemsTable = (database: SQLite.SQLiteDatabase) => {

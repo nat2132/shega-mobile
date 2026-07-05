@@ -88,8 +88,8 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
       recurStartDate,
       recurEndDate,
     }), [amount, category, date, description, selectedBudgetId, isRecurring, recurFrequency, recurStartDate, recurEndDate]),
-    getTitle: useCallback(() => (category ? `Expense - ${category}` : 'Expense Draft'), [category]),
-    getSubtitle: useCallback(() => (amount ? `ETB ${amount}` : 'No amount set'), [amount]),
+    getTitle: useCallback(() => (category ? t('draft.expense_title', { category }) : t('draft.expense_default')), [category, t]),
+    getSubtitle: useCallback(() => (amount ? t('draft.expense_subtitle', { amount }) : t('draft.expense_no_amount')), [amount, t]),
     enabled: !successDetails,
   });
 
@@ -198,7 +198,7 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
     if (!category.trim()) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       playBad();
-      await dialog.alert({ title: t('common.error'), message: 'Please select a category', iconType: 'danger' });
+      await dialog.alert({ title: t('common.error'), message: t('expense.select_category'), iconType: 'danger' });
       return;
     }
 
@@ -217,7 +217,7 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
       playNice();
       await draftFormData.clearCurrent();
       setSuccessDetails({
-        title: 'Recurring expense scheduled',
+        title: t('expense.recurring_scheduled'),
         subtitle: `${recurFrequency} Â· ${formatDate(new Date(recurStartDate), calendarType, language)}`,
         mainLabel: t('expense.magnitude'),
         mainValue: `${amountNum.toLocaleString()} ${t('common.etb')}`,
@@ -378,7 +378,7 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
                 {frequentCategories.length > 0 && (
                   <>
                     <AppText variant="caption" weight="bold" style={[styles.sectionLabel, { color: G.fgSecondary }]}>
-                      Recent
+                      {t('expense.recent')}
                     </AppText>
                     <View style={styles.chipRow}>
                       {frequentCategories.map(cat => (
@@ -447,7 +447,7 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
                   <Wallet size={18} color={G.fgSecondary} />
                   <View style={{ flex: 1, marginLeft: 12 }}>
                     <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary }]}>
-                      Budget
+                      {t('expense.budget_label')}
                     </AppText>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginTop: 8 }}>
                       <TouchableOpacity
@@ -455,7 +455,7 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
                         onPress={() => handleBudgetSelect(null)}
                       >
                         <AppText variant="micro" weight="bold" style={{ color: selectedBudgetId === null ? G.bg : G.fg }}>
-                          Auto
+                          {t('expense.auto')}
                         </AppText>
                       </TouchableOpacity>
                       {budgets.map((b: any) => (
@@ -480,14 +480,14 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
           {ambiguousCategories.length > 0 && (
             <Animated.View entering={FadeIn} style={[styles.warningCard, { backgroundColor: colors.warning + '15', borderColor: colors.warning }]}>
               <AppText variant="caption" weight="bold" style={{ color: colors.warning, marginBottom: 8 }}>
-                Multiple budget categories match. Select one:
+                {t('expense.multiple_budget_match')}
               </AppText>
               {ambiguousCategories.map((cat: any) => (
                 <TouchableOpacity key={cat.id} style={[styles.ambiguousRow, { borderBottomColor: G.border }]}
                   onPress={() => handleSelectAmbiguousCategory(cat)}>
                   <AppText variant="body-sm" weight="bold" style={{ color: G.fg }}>{cat.category}</AppText>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <AppText variant="caption" style={{ color: G.fgSecondary }}>Budget: </AppText>
+                    <AppText variant="caption" style={{ color: G.fgSecondary }}>{t('expense.budget_label')}: </AppText>
                     <AppNumber value={cat.plannedAmount} size="caption" prefix={t('common.etb') + ' '} />
                   </View>
                 </TouchableOpacity>
@@ -538,7 +538,7 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
                 <View style={[styles.overWarning, { backgroundColor: colors.error + '15' }]}>
                   <AlertTriangle size={14} color={colors.error} />
                   <AppText variant="caption" weight="bold" style={{ color: colors.error, flex: 1, marginLeft: 6 }}>
-                    This will exceed the budget
+                    {t('expense.will_exceed_budget')}
                   </AppText>
                 </View>
               )}
@@ -556,10 +556,10 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
                 <Repeat size={18} color={isRecurring ? G.fg : G.fgSecondary} />
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary }]}>
-                    Recurring
+                    {t('expense.recurring')}
                   </AppText>
                   <AppText variant="body" weight="bold" style={[styles.fieldValue, { color: isRecurring ? G.fg : G.fgSecondary }]}>
-                    {isRecurring ? `${recurFrequency} Â· ${formatDate(new Date(recurStartDate), calendarType, language)}` : 'One-time expense'}
+                    {isRecurring ? `${recurFrequency} · ${formatDate(new Date(recurStartDate), calendarType, language)}` : t('expense.one_time')}
                   </AppText>
                 </View>
                 <View style={[styles.toggleTrack, { backgroundColor: isRecurring ? G.fg : G.border }]}>
@@ -616,7 +616,7 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
           >
             <ShieldCheck size={22} color={G.bg} />
             <AppText variant="body" weight="bold" style={[styles.saveBtnText, { color: G.bg }]}>
-              {isRecurring ? 'Save & Schedule' : t('expense.commit_ledger')}
+              {isRecurring ? t('expense.save_schedule') : t('expense.commit_ledger')}
             </AppText>
           </TouchableOpacity>
         </ScrollView>

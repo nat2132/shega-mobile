@@ -1,6 +1,6 @@
 import { Fonts, Spacing } from '@/constants/theme';
 import { useDialog } from '@/context/DialogContext';
-import { PROFILE_IMAGES, useSettings } from '@/context/SettingsContext';
+import { PROFILE_IMAGES, useDashboardVisibility, useSettings } from '@/context/SettingsContext';
 import { clearDatabase } from '@/database/db';
 import * as Haptics from 'expo-haptics';
 import * as SecureStore from 'expo-secure-store';
@@ -22,21 +22,23 @@ import Animated, {
 import { getSettingsGlass } from './glass-settings';
 
 import {
+  AlertTriangle,
   ArrowUpRight,
   BadgeCheck,
   Bell,
-  Building2,
   Calendar,
   ChevronRight,
   CloudDownload,
   Database,
   HelpCircle,
   Languages,
+  LayoutDashboard,
   Palette,
   Shield,
   Trash2,
   Volume2,
   Warehouse,
+  Zap
 } from 'lucide-react-native';
 
 import { DataTransferModal } from '@/components/DataTransferModal';
@@ -367,6 +369,7 @@ const BottomSheet = ({ visible, onClose, children }: any) => {
 
 const SettingsScreen = () => {
   const { theme, setTheme, userProfile, pin, colors, t, soundEnabled, setSoundEnabled } = useSettings();
+  const { dashboardVisibility, toggleDashboardSection } = useDashboardVisibility();
   const G = getSettingsGlass(colors);
 
   const [showProfile, setShowProfile] = useState(false);
@@ -401,11 +404,11 @@ const SettingsScreen = () => {
         {/* Integrated Header */}
         <View style={styles.integratedHeader}>
           <View>
-  <AppText variant="body" weight="medium" style={[styles.headerLabel, { color: G.muted }]} numberOfLines={2}>{t('settings.system_pref')}</AppText>
-  <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{t('settings.configuration')}</AppText>
+            <AppText variant="body" weight="medium" style={[styles.headerLabel, { color: G.muted }]} numberOfLines={2}>{t('settings.system_pref')}</AppText>
+            <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{t('settings.configuration')}</AppText>
           </View>
           <View style={[styles.headerIconBox, { backgroundColor: G.bgCard, borderColor: G.border }]}>
-             <Shield size={24} color={G.fg} />
+            <Shield size={24} color={G.fg} />
           </View>
         </View>
 
@@ -423,8 +426,8 @@ const SettingsScreen = () => {
               </View>
             </View>
             <View style={styles.bannerInfo}>
-            <AppText variant="title" weight="bold" style={[styles.bannerName, { color: G.fg }]} numberOfLines={2}>{userProfile.name}</AppText>
-            <AppText variant="body-sm" weight="medium" style={[styles.bannerBusiness, { color: G.muted }]} numberOfLines={1}>{userProfile.businessName}</AppText>
+              <AppText variant="title" weight="bold" style={[styles.bannerName, { color: G.fg }]} numberOfLines={2}>{userProfile.name}</AppText>
+              <AppText variant="body-sm" weight="medium" style={[styles.bannerBusiness, { color: G.muted }]} numberOfLines={1}>{userProfile.businessName}</AppText>
               <View style={[styles.profileLinkBtn, { backgroundColor: G.accentGlass }]}>
                 <AppText variant="caption" weight="bold" style={[styles.profileLinkText, { color: G.fg }]} numberOfLines={1}>{t('profile.edit')}</AppText>
                 <ArrowUpRight size={14} color={G.fg} />
@@ -478,13 +481,82 @@ const SettingsScreen = () => {
           </View>
         </View>
 
+        {/* Dashboard Customization */}
+        <View style={styles.ledgerSection}>
+          <View style={styles.sectionHead}>
+            <View>
+              <AppText variant="heading" weight="bold" style={[styles.sectionTitle, { color: G.fg }]} numberOfLines={2}>{t('settings.dashboard')}</AppText>
+              <AppText variant="body-sm" weight="medium" style={[styles.sectionSub, { color: G.muted }]} numberOfLines={2}>{t('settings.dashboard_subtitle')}</AppText>
+            </View>
+            <LayoutDashboard size={20} color={G.muted} />
+          </View>
+          <View style={[styles.ledgerGroup, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+            <View style={[styles.soundRow, { borderBottomColor: G.border }]}>
+              <View style={[styles.ledgerIconBox, { backgroundColor: G.accentGlass }]}>
+                <AlertTriangle size={18} color={G.fg} strokeWidth={2.5} />
+              </View>
+              <View style={{ flex: 1, marginLeft: 14 }}>
+                <AppText variant="body" weight="bold" style={{ color: G.fg }} numberOfLines={1}>{t('dashboard.alerts')}</AppText>
+                <AppText variant="caption" weight="medium" style={{ color: G.muted }} numberOfLines={1}>{t('settings.dashboard_alerts_desc')}</AppText>
+              </View>
+              <Switch
+                value={dashboardVisibility.alerts}
+                onValueChange={(val: boolean) => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  toggleDashboardSection('alerts', val);
+                }}
+                trackColor={{ false: G.border, true: G.fg + '60' }}
+                thumbColor={dashboardVisibility.alerts ? G.fg : G.muted}
+              />
+            </View>
+
+            <View style={[styles.soundRow, { borderBottomColor: G.border }]}>
+              <View style={[styles.ledgerIconBox, { backgroundColor: G.accentGlass }]}>
+                <Zap size={18} color={G.fg} strokeWidth={2.5} />
+              </View>
+              <View style={{ flex: 1, marginLeft: 14 }}>
+                <AppText variant="body" weight="bold" style={{ color: G.fg }} numberOfLines={1}>{t('dashboard.health_score')}</AppText>
+                <AppText variant="caption" weight="medium" style={{ color: G.muted }} numberOfLines={1}>{t('settings.dashboard_health_desc')}</AppText>
+              </View>
+              <Switch
+                value={dashboardVisibility.businessHealth}
+                onValueChange={(val: boolean) => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  toggleDashboardSection('businessHealth', val);
+                }}
+                trackColor={{ false: G.border, true: G.fg + '60' }}
+                thumbColor={dashboardVisibility.businessHealth ? G.fg : G.muted}
+              />
+            </View>
+
+            <View style={[styles.soundRow, { borderBottomColor: 'transparent' }]}>
+              <View style={[styles.ledgerIconBox, { backgroundColor: G.accentGlass }]}>
+                <LayoutDashboard size={18} color={G.fg} strokeWidth={2.5} />
+              </View>
+              <View style={{ flex: 1, marginLeft: 14 }}>
+                <AppText variant="body" weight="bold" style={{ color: G.fg }} numberOfLines={1}>{t('dashboard.assistant')}</AppText>
+                <AppText variant="caption" weight="medium" style={{ color: G.muted }} numberOfLines={1}>{t('settings.dashboard_assistant_desc')}</AppText>
+              </View>
+              <Switch
+                value={dashboardVisibility.businessAssistant}
+                onValueChange={(val: boolean) => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  toggleDashboardSection('businessAssistant', val);
+                }}
+                trackColor={{ false: G.border, true: G.fg + '60' }}
+                thumbColor={dashboardVisibility.businessAssistant ? G.fg : G.muted}
+              />
+            </View>
+          </View>
+        </View>
+
         {/* The Palette — Theme Selection */}
         <View style={styles.paletteSection}>
           <View style={styles.sectionHead}>
-          <View>
-          <AppText variant="heading" weight="bold" style={[styles.sectionTitle, { color: G.fg }]} numberOfLines={2}>{t('settings.palette')}</AppText>
-          <AppText variant="body-sm" weight="medium" style={[styles.sectionSub, { color: G.muted }]} numberOfLines={2}>{t('settings.theme_subtitle')}</AppText>
-          </View>
+            <View>
+              <AppText variant="heading" weight="bold" style={[styles.sectionTitle, { color: G.fg }]} numberOfLines={2}>{t('settings.palette')}</AppText>
+              <AppText variant="body-sm" weight="medium" style={[styles.sectionSub, { color: G.muted }]} numberOfLines={2}>{t('settings.theme_subtitle')}</AppText>
+            </View>
             <Palette size={20} color={G.muted} />
           </View>
           <ScrollView
@@ -865,6 +937,7 @@ const styles = StyleSheet.create({
   },
   ledgerSection: {
     paddingHorizontal: 25,
+    marginBottom: 28,
   },
   ledgerHeader: {
 
@@ -911,7 +984,7 @@ const styles = StyleSheet.create({
   },
   footer: {
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 32,
     paddingHorizontal: 25,
   },
   versionText: {

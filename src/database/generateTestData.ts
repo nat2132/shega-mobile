@@ -866,6 +866,9 @@ const BULK_COLS_CONTACT_COUNT = BULK_COLS_CONTACT.split(',').length;
 const BULK_COLS_PACK = 'itemId,packNumber,initialQuantity,currentQuantity,unit,status';
 const BULK_COLS_PACK_COUNT = BULK_COLS_PACK.split(',').length;
 
+const MAX_SQLITE_PARAMS = 900;
+const safeBatchSize = (columnCount: number) => Math.max(1, Math.floor(MAX_SQLITE_PARAMS / columnCount));
+
 export const generateBulkTestData = (count: number): GenerateTestDataResult => {
   const result: GenerateTestDataResult = {
     success: false,
@@ -878,9 +881,15 @@ export const generateBulkTestData = (count: number): GenerateTestDataResult => {
     message: '',
   };
 
+  const db = getDB();
+
   try {
-    const db = getDB();
-    const batchSize = 500;
+    const batchSizeItems = safeBatchSize(BULK_COLS_ITEM_COUNT);
+    const batchSizeSales = safeBatchSize(BULK_COLS_SALE_COUNT);
+    const batchSizeExpenses = safeBatchSize(BULK_COLS_EXPENSE_COUNT);
+    const batchSizeAdjustments = safeBatchSize(BULK_COLS_ADJ_COUNT);
+    const batchSizeContacts = safeBatchSize(BULK_COLS_CONTACT_COUNT);
+    const batchSizePacks = safeBatchSize(BULK_COLS_PACK_COUNT);
 
     // ── Categories ────────────────────────────────────────────────
     const existingCats = db.getAllSync<{ id: number }>('SELECT id FROM categories');
@@ -910,9 +919,9 @@ export const generateBulkTestData = (count: number): GenerateTestDataResult => {
 
     // ── Items (bulk) ──────────────────────────────────────────────
     const itemIds: number[] = [];
-    for (let b = 0; b < Math.ceil(count / batchSize); b++) {
-      const start = b * batchSize;
-      const end = Math.min(start + batchSize, count);
+    for (let b = 0; b < Math.ceil(count / batchSizeItems); b++) {
+      const start = b * batchSizeItems;
+      const end = Math.min(start + batchSizeItems, count);
       const values: string[] = [];
       const params: any[] = [];
 
@@ -952,9 +961,9 @@ export const generateBulkTestData = (count: number): GenerateTestDataResult => {
 
     // ── Sales (bulk) ────────────────────────────────────────────────
     let saleCount = 0;
-    for (let b = 0; b < Math.ceil(count / batchSize); b++) {
-      const start = b * batchSize;
-      const end = Math.min(start + batchSize, count);
+    for (let b = 0; b < Math.ceil(count / batchSizeSales); b++) {
+      const start = b * batchSizeSales;
+      const end = Math.min(start + batchSizeSales, count);
       const values: string[] = [];
       const params: any[] = [];
 
@@ -1005,9 +1014,9 @@ export const generateBulkTestData = (count: number): GenerateTestDataResult => {
 
     // ── Expenses (bulk) ────────────────────────────────────────────
     let expCount = 0;
-    for (let b = 0; b < Math.ceil(count / batchSize); b++) {
-      const start = b * batchSize;
-      const end = Math.min(start + batchSize, count);
+    for (let b = 0; b < Math.ceil(count / batchSizeExpenses); b++) {
+      const start = b * batchSizeExpenses;
+      const end = Math.min(start + batchSizeExpenses, count);
       const values: string[] = [];
       const params: any[] = [];
 
@@ -1032,10 +1041,10 @@ export const generateBulkTestData = (count: number): GenerateTestDataResult => {
     // ── Adjustments (bulk) ─────────────────────────────────────────
     const adjTypes = ['price_up', 'price_down', 'damaged'];
     let adjCount = 0;
-    for (let b = 0; b < Math.ceil(count / 2 / batchSize); b++) {
-      const total = Math.min(count / 2, 10000);
-      const start = b * batchSize;
-      const end = Math.min(start + batchSize, total);
+    const adjTotal = Math.min(count / 2, 10000);
+    for (let b = 0; b < Math.ceil(adjTotal / batchSizeAdjustments); b++) {
+      const start = b * batchSizeAdjustments;
+      const end = Math.min(start + batchSizeAdjustments, adjTotal);
       const values: string[] = [];
       const params: any[] = [];
 
@@ -1064,10 +1073,10 @@ export const generateBulkTestData = (count: number): GenerateTestDataResult => {
     // ── Contacts (bulk) ────────────────────────────────────────────
     const contactCategories = ['Customer', 'Supplier', 'Both'];
     let contactCount = 0;
-    for (let b = 0; b < Math.ceil(count / 3 / batchSize); b++) {
-      const total = Math.min(count / 3, 10000);
-      const start = b * batchSize;
-      const end = Math.min(start + batchSize, total);
+    const contactTotal = Math.min(count / 3, 10000);
+    for (let b = 0; b < Math.ceil(contactTotal / batchSizeContacts); b++) {
+      const end = Math.min((b + 1) * batchSizeContacts, contactTotal);
+      const start = b * batchSizeContacts;
       const values: string[] = [];
       const params: any[] = [];
 
@@ -1109,10 +1118,10 @@ export const generateBulkTestData = (count: number): GenerateTestDataResult => {
 
     // ── Item Packs (bulk) ──────────────────────────────────────────
     let packCount = 0;
-    for (let b = 0; b < Math.ceil(count / 2 / batchSize); b++) {
-      const total = Math.min(count / 2, 10000);
-      const start = b * batchSize;
-      const end = Math.min(start + batchSize, total);
+    const packTotal = Math.min(count / 2, 10000);
+    for (let b = 0; b < Math.ceil(packTotal / batchSizePacks); b++) {
+      const end = Math.min((b + 1) * batchSizePacks, packTotal);
+      const start = b * batchSizePacks;
       const values: string[] = [];
       const params: any[] = [];
 

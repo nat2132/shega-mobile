@@ -1,39 +1,39 @@
-import SaleSuccessModal from '@/components/SaleSuccessModal';
-import { NotificationBell } from '@/components/NotificationBell';
 import { DashboardAlerts } from '@/components/DashboardAlerts';
+import { NotificationBell } from '@/components/NotificationBell';
+import SaleSuccessModal from '@/components/SaleSuccessModal';
 import { Fonts } from '@/constants/theme';
 import * as Haptics from 'expo-haptics';
 import { router, useFocusEffect } from 'expo-router';
 import {
-    AlertTriangle,
-    ArrowUpRight,
-    Banknote,
-    ChevronLeft,
-    ChevronRight,
-    Clock,
-    Handshake,
-    Package,
-    Plus,
-    RefreshCw,
-    Search,
-    ShoppingBag,
-    TrendingDown,
-    TrendingUp,
-    X,
-    Zap
+  AlertTriangle,
+  ArrowUpRight,
+  Banknote,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Handshake,
+  Package,
+  Plus,
+  RefreshCw,
+  Search,
+  ShoppingBag,
+  TrendingDown,
+  TrendingUp,
+  X,
+  Zap
 } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-    Dimensions,
-    Image,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    TouchableOpacity,
-    View,
+  Dimensions,
+  Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import AdjustmentDetailsScreen from '../adjustement/adjustment-details';
 import ExpenseDetailsScreen from '../expense/expense-details';
@@ -48,38 +48,38 @@ import OnCreditCustomersScreen from './debt-list';
 import LowStockItemsScreen from './low-stock-list';
 import OnCreditItemsScreen from './oncredit-list';
 
-import { PROFILE_IMAGES, useSettings } from '@/context/SettingsContext';
+import { BusinessAssistant } from '@/components/BusinessAssistant';
+import { BusinessHealthCard } from '@/components/BusinessHealthCard';
+import { SparklineSkeleton } from '@/components/ChartSkeleton';
+import { AppNumber, AppText } from '@/components/ui';
+import { UniversalSearch } from '@/components/UniversalSearch';
 import { useDialog } from '@/context/DialogContext';
+import { PROFILE_IMAGES, useDashboardVisibility, useSettings } from '@/context/SettingsContext';
 import { useSidebar } from '@/context/SidebarContext';
 import { useWarehouse } from '@/context/WarehouseContext';
 import { getActivityFeed, getAdjustmentById, getDashboardStats, getDebtCustomers, getExpenseById, getInventoryStats, getLowStockItems, getOnCreditItems, getRecentItems, getSaleWithItemsById, ItemData } from '@/database/db';
 import { generateBulkTestData } from '@/database/generateTestData';
+import { useBusinessAssistant } from '@/hooks/useBusinessAssistant';
+import { useBusinessHealthScore } from '@/hooks/useBusinessHealthScore';
 import { useNotifications } from '@/hooks/useNotifications';
 import { playBad } from '@/services/soundService';
-import { formatDate, toEthiopianHour} from '@/utils/date-utils';
+import { formatDate, toEthiopianHour } from '@/utils/date-utils';
 import {
-    Gesture,
-    GestureDetector
+  Gesture,
+  GestureDetector
 } from 'react-native-gesture-handler';
 import Animated, {
-    FadeIn,
-    FadeInDown,
-    FadeInUp,
-    FadeOut,
-    runOnJS,
-    useAnimatedStyle,
-    useSharedValue,
-    withSpring
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
+  FadeOut,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring
 } from 'react-native-reanimated';
 import Svg, { Circle, Defs, LinearGradient, Path, Stop } from 'react-native-svg';
-import { SparklineSkeleton } from '@/components/ChartSkeleton';
-import { AppText, AppNumber } from '@/components/ui';
-import { UniversalSearch } from '@/components/UniversalSearch';
-import { BusinessHealthCard } from '@/components/BusinessHealthCard';
-import { BusinessAssistant } from '@/components/BusinessAssistant';
-import { useBusinessHealthScore } from '@/hooks/useBusinessHealthScore';
-import { useBusinessAssistant } from '@/hooks/useBusinessAssistant';
-import { getDashGlass, DASH_SPACING, CARD_WIDTH, CARD_GAP } from './glass-dashboard';
+import { CARD_GAP, CARD_WIDTH, DASH_SPACING, getDashGlass } from './glass-dashboard';
 
 const { width } = Dimensions.get('window');
 const SparklineChart = React.memo(({ todayValue = 0, yesterdayValue = 0, color = '#2F6FED', loading = false }: {
@@ -176,6 +176,7 @@ SparklineChart.displayName = 'SparklineChart';
   const DashboardScreen = () => {
     const { openSidebar } = useSidebar();
     const { userProfile, colors, calendarType, language, timeSystem, t } = useSettings();
+    const { dashboardVisibility, toggleDashboardSection } = useDashboardVisibility();
     const G = getDashGlass(colors);
     const styles = useMemo(() => createStyles(G), [G]);
     useNotifications();
@@ -553,14 +554,18 @@ SparklineChart.displayName = 'SparklineChart';
           </View>
 
           {/* Dashboard Alert Cards - action required */}
-          <View style={{ paddingHorizontal: DASH_SPACING.gutter }}>
-            <DashboardAlerts />
-          </View>
+          {dashboardVisibility.alerts && (
+            <View style={{ paddingHorizontal: DASH_SPACING.gutter }}>
+              <DashboardAlerts />
+            </View>
+          )}
 
           {/* Business Health Score */}
-          <View style={{ paddingHorizontal: DASH_SPACING.gutter }}>
-            <BusinessHealthCard health={businessHealth} loading={healthLoading} />
-          </View>
+          {dashboardVisibility.businessHealth && (
+            <View style={{ paddingHorizontal: DASH_SPACING.gutter }}>
+              <BusinessHealthCard health={businessHealth} loading={healthLoading} />
+            </View>
+          )}
 
           {/* Metric Hub */}
           <Animated.View entering={FadeInDown.springify().damping(18).stiffness(120)} style={styles.metricHub}>
@@ -686,9 +691,11 @@ SparklineChart.displayName = 'SparklineChart';
           </View>
 
           {/* Business Assistant */}
-          <View style={{ paddingHorizontal: DASH_SPACING.gutter }}>
-            <BusinessAssistant insights={assistantInsights} loading={assistantLoading} />
-          </View>
+          {dashboardVisibility.businessAssistant && (
+            <View style={{ paddingHorizontal: DASH_SPACING.gutter }}>
+              <BusinessAssistant insights={assistantInsights} loading={assistantLoading} />
+            </View>
+          )}
 
           {/* Activity Feed */}
           <View style={styles.feedSection}>

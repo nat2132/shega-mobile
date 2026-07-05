@@ -1,14 +1,31 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import * as SecureStore from 'expo-secure-store';
-import { LightTheme, DarkTheme, MidnightTheme, EmeraldTheme, CharcoalTheme, SlateTheme, CocoaTheme } from '@/constants/theme';
-import { storePinHash, removePinHash, hasPinHash } from '@/services/crypto';
+import { CharcoalTheme, CocoaTheme, DarkTheme, EmeraldTheme, LightTheme, MidnightTheme, SlateTheme } from '@/constants/theme';
+import { hasPinHash, removePinHash, storePinHash } from '@/services/crypto';
 import { hasRecoveryCode } from '@/services/recovery';
 import { setSoundEnabled as setSoundServiceEnabled } from '@/services/soundService';
+import * as SecureStore from 'expo-secure-store';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
 type Theme = 'light' | 'dark' | 'midnight' | 'emerald' | 'charcoal' | 'slate' | 'cocoa';
 type Language = 'en' | 'am' | 'om' | 'ti';
 type CalendarType = 'ethiopian' | 'gregorian';
 type TimeSystem = 'device' | 'ethiopian';
+
+interface ThemeColors {
+  primary: string;
+  secondary: string;
+  background: string;
+  surface: string;
+  card: string;
+  text: string;
+  textSecondary: string;
+  border: string;
+  success: string;
+  warning: string;
+  error: string;
+  tint: string;
+  tabBar: string;
+  header: string;
+}
 
 interface UserProfile {
   name: string;
@@ -45,30 +62,36 @@ export const PROFILE_IMAGES = [
   require('../assets/images/profile/profile10.png'),
 ];
 
-interface SettingsContextType {
-  theme: Theme;
-  language: Language;
-  calendarType: CalendarType;
-  timeSystem: TimeSystem;
-  userProfile: UserProfile;
-  notifications: NotificationSettings;
-  soundEnabled: boolean;
-  pin: string | null;
-  recoveryCodeExists: boolean;
-  setTheme: (theme: Theme) => void;
-  previousDarkTheme: Theme;
-  setLanguage: (lang: Language) => void;
-  setCalendarType: (type: CalendarType) => void;
-  setTimeSystem: (system: TimeSystem) => void;
-  setUserProfile: (profile: UserProfile) => void;
-  setNotifications: (settings: NotificationSettings) => void;
-  setSoundEnabled: (enabled: boolean) => void;
-  setPin: (pin: string | null) => Promise<void>;
-  setRecoveryCodeExists: (exists: boolean) => void;
-  refreshPinStatus: () => Promise<void>;
-  t: (key: string, params?: Record<string, string>) => string;
-  colors: typeof LightTheme;
-}
+  interface SettingsContextType {
+    theme: Theme;
+    language: Language;
+    calendarType: CalendarType;
+    timeSystem: TimeSystem;
+    userProfile: UserProfile;
+    notifications: NotificationSettings;
+    soundEnabled: boolean;
+    pin: string | null;
+    recoveryCodeExists: boolean;
+    dashboardVisibility: {
+      alerts: boolean;
+      businessHealth: boolean;
+      businessAssistant: boolean;
+    };
+    setTheme: (val: Theme) => Promise<void>;
+    previousDarkTheme: Theme;
+    setLanguage: (val: Language) => Promise<void>;
+    setCalendarType: (val: CalendarType) => Promise<void>;
+    setTimeSystem: (val: TimeSystem) => Promise<void>;
+    setUserProfile: (val: UserProfile) => Promise<void>;
+    setNotifications: (val: NotificationSettings) => Promise<void>;
+    setSoundEnabled: (val: boolean) => void;
+    setPin: (val: string | null) => Promise<void>;
+    setRecoveryCodeExists: (exists: boolean) => void;
+    refreshPinStatus: () => Promise<void>;
+    toggleDashboardSection: (section: 'alerts' | 'businessHealth' | 'businessAssistant', value?: boolean) => Promise<void>;
+    t: (key: string, params?: Record<string, string>) => string;
+    colors: ThemeColors;
+  }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
@@ -1570,6 +1593,16 @@ const translations: Record<Language, Record<string, string>> = {
     'draft.inventory_subtitle': 'Step {step}/4',
     'common.yes': 'Yes',
     'common.no': 'No',
+    'expense.new_expense': 'New Expense',
+    'expense.frequency': 'Frequency',
+    'expense.save_schedule': 'Save & Schedule',
+    'expense.recurring_scheduled': 'Recurring expense scheduled',
+    'expense.auto': 'Auto',
+    'expense.will_exceed_budget': 'This will exceed the budget',
+    'draft.expense_title': 'Expense - {category}',
+    'draft.expense_default': 'Expense Draft',
+    'draft.expense_subtitle': 'ETB {amount}',
+    'draft.expense_no_amount': 'No amount set',
 
     // Sidebar
     'sidebar.quick_links': 'QUICK LINKS',
@@ -2057,6 +2090,7 @@ const translations: Record<Language, Record<string, string>> = {
     'dashboard.recorded_today': 'ዛሬ የተመዘገበ',
     'dashboard.activity.damaged': 'ተበላሽቷል',
     'dashboard.activity.added': 'ተጨምሯል',
+    'dashboard.alerts_title': 'የድርጊት አስፈላጊነት',
     'dashboard.seed_title': 'የሙከራ ውሂብ አመንጭ',
     'dashboard.seed_message': 'ምን ያህል መዝገቦች መፍጠር ይፈልጋሉ?',
     'dashboard.seed_success': 'ውሂብ ተፈጠረ',
@@ -3159,6 +3193,11 @@ const translations: Record<Language, Record<string, string>> = {
     'notif.call_supplier': 'አቅራቢውን ይደውሉ',
     'notif.supplier_phone': 'የአቅራቢ ስልክ',
     'notif.mark_all_read': 'ሁሉንም እንደተነበበ ምልክት አድርግ',
+    'notif.reminder_history': 'የመንታ ታሪክ',
+    'notif.scheduled': 'የታቀዱ መንታዎች',
+    'notif.no_reminders': 'ምንም መንታ የለም',
+    'notif.no_reminders_sub': 'የምታስቀምጡ መንታዎች እዚህ ይታያሉ።',
+    'inv.filtered_view': 'የተጣራ ዕይታ',
     'notif.search_placeholder': 'ማስታወቂያዎችን ፈልግ...',
     'notif.just_now': 'አሁን',
     'notif.m_ago': 'ከ{n} ደቂቃ በፊት',
@@ -3324,6 +3363,18 @@ const translations: Record<Language, Record<string, string>> = {
     'draft.inventory_subtitle': 'ደረጃ {step}/4',
     'common.yes': 'አዎ',
     'common.no': 'አይደለም',
+    'expense.new_expense': 'አዲስ ወጪ',
+    'expense.frequency': 'ድግግሞሽ',
+    'expense.save_schedule': 'አስቀምጥ እና የጊዜ ሰሌዳ',
+    'expense.recurring_scheduled': 'ደጋሚ ወጪ ተመዝግቧል',
+    'expense.budget_label': 'በጀት',
+    'expense.auto': 'ራስ-ሰር',
+    'expense.multiple_budget_match': 'በብዛት የበጀት ምድባራት ተመሳሳይ ናቸው። አንድ ይምረጡ፡',
+    'expense.will_exceed_budget': 'ይህ በጀቱን ያስበ酞ው ነው',
+    'draft.expense_title': 'ወጪ - {category}',
+    'draft.expense_default': 'የወጪ ረቂቅ',
+    'draft.expense_subtitle': 'ብር {amount}',
+    'draft.expense_no_amount': 'መጠን አልተወሰነም',
 
     // Sidebar
     'sidebar.quick_links': 'ፈጣን አገናኞች',
@@ -3390,10 +3441,7 @@ const translations: Record<Language, Record<string, string>> = {
     'expense.template': 'እባክ',
     'expense.clear': 'አጽዳ',
     'expense.enter_valid_amount': 'ትክክለኛ መጠን ያስገቡ',
-    'expense.select_category': 'እባክዎ ምድብ ይምረጡ',
     'expense.budget_categories': 'በጀት: {count} ምድሮች',
-    'expense.multiple_budget_match': 'በብዛት የሚዛመዱ በጀት ምድሮች አሉ። አንዱን ይምረጡ:',
-    'expense.budget_label': 'በጀት:',
     'expense.planned': 'የተቀመጠ',
     'expense.spent': 'የተከፈለ',
     'expense.remaining': 'ቀሪ',
@@ -4031,6 +4079,7 @@ const translations: Record<Language, Record<string, string>> = {
     'dashboard.activity.added': 'dabalamte',
     'dashboard.activity.sold': 'gurgurameera',
     'dashboard.activity.debt_collected': 'liqi kaffalame',
+    'dashboard.alerts_title': 'Fayyaa Waliigalaa',
     'dashboard.seed_title': 'Deetaa Qormaata Uumi',
     'dashboard.seed_message': 'Raawwii meeqa uumuu barbaadda?',
     'dashboard.seed_success': 'Deetaan Uumameera',
@@ -4379,6 +4428,11 @@ const translations: Record<Language, Record<string, string>> = {
     'notif.supplier_phone': 'Lakkoofsa daldalaa',
     'notif.mark_all_read': 'Hunda dubbisaa taasisuu',
     'notif.search_placeholder': 'Beeksisa barbaadi...',
+    'notif.reminder_history': 'Seenaa Daawwii',
+    'notif.scheduled': 'Daawwii Qophaa\'ame',
+    'notif.no_reminders': 'Daawwii Hin Jiru',
+    'notif.no_reminders_sub': 'Daawwwan kee qofti armaan jalatti argamu.',
+    'inv.filtered_view': 'Iddoo Filatame',
     'notif.just_now': 'Ammuma',
     'notif.m_ago': 'Daqiiqaa {n} dura',
     'notif.h_ago': 'Sa\'aatii {n} dura',
@@ -4887,6 +4941,18 @@ const translations: Record<Language, Record<string, string>> = {
     'draft.inventory_subtitle': 'Aangii {step}/4',
     'common.yes': 'Eeyyee',
     'common.no': 'Lakki',
+    'expense.new_expense': 'Baasii Haaraa',
+    'expense.frequency': 'Yeroo Dhuunfaa',
+    'expense.save_schedule': 'Ol kaa\'i fi Yeroo Qindeessi',
+    'expense.recurring_scheduled': 'Baasii yeroo dhuunfaa qophaa\'ame',
+    'expense.budget_label': 'Buudjeetti',
+    'expense.auto': 'Of-Of',
+    'expense.multiple_budget_match': 'Ramaddii buudjeetti hedduu waliin qixa. Tokko filadhu:',
+    'expense.will_exceed_budget': 'Kuni buudjeetti kee iga ba\'a',
+    'draft.expense_title': 'Baasii - {category}',
+    'draft.expense_default': 'Baasii Draftii',
+    'draft.expense_subtitle': 'Birr {amount}',
+    'draft.expense_no_amount': 'Hanga hin qabamne',
 
     // Sidebar
     'sidebar.quick_links': 'LINKs DURBAA',
@@ -4967,10 +5033,7 @@ const translations: Record<Language, Record<string, string>> = {
     'expense.template': 'Qooddii',
     'expense.clear': 'Haqi',
     'expense.enter_valid_amount': 'Gatii sirrii galchuu',
-    'expense.select_category': 'Maaloo kutaa filadhu',
     'expense.budget_categories': 'Bajetii: {count} Kutaa',
-    'expense.multiple_budget_match': 'Bajetii kutaa hedduu wal qabamee jira. Tokko filadhu:',
-    'expense.budget_label': 'Bajetii:',
     'expense.planned': 'Qophaa\'e',
     'expense.spent': 'Fayyadame',
     'expense.remaining': 'Hafe',
@@ -5397,6 +5460,7 @@ const translations: Record<Language, Record<string, string>> = {
     'dashboard.seed_message': 'ክንደይ መዝገባት ክትፈጥሩ ትደልዩ?',
     'dashboard.seed_success': 'መረዳእታ ተፈጢሩ',
     'dashboard.seed_error': 'ምፍጣር ኣይከኣለን',
+    'dashboard.alerts_title': 'ንድርጊት ዝድሊ',
     'inventory.header': 'ክምችት',
     'inventory.value': 'ዋጋ ክምችት',
     'inventory.add_item': 'ንብረት ወስኽ',
@@ -5541,6 +5605,11 @@ const translations: Record<Language, Record<string, string>> = {
     'notif.call_supplier': 'መቐረባይ ደውሉ',
     'notif.supplier_phone': 'ቁጽሪ ስልኪ መቐረባይ',
     'notif.mark_all_read': 'ኩሉ ከም ዝተነበበ ኣመልክት',
+    'notif.reminder_history': 'ታሪኽ ኣስታIRST',
+    'notif.scheduled': 'ዝተመዝገበ ኣስታIRST',
+    'notif.no_reminders': 'ምንም ኣስታIRST የለን',
+    'notif.no_reminders_sub': 'ዝትስርሕ ኣስታIRSTካ ኣብዚ ክትርአ እያ.',
+    'inv.filtered_view': 'ዝተጸረየ ዕይታ',
     'notif.search_placeholder': 'መልዕኢታት ድለይ...',
     'notif.just_now': 'ሕጂ',
     'notif.m_ago': 'ካብ {n} ደቒቃ ቅድሚ',
@@ -6517,6 +6586,18 @@ const translations: Record<Language, Record<string, string>> = {
     'draft.inventory_subtitle': 'ደረጃ {step}/4',
     'common.yes': 'ኣዎ',
     'common.no': 'ኣይኮንን',
+    'expense.new_expense': 'ሓድሽ ወጪ',
+    'expense.frequency': 'ድግስ ዘይኮይኖ',
+    'expense.save_schedule': 'ኣቀምጥ ከምኡ ጊዜ ምድላው',
+    'expense.recurring_scheduled': 'ዝቕልል ወጪ ተመዝጊቡ',
+    'expense.budget_label': 'በጀት',
+    'expense.auto': 'ራስ-ሰር',
+    'expense.multiple_budget_match': 'ብዝሒ ናይ በጀት ምድባራት ተመሳሳይ እዩ። ሓንሳው ምረጽ:',
+    'expense.will_exceed_budget': 'እዚ ናይ በጀት ክውሰን እዩ',
+    'draft.expense_title': 'ወጪ - {category}',
+    'draft.expense_default': 'ወጪ ረቂቅ',
+    'draft.expense_subtitle': 'ብር {amount}',
+    'draft.expense_no_amount': 'መጠን ኣይተወሰነን',
 
     // Sidebar
     'sidebar.quick_links': 'ቅልጡፍ መጋንይቲ',
@@ -6589,7 +6670,6 @@ const translations: Record<Language, Record<string, string>> = {
     // Expense
     'expense.search_ph': 'ንጥፈታት ድለዩ...',
     'expense.paid': 'ተከፍለ',
-    'expense.recent': 'ሓድሽ',
     'expense.view_all': 'ኩሎም ተመልከት',
     'expense.no_expenses': 'ንጥፈት የለን',
     'expense.record_expense': 'ንጥፈት ምዝገባ',
@@ -6597,10 +6677,7 @@ const translations: Record<Language, Record<string, string>> = {
     'expense.template': 'ምንጻፍ',
     'expense.clear': 'ሰርዝ',
     'expense.enter_valid_amount': 'ትክክል መጠን ኣእትው',
-    'expense.select_category': 'በጃኹም ክፍለ ምረጥ',
     'expense.budget_categories': 'በጀት: {count} ክፍለ',
-    'expense.multiple_budget_match': 'ብዙ በጀት ክፍለ ዝምድኑ እዩ። ኸነን ምረጥ:',
-    'expense.budget_label': 'በጀት:',
     'expense.planned': 'ዝተወሰነ',
     'expense.spent': 'ዝተፈጻመ',
     'expense.remaining': 'ዝተረፈ',
@@ -6934,6 +7011,15 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [recoveryCodeExists, setRecoveryCodeExistsState] = useState<boolean>(false);
   const [soundEnabled, setSoundEnabledState] = useState<boolean>(true);
   const [previousDarkTheme, setPreviousDarkTheme] = useState<Theme>('dark');
+  const [dashboardVisibility, setDashboardVisibility] = useState<{
+    alerts: boolean;
+    businessHealth: boolean;
+    businessAssistant: boolean;
+  }>({
+    alerts: true,
+    businessHealth: true,
+    businessAssistant: true,
+  });
 
   const setSoundEnabled = useCallback((val: boolean) => {
     setSoundEnabledState(val);
@@ -6976,6 +7062,12 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const parsed = JSON.parse(savedSound);
         setSoundEnabledState(parsed);
         setSoundServiceEnabled(parsed);
+      }
+
+      const savedDashboardVisibility = await SecureStore.getItemAsync('settings_dashboard_visibility');
+      if (savedDashboardVisibility) {
+        const parsed = JSON.parse(savedDashboardVisibility);
+        setDashboardVisibility(parsed);
       }
 
       // PIN is stored only as a salted hash. The in-memory flag simply
@@ -7044,6 +7136,14 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setRecoveryCodeExistsState(exists);
   };
 
+  const toggleDashboardSection = async (section: 'alerts' | 'businessHealth' | 'businessAssistant', value?: boolean) => {
+    setDashboardVisibility(prev => {
+      const newVisibility = { ...prev, [section]: value !== undefined ? value : !prev[section] };
+      SecureStore.setItemAsync('settings_dashboard_visibility', JSON.stringify(newVisibility)).catch(() => {});
+      return newVisibility;
+    });
+  };
+
   const t = (key: string, params?: Record<string, string>) => {
     let text = translations[language][key] || translations['en'][key] || key;
     if (params) {
@@ -7070,8 +7170,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const colors = getThemeColors(theme);
   return (
     <SettingsContext.Provider value={{
-      theme, language, calendarType, timeSystem, userProfile, notifications, soundEnabled, pin, recoveryCodeExists,
-      setTheme, previousDarkTheme, setLanguage, setCalendarType, setTimeSystem, setUserProfile, setNotifications, setSoundEnabled, setPin, setRecoveryCodeExists, refreshPinStatus, t, colors
+      theme, language, calendarType, timeSystem, userProfile, notifications, soundEnabled, pin, recoveryCodeExists, dashboardVisibility,
+      setTheme, previousDarkTheme, setLanguage, setCalendarType, setTimeSystem, setUserProfile, setNotifications, setSoundEnabled, setPin, setRecoveryCodeExists, refreshPinStatus, toggleDashboardSection, t, colors
     }}>
       {children}
     </SettingsContext.Provider>
@@ -7093,6 +7193,8 @@ export const useSettings = () => {
       soundEnabled: true,
       pin: null,
       recoveryCodeExists: false,
+      dashboardVisibility: { alerts: true, businessHealth: true, businessAssistant: true },
+      toggleDashboardSection: async () => {},
       setTheme: async () => {},
       previousDarkTheme: 'dark',
       setLanguage: async () => {},
@@ -7110,4 +7212,18 @@ export const useSettings = () => {
     return fallback;
   }
   return context;
+};
+
+export const useDashboardVisibility = () => {
+  const context = useContext(SettingsContext);
+  if (context === undefined) {
+    return {
+      dashboardVisibility: { alerts: true, businessHealth: true, businessAssistant: true },
+      toggleDashboardSection: async () => {},
+    };
+  }
+  return {
+    dashboardVisibility: context.dashboardVisibility,
+    toggleDashboardSection: context.toggleDashboardSection,
+  };
 };
