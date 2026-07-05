@@ -166,8 +166,8 @@ const RestockFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?:
       supplierCallEnabled,
       selectedSupplier,
     }), [searchQuery, selectedItem, buyingPrice, unitSellingPrice, bulkSellingPrice, restockQty, supplierPhone, supplierCallEnabled, selectedSupplier]),
-    getTitle: useCallback(() => (selectedItem?.name ? `Restock - ${selectedItem.name}` : 'Restock Draft'), [selectedItem]),
-    getSubtitle: useCallback(() => `Qty: ${restockQty || '0'}`, [restockQty]),
+    getTitle: useCallback(() => (selectedItem?.name ? t('draft.restock_title', { name: selectedItem.name }) : t('draft.restock_default')), [selectedItem, t]),
+    getSubtitle: useCallback(() => t('draft.restock_subtitle', { qty: restockQty || '0' }), [restockQty, t]),
     enabled: true,
   });
 
@@ -571,8 +571,8 @@ const AddItemFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?:
       hasPacks,
       recordDate,
     }), [step, itemName, selectedCategory, companyName, purchaseUnit, baseUnit, unitsPerPack, totalPackQuantity, packPurchasePrice, baseSellingPrice, packSellingPrice, allowSellByPack, expiryDate, qualityGrade, creditToggle, supplierPhone, supplierAccount, supplierCallEnabled, hasPacks, recordDate]),
-    getTitle: useCallback(() => (itemName ? `Inventory - ${itemName}` : 'Add Item Draft'), [itemName]),
-    getSubtitle: useCallback(() => `Step ${step}/4`, [step]),
+    getTitle: useCallback(() => (itemName ? t('draft.inventory_title', { name: itemName }) : t('draft.inventory_default')), [itemName, t]),
+    getSubtitle: useCallback(() => t('draft.inventory_subtitle', { step: String(step) }), [step, t]),
     enabled: true,
   });
 
