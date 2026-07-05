@@ -3,7 +3,7 @@ import { SettingsProvider , useSettings } from '@/context/SettingsContext';
 import { SidebarProvider } from '@/context/SidebarContext';
 import { NavigationIntentProvider } from '@/context/NavigationIntentContext';
 import { WarehouseProvider } from '@/context/WarehouseContext';
-import { initDB } from '@/database/db';
+import { initDB, resetDatabase } from '@/database/db';
 import { playStart } from '@/services/soundService';
 import {
     Inter_400Regular,
@@ -16,7 +16,7 @@ import {
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 
 import { ToastProvider } from '@/context/ToastContext';
@@ -69,11 +69,25 @@ export default function RootLayout() {
     Inter_700Bold,
     Inter_800ExtraBold,
   });
+  const [dbReady, setDbReady] = useState(false);
 
   useEffect(() => {
     if (loaded || error) {
-      initDB();
-      SplashScreen.hideAsync();
+      (async () => {
+        for (let i = 0; i < 3; i++) {
+          try {
+            resetDatabase();
+            initDB();
+            setDbReady(true);
+            SplashScreen.hideAsync();
+            return;
+          } catch (e) {
+            console.error(`DB init attempt ${i + 1} failed:`, e);
+            await new Promise(r => setTimeout(r, 2000));
+          }
+        }
+        SplashScreen.hideAsync();
+      })();
     }
   }, [loaded, error]);
 
@@ -83,23 +97,25 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SettingsProvider>
-        <WarehouseProvider>
-          <ToastProvider>
-            <DialogProvider>
-              <InAppBannerProvider>
-                <NotificationProvider>
-                  <NavigationIntentProvider>
-                    <SidebarProvider>
-                      <AppShell />
-                    </SidebarProvider>
-                  </NavigationIntentProvider>
-                </NotificationProvider>
-              </InAppBannerProvider>
-            </DialogProvider>
-          </ToastProvider>
-        </WarehouseProvider>
-      </SettingsProvider>
+      {dbReady && (
+        <SettingsProvider>
+          <WarehouseProvider>
+            <ToastProvider>
+              <DialogProvider>
+                <InAppBannerProvider>
+                  <NotificationProvider>
+                    <NavigationIntentProvider>
+                      <SidebarProvider>
+                        <AppShell />
+                      </SidebarProvider>
+                    </NavigationIntentProvider>
+                  </NotificationProvider>
+                </InAppBannerProvider>
+              </DialogProvider>
+            </ToastProvider>
+          </WarehouseProvider>
+        </SettingsProvider>
+      )}
     </GestureHandlerRootView>
   );
 }

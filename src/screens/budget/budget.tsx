@@ -1,43 +1,42 @@
-import React, { useState, useCallback, useEffect } from "react";
-import {
-  View,
-  ScrollView,
-  TouchableOpacity,
-  Modal,
-  TextInput,
-  StyleSheet,
-  Dimensions,
-  Image,
-} from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
-import { useRouter } from "expo-router";
+import { DraftSection } from '@/components/DraftSection';
+import { AppNumber, AppText } from "@/components/ui";
+import { Fonts } from "@/constants/theme";
+import { useDialog } from "@/context/DialogContext";
 import { PROFILE_IMAGES, useSettings } from "@/context/SettingsContext";
 import { useSidebar } from "@/context/SidebarContext";
-import { useDialog } from "@/context/DialogContext";
-import { useNotifications } from "@/hooks/useNotifications";
-import { AppText, AppNumber } from "@/components/ui";
-import { Fonts } from "@/constants/theme";
-import * as Haptics from "expo-haptics";
-import { playNice} from '@/services/soundService';
-import Animated, { FadeInDown } from "react-native-reanimated";
-import Svg, { Circle } from "react-native-svg";
-import { Bell, Plus, X, AlertTriangle, DollarSign } from "lucide-react-native";
-import { notifyBudgetCreated } from '@/services/notificationService';
-import { getBudgetGlass } from './glass-budget';
 import {
-  getBudgetDashboard,
-  insertBudget,
-  insertBudgetCategory,
   deleteBudget,
   getBudgetAlerts,
-  getCategories,
-  getBudgetWithCategoryProgress,
-  getMonthlyBudgetSummary,
+  getBudgetDashboard,
   getBudgets,
+  getBudgetWithCategoryProgress,
+  getCategories,
+  getMonthlyBudgetSummary,
+  insertBudget,
+  insertBudgetCategory,
 } from "@/database/db";
 import { useFormDrafts } from '@/hooks/useFormDrafts';
-import { DraftSection } from '@/components/DraftSection';
-import { Draft } from '@/services/draftService';
+import { useNotifications } from "@/hooks/useNotifications";
+import { notifyBudgetCreated } from '@/services/notificationService';
+import { playNice } from '@/services/soundService';
+import { useFocusEffect } from "@react-navigation/native";
+import * as Haptics from "expo-haptics";
+import { useRouter } from "expo-router";
+import { AlertTriangle, Bell, DollarSign, Plus, X } from "lucide-react-native";
+import { useCallback, useEffect, useState } from "react";
+import {
+  Dimensions,
+  Image,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
+import Svg, { Circle } from "react-native-svg";
+import { getBudgetGlass } from './glass-budget';
 
 const StatusBadge = ({ status }: { status: string }) => {
   const { colors, t } = useSettings();
@@ -722,7 +721,7 @@ const s = StyleSheet.create({
   modalOverlay: { flex: 1, justifyContent: "flex-end" },
   modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)" },
   detailSheet: { borderTopLeftRadius: 30, borderTopRightRadius: 30, maxHeight: Dimensions.get("window").height * 0.90, paddingBottom: 40 },
-  createSheet: { borderTopLeftRadius: 30, borderTopRightRadius: 30, maxHeight: Dimensions.get("window").height * 0.92, paddingBottom: 40 },
+  createSheet: { borderTopLeftRadius: 30, borderTopRightRadius: 30, height: Dimensions.get("window").height * 0.92, paddingBottom: 40 },
   modalHeader: { alignItems: "center", paddingTop: 15, paddingBottom: 10 },
   modalHandle: { width: 40, height: 4, borderRadius: 2 },
   detailHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 10, marginBottom: 4 },

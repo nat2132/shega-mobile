@@ -18,15 +18,25 @@ const openDB = (useNew = false) => {
 const recoverDB = () => {
   try { db?.closeSync(); } catch {}
   (globalThis as any)[GLOBAL_DB_KEY] = null;
-  try {
-    SQLite.deleteDatabaseSync(DB_NAME);
-  } catch {}
   db = null;
   dbReady = false;
-  db = openDB();
-  (globalThis as any)[GLOBAL_DB_KEY] = db;
-  dbReady = true;
-  return db;
+
+  try {
+    SQLite.deleteDatabaseSync(DB_NAME);
+    db = openDB();
+    (globalThis as any)[GLOBAL_DB_KEY] = db;
+    dbReady = true;
+    return db;
+  } catch {}
+
+  try {
+    db = openDB(true);
+    (globalThis as any)[GLOBAL_DB_KEY] = db;
+    dbReady = true;
+    return db;
+  } catch {}
+
+  throw new Error('Cannot recover database - still locked after delete + reopen');
 };
 
 const getDBCached = (): SQLite.SQLiteDatabase => {
@@ -61,11 +71,13 @@ export const getDB = () => {
 };
 
 export const resetDatabase = () => {
+  try { db?.closeSync(); } catch {}
   db = null;
   dbReady = false;
   (globalThis as any)[GLOBAL_DB_KEY] = null;
-  try { SQLite.deleteDatabaseSync(DB_NAME); } catch {}
-  return getDB();
+  SQLite.deleteDatabaseSync(DB_NAME);
+  db = getDB();
+  return db;
 };
 
 const migrateItemsTable = (database: SQLite.SQLiteDatabase) => {
@@ -174,11 +186,6 @@ export const initDB = () => {
       );
     `);
     
-    // Perform migration for existing users
-    migrateItemsTable(database);
-    
-    console.log('Table "items" checked/created/migrated.');
-
     database.execSync(`
       CREATE TABLE IF NOT EXISTS item_packs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -214,6 +221,11 @@ export const initDB = () => {
       );
     `);
     console.log('Table "sales" checked/created.');
+
+    // Perform migration for existing users
+    migrateItemsTable(database);
+    
+    console.log('Table migrations completed.');
 
     // Debt payment history (one row per payment event, supports full + partial + write-off).
     database.execSync(`
