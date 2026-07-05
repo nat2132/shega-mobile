@@ -1,6 +1,8 @@
 import { DashboardAlerts } from '@/components/DashboardAlerts';
 import { NotificationBell } from '@/components/NotificationBell';
 import SaleSuccessModal from '@/components/SaleSuccessModal';
+import PremiumTrialBanner from '@/components/PremiumTrialBanner';
+import { useSubscription } from '@/context/SubscriptionContext';
 import { Fonts } from '@/constants/theme';
 import * as Haptics from 'expo-haptics';
 import { router, useFocusEffect } from 'expo-router';
@@ -177,6 +179,7 @@ SparklineChart.displayName = 'SparklineChart';
     const { openSidebar } = useSidebar();
     const { userProfile, colors, calendarType, language, timeSystem, t } = useSettings();
     const { dashboardVisibility, toggleDashboardSection } = useDashboardVisibility();
+    const { refreshTrialDays } = useSubscription();
     const G = getDashGlass(colors);
     const styles = useMemo(() => createStyles(G), [G]);
     useNotifications();
@@ -250,7 +253,8 @@ SparklineChart.displayName = 'SparklineChart';
     }
     refreshHealth();
     refreshAssistant();
-  }, [activeWarehouseId, refreshHealth, refreshAssistant]);
+    refreshTrialDays();
+  }, [activeWarehouseId, refreshHealth, refreshAssistant, refreshTrialDays]);
 
   useFocusEffect(
     useCallback(() => {
@@ -569,6 +573,9 @@ SparklineChart.displayName = 'SparklineChart';
               </View>
             </View>
           </View>
+
+          {/* Premium Trial Banner */}
+          <PremiumTrialBanner />
 
           {/* Dashboard Alert Cards - action required */}
           {dashboardVisibility.alerts && (

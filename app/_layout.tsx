@@ -23,6 +23,7 @@ import { ToastProvider } from '@/context/ToastContext';
 import { DialogProvider } from '@/context/DialogContext';
 import { InAppBannerProvider } from '@/components/InAppBanner';
 import { NotificationProvider } from '@/context/NotificationContext';
+import { SubscriptionProvider } from '@/context/SubscriptionContext';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useNotificationTriggers } from '@/hooks/useNotificationTriggers';
 import { View } from 'react-native';
@@ -55,6 +56,11 @@ function AppShell() {
         <Stack.Screen name="analytics-onboarding" options={{ animation: 'fade' }} />
         <Stack.Screen name="user-setup" options={{ animation: 'fade' }} />
         <Stack.Screen name="contacts" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="subscription/welcome" options={{ animation: 'fade' }} />
+        <Stack.Screen name="subscription/plans" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="subscription/upgrade" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="subscription/payment" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="subscription/manage" options={{ animation: 'slide_from_right' }} />
       </Stack>
       <SidebarOverlay />
     </View>
@@ -97,23 +103,25 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       {dbReady && (
-        <SettingsProvider>
-          <WarehouseProvider>
-            <ToastProvider>
-              <DialogProvider>
-                <InAppBannerProvider>
-                  <NotificationProvider>
-                    <NavigationIntentProvider>
-                      <SidebarProvider>
-                        <AppShell />
-                      </SidebarProvider>
-                    </NavigationIntentProvider>
-                  </NotificationProvider>
-                </InAppBannerProvider>
-              </DialogProvider>
-            </ToastProvider>
-          </WarehouseProvider>
-        </SettingsProvider>
+          <SettingsProvider>
+            <SubscriptionProvider>
+              <WarehouseProvider>
+                <ToastProvider>
+                  <DialogProvider>
+                    <InAppBannerProvider>
+                      <NotificationProvider>
+                        <NavigationIntentProvider>
+                          <SidebarProvider>
+                            <AppShell />
+                          </SidebarProvider>
+                        </NavigationIntentProvider>
+                      </NotificationProvider>
+                    </InAppBannerProvider>
+                  </DialogProvider>
+                </ToastProvider>
+              </WarehouseProvider>
+            </SubscriptionProvider>
+          </SettingsProvider>
       )}
     </GestureHandlerRootView>
   );

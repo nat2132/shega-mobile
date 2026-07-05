@@ -2,9 +2,10 @@ import React from 'react';
 import { View, TouchableOpacity, Image, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { X, Banknote, SlidersHorizontal, ClipboardList, LogOut, ChevronRight, User as UserIcon, TrendingUp, Users} from 'lucide-react-native';
+import { X, Banknote, SlidersHorizontal, ClipboardList, LogOut, ChevronRight, User as UserIcon, TrendingUp, Users, Crown} from 'lucide-react-native';
 import { Fonts , Spacing } from '@/constants/theme';
 import { useSettings, PROFILE_IMAGES } from '@/context/SettingsContext';
+import { useSubscription } from '@/context/SubscriptionContext';
 import { AppText, AppListItem } from '@/components/ui';
 
 import { getBarsGlass } from './glass-bars';
@@ -16,7 +17,9 @@ interface SidebarProps {
 const MyStoreMenu: React.FC<SidebarProps> = ({ onClose }) => {
   const router = useRouter();
   const { userProfile, t, theme, colors } = useSettings();
+  const { isTrial, trialDaysRemaining, isPremium, isFeatureUnlocked } = useSubscription();
   const G = getBarsGlass(colors);
+  const gold = '#D4AF37';
 
   const handleRoute = (routePath: string) => {
     if (onClose) onClose();
@@ -25,18 +28,29 @@ const MyStoreMenu: React.FC<SidebarProps> = ({ onClose }) => {
     }, 150);
   };
 
-  const MenuItem = ({ icon: Icon, label, onPress, delay = 0 }: { icon: any; label: string; onPress: () => void; delay?: number }) => (
+  const handlePremiumRoute = (routePath: string, featureId: string) => {
+    if (onClose) onClose();
+    setTimeout(() => {
+      if (isFeatureUnlocked(featureId)) {
+        router.push(routePath as any);
+      } else {
+        router.push(`/subscription/upgrade?feature=${featureId}` as any);
+      }
+    }, 150);
+  };
+
+  const MenuItem = ({ icon: Icon, label, onPress, delay = 0, locked = false }: { icon: any; label: string; onPress: () => void; delay?: number; locked?: boolean }) => (
     <Animated.View entering={FadeInDown.delay(delay).duration(500)}>
       <AppListItem
         left={
-            <View style={[styles.iconContainer, { backgroundColor: G.mutedLight }]}>
-             <Icon color={G.fg} size={22} strokeWidth={2} />
+            <View style={[styles.iconContainer, { backgroundColor: locked ? G.error + '18' : G.mutedLight }]}>
+             <Icon color={locked ? G.error : G.fg} size={22} strokeWidth={2} />
           </View>
         }
         title={label}
         titleMaxLines={2}
         right={
-          <ChevronRight size={18} color={G.border} />
+          <ChevronRight size={18} color={locked ? G.error : G.border} />
         }
         onPress={onPress}
         noBorder
@@ -44,6 +58,7 @@ const MyStoreMenu: React.FC<SidebarProps> = ({ onClose }) => {
         style={{
           backgroundColor: 'transparent',
           minHeight: 56,
+          opacity: locked ? 0.6 : 1,
         }}
       />
     </Animated.View>
@@ -84,6 +99,28 @@ const MyStoreMenu: React.FC<SidebarProps> = ({ onClose }) => {
               </AppText>
             </Animated.View>
 
+            {/* Trial Banner */}
+            {isTrial && (
+              <Animated.View entering={FadeInDown.delay(100).duration(500)} style={[styles.trialBanner, { backgroundColor: gold + '15', borderColor: gold + '30' }]}>
+                <TouchableOpacity
+                  style={styles.trialBannerInner}
+                  onPress={() => handleRoute('/subscription/manage')}
+                  activeOpacity={0.7}
+                >
+                  <Crown size={18} color={gold} />
+                  <View style={{ flex: 1 }}>
+                    <AppText variant="body-sm" weight="bold" style={{ color: gold }}>
+                      Premium Trial
+                    </AppText>
+                    <AppText variant="micro" weight="medium" style={{ color: gold + 'CC' }}>
+                      {trialDaysRemaining} day{trialDaysRemaining !== 1 ? 's' : ''} left
+                    </AppText>
+                  </View>
+                  <ChevronRight size={16} color={gold} />
+                </TouchableOpacity>
+              </Animated.View>
+            )}
+
             {/* Menu Items List */}
             <View style={styles.menuList}>
               <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.sectionHeading, { color: G.fgSecondary }]} numberOfLines={1}>
@@ -99,7 +136,8 @@ const MyStoreMenu: React.FC<SidebarProps> = ({ onClose }) => {
               <MenuItem 
                 icon={Banknote} 
                 label={t('sidebar.expense_tracker')} 
-                onPress={() => handleRoute('/expense')} 
+                onPress={() => handlePremiumRoute('/expense', 'expense')} 
+                locked={!isFeatureUnlocked('expense')}
                 delay={200}
               />
               <MenuItem 
@@ -111,14 +149,22 @@ const MyStoreMenu: React.FC<SidebarProps> = ({ onClose }) => {
               <MenuItem 
                 icon={ClipboardList} 
                 label={t('sidebar.reports_analytics')} 
-                onPress={() => handleRoute('/summary')} 
+                onPress={() => handlePremiumRoute('/summary', 'reports')} 
+                locked={!isFeatureUnlocked('reports')}
                 delay={400}
               />
               <MenuItem 
                 icon={TrendingUp} 
                 label={t('sidebar.financial_reports')} 
-                onPress={() => handleRoute('/reports')} 
+                onPress={() => handlePremiumRoute('/reports', 'reports')} 
+                locked={!isFeatureUnlocked('reports')}
                 delay={430}
+              />
+              <MenuItem 
+                icon={Crown} 
+                label="Subscription" 
+                onPress={() => handleRoute('/subscription/manage')} 
+                delay={460}
               />
 
               <View style={[styles.divider, { backgroundColor: G.border }]} />
@@ -209,6 +255,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
+  },
+  trialBanner: {
+    marginHorizontal: 35,
+    marginBottom: 24,
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  trialBannerInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
   },
   divider: {
     height: 1,

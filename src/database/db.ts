@@ -545,6 +545,87 @@ export const initDB = () => {
   `);
   console.log('Table "recurring_expense_templates" checked/created.');
 
+  // →→ Subscription tables →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS subscriptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      plan TEXT NOT NULL DEFAULT 'basic',
+      status TEXT NOT NULL DEFAULT 'trial',
+      trialStartedAt TEXT,
+      trialEndsAt TEXT,
+      durationMonths INTEGER DEFAULT 1,
+      price REAL,
+      currency TEXT DEFAULT 'ETB',
+      startedAt TEXT,
+      expiresAt TEXT,
+      cancelledAt TEXT,
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+  console.log('Table "subscriptions" checked/created.');
+
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS subscription_payments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      subscriptionId INTEGER,
+      transactionId TEXT,
+      businessName TEXT,
+      phoneNumber TEXT,
+      planName TEXT,
+      amount REAL,
+      currency TEXT DEFAULT 'ETB',
+      paymentDate TEXT,
+      notes TEXT,
+      status TEXT DEFAULT 'pending_verification',
+      verifiedAt TEXT,
+      verifiedBy TEXT,
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (subscriptionId) REFERENCES subscriptions(id)
+    );
+  `);
+  console.log('Table "subscription_payments" checked/created.');
+
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS subscription_renewals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      subscriptionId INTEGER,
+      previousExpiry TEXT,
+      newExpiry TEXT,
+      plan TEXT,
+      durationMonths INTEGER,
+      amount REAL,
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (subscriptionId) REFERENCES subscriptions(id)
+    );
+  `);
+  console.log('Table "subscription_renewals" checked/created.');
+
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS subscription_audit (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      subscriptionId INTEGER,
+      action TEXT,
+      oldValue TEXT,
+      newValue TEXT,
+      performedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (subscriptionId) REFERENCES subscriptions(id)
+    );
+  `);
+  console.log('Table "subscription_audit" checked/created.');
+
+  // Initialize default trial subscription if none exists
+  const subCount = database.getFirstSync<{ count: number }>('SELECT COUNT(*) as count FROM subscriptions');
+  if (subCount && subCount.count === 0) {
+    const now = new Date();
+    const trialEnd = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    database.execSync(`
+      INSERT INTO subscriptions (plan, status, trialStartedAt, trialEndsAt, startedAt, expiresAt)
+      VALUES ('premium', 'trial', datetime('now'), datetime('now', '+7 days'), datetime('now'), datetime('now', '+7 days'))
+    `);
+    console.log('Default trial subscription created.');
+  }
+
   } catch (error) {
     console.error('Database initialization error:', error);
   }
@@ -5876,5 +5957,308 @@ export const getBudgetThresholdNotifications = (threshold: number = 80) => {
   } catch (error) {
     console.error('Get budget threshold notifications error:', error);
     return [];
+  }
+};
+
+// →→ Subscription Functions →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
+
+export interface SubscriptionData {
+  id: number;
+  plan: string;
+  status: string;
+  trialStartedAt: string | null;
+  trialEndsAt: string | null;
+  durationMonths: number;
+  price: number | null;
+  currency: string;
+  startedAt: string | null;
+  expiresAt: string | null;
+  cancelledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const getSubscription = (): SubscriptionData | null => {
+  try {
+    const database = getDB();
+    return database.getFirstSync<SubscriptionData>('SELECT * FROM subscriptions ORDER BY id DESC LIMIT 1');
+  } catch (error) {
+    console.error('Get subscription error:', error);
+    return null;
+  }
+};
+
+export const updateSubscriptionPlan = (plan: string, durationMonths: number, price: number): boolean => {
+  try {
+    const database = getDB();
+    const sub = getSubscription();
+    if (!sub) return false;
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + durationMonths * 30 * 24 * 60 * 60 * 1000);
+    database.runSync(
+      `UPDATE subscriptions SET plan = ?, durationMonths = ?, price = ?, startedAt = datetime('now'), expiresAt = ?, status = 'pending_payment', updatedAt = datetime('now') WHERE id = ?`,
+      [plan, durationMonths, price, expiresAt.toISOString(), sub.id]
+    );
+    logAudit(sub.id, 'plan_selected', sub.plan, plan);
+    return true;
+  } catch (error) {
+    console.error('Update subscription plan error:', error);
+    return false;
+  }
+};
+
+export const verifySubscriptionPayment = (): boolean => {
+  try {
+    const database = getDB();
+    const sub = getSubscription();
+    if (!sub) return false;
+    database.runSync(
+      "UPDATE subscriptions SET status = 'pending_verification', updatedAt = datetime('now') WHERE id = ?",
+      [sub.id]
+    );
+    logAudit(sub.id, 'payment_submitted', sub.status, 'pending_verification');
+    return true;
+  } catch (error) {
+    console.error('Verify subscription payment error:', error);
+    return false;
+  }
+};
+
+export const approveSubscription = (): boolean => {
+  try {
+    const database = getDB();
+    const sub = getSubscription();
+    if (!sub) return false;
+    database.runSync(
+      "UPDATE subscriptions SET status = 'active', updatedAt = datetime('now') WHERE id = ?",
+      [sub.id]
+    );
+    logAudit(sub.id, 'approved', sub.status, 'active');
+    return true;
+  } catch (error) {
+    console.error('Approve subscription error:', error);
+    return false;
+  }
+};
+
+export const rejectSubscription = (): boolean => {
+  try {
+    const database = getDB();
+    const sub = getSubscription();
+    if (!sub) return false;
+    database.runSync(
+      "UPDATE subscriptions SET status = 'rejected', updatedAt = datetime('now') WHERE id = ?",
+      [sub.id]
+    );
+    logAudit(sub.id, 'rejected', sub.status, 'rejected');
+    return true;
+  } catch (error) {
+    console.error('Reject subscription error:', error);
+    return false;
+  }
+};
+
+export const cancelSubscription = (): boolean => {
+  try {
+    const database = getDB();
+    const sub = getSubscription();
+    if (!sub) return false;
+    database.runSync(
+      "UPDATE subscriptions SET status = 'cancelled', cancelledAt = datetime('now'), updatedAt = datetime('now') WHERE id = ?",
+      [sub.id]
+    );
+    logAudit(sub.id, 'cancelled', sub.status, 'cancelled');
+    return true;
+  } catch (error) {
+    console.error('Cancel subscription error:', error);
+    return false;
+  }
+};
+
+export const expireSubscription = (): boolean => {
+  try {
+    const database = getDB();
+    const sub = getSubscription();
+    if (!sub) return false;
+    database.runSync(
+      "UPDATE subscriptions SET status = 'expired', plan = 'basic', updatedAt = datetime('now') WHERE id = ?",
+      [sub.id]
+    );
+    logAudit(sub.id, 'expired', sub.status, 'expired');
+    return true;
+  } catch (error) {
+    console.error('Expire subscription error:', error);
+    return false;
+  }
+};
+
+export const renewSubscription = (durationMonths: number, price: number): boolean => {
+  try {
+    const database = getDB();
+    const sub = getSubscription();
+    if (!sub) return false;
+    const previousExpiry = sub.expiresAt;
+    const now = new Date();
+    const newExpiry = new Date(now.getTime() + durationMonths * 30 * 24 * 60 * 60 * 1000);
+    database.runSync(
+      `UPDATE subscriptions SET status = 'renewing', durationMonths = ?, price = ?, expiresAt = ?, updatedAt = datetime('now') WHERE id = ?`,
+      [durationMonths, price, newExpiry.toISOString(), sub.id]
+    );
+    database.runSync(
+      `INSERT INTO subscription_renewals (subscriptionId, previousExpiry, newExpiry, plan, durationMonths, amount) VALUES (?, ?, ?, ?, ?, ?)`,
+      [sub.id, previousExpiry, newExpiry.toISOString(), sub.plan, durationMonths, price]
+    );
+    logAudit(sub.id, 'renewal_initiated', `expiry:${previousExpiry}`, `expiry:${newExpiry.toISOString()}`);
+    return true;
+  } catch (error) {
+    console.error('Renew subscription error:', error);
+    return false;
+  }
+};
+
+export const confirmRenewal = (): boolean => {
+  try {
+    const database = getDB();
+    const sub = getSubscription();
+    if (!sub) return false;
+    database.runSync(
+      "UPDATE subscriptions SET status = 'active', updatedAt = datetime('now') WHERE id = ?",
+      [sub.id]
+    );
+    logAudit(sub.id, 'renewal_confirmed', 'renewing', 'active');
+    return true;
+  } catch (error) {
+    console.error('Confirm renewal error:', error);
+    return false;
+  }
+};
+
+export const insertSubscriptionPayment = (data: {
+  transactionId: string;
+  businessName: string;
+  phoneNumber: string;
+  planName: string;
+  amount: number;
+  paymentDate: string;
+  notes?: string;
+}): boolean => {
+  try {
+    const database = getDB();
+    const sub = getSubscription();
+    if (!sub) return false;
+    database.runSync(
+      `INSERT INTO subscription_payments (subscriptionId, transactionId, businessName, phoneNumber, planName, amount, paymentDate, notes, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending_verification')`,
+      [sub.id, data.transactionId, data.businessName, data.phoneNumber, data.planName, data.amount, data.paymentDate, data.notes || null]
+    );
+    logAudit(sub.id, 'payment_recorded', 'none', `txn:${data.transactionId}`);
+    return true;
+  } catch (error) {
+    console.error('Insert subscription payment error:', error);
+    return false;
+  }
+};
+
+export const getSubscriptionPayments = () => {
+  try {
+    const database = getDB();
+    return database.getAllSync('SELECT * FROM subscription_payments ORDER BY createdAt DESC');
+  } catch (error) {
+    console.error('Get subscription payments error:', error);
+    return [];
+  }
+};
+
+export const getSubscriptionRenewals = () => {
+  try {
+    const database = getDB();
+    return database.getAllSync('SELECT * FROM subscription_renewals ORDER BY createdAt DESC');
+  } catch (error) {
+    console.error('Get subscription renewals error:', error);
+    return [];
+  }
+};
+
+export const getSubscriptionAuditLog = () => {
+  try {
+    const database = getDB();
+    return database.getAllSync('SELECT * FROM subscription_audit ORDER BY performedAt DESC');
+  } catch (error) {
+    console.error('Get subscription audit log error:', error);
+    return [];
+  }
+};
+
+const logAudit = (subscriptionId: number, action: string, oldValue: string, newValue: string) => {
+  try {
+    const database = getDB();
+    database.runSync(
+      `INSERT INTO subscription_audit (subscriptionId, action, oldValue, newValue) VALUES (?, ?, ?, ?)`,
+      [subscriptionId, action, oldValue, newValue]
+    );
+  } catch (error) {
+    console.error('Log audit error:', error);
+  }
+};
+
+export const checkAndExpireSubscription = (): SubscriptionData | null => {
+  try {
+    const database = getDB();
+    const sub = getSubscription();
+    if (!sub) return null;
+    if (sub.status === 'trial' && sub.trialEndsAt) {
+      const trialEnd = new Date(sub.trialEndsAt);
+      if (new Date() > trialEnd) {
+        database.runSync(
+          "UPDATE subscriptions SET status = 'expired', plan = 'basic', updatedAt = datetime('now') WHERE id = ?",
+          [sub.id]
+        );
+        logAudit(sub.id, 'trial_ended', 'trial', 'expired');
+        return { ...sub, status: 'expired', plan: 'basic' };
+      }
+    }
+    if (sub.status === 'active' && sub.expiresAt) {
+      const expiry = new Date(sub.expiresAt);
+      if (new Date() > expiry) {
+        database.runSync(
+          "UPDATE subscriptions SET status = 'expired', plan = 'basic', updatedAt = datetime('now') WHERE id = ?",
+          [sub.id]
+        );
+        logAudit(sub.id, 'subscription_expired', 'active', 'expired');
+        return { ...sub, status: 'expired', plan: 'basic' };
+      }
+    }
+    return sub;
+  } catch (error) {
+    console.error('Check and expire subscription error:', error);
+    return null;
+  }
+};
+
+export const getTrialDaysRemaining = (): number => {
+  try {
+    const sub = getSubscription();
+    if (!sub || !sub.trialEndsAt) return 0;
+    if (sub.status !== 'trial') return 0;
+    const trialEnd = new Date(sub.trialEndsAt);
+    const now = new Date();
+    const diff = trialEnd.getTime() - now.getTime();
+    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+  } catch (error) {
+    console.error('Get trial days remaining error:', error);
+    return 0;
+  }
+};
+
+export const isPremiumFeatureUnlocked = (feature: string): boolean => {
+  try {
+    const sub = checkAndExpireSubscription();
+    if (!sub) return false;
+    if (sub.status === 'trial') return true;
+    if (sub.status !== 'active') return false;
+    return sub.plan === 'premium';
+  } catch (error) {
+    console.error('Is premium feature unlocked error:', error);
+    return false;
   }
 };

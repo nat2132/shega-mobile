@@ -23,6 +23,7 @@ import {
 } from '@/utils/pdf-utils';
 import * as Haptics from 'expo-haptics';
 import { useToast } from '@/context/ToastContext';
+import PremiumFeatureGate from '@/components/PremiumFeatureGate';
 import { useRouter } from 'expo-router';
 import {
     Bell,
@@ -50,7 +51,7 @@ import { getReportsGlass } from '@/screens/reports/glass-reports';
 type Period = 'D' | 'W' | 'M' | 'Y' | 'C';
 
 
-export default function ReportsHubScreen() {
+const ReportsHubScreenContent = () => {
   const { colors, t, userProfile, calendarType, language } = useSettings();
   const REP_GLASS = useMemo(() => getReportsGlass(colors), [colors]);
   const { openSidebar } = useSidebar();
@@ -772,3 +773,11 @@ const styles = StyleSheet.create({
   loadingBox: { padding: 30, borderRadius: 24, alignItems: 'center', gap: 15, elevation: 5 },
   loadingText: { fontSize: 14, fontFamily: Fonts.bold },
 });
+
+export default function ReportsHubScreen() {
+  return (
+    <PremiumFeatureGate feature="reports">
+      <ReportsHubScreenContent />
+    </PremiumFeatureGate>
+  );
+}
