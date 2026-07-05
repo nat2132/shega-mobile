@@ -1069,7 +1069,7 @@ const styles = StyleSheet.create({
   modalBackdrop: { flex: 1, width: "100%" },
   bottomSheetContainer: {
     width: "100%",
-    maxHeight: "90%",
+    height: "90%",
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
     borderTopWidth: 1,

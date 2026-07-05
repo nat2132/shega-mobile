@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -218,7 +218,7 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
       await draftFormData.clearCurrent();
       setSuccessDetails({
         title: t('expense.recurring_scheduled'),
-        subtitle: `${recurFrequency} Â· ${formatDate(new Date(recurStartDate), calendarType, language)}`,
+        subtitle: `${recurFrequency} Ã‚· ${formatDate(new Date(recurStartDate), calendarType, language)}`,
         mainLabel: t('expense.magnitude'),
         mainValue: `${amountNum.toLocaleString()} ${t('common.etb')}`,
         secondaryLabel: t('common.category'),
@@ -394,10 +394,10 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
                   {selectedBudgetId && budgetCategoryNames.length > 0 ? `Budget: ${budgets.find((b: any) => b.id === selectedBudgetId)?.name || ''} Categories` : t('common.categories')}
                 </AppText>
                 <View style={styles.chipRow}>
-                  {(selectedBudgetId && budgetCategoryNames.length > 0 ? budgetCategoryNames : DEFAULT_CATEGORIES).map(cat => (
-                    <TouchableOpacity key={cat} style={[styles.chip, { backgroundColor: G.bgCard, borderColor: G.border }]}
-                      onPress={() => handleCategoryChange(cat)}>
-                      <AppText variant="body-sm" weight="bold" style={{ color: G.fg }}>{cat}</AppText>
+                  {(selectedBudgetId && budgetCategoryNames.length > 0 ? budgetCategoryNames : DEFAULT_CATEGORY_KEYS).map(key => (
+                    <TouchableOpacity key={key} style={[styles.chip, { backgroundColor: G.bgCard, borderColor: G.border }]}
+                      onPress={() => handleCategoryChange(t(key))}>
+                      <AppText variant="body-sm" weight="bold" style={{ color: G.fg }}>{t(key)}</AppText>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -573,12 +573,12 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
                 <View style={[styles.fieldCard, { backgroundColor: G.bgCard, borderColor: G.border, marginBottom: 8, overflow: 'hidden' }]}>
                    <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary, marginBottom: 10 }]}>{t('expense.frequency')}</AppText>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                    {['Daily', 'Weekly', 'Monthly', 'Yearly'].map(freq => (
-                      <TouchableOpacity key={freq}
-                        style={[styles.chip, { backgroundColor: G.bgCard, borderColor: G.border, paddingVertical: 8, paddingHorizontal: 14 }, recurFrequency === freq && { backgroundColor: G.fg }]}
-                        onPress={() => { setRecurFrequency(freq); Haptics.selectionAsync(); }}
+                    {[{ key: 'Daily', label: t('expense.daily') }, { key: 'Weekly', label: t('expense.weekly') }, { key: 'Monthly', label: t('expense.monthly') }, { key: 'Yearly', label: t('expense.yearly') }].map(freq => (
+                      <TouchableOpacity key={freq.key}
+                        style={[styles.chip, { backgroundColor: G.bgCard, borderColor: G.border, paddingVertical: 8, paddingHorizontal: 14 }, recurFrequency === freq.key && { backgroundColor: G.fg }]}
+                        onPress={() => { setRecurFrequency(freq.key); Haptics.selectionAsync(); }}
                       >
-                        <AppText variant="body-sm" weight="bold" style={{ color: recurFrequency === freq ? G.bg : G.fg }}>{freq}</AppText>
+                        <AppText variant="body-sm" weight="bold" style={{ color: recurFrequency === freq.key ? G.bg : G.fg }}>{freq.label}</AppText>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -655,10 +655,10 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
   );
 };
 
-const DEFAULT_CATEGORIES = [
-  'Utilities', 'Rent', 'Salaries', 'Inventory', 'Transportation',
-  'Marketing', 'Maintenance', 'Taxes', 'Loan Payment', 'Office Supplies',
-  'Insurance', 'General'
+const DEFAULT_CATEGORY_KEYS = [
+  'expense.cat_utilities', 'expense.cat_rent', 'expense.cat_salaries', 'expense.cat_inventory', 'expense.cat_transportation',
+  'expense.cat_marketing', 'expense.cat_maintenance', 'expense.cat_taxes', 'expense.cat_loan_payment', 'expense.cat_office_supplies',
+  'expense.cat_insurance', 'expense.cat_general'
 ];
 
 const styles = StyleSheet.create({
@@ -701,3 +701,4 @@ const styles = StyleSheet.create({
 });
 
 export default AddExpenseScreen;
+

@@ -355,6 +355,22 @@ SparklineChart.displayName = 'SparklineChart';
       ? (activity.customerName || t('sales.walk_in_customer'))
       : (activity.name || activity.label || (isExpense ? t('expense.header') : (isAdjustment ? t('adjustment.header') : t('inventory.header'))));
     
+    // Amount color based on type
+    let amtColor: string | undefined = undefined;
+    if (isExpense) {
+      amtColor = colors.error;
+    } else if (isAdjustment) {
+      const adjType = activity.adjType || activity.type;
+      if (adjType === 'damaged' || adjType === 'price_down') amtColor = colors.error;
+      else if (adjType === 'price_up') amtColor = colors.success;
+    } else if (isSale) {
+      const paymentStatus = activity.paymentStatus || 'Paid';
+      if (paymentStatus === 'Cancelled') amtColor = colors.textSecondary;
+      else amtColor = colors.success;
+    } else if (isInventory) {
+      amtColor = colors.success;
+    }
+
     // Amount
     let displayAmt = typeof activity.amount === 'number' && !isNaN(activity.amount)
       ? activity.amount
@@ -413,6 +429,7 @@ SparklineChart.displayName = 'SparklineChart';
               prefix={prefix}
               suffix={' ' + t('common.etb')}
               style={styles.activityAmount}
+              color={amtColor}
             />
           )}
           <AppText variant="caption" weight="medium" style={styles.activityTime} numberOfLines={1}>

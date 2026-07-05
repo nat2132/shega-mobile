@@ -174,8 +174,8 @@ const PointerLabel = (items: any) => {
     strokeDashArray: [4, 4],
     pointerColor: colors.primary,
     radius: 6,
-    pointerLabelWidth: 80,
-    pointerLabelHeight: 30,
+    pointerLabelWidth: 160,
+    pointerLabelHeight: 40,
     activatePointersOnLongPress: false,
     autoAdjustPointerLabelPosition: true,
     pointerLabelComponent: PointerLabel,
@@ -503,7 +503,7 @@ const PointerLabel = (items: any) => {
                     {item.name || item.category}
                   </AppText>
                   <AppText variant="caption" style={{ color: G.muted }}>
-                    {item.category} Â· {item.date}
+                    {item.category} · {item.date}
                   </AppText>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
@@ -659,7 +659,7 @@ const styles = StyleSheet.create({
   modalOverlay: { flex: 1, justifyContent: 'flex-end' },
   modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.65)' },
   bottomSheet: { borderTopLeftRadius: 30, borderTopRightRadius: 30, paddingBottom: 40 },
-  detailSheet: { borderTopLeftRadius: 30, borderTopRightRadius: 30, maxHeight: Dimensions.get('window').height * 0.90 },
+  detailSheet: { borderTopLeftRadius: 30, borderTopRightRadius: 30, height: Dimensions.get('window').height * 0.90 },
   modalHeader: { alignItems: 'center', paddingTop: 15, paddingBottom: 10 },
   modalHandle: { width: 40, height: 4, borderRadius: 2 },
 });

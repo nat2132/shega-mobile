@@ -147,6 +147,9 @@ export const LineChartSkeleton: React.FC<LineChartSkeletonProps> = React.memo(({
   width = 320,
   style,
 }) => {
+  const { theme } = useSettings();
+  const isDark = theme !== 'light';
+  const strokeColor = isDark ? '#5A5A5C80' : '#3A3A3C40';
   const points = useMemo(() => {
     const w = width;
     const h = height;
@@ -163,7 +166,7 @@ export const LineChartSkeleton: React.FC<LineChartSkeletonProps> = React.memo(({
       <Svg width={points.w} height={points.h}>
         <Path
           d={points.xs.map((x, i) => `${i === 0 ? 'M' : 'L'} ${x} ${points.ys[i]}`).join(' ')}
-          stroke="#3A3A3C40"
+          stroke={strokeColor}
           strokeWidth={3}
           fill="none"
           strokeLinecap="round"
@@ -189,12 +192,15 @@ export const SparklineSkeleton: React.FC<SparklineSkeletonProps> = React.memo(({
   height = 30,
   style,
 }) => {
+  const { theme } = useSettings();
+  const isDark = theme !== 'light';
+  const strokeColor = isDark ? '#5A5A5C80' : '#3A3A3C40';
   return (
     <View style={[{ width, height, justifyContent: 'center' }, style]}>
       <Svg width={width} height={height} viewBox={`0 0 100 30`}>
         <Path
           d="M0 22 C15 22, 25 4, 40 14 C55 22, 75 9, 100 3"
-          stroke="#3A3A3C40"
+          stroke={strokeColor}
           strokeWidth={3}
           fill="none"
           strokeLinecap="round"

@@ -339,7 +339,7 @@ const SaleDetailsScreen = ({
 
   const debtFieldsSection = (editForm.paymentStatus === "Debt" ||
     editForm.paymentStatus === "Order") && (
-    <Animated.View entering={FadeInDown.delay(500)} style={styles.section}>
+    <Animated.View style={styles.section}>
       <AppText
         variant="micro"
         weight="bold"
@@ -578,7 +578,7 @@ const SaleDetailsScreen = ({
           </View>
         </View>
 
-        <Animated.View entering={ZoomIn} style={styles.heroContent}>
+        <Animated.View style={styles.heroContent}>
           <View
             style={[
               styles.badgeContainer,
@@ -632,7 +632,7 @@ const SaleDetailsScreen = ({
               value={editForm.totalPrice}
               size="display"
               weight="bold"
-              prefix={"ETB "}
+              prefix={t('common.etb') + ' '}
               color={SALES_GLASS.fg}
               style={styles.heroTitle}
             />
@@ -665,12 +665,13 @@ const SaleDetailsScreen = ({
       </View>
 
       <ScrollView
+        style={{ flex: 1 }}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
         {/* Settlement Intelligence */}
-        <Animated.View entering={FadeInDown.delay(200)} style={styles.section}>
+        <Animated.View style={styles.section}>
           <AppText
             variant="micro"
             weight="bold"
@@ -926,7 +927,7 @@ const SaleDetailsScreen = ({
         </Animated.View>
 
         {/* Intelligence Nodes - Batch Items or Single Item */}
-        <Animated.View entering={FadeInDown.delay(400)} style={styles.section}>
+        <Animated.View style={styles.section}>
           <AppText
             variant="micro"
             weight="bold"
@@ -999,7 +1000,7 @@ const SaleDetailsScreen = ({
                       </TouchableOpacity>
                       {isExpanded && (
                         <Animated.View
-                          entering={FadeInDown}
+                         
                           style={[
                             styles.expandedSection,
                             {

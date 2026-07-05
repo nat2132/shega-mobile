@@ -1,4 +1,4 @@
-import { getCategories, getContacts, getItems, insertAdjustment, insertCategory, insertContact, insertExpense, insertItem, insertSale } from '@/database/db';
+import { getCategories, getContacts, getItems, insertAdjustment, insertCategory, insertContact, insertExpense, insertItem, insertSale, getDB } from '@/database/db';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 
@@ -20,7 +20,7 @@ export interface CSVModuleSpec {
   requiredColumns: string[];
 }
 
-// â”€â”€â”€ Module Specs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ——— Module Specs ————————————————————————————————————————————————————
 
 export const CSV_SPECS: Record<string, CSVModuleSpec> = {
   items: {
@@ -47,6 +47,9 @@ export const CSV_SPECS: Record<string, CSVModuleSpec> = {
       { key: 'supplierCallEnabled', label: 'Call Supplier', required: false, type: 'boolean', defaultValue: false },
       { key: 'lastPriceCheckAt', label: 'Last Price Check', required: false, type: 'date', defaultValue: null },
       { key: 'isCredit', label: 'Credit Item', required: false, type: 'boolean', defaultValue: false },
+      { key: 'dueDate', label: 'Due Date', required: false, type: 'date', defaultValue: null },
+      { key: 'supplierId', label: 'Supplier ID', required: false, type: 'number', defaultValue: null },
+      { key: 'warehouseId', label: 'Warehouse ID', required: false, type: 'number', defaultValue: null },
     ],
     requiredColumns: ['name', 'totalBaseQuantity', 'basePurchasePrice', 'baseSellingPrice'],
   },
@@ -68,6 +71,12 @@ export const CSV_SPECS: Record<string, CSVModuleSpec> = {
       { key: 'createdAt', label: 'Date', required: false, type: 'date', defaultValue: null },
       { key: 'batchId', label: 'Batch ID', required: false, type: 'string', defaultValue: '' },
       { key: 'notes', label: 'Notes', required: false, type: 'string', defaultValue: '' },
+      { key: 'dueDate', label: 'Due Date', required: false, type: 'date', defaultValue: null },
+      { key: 'paidAmount', label: 'Paid Amount', required: false, type: 'number', defaultValue: 0 },
+      { key: 'taxType', label: 'Tax Type', required: false, type: 'string', defaultValue: 'VAT' },
+      { key: 'orderNumber', label: 'Order Number', required: false, type: 'string', defaultValue: '' },
+      { key: 'convertedAt', label: 'Converted At', required: false, type: 'date', defaultValue: null },
+      { key: 'cancelledAt', label: 'Cancelled At', required: false, type: 'date', defaultValue: null },
     ],
     requiredColumns: ['itemName', 'quantity', 'totalPrice'],
   },
@@ -84,6 +93,8 @@ export const CSV_SPECS: Record<string, CSVModuleSpec> = {
       { key: 'nextBillingDate', label: 'Next Billing Date', required: false, type: 'date', defaultValue: null },
       { key: 'budgetCategoryId', label: 'Budget Category ID', required: false, type: 'number', defaultValue: null },
       { key: 'paymentStatus', label: 'Payment Status', required: false, type: 'string', defaultValue: 'pending' },
+      { key: 'isOverdue', label: 'Is Overdue', required: false, type: 'boolean', defaultValue: false },
+      { key: 'overdueDays', label: 'Overdue Days', required: false, type: 'number', defaultValue: 0 },
     ],
     requiredColumns: ['name', 'amount'],
   },
@@ -92,7 +103,7 @@ export const CSV_SPECS: Record<string, CSVModuleSpec> = {
     description: 'Product and expense categories',
     columns: [
       { key: 'name', label: 'Category Name', required: true, type: 'string' },
-      { key: 'icon', label: 'Icon', required: false, type: 'string', defaultValue: 'ðŸ“¦' },
+      { key: 'icon', label: 'Icon', required: false, type: 'string', defaultValue: '📦' },
       { key: 'isCustom', label: 'Is Custom', required: false, type: 'boolean', defaultValue: true },
     ],
     requiredColumns: ['name'],
@@ -126,7 +137,47 @@ export const CSV_SPECS: Record<string, CSVModuleSpec> = {
     ],
     requiredColumns: ['itemName', 'type'],
   },
+  warehouses: {
+    name: 'Warehouses',
+    description: 'Inventory storage locations',
+    columns: [
+      { key: 'name', label: 'Name', required: true, type: 'string' },
+      { key: 'location', label: 'Location', required: false, type: 'string', defaultValue: '' },
+      { key: 'contactPerson', label: 'Contact Person', required: false, type: 'string', defaultValue: '' },
+      { key: 'phone', label: 'Phone', required: false, type: 'string', defaultValue: '' },
+      { key: 'notes', label: 'Notes', required: false, type: 'string', defaultValue: '' },
+    ],
+    requiredColumns: ['name'],
+  },
+  debt_payments: {
+    name: 'Debt Payments',
+    description: 'Customer debt payment history',
+    columns: [
+      { key: 'saleId', label: 'Sale ID', required: false, type: 'number', defaultValue: null },
+      { key: 'customerName', label: 'Customer Name', required: true, type: 'string' },
+      { key: 'customerPhone', label: 'Customer Phone', required: false, type: 'string', defaultValue: '' },
+      { key: 'amount', label: 'Amount', required: true, type: 'number' },
+      { key: 'type', label: 'Type', required: true, type: 'string', defaultValue: 'full' },
+      { key: 'note', label: 'Note', required: false, type: 'string', defaultValue: '' },
+    ],
+    requiredColumns: ['customerName', 'amount', 'type'],
+  },
+  returns: {
+    name: 'Returns',
+    description: 'Item returns and refunds',
+    columns: [
+      { key: 'saleId', label: 'Sale ID', required: false, type: 'number', defaultValue: null },
+      { key: 'itemName', label: 'Item Name', required: true, type: 'string' },
+      { key: 'quantity', label: 'Quantity', required: true, type: 'number' },
+      { key: 'unit', label: 'Unit', required: false, type: 'string', defaultValue: 'pcs' },
+      { key: 'unitType', label: 'Unit Type', required: false, type: 'string', defaultValue: 'base' },
+      { key: 'totalRefund', label: 'Total Refund', required: true, type: 'number' },
+      { key: 'reason', label: 'Reason', required: false, type: 'string', defaultValue: '' },
+    ],
+    requiredColumns: ['itemName', 'quantity', 'totalRefund'],
+  },
 };
+
 
 // â”€â”€â”€ CSV Parsing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -677,6 +728,9 @@ export async function executeImport(
     case 'categories': return importCategories(data);
     case 'contacts': return importContacts(data);
     case 'adjustments': return importAdjustments(data);
+    case 'warehouses': return importWarehouses(data);
+    case 'debt_payments': return importDebtPayments(data);
+    case 'returns': return importReturns(data);
     default:
       return { success: false, imported: 0, skipped: 0, errors: [`Unknown module: ${moduleKey}`] };
   }
@@ -785,6 +839,156 @@ export function importAdjustments(data: any[]): ImportResult {
         result.imported++;
       } else {
         result.errors.push(`Row ${rowNum}: Failed to insert adjustment for "${row.itemName}"`);
+        result.skipped++;
+      }
+    } catch (e: any) {
+      result.errors.push(`Row ${rowNum}: ${e.message || 'Unknown error'}`);
+      result.skipped++;
+    }
+  }
+
+  return result;
+}
+
+export function importWarehouses(data: any[]): ImportResult {
+  const result: ImportResult = { success: true, imported: 0, skipped: 0, errors: [] };
+  const database = getDB();
+  const existingWarehouses = database.getAllSync('SELECT * FROM warehouses') as any[];
+
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i];
+    const rowNum = i + 2;
+    try {
+      if (!row.name || row.name.trim() === '') {
+        result.errors.push(`Row ${rowNum}: Warehouse Name is required`);
+        result.skipped++;
+        continue;
+      }
+
+      const isDupe = existingWarehouses.some((w: any) => w.name?.toLowerCase() === row.name?.toLowerCase());
+      if (isDupe) {
+        result.skipped++;
+        result.errors.push(`Row ${rowNum}: Warehouse "${row.name}" already exists (skipped)`);
+        continue;
+      }
+
+      const statement = database.prepareSync('INSERT INTO warehouses (name, location, contactPerson, phone, notes) VALUES (?, ?, ?, ?, ?)');
+      const res = statement.executeSync([
+        row.name.trim(),
+        row.location || null,
+        row.contactPerson || null,
+        row.phone || null,
+        row.notes || null,
+      ]);
+
+      if (res.lastInsertRowId) {
+        result.imported++;
+        existingWarehouses.push({ id: res.lastInsertRowId, name: row.name.trim() });
+      } else {
+        result.errors.push(`Row ${rowNum}: Failed to insert warehouse "${row.name}"`);
+        result.skipped++;
+      }
+    } catch (e: any) {
+      result.errors.push(`Row ${rowNum}: ${e.message || 'Unknown error'}`);
+      result.skipped++;
+    }
+  }
+
+  return result;
+}
+
+export function importDebtPayments(data: any[]): ImportResult {
+  const result: ImportResult = { success: true, imported: 0, skipped: 0, errors: [] };
+  const database = getDB();
+
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i];
+    const rowNum = i + 2;
+    try {
+      if (!row.customerName || row.customerName.trim() === '') {
+        result.errors.push(`Row ${rowNum}: Customer Name is required`);
+        result.skipped++;
+        continue;
+      }
+      
+      const amount = Number(row.amount);
+      if (isNaN(amount) || amount <= 0) {
+        result.errors.push(`Row ${rowNum}: Amount must be a positive number`);
+        result.skipped++;
+        continue;
+      }
+
+      const statement = database.prepareSync('INSERT INTO debt_payments (saleId, customerName, customerPhone, amount, type, note) VALUES (?, ?, ?, ?, ?, ?)');
+      const res = statement.executeSync([
+        row.saleId ? Number(row.saleId) : null,
+        row.customerName.trim(),
+        row.customerPhone || null,
+        amount,
+        row.type || 'full',
+        row.note || null,
+      ]);
+
+      if (res.lastInsertRowId) {
+        result.imported++;
+      } else {
+        result.errors.push(`Row ${rowNum}: Failed to insert debt payment for "${row.customerName}"`);
+        result.skipped++;
+      }
+    } catch (e: any) {
+      result.errors.push(`Row ${rowNum}: ${e.message || 'Unknown error'}`);
+      result.skipped++;
+    }
+  }
+
+  return result;
+}
+
+export function importReturns(data: any[]): ImportResult {
+  const result: ImportResult = { success: true, imported: 0, skipped: 0, errors: [] };
+  const database = getDB();
+  const items = getItems() as any[];
+
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i];
+    const rowNum = i + 2;
+    try {
+      if (!row.itemName || row.itemName.trim() === '') {
+        result.errors.push(`Row ${rowNum}: Item Name is required`);
+        result.skipped++;
+        continue;
+      }
+
+      const quantity = Number(row.quantity);
+      if (isNaN(quantity) || quantity <= 0) {
+        result.errors.push(`Row ${rowNum}: Quantity must be a positive number`);
+        result.skipped++;
+        continue;
+      }
+
+      const matchedItem = items.find((item: any) =>
+        item.name?.toLowerCase() === row.itemName?.toLowerCase()
+      );
+      if (!matchedItem) {
+        result.errors.push(`Row ${rowNum}: Item "${row.itemName}" not found in inventory (skipped)`);
+        result.skipped++;
+        continue;
+      }
+
+      const statement = database.prepareSync('INSERT INTO returns (saleId, itemId, quantity, unit, unitType, totalRefund, reason) VALUES (?, ?, ?, ?, ?, ?, ?)');
+      const res = statement.executeSync([
+        row.saleId ? Number(row.saleId) : null,
+        matchedItem.id,
+        quantity,
+        row.unit || 'pcs',
+        row.unitType || 'base',
+        Number(row.totalRefund) || 0,
+        row.reason || null,
+      ]);
+
+      if (res.lastInsertRowId) {
+        result.imported++;
+      } else {
+        result.errors.push(`Row ${rowNum}: Failed to insert return for "${row.itemName}"`);
         result.skipped++;
       }
     } catch (e: any) {

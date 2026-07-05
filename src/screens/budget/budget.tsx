@@ -10,7 +10,6 @@ import {
   getBudgetDashboard,
   getBudgets,
   getBudgetWithCategoryProgress,
-  getCategories,
   getMonthlyBudgetSummary,
   insertBudget,
   insertBudgetCategory,
@@ -242,15 +241,15 @@ const BudgetOverview = () => {
 
           <View style={[s.statsRow, { borderTopColor: G.border }]}>
             <View style={[s.stat, { borderRightWidth: 1, borderRightColor: G.border }]}>
-              <AppNumber value={totalBudget} size="heading-lg" prefix="ETB " />
+              <AppNumber value={totalBudget} size="heading-lg" prefix={`${t('common.etb')} `} />
               <AppText variant="micro" style={{ color: G.fgSecondary, marginTop: 2 }}>{t("budget.total_budget")}</AppText>
             </View>
             <View style={[s.stat, { borderRightWidth: 1, borderRightColor: G.border }]}>
-              <AppNumber value={totalSpent} size="heading-lg" prefix="ETB " />
+              <AppNumber value={totalSpent} size="heading-lg" prefix={`${t('common.etb')} `} />
               <AppText variant="micro" style={{ color: G.fgSecondary, marginTop: 2 }}>{t("budget.total_spent")}</AppText>
             </View>
             <View style={s.stat}>
-              <AppNumber value={remaining} size="heading-lg" prefix="ETB " />
+              <AppNumber value={remaining} size="heading-lg" prefix={`${t('common.etb')} `} />
               <AppText variant="micro" style={{ color: G.fgSecondary, marginTop: 2 }}>{t("budget.remaining")}</AppText>
             </View>
           </View>
@@ -281,9 +280,9 @@ const BudgetOverview = () => {
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' }}>
                     <AppNumber value={alert.percentUsed} size="caption" suffix="%" />
                     <AppText variant="caption" style={{ color: G.fgSecondary }}>{t('budget.used_separator')}</AppText>
-                    <AppNumber value={alert.spent} size="body-sm" prefix="ETB " />
+                    <AppNumber value={alert.spent} size="body-sm" prefix={`${t('common.etb')} `} />
                     <AppText variant="caption" style={{ color: G.fgSecondary }}>{' / '}</AppText>
-                    <AppNumber value={alert.plannedAmount} size="body" prefix="ETB " />
+                    <AppNumber value={alert.plannedAmount} size="body" prefix={`${t('common.etb')} `} />
                   </View>
                 </View>
                 <View style={[s.alertBadge, { backgroundColor: (alert.isExceeded ? colors.error : colors.warning) + "20" }]}>
@@ -323,9 +322,9 @@ const BudgetOverview = () => {
                   </View>
                   <View style={s.catFooter}>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' }}>
-                      <AppNumber value={cat.spent} size="body" prefix="ETB " />
+                      <AppNumber value={cat.spent} size="body" prefix={`${t('common.etb')} `} />
                       <AppText variant="caption" style={{ color: G.fgSecondary }}>{' / '}</AppText>
-                      <AppNumber value={cat.planned} size="body" prefix="ETB " />
+                      <AppNumber value={cat.planned} size="body" prefix={`${t('common.etb')} `} />
                     </View>
                     <AppNumber value={pct} size="caption" suffix="%" />
                   </View>
@@ -361,7 +360,7 @@ const BudgetOverview = () => {
                     <View style={{ flex: 1 }}>
                       <AppText variant="body" weight="bold" style={{ color: G.fg }}>{budget.name}</AppText>
                       <AppText variant="caption" style={{ color: G.fgSecondary, marginTop: 2 }}>
-                        {budget.type} Â· {budget.period} Â· {budget.year}{budget.month ? `/${String(budget.month).padStart(2, '0')}` : ""}
+                        {budget.type} · {budget.period} · {budget.year}{budget.month ? `/${String(budget.month).padStart(2, '0')}` : ""}
                       </AppText>
                     </View>
                     <StatusBadge status={pct >= 100 ? "exceeded" : pct >= 80 ? "near" : "within"} />
@@ -373,8 +372,8 @@ const BudgetOverview = () => {
                     }]} />
                   </View>
                   <View style={s.budgetCardFooter}>
-                    <AppNumber value={budget.totalActual} size="body" suffix={` ${t('budget.spent_label')}`} />
-                    <AppNumber value={budget.totalPlanned} size="body" suffix={` ${t('budget.planned_label')}`} />
+                    <AppNumber value={budget.totalActual} size="body" prefix={`${t('common.etb')} `} />
+                    <AppNumber value={budget.totalPlanned} size="body" prefix={`${t('common.etb')} `} />
                   </View>
                 </TouchableOpacity>
               );
@@ -415,7 +414,7 @@ const BudgetOverview = () => {
             <View style={s.modalHeader}>
               <View style={[s.modalHandle, { backgroundColor: G.border }]} />
             </View>
-            <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, paddingHorizontal: 24 }}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }} style={{ flex: 1, paddingHorizontal: 24 }}>
               {selectedBudget && (
                 <>
                   <View style={s.detailHeader}>
@@ -427,15 +426,15 @@ const BudgetOverview = () => {
 
                   <View style={[s.statsRow, { marginVertical: 20 }]}>
                     <View style={[s.stat, { borderRightWidth: 1, borderRightColor: G.border }]}>
-                      <AppNumber value={selectedBudget.totalSpent} size="heading-lg" prefix="ETB " />
+                      <AppNumber value={selectedBudget.totalSpent} size="heading-lg" prefix={`${t('common.etb')} `} />
                       <AppText variant="micro" style={{ color: G.fgSecondary, marginTop: 2 }}>{t('budget.total_spent')}</AppText>
                     </View>
                     <View style={[s.stat, { borderRightWidth: 1, borderRightColor: G.border }]}>
-                      <AppNumber value={selectedBudget.totalPlanned} size="heading-lg" prefix="ETB " />
+                      <AppNumber value={selectedBudget.totalPlanned} size="heading-lg" prefix={`${t('common.etb')} `} />
                       <AppText variant="micro" style={{ color: G.fgSecondary, marginTop: 2 }}>{t('budget.planned')}</AppText>
                     </View>
                     <View style={s.stat}>
-                      <AppNumber value={selectedBudget.remaining} size="heading-lg" prefix="ETB " />
+                      <AppNumber value={selectedBudget.remaining} size="heading-lg" prefix={`${t('common.etb')} `} />
                       <AppText variant="micro" style={{ color: G.fgSecondary, marginTop: 2 }}>{t('budget.remaining')}</AppText>
                     </View>
                   </View>
@@ -469,9 +468,9 @@ const BudgetOverview = () => {
                         </View>
                         <View style={s.catFooter}>
                           <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' }}>
-                            <AppNumber value={cat.spent || 0} size="body" prefix="ETB " />
+                            <AppNumber value={cat.spent || 0} size="body" prefix={`${t('common.etb')} `} />
                             <AppText variant="caption" style={{ color: G.fgSecondary }}>{' / '}</AppText>
-                            <AppNumber value={cat.plannedAmount} size="body" prefix="ETB " />
+                            <AppNumber value={cat.plannedAmount} size="body" prefix={`${t('common.etb')} `} />
                           </View>
                           {catRemaining >= 0 ? (
                             <AppNumber value={catRemaining} size="body" suffix={` ${t('budget.left_label')}`} />
@@ -519,9 +518,7 @@ const CreateBudgetModal = ({ colors, t, onClose, onSaved }: { colors: any; t: an
   });
 
   useEffect(() => {
-    const dbCats = getCategories();
-    const names = dbCats.map((c: any) => c.name).filter((n: string) => !['All', 'Uncategorized'].includes(n));
-    setCategories(names.map((n: string) => ({ name: n, amount: "" })));
+    setCategories([]);
   }, []);
 
   const addCustomCategory = () => {
@@ -694,8 +691,8 @@ const s = StyleSheet.create({
   summaryTop: { flexDirection: "row", alignItems: "center", marginBottom: 20 },
   summaryLabel: { fontSize: 11, letterSpacing: 1.5, marginBottom: 4 },
   summaryTitle: { fontSize: 24, fontFamily: Fonts.bold, letterSpacing: -0.5 },
-  statsRow: { flexDirection: "row", paddingTop: 16, borderTopWidth: 1 },
-  stat: { flex: 1, alignItems: "center" },
+  statsRow: { flexDirection: "row", flexWrap: "wrap", paddingTop: 16, borderTopWidth: 1 },
+  stat: { minWidth: 120, alignItems: "center", paddingVertical: 8 },
   progressBar: { height: 6, borderRadius: 3, overflow: "hidden" },
   progressFill: { height: "100%", borderRadius: 3 },
   alertsSection: { marginHorizontal: 24, marginTop: 24 },
@@ -720,7 +717,7 @@ const s = StyleSheet.create({
   fab: { width: 60, height: 60, borderRadius: 30, justifyContent: "center", alignItems: "center", elevation: 2, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4 },
   modalOverlay: { flex: 1, justifyContent: "flex-end" },
   modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)" },
-  detailSheet: { borderTopLeftRadius: 30, borderTopRightRadius: 30, maxHeight: Dimensions.get("window").height * 0.90, paddingBottom: 40 },
+  detailSheet: { borderTopLeftRadius: 30, borderTopRightRadius: 30, height: Dimensions.get("window").height * 0.90, paddingBottom: 40 },
   createSheet: { borderTopLeftRadius: 30, borderTopRightRadius: 30, height: Dimensions.get("window").height * 0.92, paddingBottom: 40 },
   modalHeader: { alignItems: "center", paddingTop: 15, paddingBottom: 10 },
   modalHandle: { width: 40, height: 4, borderRadius: 2 },

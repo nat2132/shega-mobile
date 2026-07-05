@@ -5,7 +5,8 @@ import {
   TouchableOpacity,
   ScrollView,
   TextInput,
-  Modal
+  Modal,
+  Switch
 } from 'react-native';
 import Animated, { 
   FadeInDown, 
@@ -21,7 +22,8 @@ import {
   TrendingDown,
   ShieldCheck,
   Zap,
-  Trash2
+  Trash2,
+  Calendar
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { playNice} from '@/services/soundService';
@@ -144,7 +146,7 @@ const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => vo
             </View>
          </View>
 
-         <Animated.View entering={ZoomIn} style={styles.heroContent}>
+         <Animated.View style={styles.heroContent}>
             <View style={[styles.badgeContainer, { backgroundColor: colors.error + '15' }]}>
                <TrendingDown size={28} color={colors.error} />
             </View>
@@ -167,16 +169,26 @@ const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => vo
                   <AppNumber value={editForm.amount} size="display" prefix={t('common.etb') + ' '} />
                 </View>
             )}
+            {isEditing ? (
+              <TextInput
+                style={[styles.heroMetaInput, { color: G.fg, borderColor: G.border }]}
+                value={editForm.date || ''}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={G.fgSecondary}
+                onChangeText={(t) => setEditForm((prev: any) => ({ ...prev, date: t }))}
+              />
+            ) : (
             <AppText variant="body-sm" weight="bold" style={[styles.heroMeta, { color: G.fgSecondary }]} numberOfLines={1}>
                {editForm.date ? formatDate(new Date(editForm.date), calendarType, language) : t('common.loading')}
             </AppText>
+            )}
          </Animated.View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         
         {/* Magnitude & Context */}
-        <Animated.View entering={FadeInDown.delay(200)} style={styles.section}>
+        <Animated.View style={styles.section}>
            <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.sectionTitle, { color: G.fgSecondary }]} numberOfLines={1}>{t('expense.outflow_identity')}</AppText>
             <View style={[styles.intelligenceBlock, { backgroundColor: G.bgCard, borderColor: G.border, overflow: 'hidden' }]}>
                <View style={styles.node}>
@@ -216,19 +228,49 @@ const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => vo
         </Animated.View>
 
         {/* Orchestration Block (Recurring) */}
-        <Animated.View entering={FadeInDown.delay(400)} style={styles.section}>
+        <Animated.View style={styles.section}>
           <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.sectionTitle, { color: G.fgSecondary }]} numberOfLines={1}>{t('expense.orchestration_nodes')}</AppText>
            <View style={[styles.intelligenceBlock, { backgroundColor: G.bgCard, borderColor: G.border, overflow: 'hidden' }]}>
              <View style={styles.node}>
                <View style={styles.nodeInfo}>
                  <Repeat size={18} color={editForm.isRecurring ? colors.primary : G.fgSecondary} />
                 <View>
+                  {isEditing ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <AppText variant="body-sm" weight="bold" style={[styles.nodeValue, { color: G.fg }]} numberOfLines={1}>{t('expense.automated')}</AppText>
+                      <Switch
+                        value={editForm.isRecurring}
+                        onValueChange={(v) => setEditForm((prev: any) => ({ ...prev, isRecurring: v ? 1 : 0 }))}
+                        trackColor={{ false: G.border, true: colors.primary + '60' }}
+                        thumbColor={editForm.isRecurring ? colors.primary : G.fgSecondary}
+                      />
+                    </View>
+                  ) : (
                   <AppText variant="body-sm" weight="bold" style={[styles.nodeValue, { color: G.fg }]} numberOfLines={1}>{editForm.isRecurring ? t('expense.automated') : t('expense.one_time')}</AppText>
+                  )}
+                  {!isEditing && (
                   <AppText variant="caption" weight="medium" style={[styles.nodeSub, { color: G.fgSecondary }]} numberOfLines={2}>{editForm.isRecurring ? t('expense.repeats_every', { frequency: t(`expense.${(editForm.frequency || 'Monthly').toLowerCase()}`) }) : t('expense.no_pulse')}</AppText>
+                  )}
                 </View>
               </View>
             </View>
-            {editForm.isRecurring && (
+            {editForm.isRecurring && isEditing && (
+              <View style={{ flexDirection: 'row', gap: 6, paddingVertical: 10, flexWrap: 'wrap' }}>
+                {['Daily', 'Weekly', 'Monthly', 'Yearly'].map((freq) => {
+                  const isActive = editForm.frequency === freq;
+                  return (
+                    <TouchableOpacity
+                      key={freq}
+                      style={[styles.freqChip, { borderColor: G.border, backgroundColor: isActive ? G.fg : 'transparent' }]}
+                      onPress={() => setEditForm((prev: any) => ({ ...prev, frequency: freq }))}
+                    >
+                      <AppText variant="caption" weight="bold" shrink={false} style={{ color: isActive ? G.bg : G.fgSecondary }} numberOfLines={1}>{t(`expense.${freq.toLowerCase()}`)}</AppText>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+            {editForm.isRecurring && !isEditing && (
               <View style={styles.dateNodes}>
                 <View style={[styles.dNode, { backgroundColor: G.bg, borderColor: G.border, overflow: 'hidden' }]}>
                   <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.dLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('expense.committed')}</AppText>
@@ -293,6 +335,7 @@ const styles = StyleSheet.create({
   heroTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   heroInput: { fontSize: 32, fontFamily: Fonts.bold, textAlign: 'center', borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)', borderRadius: 12, paddingHorizontal: 20, minWidth: 150 },
   heroMeta: { fontSize: 13, fontFamily: Fonts.bold, marginTop: 10, opacity: 0.6 },
+  heroMetaInput: { fontSize: 15, fontFamily: Fonts.bold, textAlign: 'center', borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6, minWidth: 160, marginTop: 10 },
   scrollContent: { padding: 25 },
   section: { marginBottom: 35 },
   sectionTitle: { fontSize: 11, fontFamily: Fonts.bold, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 15, marginLeft: 5 },
@@ -307,6 +350,7 @@ const styles = StyleSheet.create({
   nodeDivider: { height: 1, backgroundColor: 'rgba(0,0,0,0.05)', marginVertical: 4 },
   miniBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
   badgeText: { fontSize: 11, fontFamily: Fonts.bold },
+  freqChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, borderWidth: 1 },
   dateNodes: { flexDirection: 'row', gap: 10, marginTop: 15 },
   dNode: { flex: 1, borderRadius: 18, padding: 15, borderWidth: 1 },
   dLabel: { fontSize: 9, fontFamily: Fonts.bold, letterSpacing: 0.5, marginBottom: 4 },

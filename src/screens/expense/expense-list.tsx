@@ -427,7 +427,7 @@ const styles = StyleSheet.create({
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   modalOverlayCenter: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
   modalBackdrop: { flex: 1, width: '100%' },
-  detailSheet: { width: '100%', maxHeight: '90%', borderTopLeftRadius: 32, borderTopRightRadius: 32 },
+  detailSheet: { width: '100%', height: '90%', borderTopLeftRadius: 32, borderTopRightRadius: 32 },
   modalHandleRow: { alignItems: 'center', paddingTop: 15, paddingBottom: 5 },
   modalHandle: { width: 40, height: 4, borderRadius: 2 },
   sortMenu: { width: 220, borderRadius: 20, padding: 8, elevation: 10, borderWidth: 1 },

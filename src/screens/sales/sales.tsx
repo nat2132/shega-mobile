@@ -3303,15 +3303,13 @@ const SalesDashboard = () => {
                 style={[styles.modalHandle, { backgroundColor: colors.border }]}
               />
             </View>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <SaleDetailsScreen
-                sale={selectedSale}
-                onClose={() => {
-                  setShowSaleDetails(false);
-                  loadData();
-                }}
-              />
-            </ScrollView>
+            <SaleDetailsScreen
+              sale={selectedSale}
+              onClose={() => {
+                setShowSaleDetails(false);
+                loadData();
+              }}
+            />
           </View>
         </View>
       </Modal>
@@ -3981,10 +3979,10 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   ledgerSection: {
-    paddingHorizontal: 25,
   },
   ledgerList: {
     marginTop: 10,
+    paddingHorizontal: 25,
   },
   viewAllBtn: {
     fontFamily: Fonts.bold,
@@ -4365,7 +4363,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     paddingBottom: 40,
-    maxHeight: height * 0.90,
+    height: height * 0.90,
     backgroundColor: SALES_GLASS.surfaceFill,
     borderWidth: 1,
     borderColor: SALES_GLASS.borderGlass,

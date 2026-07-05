@@ -3,7 +3,7 @@ import { SettingsProvider , useSettings } from '@/context/SettingsContext';
 import { SidebarProvider } from '@/context/SidebarContext';
 import { NavigationIntentProvider } from '@/context/NavigationIntentContext';
 import { WarehouseProvider } from '@/context/WarehouseContext';
-import { initDB, resetDatabase } from '@/database/db';
+import { initDB } from '@/database/db';
 import { playStart } from '@/services/soundService';
 import {
     Inter_400Regular,
@@ -76,7 +76,6 @@ export default function RootLayout() {
       (async () => {
         for (let i = 0; i < 3; i++) {
           try {
-            resetDatabase();
             initDB();
             setDbReady(true);
             SplashScreen.hideAsync();

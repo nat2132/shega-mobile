@@ -35,6 +35,7 @@ import {
   LayoutDashboard,
   Palette,
   Shield,
+  Sliders,
   Trash2,
   Volume2,
   Warehouse,
@@ -470,7 +471,11 @@ const SettingsScreen = () => {
 
         {/* Warehouse Section */}
         <View style={styles.ledgerSection}>
-          <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: G.muted }]} numberOfLines={1}>{t('inv.warehouses_title')}</AppText>
+          <View style={styles.sectionHead}>
+            <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: G.muted }]} numberOfLines={1}>{t('inv.warehouses_title')}</AppText>
+            <View style={{ flex: 1 }} />
+            <Warehouse size={20} color={G.muted} />
+          </View>
           <View style={[styles.ledgerGroup, { backgroundColor: G.bgCard, borderColor: G.border }]}>
             <SettingLedgerItem
               icon={Warehouse}
@@ -484,10 +489,8 @@ const SettingsScreen = () => {
         {/* Dashboard Customization */}
         <View style={styles.ledgerSection}>
           <View style={styles.sectionHead}>
-            <View>
-              <AppText variant="heading" weight="bold" style={[styles.sectionTitle, { color: G.fg }]} numberOfLines={2}>{t('settings.dashboard')}</AppText>
-              <AppText variant="body-sm" weight="medium" style={[styles.sectionSub, { color: G.muted }]} numberOfLines={2}>{t('settings.dashboard_subtitle')}</AppText>
-            </View>
+            <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: G.muted }]} numberOfLines={1}>{t('settings.dashboard')}</AppText>
+            <View style={{ flex: 1 }} />
             <LayoutDashboard size={20} color={G.muted} />
           </View>
           <View style={[styles.ledgerGroup, { backgroundColor: G.bgCard, borderColor: G.border }]}>
@@ -553,10 +556,8 @@ const SettingsScreen = () => {
         {/* The Palette — Theme Selection */}
         <View style={styles.paletteSection}>
           <View style={styles.sectionHead}>
-            <View>
-              <AppText variant="heading" weight="bold" style={[styles.sectionTitle, { color: G.fg }]} numberOfLines={2}>{t('settings.palette')}</AppText>
-              <AppText variant="body-sm" weight="medium" style={[styles.sectionSub, { color: G.muted }]} numberOfLines={2}>{t('settings.theme_subtitle')}</AppText>
-            </View>
+            <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: G.muted }]} numberOfLines={1}>{t('settings.palette')}</AppText>
+            <View style={{ flex: 1 }} />
             <Palette size={20} color={G.muted} />
           </View>
           <ScrollView
@@ -580,7 +581,11 @@ const SettingsScreen = () => {
 
         {/* Advanced System Ledger */}
         <View style={styles.ledgerSection}>
-          <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: G.muted }]} numberOfLines={1}>{t('settings.advanced')}</AppText>
+          <View style={styles.sectionHead}>
+            <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: G.muted }]} numberOfLines={1}>{t('settings.advanced')}</AppText>
+            <View style={{ flex: 1 }} />
+            <Sliders size={20} color={G.muted} />
+          </View>
           <View style={[styles.ledgerGroup, { backgroundColor: G.bgCard, borderColor: G.border }]}>
              <SettingLedgerItem 
                 icon={Database} 
@@ -913,13 +918,13 @@ const styles = StyleSheet.create({
     right: 20,
   },
   paletteSection: {
+    paddingHorizontal: 25,
     marginBottom: 30,
   },
   sectionHead: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingHorizontal: 25,
+    alignItems: 'center',
     marginBottom: 15,
   },
   sectionTitle: {
@@ -933,6 +938,7 @@ const styles = StyleSheet.create({
   },
   paletteScrollContent: {
     paddingHorizontal: 25,
+    paddingVertical: 5,
     gap: 12,
   },
   ledgerSection: {
@@ -940,7 +946,6 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   ledgerHeader: {
-
     fontFamily: Fonts.semibold,
     textTransform: 'uppercase',
     letterSpacing: 1,
