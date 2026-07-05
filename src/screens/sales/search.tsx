@@ -147,7 +147,7 @@ const SearchResultRow = React.memo(({
         bg: colors.error + '12',
         border: colors.error + '30',
         text: colors.error,
-        label: t('dash.depleted') || 'Out of Stock',
+        label: t('search.out_of_stock'),
       };
     }
     if (isLowStock) {
@@ -155,14 +155,14 @@ const SearchResultRow = React.memo(({
         bg: colors.warning + '12',
         border: colors.warning + '30',
         text: colors.warning,
-        label: `${t('common.only') || 'Only'} ${item.totalBaseQuantity} ${t('form.' + (item.baseUnit || 'pieces').toLowerCase()) || item.baseUnit} ${t('common.left') || 'left'}`,
+        label: `${item.totalBaseQuantity} ${t('form.' + (item.baseUnit || 'pieces').toLowerCase()) || item.baseUnit} ${t('search.left')}`,
       };
     }
     return {
       bg: colors.success + '12',
       border: colors.success + '30',
       text: colors.success,
-      label: `${item.totalBaseQuantity} ${t('form.' + (item.baseUnit || 'pieces').toLowerCase()) || item.baseUnit} ${t('common.available') || 'available'}`,
+      label: `${item.totalBaseQuantity} ${t('form.' + (item.baseUnit || 'pieces').toLowerCase()) || item.baseUnit} ${t('search.available')}`,
     };
   }, [isOutOfStock, isLowStock, item.totalBaseQuantity, item.baseUnit, colors, t]);
 
@@ -210,9 +210,9 @@ const SearchResultRow = React.memo(({
             </View>
 
             <View style={styles.priceArea}>
-              <AppNumber value={item.baseSellingPrice} size="body" weight="bold" prefix={"ETB "} color={SALES_GLASS.fg} style={styles.mainPrice} />
+              <AppNumber value={item.baseSellingPrice} size="body" weight="bold" prefix={t('common.etb') + ' '} color={SALES_GLASS.fg} style={styles.mainPrice} />
               <AppText variant="caption" weight="medium" shrink={false} style={[styles.unitLabel, { color: SALES_GLASS.fgSecondary }]} numberOfLines={1}>
-                per {item.baseUnit}
+                {t('search.per')} {item.baseUnit}
               </AppText>
             </View>
           </View>
@@ -245,10 +245,10 @@ const FilterBar = React.memo(({
   const SALES_GLASS = useMemo(() => getSalesGlass(colors), [colors]);
 
   const filters = useMemo(() => [
-    { id: 'all', label: t('common.all') || 'All' },
-    { id: 'in_stock', label: t('inventory.in_stock') || 'In Stock' },
-    { id: 'low_stock', label: 'Low Stock' },
-    { id: 'out_of_stock', label: t('inventory.out_of_stock') || 'Out of Stock' },
+    { id: 'all', label: t('common.all') },
+    { id: 'in_stock', label: t('search.in_stock') },
+    { id: 'low_stock', label: t('search.low_stock') },
+    { id: 'out_of_stock', label: t('search.out_of_stock') },
   ], [t]);
 
   return (
@@ -298,9 +298,9 @@ const EmptyState = React.memo(({
   const SALES_GLASS = useMemo(() => getSalesGlass(colors), [colors]);
 
   const suggestionTags = useMemo(() => [
-    { label: t('inventory.in_stock') || 'In Stock', filterId: 'in_stock', text: '' },
-    { label: t('inventory.out_of_stock') || 'Out of Stock', filterId: 'out_of_stock', text: '' },
-    { label: 'Low Stock', filterId: 'low_stock', text: '' },
+    { label: t('search.in_stock'), filterId: 'in_stock', text: '' },
+    { label: t('search.out_of_stock'), filterId: 'out_of_stock', text: '' },
+    { label: t('search.low_stock'), filterId: 'low_stock', text: '' },
     { label: 'Water', text: 'Water' },
     { label: 'Soda', text: 'Soda' },
     { label: 'Oil', text: 'Oil' },
@@ -317,13 +317,13 @@ const EmptyState = React.memo(({
           {t('sale.refine_search') || 'Inventory Search'}
         </AppText>
         <AppText variant="body-sm" weight="medium" align="center" style={{ color: SALES_GLASS.fgSecondary, marginTop: 6, paddingHorizontal: 16 }}>
-          Search products by name or category, or choose suggestions below to filter stock immediately.
+          {t('search.description')}
         </AppText>
       </View>
 
       <View style={styles.suggestionsSection}>
         <AppText variant="caption" weight="bold" transform="uppercase" style={{ color: SALES_GLASS.fgSecondary, letterSpacing: 1.2, marginBottom: 12 }}>
-          Suggested Searches
+          {t('search.suggested')}
         </AppText>
         <View style={styles.suggestionsGrid}>
           {suggestionTags.map((tag, idx) => (
@@ -362,19 +362,19 @@ const NoResultsState = React.memo(({
         <AlertCircle size={32} color={colors.error} />
       </View>
       <AppText variant="title" weight="bold" align="center" style={{ color: SALES_GLASS.fg, marginTop: 16 }}>
-        {t('sales.no_records_found') || 'No Records Found'}
+        {t('sales.no_records_found')}
       </AppText>
       <AppText variant="body-sm" weight="medium" align="center" style={{ color: SALES_GLASS.fgSecondary, marginTop: 6, paddingHorizontal: 30 }}>
-        We couldn't find any products matching "{query}". Double-check spelling or try searching for general categories.
+        {t('search.no_results_msg', { query })}
       </AppText>
-      
+
       <TouchableOpacity
         activeOpacity={0.8}
         onPress={onClear}
         style={[styles.resetBtn, { backgroundColor: colors.primary }]}
       >
         <AppText variant="body-sm" weight="bold" style={{ color: colors.background }}>
-          Clear Search
+          {t('search.clear')}
         </AppText>
       </TouchableOpacity>
     </Animated.View>
@@ -595,7 +595,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onSelectItem }) => {
           <Animated.View style={[cancelAnimStyle, { overflow: 'hidden', justifyContent: 'center' }]}>
             <TouchableOpacity onPress={handleCancel} style={styles.cancelBtn} activeOpacity={0.6}>
               <AppText variant="body" weight="bold" color={colors.primary} numberOfLines={1} style={{ width: 60 }}>
-                Cancel
+                {t('search.cancel')}
               </AppText>
             </TouchableOpacity>
           </Animated.View>

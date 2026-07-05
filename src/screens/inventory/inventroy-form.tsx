@@ -1280,7 +1280,7 @@ const loadCategories = async () => {
                   style={[styles.addBtn, { backgroundColor: G.fg, alignSelf: 'flex-end' }]}
                   onPress={async () => {
                     if (!newSupplierName.trim()) {
-                      await dialog.alert({ title: 'Error', message: 'Supplier name is required', iconType: 'danger' });
+                      await dialog.alert({ title: t('common.error'), message: t('form.supplier_name_required'), iconType: 'danger' });
                       return;
                     }
                     const id = await insertContact({

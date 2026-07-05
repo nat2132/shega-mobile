@@ -1,5 +1,5 @@
+import { fromEthiopianToDate, getEthiopianDaysInMonth, toEthiopianDate } from '@/utils/date-utils';
 import * as SQLite from 'expo-sqlite';
-import { toEthiopianDate, fromEthiopianToDate, getEthiopianDaysInMonth } from '@/utils/date-utils';
 
 let db: SQLite.SQLiteDatabase | null = null;
 
@@ -2459,17 +2459,17 @@ export const getSalesChartData = (period: 'W' | 'M' | 'Y', offset: number = 0, c
 
 const CHART_LABELS: Record<string, string[]> = {
   en_days: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
-  am_days: ['áŠ¥áˆá‹µ', 'áˆ°áŠž', 'áˆ›áŠ­áˆ°áŠž', 'áˆ¨á‰¡á‹•', 'áˆáˆ™áˆµ', 'áŠ áˆ­á‰¥', 'á‰…á‹³áˆœ'],
+  am_days: ['ሰንዠት', 'እሑድ', 'ማክሰኞ', 'ረቡዕ', 'ሙስ', 'ዓርብ', 'ቅዳሜ'],
   om_days: ['Dil', 'Wii', 'Qib', 'Roob', 'Kam', 'Jum', 'San'],
-  ti_days: ['áˆ°áŠ•á‰ á‰µ', 'áˆ°áŠ‘á‹­', 'áˆ°áˆ‰áˆµ', 'áˆ¨á‰¡á‹•', 'áˆ“áˆ™áˆµ', 'á‹“áˆ­á‰¢', 'á‰€á‹³áˆ'],
+  ti_days: ['ሰንበት', 'እሑድ', 'ሰኑ', 'ማክሰኞ', 'ረቡዕ', 'ሐሙስ', 'ዓርቢ'],
   en_months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
-  am_months: ['áŒ¥áˆ­', 'áˆˆáŠ«', 'áˆ˜áŒ‹', 'áˆšá‹«', 'áŒáŠ•', 'áˆ°áŠ', 'áˆáˆ', 'áŠáˆ', 'áŒ¥á‰…', 'áˆ…á‹³', 'á‰³áˆ…', 'áŠ áˆ­á‰¥'],
+  am_months: ['ጃንዩ', 'ፌብሩ', 'ማርች', 'ኤፕሪል', 'ሜይ', 'ጁን', 'ጁላይ', 'ኦገስ', 'ሴፕቴምበር', 'ኦክቶበር', 'ኖቬምበር', 'ዲሴምበር'],
   om_months: ['Ama', 'Gur', 'Bit', 'Ebl', 'Caa', 'Wax', 'Ado', 'Hag', 'Ful', 'Onk', 'Sad', 'Mud'],
-  ti_months: ['áŒ¥áˆª', 'áˆˆáŠ«', 'áˆ˜áŒ‹', 'áˆšá‹«', 'áŒáŠ•', 'áˆ°áŠ', 'áˆ“áˆ', 'áŠáˆ“', 'áŒ¥á‰…', 'áˆ•á‹³', 'á‰³áˆ•', 'áŠ áˆ­á‰¥'],
+  ti_months: ['ጃንዩ', 'ፌብሩ', 'ማርች', 'ኤፕሪል', 'ሜይ', 'ጁን', 'ጁላይ', 'ኦገስ', 'ሴፕቴምበር', 'ኦክቶበር', 'ኖቬምበር', 'ዲሴምበር'],
   en_hours: ['3 AM', '6 AM', '9 AM', '12 PM', '3 PM'],
-  am_hours: ['3:00 á‰€áŠ•', '6:00 á‰€áŠ•', '9:00 á‰€áŠ•', '12:00 áˆ›á‰³', '3:00 áˆ›á‰³'],
+  am_hours: ['3:00 ጽ', '6:00 ጽ', '9:00 ጽ', '12:00 ረፋድ', '3:00 ረፋድ'],
   om_hours: ['3 AA', '6 AA', '9 AA', '12 WB', '3 WB'],
-  ti_hours: ['3:00 áŠ•áŒ‰áˆ†', '6:00 áŠ•áŒ‰áˆ†', '9:00 áŠ•áŒ‰áˆ†', '12:00 áˆáˆ¸á‰µ', '3:00 áˆáˆ¸á‰µ'],
+  ti_hours: ['3:00 ጽ', '6:00 ጽ', '9:00 ጽ', '12:00 ረፋድ', '3:00 ረፋድ'],
 };
 
 export const getExpenseChartData = (period: string, language: string = 'en', targetDate?: string, timeSystem: 'device' | 'ethiopian' = 'device') => {
@@ -2544,7 +2544,7 @@ export const getExpenseChartData = (period: string, language: string = 'en', tar
         GROUP BY week_num
       `, [startStr, endStr]);
 
-      const weekPrefix: Record<string, string> = { en: 'Week', am: 'áˆ³áˆáŠ•á‰µ', om: 'Torban', ti: 'áˆ°áˆ™áŠ•' };
+      const weekPrefix: Record<string, string> = { en: 'Week', am: 'ሳምንት', om: 'Torban', ti: 'ሳምንት' };
       const prefix = weekPrefix[language] || 'Week';
       const numWeeks = Math.ceil(monthEnd.getDate() / 7);
       const weeks: { label: string, value: number }[] = [];

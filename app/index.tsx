@@ -1,28 +1,10 @@
-import { useEffect, useState } from 'react';
+import React from 'react';
 import { router } from 'expo-router';
-import { View, ActivityIndicator } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
-import OnboardingScreen from '../src/screens/onboarding/first-onboarding';
+import StartupSplashScreen from '../src/screens/onboarding/startup-splash';
 
 export default function Index() {
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    // Just a small delay to simulate system check/loading if needed
-    // but we don't redirect here anymore as per request.
-    const timer = setTimeout(() => setIsLoading(false), 500);
-    return () => clearTimeout(timer);
-  }, []);
-
-  if (isLoading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' }}>
-        <ActivityIndicator size="large" color="#000000" />
-      </View>
-    );
-  }
-
-  const onComplete = async () => {
+  const onStartupFinish = async () => {
     try {
       const pin = await SecureStore.getItemAsync('user_pin');
       const setupComplete = await SecureStore.getItemAsync('user_setupComplete');
@@ -34,14 +16,14 @@ export default function Index() {
         // If no PIN but setup is done, go to dashboard
         router.replace('/(tabs)/dashboard');
       } else {
-        // New user or incomplete setup - show choices
-        router.replace('/welcome-choice');
+        // New user or incomplete setup - show first onboarding experience
+        router.replace('/first-onboarding');
       }
     } catch (error) {
       console.error('[AuthCheck] Initialization failed:', error);
-      router.replace('/welcome-choice');
+      router.replace('/first-onboarding');
     }
   };
 
-  return <OnboardingScreen onNext={onComplete} />;
+  return <StartupSplashScreen onNext={onStartupFinish} />;
 }
