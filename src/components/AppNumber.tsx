@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { StyleProp, StyleSheet, TextStyle } from 'react-native';
+import { Platform, StyleProp, StyleSheet, TextStyle } from 'react-native';
 import { useSettings } from '@/context/SettingsContext';
 import { formatNumber, FormatNumberOptions } from '@/utils/formatNumber';
 import { AppText, AppTextProps } from './AppText';
@@ -107,6 +107,11 @@ export const AppNumber: React.FC<AppNumberProps> = React.memo(
     const variant = SIZE_TO_VARIANT[size];
     const weight = weightProp ?? SIZE_TO_WEIGHT[size];
 
+    const numberFontFamily: string | null | undefined = Platform.select({
+      ios: null,
+      default: undefined,
+    });
+
     const numberStyle: StyleProp<TextStyle> = useMemo(
       () => [
         tabular && { fontVariant: ['tabular-nums' as any] },
@@ -123,6 +128,7 @@ export const AppNumber: React.FC<AppNumberProps> = React.memo(
       <AppText
         variant={variant}
         weight={weight}
+        fontFamily={numberFontFamily}
         color={autoColor}
         numberOfLines={numberOfLines}
         ignoreLanguageScale

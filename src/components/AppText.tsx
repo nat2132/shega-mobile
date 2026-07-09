@@ -99,6 +99,13 @@ export interface AppTextProps extends Omit<RNTextProps, 'style' | 'numberOfLines
    * width (e.g. a fixed-size icon column).
    */
   shrink?: boolean;
+  /**
+   * Override the resolved font family. Use cases:
+   * - `string` → use that specific font family
+   * - `null` → use the system default font (SF Pro on iOS; no override on Android)
+   * - `undefined` (default) → use the variant's resolved font family (Inter)
+   */
+  fontFamily?: string | null;
 }
 
 export const AppText: React.FC<AppTextProps> = React.memo(({
@@ -114,6 +121,7 @@ export const AppText: React.FC<AppTextProps> = React.memo(({
   transform,
   align,
   shrink = true,
+  fontFamily: fontFamilyProp,
   children,
   allowFontScaling,
   ...rest
@@ -129,9 +137,14 @@ export const AppText: React.FC<AppTextProps> = React.memo(({
     [variant, weight, language, ignoreLanguageScale],
   );
 
+  const resolvedFontFamily = fontFamilyProp === null
+    ? undefined
+    : (fontFamilyProp ?? variantStyle.fontFamily);
+
   const computedStyle: TextStyle = {
     ...variantStyle,
     color: color ?? colors.text,
+    fontFamily: resolvedFontFamily,
     textAlign: align,
     textTransform: transform,
     flexShrink: shrink ? 1 : undefined,
