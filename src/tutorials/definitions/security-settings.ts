@@ -12,14 +12,16 @@ export const securitySettingsTutorial: TutorialDefinition = {
       title: 'Security',
       description: 'Manage your account security settings — PIN, biometric authentication, and recovery options.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'sec-pin',
       targetId: 'sec-pin',
       title: 'Change PIN',
       description: 'Update your 6-digit security PIN. This is required to access the app and authorize transactions.',
       tooltipPosition: 'top',
-    },
+      fullContainer: true,
+},
     {
       id: 'sec-biometric',
       targetId: 'sec-biometric',

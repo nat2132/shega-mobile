@@ -5,7 +5,7 @@ import { useSettings } from '@/context/SettingsContext';
 import { useDialog } from '@/context/DialogContext';
 import { deleteAdjustment, getFilteredAdjustments, updateAdjustment } from '@/database/db';
 import { formatDate, formatTime } from '@/utils/date-utils';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { playNice} from '@/services/soundService';
 import {

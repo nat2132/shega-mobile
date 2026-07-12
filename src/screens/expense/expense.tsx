@@ -15,7 +15,7 @@ import {
 } from '@/database/db';
 import { notifyRecurringMarkedPaid } from '@/services/notificationService';
 import { useNotifications } from '@/hooks/useNotifications';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import {

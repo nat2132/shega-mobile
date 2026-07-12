@@ -27,8 +27,9 @@ export const TutorialScrollView: React.FC<TutorialScrollViewProps> = ({ children
 
   useEffect(() => {
     ctx.registerScrollViewRef(ref.current);
+    ctx.updateScrollPosition(scrollY.current, viewportHeight.current);
     return () => ctx.registerScrollViewRef(null);
-  }, [ctx.registerScrollViewRef]);
+  }, [ctx.registerScrollViewRef, ctx.updateScrollPosition]);
 
   const scrollTo = useCallback(({ y, animated = true }: { y: number; animated?: boolean }) => {
     ref.current?.scrollTo({ y, animated });
@@ -36,13 +37,15 @@ export const TutorialScrollView: React.FC<TutorialScrollViewProps> = ({ children
 
   const handleScroll = useCallback((event: any) => {
     scrollY.current = event.nativeEvent.contentOffset.y;
+    ctx.updateScrollPosition(scrollY.current, viewportHeight.current);
     onScroll?.(event);
-  }, [onScroll]);
+  }, [onScroll, ctx.updateScrollPosition]);
 
   const handleLayout = useCallback((event: any) => {
     viewportHeight.current = event.nativeEvent.layout.height;
+    ctx.updateScrollPosition(scrollY.current, viewportHeight.current);
     onLayout?.(event);
-  }, [onLayout]);
+  }, [onLayout, ctx.updateScrollPosition]);
 
   return (
     <ScrollViewRefContext.Provider value={{ ref, scrollTo, scrollY, viewportHeight }}>

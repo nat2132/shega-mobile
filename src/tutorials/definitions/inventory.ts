@@ -12,9 +12,11 @@ export const inventoryTutorial: TutorialDefinition = {
       title: 'Inventory Vault',
       description: 'Your complete inventory management system. Track stock levels, monitor valuations, and manage every item in your store.',
       tooltipPosition: 'bottom',
+
       actionType: 'none',
-    },
-    {
+      fullContainer: true,
+},
+      {
       id: 'inv-add',
       targetId: 'inv-add-btn',
       title: 'Add New Item',

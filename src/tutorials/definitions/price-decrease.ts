@@ -12,14 +12,16 @@ export const priceDecreaseTutorial: TutorialDefinition = {
       title: 'Price Decrease',
       description: 'Follow these steps to decrease the selling price of an inventory item. Use this for promotions, clearance, or competitive pricing.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'pd-search',
       targetId: 'pd-search',
       title: 'Find Item',
       description: 'Search for the item whose price you want to decrease. Type the item name to locate it in your inventory.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'pd-item',
       targetId: 'pd-item-select',

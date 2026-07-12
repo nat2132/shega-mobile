@@ -12,13 +12,15 @@ export const expenseLossTutorial: TutorialDefinition = {
       title: 'Loss Tracking',
       description: 'This screen shows expenses categorized as losses — damaged goods, theft, wastage, or other financial losses.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'exl-list',
       targetId: 'exl-list',
       title: 'Loss Entries',
       description: 'Each loss entry shows the amount, type, date, and description. Tap for more details about the incident.',
       tooltipPosition: 'top',
-    },
+      fullContainer: true,
+},
   ],
 };

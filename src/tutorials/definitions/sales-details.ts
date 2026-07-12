@@ -12,14 +12,16 @@ export const salesDetailsTutorial: TutorialDefinition = {
       title: 'Transaction Details',
       description: 'This screen shows the full details of a sale transaction. Review items sold, pricing, payment, and customer information.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'sd-summary',
       targetId: 'sd-summary',
       title: 'Sale Summary',
       description: 'View the total amount, payment status, and transaction date at a glance. The header shows whether the sale is paid, pending, or on credit.',
       tooltipPosition: 'top',
-    },
+      fullContainer: true,
+},
     {
       id: 'sd-items',
       targetId: 'sd-items',

@@ -12,14 +12,16 @@ export const expenseListTutorial: TutorialDefinition = {
       title: 'Expense Records',
       description: 'Browse through all your recorded expenses. Each entry shows the amount, category, date, and description.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'el-filter',
       targetId: 'el-filter',
       title: 'Filter Expenses',
       description: 'Filter by date range, category, or budget. Search by description or amount to find specific entries.',
       tooltipPosition: 'top',
-    },
+      fullContainer: true,
+},
     {
       id: 'el-list',
       targetId: 'el-list',

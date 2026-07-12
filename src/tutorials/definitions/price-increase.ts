@@ -12,14 +12,16 @@ export const priceIncreaseTutorial: TutorialDefinition = {
       title: 'Price Increase',
       description: 'Follow these steps to increase the selling price of an inventory item. This helps you adjust to market changes or cost increases.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'pi-search',
       targetId: 'pi-search',
       title: 'Find Item',
       description: 'Search for the item whose price you want to increase. Type the item name or scan to locate it in your inventory.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'pi-item',
       targetId: 'pi-item-select',

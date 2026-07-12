@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   View,
   StyleSheet,
@@ -30,7 +30,7 @@ import {
   FileText,
 } from "lucide-react-native";
 import { getOrdersGlass } from './glass-orders';
-import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
+import { useTutorial, useTutorialExample, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
 import { createOrderTutorial } from '@/tutorials/definitions';
 
 const ORD_GLASS = getOrdersGlass(LightTheme);
@@ -49,6 +49,11 @@ const CreateOrderScreen = () => {
   const { colors, t } = useSettings();
   const ORD_GLASS = useMemo(() => getOrdersGlass(colors), [colors]);
   const tutorial = useTutorial({ tutorial: createOrderTutorial });
+  useEffect(() => {
+    if (tutorial.isActive && tutorial.currentStep?.targetId === 'co-customer') {
+      setCustomerPhone('0911-234-567');
+    }
+  }, [tutorial.isActive, tutorial.currentStep?.targetId]);
   const router = useRouter();
   const { showToast } = useToast();
   const dialog = useDialog();
@@ -57,6 +62,7 @@ const CreateOrderScreen = () => {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [customerName, setCustomerName] = useState("");
+  useTutorialExample('co-customer', setCustomerName);
   const [customerPhone, setCustomerPhone] = useState("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);

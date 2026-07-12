@@ -12,13 +12,15 @@ export const expenseFormTutorial: TutorialDefinition = {
       title: 'Recording an Expense',
       description: 'Follow these steps to log a new expense. Fill in the amount, category, date, and optionally set up recurring payments.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'ef-amount',
       targetId: 'ef-amount',
       title: 'Enter Amount',
       description: 'Type the expense amount. This is the total amount paid or owed for this expense.',
       tooltipPosition: 'bottom',
+      exampleValue: '15,000',
     },
     {
       id: 'ef-category',
@@ -26,7 +28,8 @@ export const expenseFormTutorial: TutorialDefinition = {
       title: 'Select Category',
       description: 'Choose a category that best describes this expense. Categories help you track spending patterns and stay organized.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'ef-date',
       targetId: 'ef-date',
@@ -40,6 +43,7 @@ export const expenseFormTutorial: TutorialDefinition = {
       title: 'Add Description',
       description: 'Add a brief description or note about this expense. Include details like vendor name, purpose, or receipt reference.',
       tooltipPosition: 'bottom',
+      exampleValue: 'Office supplies — printer toner & paper',
     },
     {
       id: 'ef-recurring',

@@ -1,6 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, TouchableOpacity, StyleSheet, Dimensions, Platform, LayoutChangeEvent } from 'react-native';
-import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+type BottomTabBarProps = {
+  state: { index: number; routes: any[] };
+  descriptors: Record<string, any>;
+  navigation: any;
+};
 import Animated, { SharedValue, useAnimatedStyle, withSpring, useSharedValue } from 'react-native-reanimated';
 import { Home, Store, Warehouse, Settings as SettingsIcon } from 'lucide-react-native';
 import { useSettings } from '@/context/SettingsContext';

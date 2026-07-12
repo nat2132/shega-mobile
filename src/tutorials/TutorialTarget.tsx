@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef } from 'react';
-import { findNodeHandle, Platform, UIManager, View, type ViewProps } from 'react-native';
+import { Platform, View, type ViewProps } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -40,8 +40,8 @@ export const TutorialTarget: React.FC<TutorialTargetProps> = ({ id, children, st
     let timeoutId: ReturnType<typeof setTimeout>;
 
     const tryMeasure = () => {
-      const target = findNodeHandle(ref.current);
-      const scrollView = findNodeHandle(scrollViewCtx.ref.current);
+      const target = ref.current;
+      const scrollView = scrollViewCtx.ref.current;
 
       if (!target || !scrollView) {
         if (retries < 10) {
@@ -51,44 +51,32 @@ export const TutorialTarget: React.FC<TutorialTargetProps> = ({ id, children, st
         return;
       }
 
-      UIManager.measureLayout(
-        target,
-        scrollView,
-        () => {
-          if (retries < 10) {
-            retries++;
-            timeoutId = setTimeout(tryMeasure, 100);
-          }
-        },
-        (x, y, width, height) => {
-          if (y === 0 && height === 0 && retries < 10) {
-            retries++;
-            timeoutId = setTimeout(tryMeasure, 100);
-            return;
-          }
+      target.measureInWindow((tx, ty, tw, th) => {
+        if (tw === 0 && th === 0 && retries < 10) {
+          retries++;
+          timeoutId = setTimeout(tryMeasure, 100);
+          return;
+        }
 
+        (scrollView as unknown as View).measureInWindow((_sx: number, sy: number, _sw: number, sh: number) => {
+          const relY = ty - sy;
           const currentScrollY = scrollViewCtx.scrollY.current;
-          const viewportH = scrollViewCtx.viewportHeight.current || 500;
+          const viewportH = scrollViewCtx.viewportHeight.current || sh;
+          const margin = 40;
 
-          const targetTop = y;
-          const targetBottom = y + height;
-          
-          const viewportTop = currentScrollY + 40;
-          const viewportBottom = currentScrollY + viewportH - 40;
-
-          const isVisible = targetTop >= viewportTop && targetBottom <= viewportBottom;
+          const isVisible = relY >= margin && relY + th <= viewportH - margin;
 
           if (!isVisible) {
-            const idealScrollY = Math.max(0, y - (viewportH / 2) + (height / 2));
+            const idealScrollY = Math.max(0, currentScrollY + relY - viewportH / 2 + th / 2);
             scrollViewCtx.scrollTo({ y: idealScrollY, animated: true });
           }
-        },
-      );
+        });
+      });
     };
 
     timeoutId = setTimeout(tryMeasure, 100);
     return () => clearTimeout(timeoutId);
-  }, [isHighlighted, scrollViewCtx]);
+  }, [isHighlighted]);
 
   useEffect(() => {
     if (isHighlighted) {

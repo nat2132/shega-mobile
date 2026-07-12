@@ -12,14 +12,16 @@ export const debtManagementTutorial: TutorialDefinition = {
       title: 'Debt Management',
       description: 'Track all credit transactions — what customers owe you and what you owe suppliers. Manage payments and due dates.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'dm-summary',
       targetId: 'dm-summary',
       title: 'Debt Overview',
       description: 'See total receivables (customers owe you) and total payables (you owe suppliers) at a glance.',
       tooltipPosition: 'top',
-    },
+      fullContainer: true,
+},
     {
       id: 'dm-actions',
       targetId: 'dm-actions',

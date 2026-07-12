@@ -12,13 +12,15 @@ export const remindersTutorial: TutorialDefinition = {
       title: 'Reminder History',
       description: 'View all scheduled and past reminders for payments, stock checks, and business tasks.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'rm-list',
       targetId: 'rm-list',
       title: 'Reminder List',
       description: 'Each reminder shows the title, due date, priority, and status. Completed reminders are marked with a check.',
       tooltipPosition: 'top',
-    },
+      fullContainer: true,
+},
   ],
 };

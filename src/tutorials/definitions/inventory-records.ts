@@ -12,14 +12,16 @@ export const inventoryRecordsTutorial: TutorialDefinition = {
       title: 'Inventory Records',
       description: 'View the complete movement history for all inventory items — stock additions, sales, adjustments, and transfers.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'ir-filter',
       targetId: 'ir-filter',
       title: 'Filter Records',
       description: 'Filter by date range, transaction type (purchase, sale, adjustment), or specific item.',
       tooltipPosition: 'top',
-    },
+      fullContainer: true,
+},
     {
       id: 'ir-list',
       targetId: 'ir-list',

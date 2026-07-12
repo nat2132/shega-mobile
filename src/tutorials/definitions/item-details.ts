@@ -12,14 +12,16 @@ export const itemDetailsTutorial: TutorialDefinition = {
       title: 'Item Overview',
       description: 'This screen shows everything about an inventory item — stock levels, pricing, supplier info, and movement history.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'id-stats',
       targetId: 'id-stats',
       title: 'Stock & Pricing',
       description: 'View current stock quantity, buying price, selling price, and calculated profit margin. Low stock items are highlighted.',
       tooltipPosition: 'top',
-    },
+      fullContainer: true,
+},
     {
       id: 'id-details',
       targetId: 'id-details',

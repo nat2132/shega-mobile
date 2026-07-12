@@ -12,14 +12,16 @@ export const adjustmentHistoryTutorial: TutorialDefinition = {
       title: 'Adjustment History',
       description: 'View the complete history of all price changes, stock adjustments, and damaged item records.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'ah-filter',
       targetId: 'ah-filter',
       title: 'Filter Adjustments',
       description: 'Filter by adjustment type (price increase, decrease, damaged, stock correction) or by date range.',
       tooltipPosition: 'top',
-    },
+      fullContainer: true,
+},
     {
       id: 'ah-list',
       targetId: 'ah-list',

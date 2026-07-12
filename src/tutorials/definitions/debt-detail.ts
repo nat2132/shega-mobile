@@ -12,14 +12,16 @@ export const debtDetailTutorial: TutorialDefinition = {
       title: 'Debt Overview',
       description: 'This screen shows the complete details of a debt or credit account — what was borrowed, payments made, and remaining balance.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'dd-summary',
       targetId: 'dd-summary',
       title: 'Balance Summary',
       description: 'View total debt, amount paid, and outstanding balance. The progress bar shows how much has been repaid.',
       tooltipPosition: 'top',
-    },
+      fullContainer: true,
+},
     {
       id: 'dd-info',
       targetId: 'dd-info',

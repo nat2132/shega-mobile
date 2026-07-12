@@ -12,9 +12,11 @@ export const expenseTutorial: TutorialDefinition = {
       title: 'Expense Management',
       description: 'Track every outflow from your business. Monitor spending patterns, manage bills, and stay on top of your financial health.',
       tooltipPosition: 'bottom',
+
       actionType: 'none',
-    },
-    {
+      fullContainer: true,
+},
+      {
       id: 'exp-add',
       targetId: 'exp-add-btn',
       title: 'Record an Expense',

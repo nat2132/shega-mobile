@@ -14,7 +14,7 @@ import {
   toEthiopianDate,
   formatTime,
 } from "@/utils/date-utils";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect } from "expo-router";
 import { useToast } from "@/context/ToastContext";
 import {
   AlertCircle,

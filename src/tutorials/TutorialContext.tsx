@@ -80,6 +80,8 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const targetsRef = useRef<Map<string, RegisteredTarget>>(new Map());
   const scrollViewRef = useRef<ScrollView | null>(null);
   const scrollRetryRef = useRef(false);
+  const scrollOffsetRef = useRef(0);
+  const scrollViewHeightRef = useRef(0);
   const tutorialsRef = useRef<Map<string, RegisteredTutorial>>(
     new Map(
       Object.values(definitions).map((def: any) => [
@@ -259,49 +261,39 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     scrollViewRef.current = ref;
   }, []);
 
+  const updateScrollPosition = useCallback((offset: number, viewportHeight: number) => {
+    scrollOffsetRef.current = offset;
+    scrollViewHeightRef.current = viewportHeight;
+  }, []);
+
   const scrollToTarget = useCallback((targetId: string) => {
     const sv = scrollViewRef.current;
     const target = targetsRef.current.get(targetId);
     if (!sv || !target?.ref) return;
 
-    const targetHandle = findNodeHandle(target.ref);
-    const svHandle = findNodeHandle(sv);
-    if (!targetHandle || !svHandle) return;
+    const targetRef = target.ref as unknown as View;
+    const svRef = sv as unknown as View;
+    const currentOffset = scrollOffsetRef.current;
+    const svHeight = scrollViewHeightRef.current || 500;
 
-    if (scrollRetryRef.current) return;
-    scrollRetryRef.current = true;
+    targetRef.measureInWindow((tx, ty, tw, th) => {
+      svRef.measureInWindow((_sx, sy) => {
+        const relY = ty - sy;
+        const margin = 60;
 
-    let retries = 0;
-    const MAX_RETRIES = 10;
+        let targetScrollY: number | null = null;
 
-    const measure = () => {
-      UIManager.measureLayout(
-        targetHandle,
-        svHandle,
-        () => {
-          if (retries < MAX_RETRIES) {
-            retries++;
-            setTimeout(measure, 100);
-          } else {
-            scrollRetryRef.current = false;
-          }
-        },
-        (x, y, width, height) => {
-          scrollRetryRef.current = false;
-          if (width === 0 && height === 0 && retries < MAX_RETRIES) {
-            retries++;
-            setTimeout(measure, 100);
-            return;
-          }
-          const { height: SCREEN_H } = Dimensions.get('window');
-          const targetCenter = y + height / 2;
-          const scrollToY = Math.max(0, targetCenter - SCREEN_H / 2 + 80);
-          sv.scrollTo({ y: scrollToY, animated: true });
-        },
-      );
-    };
+        if (relY + th > svHeight - margin) {
+          targetScrollY = currentOffset + (relY + th - svHeight + margin);
+        } else if (relY < margin) {
+          targetScrollY = Math.max(0, currentOffset + relY - margin);
+        }
 
-    measure();
+        if (targetScrollY !== null) {
+          sv.scrollTo({ y: targetScrollY, animated: true });
+        }
+      });
+    });
   }, []);
 
   const value = useMemo<TutorialContextType>(
@@ -336,6 +328,7 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       getTutorialStepsCount,
       registerScrollViewRef,
       scrollToTarget,
+      updateScrollPosition,
       pauseTutorial,
       resumeTutorial,
     }),
@@ -368,6 +361,7 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       getTutorialStepsCount,
       registerScrollViewRef,
       scrollToTarget,
+      updateScrollPosition,
       pauseTutorial,
       resumeTutorial,
     ]

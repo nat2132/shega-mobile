@@ -57,7 +57,6 @@ function AppShell() {
           <Stack.Screen name="sales-onboarding" options={{ animation: 'fade' }} />
           <Stack.Screen name="analytics-onboarding" options={{ animation: 'fade' }} />
           <Stack.Screen name="user-setup" options={{ animation: 'fade' }} />
-          <Stack.Screen name="contacts" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="subscription/welcome" options={{ animation: 'fade' }} />
           <Stack.Screen name="subscription/plans" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="subscription/upgrade" options={{ animation: 'slide_from_right' }} />

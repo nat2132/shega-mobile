@@ -12,14 +12,16 @@ export const contactDetailsTutorial: TutorialDefinition = {
       title: 'Contact Profile',
       description: 'This screen shows all information about a contact — personal details, transaction history, and outstanding balances.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'cd-info',
       targetId: 'cd-info',
       title: 'Contact Information',
       description: 'View name, phone numbers, account number, category, and notes about this contact. Tap to call or message.',
       tooltipPosition: 'top',
-    },
+      fullContainer: true,
+},
     {
       id: 'cd-balance',
       targetId: 'cd-balance',

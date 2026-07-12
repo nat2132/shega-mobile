@@ -12,14 +12,16 @@ export const salesRecordsTutorial: TutorialDefinition = {
       title: 'Sales Records',
       description: 'This screen lists all your sales transactions. Browse, search, and filter through your complete sales history.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'sr-summary',
       targetId: 'sr-summary',
       title: 'Period Summary',
       description: 'See total sales, transaction count, and average per sale for the selected period at a glance.',
       tooltipPosition: 'top',
-    },
+      fullContainer: true,
+},
     {
       id: 'sr-filter',
       targetId: 'sr-filter',

@@ -16,6 +16,8 @@ export interface TutorialStep {
   actionType?: 'tap' | 'input' | 'swipe' | 'scroll' | 'none';
   waitForAction?: boolean;
   spotlightPadding?: number;
+  exampleValue?: string;
+  fullContainer?: boolean;
 }
 
 export interface TutorialDefinition {
@@ -69,4 +71,5 @@ export interface TutorialContextType {
   getTutorialStepsCount: (tutorialId: string) => number;
   registerScrollViewRef: (ref: ScrollView | null) => void;
   scrollToTarget: (targetId: string) => void;
+  updateScrollPosition: (offset: number, viewportHeight: number) => void;
 }

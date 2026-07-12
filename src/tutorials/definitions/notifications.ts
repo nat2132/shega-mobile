@@ -12,14 +12,16 @@ export const notificationsTutorial: TutorialDefinition = {
       title: 'Notifications',
       description: 'View all your business notifications — low stock alerts, payment reminders, expense warnings, and more.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'nt-list',
       targetId: 'nt-list',
       title: 'Notification Feed',
       description: 'Each notification shows the type, message, and time. Unread notifications are highlighted. Tap to view details.',
       tooltipPosition: 'top',
-    },
+      fullContainer: true,
+},
     {
       id: 'nt-actions',
       targetId: 'nt-actions',

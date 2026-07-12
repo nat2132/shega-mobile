@@ -12,14 +12,16 @@ export const collectPaymentsTutorial: TutorialDefinition = {
       title: 'Collect Payment',
       description: 'Use this screen to receive payments from customers for credit sales or orders. Follow the steps to record a payment.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'cp-customer',
       targetId: 'cp-customer-search',
       title: 'Select Customer',
       description: 'Search for the customer making the payment. Select them to see their outstanding balance and due items.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'cp-items',
       targetId: 'cp-items',

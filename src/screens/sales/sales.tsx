@@ -1307,6 +1307,7 @@ const SalesDashboard = () => {
                 </Animated.View>
               )}
 
+              <TutorialTarget id="sales-add-btn">
               <TouchableOpacity
                 style={[
                   styles.dockMainBtn,
@@ -1322,6 +1323,7 @@ const SalesDashboard = () => {
                   <Plus size={24} color={SALES_GLASS.bg} />
                 )}
               </TouchableOpacity>
+              </TutorialTarget>
 
               {isBarExpanded && (
                 <Animated.View
@@ -1347,7 +1349,6 @@ const SalesDashboard = () => {
                   entering={FadeIn.delay(120)}
                   exiting={FadeOut.duration(100)}
                 >
-                  <TutorialTarget id="sales-add-btn">
                   <TouchableOpacity
                     style={styles.dockBtn}
                     onPress={() => {
@@ -1360,7 +1361,6 @@ const SalesDashboard = () => {
                   >
                     <Plus size={22} color={SALES_GLASS.fgSecondary} />
                   </TouchableOpacity>
-                  </TutorialTarget>
                 </Animated.View>
               )}
             </View>

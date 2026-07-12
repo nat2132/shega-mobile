@@ -12,14 +12,16 @@ export const supportTutorial: TutorialDefinition = {
       title: 'Help & Support',
       description: 'Access app information, contact support, and view frequently asked questions.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'su-info',
       targetId: 'su-info',
       title: 'App Information',
       description: 'View the app version, build number, and system status. Check for updates here.',
       tooltipPosition: 'top',
-    },
+      fullContainer: true,
+},
     {
       id: 'su-contact',
       targetId: 'su-contact',

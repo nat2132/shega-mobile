@@ -12,9 +12,11 @@ export const dashboardTutorial: TutorialDefinition = {
       title: 'Welcome to Your Dashboard',
       description: 'This is your command center. View today\'s revenue, profit, expenses, and sales count at a glance. The dashboard gives you a real-time snapshot of your business health.',
       tooltipPosition: 'bottom',
+
       actionType: 'none',
-    },
-    {
+      fullContainer: true,
+},
+      {
       id: 'dash-quick-stats',
       targetId: 'dash-stats',
       title: 'Quick Status Cards',

@@ -13,9 +13,11 @@ export const budgetTutorial: TutorialDefinition = {
       description: 'Create and manage budgets for your business. Track planned vs actual spending across categories, departments, or projects.',
       tooltipPosition: 'bottom',
       actionType: 'none',
+
       spotlightPadding: 8,
-    },
-    {
+      fullContainer: true,
+},
+      {
       id: 'bud-create',
       targetId: 'bud-create-btn',
       title: 'Create a Budget',

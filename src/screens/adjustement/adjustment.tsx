@@ -4,7 +4,7 @@ import { useSidebar } from '@/context/SidebarContext';
 import { formatTime } from '@/utils/date-utils';
 import { getAdjustmentDashboardMetrics, getRecentAdjustments } from '@/database/db';
 import { useNotifications } from '@/hooks/useNotifications';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import {

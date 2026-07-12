@@ -12,14 +12,16 @@ export const notificationSettingsTutorial: TutorialDefinition = {
       title: 'Notification Preferences',
       description: 'Choose which business notifications you receive. Control alerts for stock, payments, expenses, and more.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'ns-stock',
       targetId: 'ns-stock',
       title: 'Stock Alerts',
       description: 'Get notified when inventory items reach low stock levels. Set your preferred threshold for each item.',
       tooltipPosition: 'top',
-    },
+      fullContainer: true,
+},
     {
       id: 'ns-payment',
       targetId: 'ns-payment',

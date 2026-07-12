@@ -12,13 +12,15 @@ export const lowStockListTutorial: TutorialDefinition = {
       title: 'Low Stock Alerts',
       description: 'View all inventory items that are running low and need to be restocked soon.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'lsl-list',
       targetId: 'lsl-list',
       title: 'Low Stock Items',
       description: 'Each item shows current stock level, minimum threshold, and supplier information for quick reordering.',
       tooltipPosition: 'top',
-    },
+      fullContainer: true,
+},
   ],
 };

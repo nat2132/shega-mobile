@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
   View,
   StyleSheet,
@@ -40,7 +40,7 @@ import { DraftSection } from '@/components/DraftSection';
 import { Draft } from '@/services/draftService';
 import { useFormDrafts } from '@/hooks/useFormDrafts';
 import { getSalesGlass } from './glass-sales';
-import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
+import { useTutorial, useTutorialExample, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
 import { saleFormTutorial } from '@/tutorials/definitions';
 const SALES_GLASS = getSalesGlass(LightTheme);
 interface SaleFormProps {
@@ -58,6 +58,21 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
   const SALES_GLASS = useMemo(() => getSalesGlass(colors), [colors]);
   const tutorial = useTutorial({ tutorial: saleFormTutorial });
   const dialog = useDialog();
+
+  useEffect(() => {
+    if (!tutorial.isActive) return;
+    const tid = tutorial.currentStep?.targetId;
+    if (tid === 'sf-customer-info') {
+      setCustomerName('Tigist Desta');
+      setCustomerPhone('0911-234-567');
+      setDueDays('30');
+    } else if (tid === 'sf-pricing') {
+      setGlobalDiscount('5');
+      setTaxType('VAT');
+      setTaxRate('15');
+    }
+  }, [tutorial.isActive, tutorial.currentStep?.targetId]);
+
   const [paymentMethod, setPaymentMethod] = useState<"Cash" | "Transfer" | "">(
     "Cash",
   );

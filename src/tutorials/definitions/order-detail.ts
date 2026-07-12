@@ -12,14 +12,16 @@ export const orderDetailTutorial: TutorialDefinition = {
       title: 'Purchase Order',
       description: 'This screen shows the complete details of a purchase order — items ordered, supplier info, and order status.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'od-summary',
       targetId: 'od-summary',
       title: 'Order Summary',
       description: 'View the order status, total items, and overall cost. The status indicator shows if the order is pending, received, or cancelled.',
       tooltipPosition: 'top',
-    },
+      fullContainer: true,
+},
     {
       id: 'od-items',
       targetId: 'od-items',

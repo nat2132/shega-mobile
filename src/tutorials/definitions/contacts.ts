@@ -12,9 +12,11 @@ export const contactsTutorial: TutorialDefinition = {
       title: 'Business Contacts',
       description: 'Store and manage all your business contacts — customers, suppliers, and partners. Quick access to call, message, and track interactions.',
       tooltipPosition: 'bottom',
+
       actionType: 'none',
-    },
-    {
+      fullContainer: true,
+},
+      {
       id: 'con-add',
       targetId: 'con-add-btn',
       title: 'Add a Contact',
@@ -37,6 +39,7 @@ export const contactsTutorial: TutorialDefinition = {
       description: 'Find any contact instantly by typing their name or phone number.',
       tooltipPosition: 'bottom',
       actionType: 'none',
+      exampleValue: 'Betty',
     },
   ],
 };

@@ -3,7 +3,7 @@ import { Fonts , BorderRadius, Spacing } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
 import { getActivityFeed, getAdjustmentById, getExpenseById, getSaleWithItemsById } from '@/database/db';
 import { formatDate, formatEthiopianTime, formatTime } from '@/utils/date-utils';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import {
     AlertTriangle,

@@ -12,14 +12,16 @@ export const damagedItemTutorial: TutorialDefinition = {
       title: 'Damaged Item Log',
       description: 'Follow these steps to record damaged, expired, or lost inventory items. This keeps your stock counts accurate.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'di-search',
       targetId: 'di-search',
       title: 'Find Item',
       description: 'Search for the damaged or lost item. Type its name to locate it in your inventory records.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'di-item',
       targetId: 'di-item-select',

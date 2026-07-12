@@ -13,9 +13,11 @@ export const salesHubTutorial: TutorialDefinition = {
       description: 'This is your complete sales management center. View total revenue, track transactions, analyze trends, and record new sales — all in one place.',
       tooltipPosition: 'bottom',
       actionType: 'none',
+
       spotlightPadding: 8,
-    },
-    {
+      fullContainer: true,
+},
+      {
       id: 'sales-revenue',
       targetId: 'sales-revenue',
       title: 'Revenue Summary',
@@ -28,11 +30,10 @@ export const salesHubTutorial: TutorialDefinition = {
       id: 'sales-add',
       targetId: 'sales-add-btn',
       title: 'Record a New Sale',
-      description: 'Tap this button to record a new sale. Select items from inventory, set quantities, apply discounts, and choose payment method.',
+      description: 'Tap the + button to expand the action menu, then tap the add item icon to start recording a new sale.',
       tooltipPosition: 'left',
-      actionType: 'tap',
-      waitForAction: true,
-      spotlightPadding: 6,
+      actionType: 'none',
+      spotlightPadding: 20,
     },
     {
       id: 'sales-ledger',

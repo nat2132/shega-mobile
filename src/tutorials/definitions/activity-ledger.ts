@@ -12,14 +12,16 @@ export const activityLedgerTutorial: TutorialDefinition = {
       title: 'Activity Ledger',
       description: 'This is your business activity feed — every transaction, adjustment, and event recorded in chronological order.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'al-feed',
       targetId: 'al-feed',
       title: 'Activity Feed',
       description: 'Every action is listed here: sales, expenses, inventory changes, price adjustments, and payments received.',
       tooltipPosition: 'top',
-    },
+      fullContainer: true,
+},
     {
       id: 'al-filter',
       targetId: 'al-filter',

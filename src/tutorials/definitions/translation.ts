@@ -12,14 +12,16 @@ export const translationTutorial: TutorialDefinition = {
       title: 'Language Selection',
       description: 'Choose your preferred language for the app interface. All menus, labels, and notifications will use your selection.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'tr-list',
       targetId: 'tr-list',
       title: 'Available Languages',
       description: 'Select from available languages. The app interface will update immediately to your chosen language.',
       tooltipPosition: 'top',
-    },
+      fullContainer: true,
+},
     {
       id: 'tr-current',
       targetId: 'tr-current',

@@ -12,14 +12,16 @@ export const pendingSalesTutorial: TutorialDefinition = {
       title: 'Pending Transactions',
       description: 'View all sale transactions that are in progress or awaiting completion. Complete or cancel pending sales from here.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'ps-list',
       targetId: 'ps-list',
       title: 'Pending Items',
       description: 'Items that have been added to a sale but not yet finalized. Review quantities and prices before completing.',
       tooltipPosition: 'top',
-    },
+      fullContainer: true,
+},
     {
       id: 'ps-actions',
       targetId: 'ps-actions',

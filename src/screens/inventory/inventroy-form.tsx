@@ -39,7 +39,7 @@ import {
   Truck,
   X
 } from 'lucide-react-native';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -58,7 +58,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getInventoryGlass } from './glass-inventory';
-import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
+import { useTutorial, useTutorialExample, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
 import { inventoryFormTutorial } from '@/tutorials/definitions';
 const QUALITY_GRADES = ['grade1', 'grade2', 'grade3'];
 
@@ -547,8 +547,10 @@ const AddItemFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?:
   // Data State
   const [hasPacks, setHasPacks] = useState(false);
   const [itemName, setItemName] = useState('');
+  useTutorialExample('if-name', setItemName);
   const [selectedCategory, setSelectedCategory] = useState<any>(null);
   const [companyName, setCompanyName] = useState('');
+  useTutorialExample('if-brand', setCompanyName);
   const [purchaseUnit, setPurchaseUnit] = useState('box');
   const [baseUnit, setBaseUnit] = useState('pieces');
   const [unitsPerPack, setUnitsPerPack] = useState('1');
@@ -559,6 +561,7 @@ const AddItemFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?:
   const [allowSellByBase] = useState(true);
   const [allowSellByPack, setAllowSellByPack] = useState(false);
   const [expiryDate, setExpiryDate] = useState('');
+  useTutorialExample('if-expiry', setExpiryDate);
   const [qualityGrade, setQualityGrade] = useState('grade1');
   const [notes] = useState('');
   const [supplierPhone, setSupplierPhone] = useState('');
@@ -627,6 +630,26 @@ const loadCategories = async () => {
      loadCategories();
      loadSuppliers();
    }, []);
+
+  useEffect(() => {
+    if (!tutorial.isActive) return;
+    const tid = tutorial.currentStep?.targetId;
+    if (tid === 'if-unit') {
+      setHasPacks(true);
+      setPurchaseUnit('box');
+      setUnitsPerPack('12');
+      setTotalPackQuantity('50');
+    } else if (tid === 'if-pricing') {
+      setPackPurchasePrice('1200');
+      setBaseSellingPrice('150');
+      setPackSellingPrice('1800');
+    } else if (tid === 'if-supplier') {
+      setSupplierPhone('0911-234-567');
+      setSupplierAccount('1000234567');
+      setCreditToggle('Yes');
+      setSupplierCallEnabled(true);
+    }
+  }, [tutorial.isActive, tutorial.currentStep?.targetId]);
 
   // Real-time calculations
   const totalBaseQuantity = hasPacks ? (Number(totalPackQuantity) || 0) * (Number(unitsPerPack) || 0) : (Number(totalPackQuantity) || 0);

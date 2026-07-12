@@ -18,7 +18,7 @@ import { useFormDrafts } from '@/hooks/useFormDrafts';
 import { useNotifications } from "@/hooks/useNotifications";
 import { notifyBudgetCreated } from '@/services/notificationService';
 import { playNice } from '@/services/soundService';
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { AlertTriangle, Bell, DollarSign, Plus, X } from "lucide-react-native";
@@ -36,7 +36,7 @@ import {
 import Animated, { FadeInDown } from "react-native-reanimated";
 import Svg, { Circle } from "react-native-svg";
 import { getBudgetGlass } from './glass-budget';
-import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
+import { useTutorial, useTutorialExample, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
 import { budgetTutorial, createBudgetTutorial } from '@/tutorials/definitions';
 
 const StatusBadge = ({ status }: { status: string }) => {
@@ -518,6 +518,7 @@ const CreateBudgetModal = ({ colors, t, onClose, onSaved }: { colors: any; t: an
   const [customCategoryName, setCustomCategoryName] = useState("");
   const dialog = useDialog();
   const cbTutorial = useTutorial({ tutorial: createBudgetTutorial });
+  useTutorialExample('cb-name', setName);
 
   const draftFormKey = 'budget';
   const draftFormData = useFormDrafts({

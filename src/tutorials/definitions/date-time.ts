@@ -12,14 +12,16 @@ export const dateTimeTutorial: TutorialDefinition = {
       title: 'Date & Time',
       description: 'Customize how dates and times are displayed throughout the app. Choose your preferred calendar and time format.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'dt-calendar',
       targetId: 'dt-calendar',
       title: 'Calendar Type',
       description: 'Choose between Gregorian and Ethiopian calendar systems. All dates in the app will use your selection.',
       tooltipPosition: 'top',
-    },
+      fullContainer: true,
+},
     {
       id: 'dt-time',
       targetId: 'dt-time',

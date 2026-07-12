@@ -12,14 +12,16 @@ export const addOrderItemTutorial: TutorialDefinition = {
       title: 'Adding an Order Item',
       description: 'Follow these steps to add a product to your purchase order. You can search for existing inventory items or enter custom details.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'aoi-name',
       targetId: 'aoi-name',
       title: 'Item Name',
       description: 'Enter the name of the product you want to order. If it exists in inventory, it will auto-fill details.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'aoi-company',
       targetId: 'aoi-company',

@@ -11,7 +11,7 @@ import {
 import { useDebounce } from '@/hooks/useDebounce';
 import { notifyRecurringMarkedPaid } from '@/services/notificationService';
 import { exportToCSV } from '@/utils/export';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { playNice} from '@/services/soundService';
 import {

@@ -105,7 +105,7 @@ function getActionHint(actionType?: string, completed?: boolean): string {
 }
 
 function SpotlightSVG({
-  x, y, w, h, actionType, actionCompleted, tint,
+  x, y, w, h, actionType, actionCompleted, tint, padding = 12,
 }: {
   x: SharedValue<number>;
   y: SharedValue<number>;
@@ -114,6 +114,7 @@ function SpotlightSVG({
   actionType?: string;
   actionCompleted?: boolean;
   tint: string;
+  padding?: number;
 }) {
   const pulse = useSharedValue(0);
   const pulse2 = useSharedValue(0);
@@ -137,28 +138,31 @@ function SpotlightSVG({
     );
   }, [pulse, pulse2]);
 
-  const p = 12;
   const cutoutProps = useAnimatedProps(() => ({
-    x: x.value - p,
-    y: y.value - p,
-    width: Math.max(0, w.value + p * 2),
-    height: Math.max(0, h.value + p * 2),
+    x: x.value - padding,
+    y: y.value - padding,
+    width: Math.max(0, w.value + padding * 2),
+    height: Math.max(0, h.value + padding * 2),
   }));
 
+  const ringPad = Math.min(padding * 0.66, 12);
+  const innerPad = Math.min(padding * 0.33, 6);
+  const glowPad = padding * 1.5;
+
   const outerRingStyle = useAnimatedStyle(() => ({
-    left: x.value - 8,
-    top: y.value - 8,
-    width: w.value + 16,
-    height: h.value + 16,
+    left: x.value - ringPad,
+    top: y.value - ringPad,
+    width: w.value + ringPad * 2,
+    height: h.value + ringPad * 2,
     opacity: 0.5 - pulse.value * 0.25,
     transform: [{ scale: 1 + pulse.value * 0.06 }],
   }));
 
   const innerRingStyle = useAnimatedStyle(() => ({
-    left: x.value - 3,
-    top: y.value - 3,
-    width: w.value + 6,
-    height: h.value + 6,
+    left: x.value - innerPad,
+    top: y.value - innerPad,
+    width: w.value + innerPad * 2,
+    height: h.value + innerPad * 2,
     opacity: 0.3 + pulse2.value * 0.4,
     borderColor: tint,
     borderWidth: 2,
@@ -166,20 +170,20 @@ function SpotlightSVG({
   }));
 
   const glowStyle = useAnimatedStyle(() => ({
-    left: x.value - 16,
-    top: y.value - 16,
-    width: w.value + 32,
-    height: h.value + 32,
+    left: x.value - glowPad,
+    top: y.value - glowPad,
+    width: w.value + glowPad * 2,
+    height: h.value + glowPad * 2,
     opacity: 0.08 + pulse.value * 0.08,
     borderRadius: 24 + pulse.value * 4,
     backgroundColor: tint,
   }));
 
   const successGlow = useAnimatedStyle(() => ({
-    left: x.value - 20,
-    top: y.value - 20,
-    width: w.value + 40,
-    height: h.value + 40,
+    left: x.value - glowPad,
+    top: y.value - glowPad,
+    width: w.value + glowPad * 2,
+    height: h.value + glowPad * 2,
     opacity: actionCompleted ? withTiming(0.3, { duration: 400 }) : 0,
     borderRadius: 28,
     backgroundColor: '#22C55E',
@@ -443,16 +447,6 @@ export const TutorialOverlay: React.FC = () => {
 
   const step = ctx.currentStep;
 
-  const triggerShake = useCallback(() => {
-    svShake.value = withSequence(
-      withTiming(-6, { duration: 40, easing: Easing.linear }),
-      withTiming(6, { duration: 40, easing: Easing.linear }),
-      withTiming(-4, { duration: 40, easing: Easing.linear }),
-      withTiming(4, { duration: 40, easing: Easing.linear }),
-      withTiming(0, { duration: 40, easing: Easing.linear })
-    );
-  }, [svShake]);
-
   useEffect(() => {
     if (step) {
       svPosition.value = step.tooltipPosition;
@@ -476,6 +470,16 @@ export const TutorialOverlay: React.FC = () => {
 
     const runMeasureWithScroll = () => {
       if (!running) return;
+
+      if (step.fullContainer) {
+        const pad = 20;
+        svX.value = withSpring(pad, { damping: 25, stiffness: 180 });
+        svY.value = withSpring(pad, { damping: 25, stiffness: 180 });
+        svW.value = withSpring(SCREEN_W - pad * 2, { damping: 30, stiffness: 200 });
+        svH.value = withSpring(SCREEN_H - pad * 2, { damping: 30, stiffness: 200 });
+        return;
+      }
+
       ctx.measureTarget(targetId).then((layout) => {
         if (!running || !layout) return;
         svX.value = withSpring(layout.x, { damping: 25, stiffness: 180 });
@@ -607,27 +611,7 @@ export const TutorialOverlay: React.FC = () => {
     >
       <View
         style={StyleSheet.absoluteFill}
-        pointerEvents="auto"
-        onStartShouldSetResponder={(e) => {
-          const { pageX, pageY } = e.nativeEvent;
-          const padding = 12;
-
-          const insideSpotlight =
-            pageX >= svX.value - padding &&
-            pageX <= svX.value + svW.value + padding &&
-            pageY >= svY.value - padding &&
-            pageY <= svY.value + svH.value + padding;
-
-          const pos = derivedPos.value;
-          const insideTooltip =
-            pageX >= pos.left &&
-            pageX <= pos.left + svTooltipW.value &&
-            pageY >= pos.top &&
-            pageY <= pos.top + svTooltipH.value;
-
-          return !(insideSpotlight || insideTooltip);
-        }}
-        onResponderGrant={triggerShake}
+        pointerEvents="box-none"
       />
 
       <SpotlightSVG
@@ -638,6 +622,7 @@ export const TutorialOverlay: React.FC = () => {
         actionType={step?.actionType}
         actionCompleted={ctx.actionCompleted}
         tint={colors.tint}
+        padding={step?.spotlightPadding}
       />
 
       {step && !ctx.isPaused && (

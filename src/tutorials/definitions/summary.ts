@@ -12,9 +12,11 @@ export const summaryTutorial: TutorialDefinition = {
       title: 'Business Summary',
       description: 'A comprehensive overview of your business performance. See financial summaries, operational metrics, and intelligence insights all in one dashboard.',
       tooltipPosition: 'bottom',
+
       actionType: 'none',
-    },
-    {
+      fullContainer: true,
+},
+      {
       id: 'sum-financial',
       targetId: 'sum-financial',
       title: 'Financial Summary',

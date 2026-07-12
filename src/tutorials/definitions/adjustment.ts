@@ -12,9 +12,11 @@ export const adjustmentTutorial: TutorialDefinition = {
       title: 'Adjustments Hub',
       description: 'Make corrections to your inventory — price changes, damaged item logging, and stock corrections. All adjustments are recorded in an immutable audit trail.',
       tooltipPosition: 'bottom',
+
       actionType: 'none',
-    },
-    {
+      fullContainer: true,
+},
+      {
       id: 'adj-types',
       targetId: 'adj-types',
       title: 'Adjustment Types',

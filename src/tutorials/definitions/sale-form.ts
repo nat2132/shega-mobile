@@ -12,9 +12,11 @@ export const saleFormTutorial: TutorialDefinition = {
       title: 'Recording a Sale',
       description: 'Follow these steps to record a complete sale. You\'ll select items, set quantities, apply pricing, and choose payment method.',
       tooltipPosition: 'bottom',
+
       actionType: 'none',
-    },
-    {
+      fullContainer: true,
+},
+      {
       id: 'sf-pricing',
       targetId: 'sf-pricing',
       title: 'Pricing & Discounts',

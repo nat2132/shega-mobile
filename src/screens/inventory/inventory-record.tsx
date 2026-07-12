@@ -10,7 +10,7 @@ import {
     ItemData
 } from '@/database/db';
 import { getEthiopianMonthNames, toEthiopianDate } from '@/utils/date-utils';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import {

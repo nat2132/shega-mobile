@@ -12,15 +12,18 @@ export const createOrderTutorial: TutorialDefinition = {
       title: 'Creating an Order',
       description: 'Create a new customer order by selecting items, setting quantities, and adding customer details.',
       tooltipPosition: 'bottom',
+
       actionType: 'none',
-    },
-    {
+      fullContainer: true,
+},
+      {
       id: 'co-customer',
       targetId: 'co-customer',
       title: 'Customer Name',
       description: 'Enter the customer\'s name. This is required for order tracking. Existing customers will auto-complete as you type.',
       tooltipPosition: 'bottom',
       actionType: 'none',
+      exampleValue: 'Abebe Kebede',
     },
     {
       id: 'co-items',

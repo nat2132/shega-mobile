@@ -12,9 +12,11 @@ export const ordersTutorial: TutorialDefinition = {
       title: 'Order Management',
       description: 'Track customer orders from creation to fulfillment. Manage order status, quantities, and delivery all in one place.',
       tooltipPosition: 'bottom',
+
       actionType: 'none',
-    },
-    {
+      fullContainer: true,
+},
+      {
       id: 'ord-add',
       targetId: 'ord-add-btn',
       title: 'Create New Order',

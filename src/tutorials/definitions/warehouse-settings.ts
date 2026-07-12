@@ -12,14 +12,16 @@ export const warehouseSettingsTutorial: TutorialDefinition = {
       title: 'Warehouse Settings',
       description: 'Manage your warehouse and storage location preferences. Set default warehouses for receiving stock.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'ws-default',
       targetId: 'ws-default',
       title: 'Default Warehouse',
       description: 'Set your default warehouse for new inventory items and purchases. Items will be assigned here by default.',
       tooltipPosition: 'top',
-    },
+      fullContainer: true,
+},
     {
       id: 'ws-list',
       targetId: 'ws-list',

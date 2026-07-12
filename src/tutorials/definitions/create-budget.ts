@@ -12,13 +12,15 @@ export const createBudgetTutorial: TutorialDefinition = {
       title: 'Creating a Budget',
       description: 'Follow these steps to create a new budget. Budgets help you plan spending, track limits, and control costs.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'cb-name',
       targetId: 'cb-name',
       title: 'Budget Name',
       description: 'Give your budget a clear name (e.g., "Monthly Operations", "Q1 Marketing"). This helps identify the budget in reports.',
       tooltipPosition: 'bottom',
+      exampleValue: 'Q4 Operations Budget',
     },
     {
       id: 'cb-type',
@@ -26,7 +28,8 @@ export const createBudgetTutorial: TutorialDefinition = {
       title: 'Budget Type',
       description: 'Choose the budget type — business-wide, department-specific, or project-based. This determines how spending is tracked.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'cb-period',
       targetId: 'cb-period',

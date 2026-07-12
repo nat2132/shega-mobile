@@ -12,9 +12,11 @@ export const settingsTutorial: TutorialDefinition = {
       title: 'Settings Center',
       description: 'Configure every aspect of your app. From appearance and security to notifications and data management, everything is here.',
       tooltipPosition: 'bottom',
+
       actionType: 'none',
-    },
-    {
+      fullContainer: true,
+},
+      {
       id: 'settings-profile',
       targetId: 'settings-profile',
       title: 'Profile & Account',

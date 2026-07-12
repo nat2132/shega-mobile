@@ -38,7 +38,7 @@ import { useRouter } from 'expo-router';
 import { useDebounce } from '@/hooks/useDebounce';
 import { SkeletonList } from '@/components/Skeleton';
 import { AppText, AppCard } from '@/components/ui';
-import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
+import { useTutorial, useTutorialExample, TutorialTarget, TutorialButton } from '@/tutorials';
 import { contactsTutorial } from '@/tutorials/definitions';
 
 const CATEGORIES = [
@@ -172,6 +172,7 @@ export default function ContactsList() {
   const [contacts, setContacts]           = useState<any[]>([]);
   const [activeCategory, setActiveCategory] = useState('all');
   const [searchQuery, setSearchQuery]     = useState('');
+  useTutorialExample('con-search', setSearchQuery);
   const [showForm, setShowForm]           = useState(false);
   const [showDetails, setShowDetails]     = useState(false);
   const [selectedContact, setSelectedContact] = useState<any>(null);

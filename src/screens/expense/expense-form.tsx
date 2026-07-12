@@ -41,7 +41,7 @@ import { getExpenseGlass } from './glass-expense';
 import { useFormDrafts } from '@/hooks/useFormDrafts';
 import { DraftSection } from '@/components/DraftSection';
 import { Draft } from '@/services/draftService';
-import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
+import { useTutorial, useTutorialExample, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
 import { expenseFormTutorial } from '@/tutorials/definitions';
 
 const FREQUENT_CATEGORIES_KEY = 'frequent_expense_categories';
@@ -96,6 +96,8 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
   });
 
   const tutorial = useTutorial({ tutorial: expenseFormTutorial });
+  useTutorialExample('ef-amount', setAmount);
+  useTutorialExample('ef-description', setDescription);
 
   useEffect(() => {
     try {

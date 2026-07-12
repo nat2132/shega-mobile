@@ -12,15 +12,18 @@ export const inventoryFormTutorial: TutorialDefinition = {
       title: 'Adding a New Item',
       description: 'Follow these steps to add a new product to your inventory. You\'ll configure identification, pricing, and classification.',
       tooltipPosition: 'bottom',
+
       actionType: 'none',
-    },
-    {
+      fullContainer: true,
+},
+      {
       id: 'if-name',
       targetId: 'if-name',
       title: 'Item Name & Category',
       description: 'Give your item a clear, descriptive name. Select the appropriate category — this helps with organization and reporting.',
       tooltipPosition: 'bottom',
       actionType: 'none',
+      exampleValue: 'Premium Roasted Coffee Beans',
     },
     {
       id: 'if-brand',
@@ -29,6 +32,7 @@ export const inventoryFormTutorial: TutorialDefinition = {
       description: 'Enter the manufacturer or brand name. This is useful for identifying products, especially when dealing with multiple suppliers.',
       tooltipPosition: 'bottom',
       actionType: 'none',
+      exampleValue: 'Ethio Coffee Export PLC',
     },
     {
       id: 'if-unit',
@@ -61,6 +65,7 @@ export const inventoryFormTutorial: TutorialDefinition = {
       description: 'Set an expiration date for perishable items and a quality grade. The system will alert you when items are close to expiring.',
       tooltipPosition: 'bottom',
       actionType: 'none',
+      exampleValue: '12/2026',
     },
     {
       id: 'if-commit',

@@ -12,14 +12,16 @@ export const expenseDetailsTutorial: TutorialDefinition = {
       title: 'Expense Details',
       description: 'Review the full details of an expense transaction including amount, category, date, and payment information.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'ed-amount',
       targetId: 'ed-amount',
       title: 'Amount & Category',
       description: 'The expense amount, category, and subcategory. This helps you understand where your money is going.',
       tooltipPosition: 'top',
-    },
+      fullContainer: true,
+},
     {
       id: 'ed-details',
       targetId: 'ed-details',

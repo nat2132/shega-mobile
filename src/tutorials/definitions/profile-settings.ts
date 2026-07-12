@@ -12,14 +12,16 @@ export const profileSettingsTutorial: TutorialDefinition = {
       title: 'Your Profile',
       description: 'Manage your personal and business information. Update your name, business name, and profile photo.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'pset-avatar',
       targetId: 'pset-avatar',
       title: 'Profile Photo',
       description: 'Tap your avatar to change your profile photo. You can take a new photo or choose from your gallery.',
       tooltipPosition: 'bottom',
-    },
+      fullContainer: true,
+},
     {
       id: 'pset-name',
       targetId: 'pset-name',
