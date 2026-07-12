@@ -34,6 +34,8 @@ import { Draft } from '@/services/draftService';
 
 import { AppNumber, AppText} from '@/components/ui';
 import { getAdjustmentGlass } from './glass-adjustment';
+import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
+import { priceIncreaseTutorial, priceDecreaseTutorial } from '@/tutorials/definitions';
 const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increase' | 'decrease', onComplete?: () => void }) => {
   const { colors, calendarType, language, t } = useSettings();
   const G = getAdjustmentGlass(colors);
@@ -64,6 +66,11 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
     getSubtitle: useCallback(() => `${newPrice ? `ETB ${newPrice}` : 'No price set'}`, [newPrice]),
     enabled: !successDetails,
   });
+
+  const tutorial = useTutorial({
+    tutorial: mode === 'increase' ? priceIncreaseTutorial : priceDecreaseTutorial,
+  });
+
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   useEffect(() => {
@@ -201,7 +208,7 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
       <View style={{ position: 'absolute', top: -80, right: -50, width: 220, height: 220, borderRadius: 110, backgroundColor: G.mutedLight, opacity: 0.4, pointerEvents: 'none' }} />
       <View style={{ position: 'absolute', top: 180, left: -70, width: 200, height: 200, borderRadius: 100, backgroundColor: G.mutedLight, opacity: 0.25, pointerEvents: 'none' }} />
       <View style={{ position: 'absolute', bottom: 80, right: -30, width: 160, height: 160, borderRadius: 80, backgroundColor: G.mutedLight, opacity: 0.2, pointerEvents: 'none' }} />
-      <ScrollView 
+      <TutorialScrollView 
          contentContainerStyle={styles.scrollContent}
          keyboardShouldPersistTaps="handled"
          showsVerticalScrollIndicator={false}
@@ -226,6 +233,8 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
           }}
         />
       )}
+      <TutorialTarget id="pi-header">
+      <TutorialTarget id="pd-header">
       <Animated.View entering={FadeInDown.duration(600)} style={styles.header}>
         <View style={styles.headerRow}>
            <View>
@@ -237,6 +246,8 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
            </View>
         </View>
       </Animated.View>
+      </TutorialTarget>
+      </TutorialTarget>
 
       {/* Dynamic Impact Visualization */}
       <Animated.View entering={FadeInDown.delay(200).duration(600)} style={styles.impactContainer}>
@@ -286,7 +297,9 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
               <Search size={14} color={G.fgSecondary} />
               <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('adj.search_asset')}</AppText>
            </View>
-           <View style={[styles.inputContainer, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+            <TutorialTarget id="pi-search">
+            <TutorialTarget id="pd-search">
+            <View style={[styles.inputContainer, { backgroundColor: G.bgCard, borderColor: G.border }]}>
               <TextInput 
                 style={[styles.input, { color: G.fg }]} 
                 placeholder={t("adj.search_placeholder")} 
@@ -295,30 +308,36 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
                 onChangeText={setSearchQuery}
               />
            </View>
+            </TutorialTarget>
+            </TutorialTarget>
            
            {showResults && searchResults.length > 0 && (
-             <View style={[styles.resultsPanel, { backgroundColor: G.bgCard, borderColor: G.border }]}>
-               <ScrollView nestedScrollEnabled style={{ maxHeight: 250 }} keyboardShouldPersistTaps="handled">
-                 {searchResults.map((item, index) => (
-                   <TouchableOpacity 
-                     key={item.id || index} 
-                     style={[styles.resultItem, { borderBottomColor: G.border }]} 
-                     onPress={() => handleSelectItem(item)}
-                     activeOpacity={0.7}
-                   >
-                     <View style={[styles.resultIconBox, { backgroundColor: G.fg + '08' }]}>
-                       <Package size={18} color={G.fg} />
-                     </View>
-                     <View style={styles.resultInfo}>
-                        <AppText variant="body-lg" weight="bold" style={[styles.resultText, { color: G.fg }]} numberOfLines={1}>{item.name || 'Unknown'}</AppText>
-                        <AppText variant="caption" weight="medium" style={[styles.resultSubtext, { color: G.fgSecondary }]} numberOfLines={1}>{item.categoryName || 'General'}</AppText>
-                     </View>
-                     <AppNumber value={item.baseSellingPrice ?? 0} prefix="ETB " size="body" weight="bold" style={[styles.resultPrice, { color: colors.primary }]} />
-                   </TouchableOpacity>
-                 ))}
-               </ScrollView>
-             </View>
-           )}
+              <TutorialTarget id="pi-item-select">
+              <TutorialTarget id="pd-item-select">
+              <View style={[styles.resultsPanel, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+                <ScrollView nestedScrollEnabled style={{ maxHeight: 250 }} keyboardShouldPersistTaps="handled">
+                  {searchResults.map((item, index) => (
+                    <TouchableOpacity 
+                      key={item.id || index} 
+                      style={[styles.resultItem, { borderBottomColor: G.border }]} 
+                      onPress={() => handleSelectItem(item)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.resultIconBox, { backgroundColor: G.fg + '08' }]}>
+                        <Package size={18} color={G.fg} />
+                      </View>
+                      <View style={styles.resultInfo}>
+                         <AppText variant="body-lg" weight="bold" style={[styles.resultText, { color: G.fg }]} numberOfLines={1}>{item.name || 'Unknown'}</AppText>
+                         <AppText variant="caption" weight="medium" style={[styles.resultSubtext, { color: G.fgSecondary }]} numberOfLines={1}>{item.categoryName || 'General'}</AppText>
+                      </View>
+                      <AppNumber value={item.baseSellingPrice ?? 0} prefix="ETB " size="body" weight="bold" style={[styles.resultPrice, { color: colors.primary }]} />
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+              </TutorialTarget>
+              </TutorialTarget>
+            )}
         </View>
 
         {selectedItem && (
@@ -329,17 +348,23 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
                      <Zap size={14} color={G.fgSecondary} />
                      <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('adj.precision_price')}</AppText>
                   </View>
-                  <View style={[styles.inputContainer, { backgroundColor: G.bgCard, borderColor: G.border }]}>
-                     <TextInput 
-                       style={[styles.input, { color: G.fg, fontFamily: Fonts.bold, fontSize: 18 }]} 
-                       value={newPrice} 
-                       onChangeText={setNewPrice}
-                       keyboardType="numeric" 
-                     />
-                  </View>
+                   <TutorialTarget id="pi-new-price">
+                   <TutorialTarget id="pd-new-price">
+                   <View style={[styles.inputContainer, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+                      <TextInput 
+                        style={[styles.input, { color: G.fg, fontFamily: Fonts.bold, fontSize: 18 }]} 
+                        value={newPrice} 
+                        onChangeText={setNewPrice}
+                        keyboardType="numeric" 
+                      />
+                   </View>
+                   </TutorialTarget>
+                   </TutorialTarget>
                </View>
             </View>
 
+            <TutorialTarget id="pi-reason">
+            <TutorialTarget id="pd-reason">
             <View style={styles.inputGroup}>
                <View style={styles.labelRow}>
                   <Info size={14} color={G.fgSecondary} />
@@ -364,8 +389,12 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
                   ))}
                </View>
             </View>
+            </TutorialTarget>
+            </TutorialTarget>
 
             {/* Record Date */}
+            <TutorialTarget id="pi-date">
+            <TutorialTarget id="pd-date">
             <TouchableOpacity 
               style={[{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderWidth: 1, borderColor: G.border, borderRadius: 20, padding: 16, marginBottom: 15 }]}
               onPress={() => setShowDatePicker(true)}
@@ -378,7 +407,11 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
                 </AppText>
               </View>
             </TouchableOpacity>
+            </TutorialTarget>
+            </TutorialTarget>
 
+            <TutorialTarget id="pi-commit-btn">
+            <TutorialTarget id="pd-commit-btn">
             <TouchableOpacity 
               style={[styles.confirmBtn, { backgroundColor: G.fg }]} 
               onPress={handleConfirm}
@@ -387,6 +420,9 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
               <ShieldCheck color={G.bg} size={20} />
               <AppText variant="subtitle" weight="bold" style={[styles.confirmText, { color: G.bg }]} numberOfLines={1}>{t('adj.commit_adjustment')}</AppText>
             </TouchableOpacity>
+            </TutorialTarget>
+            </TutorialTarget>
+            <TutorialButton tutorialId={mode === 'increase' ? 'price-increase' : 'price-decrease'} screenName={mode === 'increase' ? 'Price Increase' : 'Price Decrease'} />
           </>
         )}
       </Animated.View>
@@ -413,7 +449,7 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
         onSelectDate={(date) => { setRecordDate(date); setShowDatePicker(false); }}
         initialDate={recordDate}
       />
-      </ScrollView>
+      </TutorialScrollView>
     </KeyboardAvoidingView>
   );
 };

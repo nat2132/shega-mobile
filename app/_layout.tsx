@@ -3,6 +3,7 @@ import { SettingsProvider , useSettings } from '@/context/SettingsContext';
 import { SidebarProvider } from '@/context/SidebarContext';
 import { NavigationIntentProvider } from '@/context/NavigationIntentContext';
 import { WarehouseProvider } from '@/context/WarehouseContext';
+import { TutorialProvider, TutorialOverlay } from '@/tutorials';
 import { initDB } from '@/database/db';
 import { playStart } from '@/services/soundService';
 import {
@@ -48,21 +49,24 @@ function AppShell() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar style={theme !== 'light' ? 'light' : 'dark'} />
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" options={{ animation: 'fade' }} />
-        <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
-        <Stack.Screen name="inventory-onboarding" options={{ animation: 'fade' }} />
-        <Stack.Screen name="sales-onboarding" options={{ animation: 'fade' }} />
-        <Stack.Screen name="analytics-onboarding" options={{ animation: 'fade' }} />
-        <Stack.Screen name="user-setup" options={{ animation: 'fade' }} />
-        <Stack.Screen name="contacts" options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="subscription/welcome" options={{ animation: 'fade' }} />
-        <Stack.Screen name="subscription/plans" options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="subscription/upgrade" options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="subscription/payment" options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="subscription/manage" options={{ animation: 'slide_from_right' }} />
-      </Stack>
-      <SidebarOverlay />
+      <TutorialProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="index" options={{ animation: 'fade' }} />
+          <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
+          <Stack.Screen name="inventory-onboarding" options={{ animation: 'fade' }} />
+          <Stack.Screen name="sales-onboarding" options={{ animation: 'fade' }} />
+          <Stack.Screen name="analytics-onboarding" options={{ animation: 'fade' }} />
+          <Stack.Screen name="user-setup" options={{ animation: 'fade' }} />
+          <Stack.Screen name="contacts" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="subscription/welcome" options={{ animation: 'fade' }} />
+          <Stack.Screen name="subscription/plans" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="subscription/upgrade" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="subscription/payment" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="subscription/manage" options={{ animation: 'slide_from_right' }} />
+        </Stack>
+        <TutorialOverlay />
+        <SidebarOverlay />
+      </TutorialProvider>
     </View>
   );
 }

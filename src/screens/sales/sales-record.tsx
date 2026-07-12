@@ -49,6 +49,8 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { SkeletonList } from "@/components/Skeleton";
 import { AppText, AppNumber } from "@/components/ui";
 import { getSalesGlass } from './glass-sales';
+import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
+import { salesRecordsTutorial } from '@/tutorials/definitions';
 const SALES_GLASS = getSalesGlass(LightTheme);
 interface SalesRecordProps {
   onClose?: () => void;
@@ -97,6 +99,7 @@ const SalesRecordScreen: React.FC<SalesRecordProps> = ({ onClose }) => {
   const [pendingReceiptSale, setPendingReceiptSale] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const debouncedSearch = useDebounce(searchQuery, 250);
+  const tutorial = useTutorial({ tutorial: salesRecordsTutorial });
 
   const loadData = useCallback(() => {
     const businesses = getBusinesses();
@@ -381,6 +384,7 @@ const SalesRecordScreen: React.FC<SalesRecordProps> = ({ onClose }) => {
         <View style={{ position: 'absolute', bottom: -70, right: -30, width: 220, height: 220, borderRadius: 110, backgroundColor: SALES_GLASS.glow }} />
       </View>
       {/* Header */}
+      <TutorialTarget id="sr-header">
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <TouchableOpacity
@@ -408,9 +412,11 @@ const SalesRecordScreen: React.FC<SalesRecordProps> = ({ onClose }) => {
               {getHeaderLabel()}
             </AppText>
           </View>
+          <TutorialButton tutorialId="sales-records" screenName="Sales Records" />
         </View>
 
         {/* Summary Cards */}
+        <TutorialTarget id="sr-summary">
         <View style={styles.summaryRow}>
           <View
             style={[
@@ -503,9 +509,12 @@ const SalesRecordScreen: React.FC<SalesRecordProps> = ({ onClose }) => {
             </View>
           </View>
         </View>
+        </TutorialTarget>
       </View>
+      </TutorialTarget>
 
       {/* Search & Filter Bar */}
+      <TutorialTarget id="sr-filter">
       <View style={styles.filterSection}>
         <View
           style={[
@@ -594,8 +603,10 @@ const SalesRecordScreen: React.FC<SalesRecordProps> = ({ onClose }) => {
           </View>
         )}
       </View>
+      </TutorialTarget>
 
       {/* Sales List */}
+      <TutorialTarget id="sr-list">
       {isLoading ? (
         <SkeletonList count={6} showAvatar style={styles.listContent} />
       ) : (
@@ -634,14 +645,17 @@ const SalesRecordScreen: React.FC<SalesRecordProps> = ({ onClose }) => {
           }
         />
       )}
+      </TutorialTarget>
 
       {/* Sort FAB */}
+      <TutorialTarget id="sr-export">
       <TouchableOpacity
         style={[styles.sortFab, { backgroundColor: SALES_GLASS.fg }]}
         onPress={() => setSortModalVisible(true)}
       >
         <ArrowDownUp size={20} color={SALES_GLASS.bg} />
       </TouchableOpacity>
+      </TutorialTarget>
 
       {/* Date Picker */}
       <CustomDatePicker

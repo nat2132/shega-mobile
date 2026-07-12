@@ -37,6 +37,8 @@ import AdjustmentDetailsScreen from '../adjustement/adjustment-details';
 import ExpenseDetailsScreen from '../expense/expense-details';
 import SaleDetailsScreen from '../sales/sales-details';
 import { getDashGlass } from './glass-dashboard';
+import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
+import { activityLedgerTutorial } from '@/tutorials/definitions';
 
 interface ActivityLedgerProps {
   onClose?: () => void;
@@ -46,6 +48,7 @@ const ActivityLedgerScreen: React.FC<ActivityLedgerProps> = ({ onClose }) => {
   const { colors, calendarType, language, timeSystem, t } = useSettings();
   const G = getDashGlass(colors);
   const styles = useMemo(() => createStyles(G), [G]);
+  const tutorial = useTutorial({ tutorial: activityLedgerTutorial });
   const [dateModalVisible, setDateModalVisible] = useState(false);
   
   const [activities, setActivities] = useState<any[]>([]);
@@ -266,6 +269,7 @@ data.forEach((item: any) => {
     <View style={[styles.container, { backgroundColor: G.bg }]}>
       <View style={{ position: 'absolute', top: -80, left: -40, width: 200, height: 200, borderRadius: 100, backgroundColor: G.mutedLight, opacity: 0.3 }} />
       <View style={{ position: 'absolute', bottom: -60, right: -30, width: 180, height: 180, borderRadius: 90, backgroundColor: G.mutedLight, opacity: 0.2 }} />
+      <TutorialTarget id="al-header">
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <TouchableOpacity onPress={onClose} style={[styles.backBtn, { backgroundColor: G.bgCard }]}>
@@ -278,8 +282,10 @@ data.forEach((item: any) => {
               <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.liveText, { color: G.fgSecondary }]} numberOfLines={1}>{t('common.live_audit')}</AppText>
             </View>
           </View>
+          <TutorialButton tutorialId="activity-ledger" screenName="Activity Ledger" />
         </View>
 
+        <TutorialTarget id="al-filter">
         <View style={styles.searchContainer}>
           <View style={[styles.searchBar, { backgroundColor: G.bgCard, borderColor: G.border }]}>
             <Search size={20} color={G.fgSecondary} />
@@ -306,8 +312,11 @@ data.forEach((item: any) => {
             <Calendar size={20} color={selectedDate ? colors.primary : G.fgSecondary} />
           </TouchableOpacity>
         </View>
+        </TutorialTarget>
       </View>
+      </TutorialTarget>
 
+      <TutorialTarget id="al-feed">
       <FlatList
         data={activities}
         renderItem={renderActivityItem}
@@ -325,6 +334,7 @@ data.forEach((item: any) => {
           </View>
         }
       />
+      </TutorialTarget>
 
       <CustomDatePicker
         visible={dateModalVisible}

@@ -2,7 +2,6 @@ import React, { useState, useCallback, useMemo } from "react";
 import {
   View,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
@@ -32,6 +31,8 @@ import {
   Calendar,
   Check,
 } from "lucide-react-native";
+import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
+import { orderDetailTutorial } from '@/tutorials/definitions';
 import { getOrdersGlass } from './glass-orders';
 
 const ORD_GLASS = getOrdersGlass(LightTheme);
@@ -50,6 +51,7 @@ const OrderDetailScreen = () => {
   const router = useRouter();
   const dialog = useDialog();
   const { showToast } = useToast();
+  const tutorial = useTutorial({ tutorial: orderDetailTutorial });
   const { id } = useLocalSearchParams<{ id: string }>();
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -196,7 +198,7 @@ const OrderDetailScreen = () => {
       <View style={styles.glowTopRight} />
       <View style={styles.glowBottomLeft} />
       <View style={styles.glowCenter} />
-      <View style={styles.header}>
+      <TutorialTarget id="od-header" style={styles.header}>
         <TouchableOpacity
           onPress={() => router.back()}
           style={[
@@ -206,6 +208,7 @@ const OrderDetailScreen = () => {
         >
           <ChevronLeft size={20} color={ORD_GLASS.fg} />
         </TouchableOpacity>
+        <TutorialButton tutorialId="order-detail" screenName="Order Details" />
         <View style={{ flex: 1 }}>
           <AppText
             variant="micro"
@@ -240,14 +243,15 @@ const OrderDetailScreen = () => {
             {order.status}
           </AppText>
         </View>
-      </View>
+      </TutorialTarget>
 
-      <ScrollView
+      <TutorialScrollView
         style={styles.scrollContent}
         contentContainerStyle={styles.scrollPadding}
         showsVerticalScrollIndicator={false}
       >
         {/* Info Card */}
+        <TutorialTarget id="od-notes">
         <Animated.View entering={FadeInDown.duration(500)}>
           <View
             style={[
@@ -316,8 +320,10 @@ const OrderDetailScreen = () => {
             )}
           </View>
         </Animated.View>
+        </TutorialTarget>
 
         {/* Items */}
+        <TutorialTarget id="od-items">
         <Animated.View entering={FadeInDown.delay(100)} style={styles.section}>
           <AppText
             variant="body"
@@ -369,8 +375,10 @@ const OrderDetailScreen = () => {
             </View>
           ))}
         </Animated.View>
+        </TutorialTarget>
 
         {/* Total */}
+        <TutorialTarget id="od-summary">
         <Animated.View
           entering={FadeInDown.delay(200)}
           style={[
@@ -393,6 +401,7 @@ const OrderDetailScreen = () => {
             style={{ color: ORD_GLASS.fg }}
           />
         </Animated.View>
+        </TutorialTarget>
 
         {/* History */}
         {order.history && order.history.length > 0 && (
@@ -522,7 +531,7 @@ const OrderDetailScreen = () => {
             </TouchableOpacity>
           </Animated.View>
         )}
-      </ScrollView>
+      </TutorialScrollView>
     </View>
   );
 };

@@ -5,7 +5,6 @@ import {
   Image,
   TextInput,
   TouchableOpacity,
-  ScrollView,
 } from 'react-native';
 import {
   Check,
@@ -29,6 +28,8 @@ import { useDialog } from '@/context/DialogContext';
 import { router } from 'expo-router';
 import { AppText} from '@/components/ui';
 import { getSettingsGlass } from './glass-settings';
+import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
+import { profileSettingsTutorial } from '@/tutorials/definitions';
 const EditProfileScreen = () => {
   const { userProfile, setUserProfile, t, colors } = useSettings();
   const G = getSettingsGlass(colors);
@@ -37,6 +38,7 @@ const EditProfileScreen = () => {
   const [businessName, setBusinessName] = useState(userProfile.businessName);
   const [selectedAvatar, setSelectedAvatar] = useState(userProfile.avatarIndex);
   const [customAvatarUri, setCustomAvatarUri] = useState<string | undefined>(userProfile.avatarUri);
+  const tutorial = useTutorial({ tutorial: profileSettingsTutorial });
 
   const handleSave = async () => {
     setUserProfile({
@@ -92,11 +94,12 @@ const EditProfileScreen = () => {
         <View style={[styles.glowWash, { backgroundColor: G.mutedLight, top: -80, left: -60, width: 200, height: 200, borderRadius: 100 }]} />
         <View style={[styles.glowWash, { backgroundColor: G.mutedLight, bottom: -40, right: -30, width: 160, height: 160, borderRadius: 80 }]} />
       </View>
-      <ScrollView 
+      <TutorialScrollView 
         contentContainerStyle={styles.container} 
         showsVerticalScrollIndicator={false}
       >
       {/* Elite Profile Banner */}
+      <TutorialTarget id="pset-header">
       <View style={styles.bannerContainer}>
         <View style={[styles.bannerWash, { backgroundColor: G.fg + '05' }]} />
         <Animated.View entering={ZoomIn} style={styles.avatarWrapper}>
@@ -117,12 +120,14 @@ const EditProfileScreen = () => {
         <AppText variant="heading-lg" weight="bold" style={[styles.profileTitle, { color: G.fg }]} numberOfLines={2}>{userProfile.businessName || t('profile.elite_user')}</AppText>
         <AppText variant="caption" weight="bold" style={[styles.profileSub, { color: G.fgSecondary }]} numberOfLines={1}>{t('profile.verified_identity')}</AppText>
       </View>
+      </TutorialTarget>
 
       <Animated.View entering={FadeInDown.delay(200)} style={styles.sectionHeader}>
         <Sparkles size={16} color={colors.primary} />
         <AppText variant="caption" weight="bold" style={[styles.sectionSubtitle, { color: G.fgSecondary }]} numberOfLines={1}>{t('settings.choose_avatar')}</AppText>
       </Animated.View>
 
+      <TutorialTarget id="pset-avatar">
       <View style={styles.avatarGrid}>
         {PROFILE_IMAGES.map((img, i) => (
           <Animated.View key={i} entering={FadeInDown.delay(300 + i * 50)}>
@@ -162,12 +167,14 @@ const EditProfileScreen = () => {
           </TouchableOpacity>
         </Animated.View>
       </View>
+      </TutorialTarget>
 
       {/* Verification Nodes */}
       <Animated.View entering={FadeInDown.delay(600)} style={styles.formContainer}>
         <View style={[styles.formCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
           <AppText variant="caption" weight="bold" style={[styles.formLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('settings.personal_info').toUpperCase()}</AppText>
           
+          <TutorialTarget id="pset-name">
           <View style={styles.inputNode}>
             <View style={styles.nodeHeader}>
                <User size={14} color={G.fgSecondary} />
@@ -182,6 +189,7 @@ const EditProfileScreen = () => {
               onFocus={() => Haptics.selectionAsync()}
             />
           </View>
+          </TutorialTarget>
 
           <View style={styles.inputNode}>
             <View style={styles.nodeHeader}>
@@ -199,6 +207,7 @@ const EditProfileScreen = () => {
           </View>
         </View>
 
+        <TutorialTarget id="pset-save-btn">
         <TouchableOpacity 
           style={[styles.saveButton, { backgroundColor: G.fg }]} 
           onPress={handleSave}
@@ -207,12 +216,16 @@ const EditProfileScreen = () => {
           <ShieldCheck size={20} color={G.bg} />
           <AppText variant="body" weight="bold" style={[styles.saveButtonText, { color: G.bg }]} numberOfLines={1}>{t('common.save')}</AppText>
         </TouchableOpacity>
+        </TutorialTarget>
         
         <AppText variant="caption" weight="medium" style={[styles.footerText, { color: G.fgSecondary }]} numberOfLines={3}>{t('settings.profile_footer')}</AppText>
       </Animated.View>
       
       <View style={{ height: 60 }} />
-    </ScrollView>
+    </TutorialScrollView>
+      <View style={{ position: 'absolute', top: 50, right: 20, zIndex: 100 }}>
+        <TutorialButton tutorialId="profile-settings" screenName={t('settings.profile')} />
+      </View>
     </View>
   );
 };

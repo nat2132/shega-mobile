@@ -38,6 +38,8 @@ import { useRouter } from 'expo-router';
 import { useDebounce } from '@/hooks/useDebounce';
 import { SkeletonList } from '@/components/Skeleton';
 import { AppText, AppCard } from '@/components/ui';
+import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
+import { contactsTutorial } from '@/tutorials/definitions';
 
 const CATEGORIES = [
   { key: 'all',              label: 'All',       icon: Users,          colorToken: 'primary' },
@@ -165,6 +167,7 @@ export default function ContactsList() {
   const { openSidebar } = useSidebar();
   const { notifCount } = useNotifications();
   const router = useRouter();
+  const tutorial = useTutorial({ tutorial: contactsTutorial });
 
   const [contacts, setContacts]           = useState<any[]>([]);
   const [activeCategory, setActiveCategory] = useState('all');
@@ -250,12 +253,14 @@ export default function ContactsList() {
       </View>
 
       {/* →→ Header →→ */}
+      <TutorialTarget id="con-header">
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.headerSub, { color: G.muted }]} numberOfLines={1}>{t('contacts.directory')}</AppText>
           <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{t('contacts.title')}</AppText>
         </View>
         <View style={styles.headerActions}>
+          <TutorialButton tutorialId="contacts" screenName="Contacts" />
           <TouchableOpacity
             onPress={() => router.push('/notifications')}
             style={[styles.headerIconBtn, { backgroundColor: G.bgCard, borderColor: G.border }]}
@@ -277,8 +282,10 @@ export default function ContactsList() {
           </TouchableOpacity>
         </View>
       </View>
+      </TutorialTarget>
 
       {/* →→ Search →→ */}
+      <TutorialTarget id="con-search">
       <View style={[styles.searchBar, { backgroundColor: G.bgCard, borderColor: G.border }]}>
         <Search size={16} color={G.muted} />
         <TextInput
@@ -297,6 +304,7 @@ export default function ContactsList() {
           </TouchableOpacity>
         )}
       </View>
+      </TutorialTarget>
 
       {/* →→ Category Pills (bigger) →→ */}
       <ScrollView
@@ -369,6 +377,7 @@ export default function ContactsList() {
           )}
         </Animated.View>
       ) : (
+        <TutorialTarget id="con-list">
         <SectionList
           sections={sections}
           keyExtractor={keyExtractor}
@@ -383,6 +392,7 @@ export default function ContactsList() {
           removeClippedSubviews={true}
           stickySectionHeadersEnabled={false}
         />
+        </TutorialTarget>
       )}
 
 
@@ -415,6 +425,7 @@ export default function ContactsList() {
       </Modal>
 
       {/* Floating Add Button */}
+      <TutorialTarget id="con-add-btn">
       <TouchableOpacity
         style={[styles.fab, { backgroundColor: G.bgCardStrong, borderColor: G.borderLight, borderWidth: 1 }]}
         onPress={() => { setEditingContact(null); setShowForm(true); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
@@ -422,6 +433,7 @@ export default function ContactsList() {
       >
         <Plus size={24} color={G.fg} />
       </TouchableOpacity>
+      </TutorialTarget>
     </View>
   );
 }

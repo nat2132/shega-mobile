@@ -3,7 +3,6 @@ import {
   View,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
   TextInput,
   Modal,
   Switch
@@ -34,11 +33,14 @@ import { useSettings } from '@/context/SettingsContext';
 import { formatDate } from '@/utils/date-utils';
 import { AppNumber, AppText } from '@/components/ui';
 import PremiumActionModal from '@/components/PremiumActionModal';
+import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
+import { expenseDetailsTutorial } from '@/tutorials/definitions';
 import { getExpenseGlass } from './glass-expense';
 
 const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => void }) => {
   const { colors, calendarType, language, t } = useSettings();
   const G = getExpenseGlass(colors);
+  const tutorial = useTutorial({ tutorial: expenseDetailsTutorial });
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState(expense);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -117,12 +119,13 @@ const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => vo
       <View style={{ position: 'absolute', top: -120, left: -80, width: 280, height: 280, borderRadius: 140, backgroundColor: G.mutedLight, opacity: 0.15 }} />
       <View style={{ position: 'absolute', bottom: -60, right: -60, width: 220, height: 220, borderRadius: 110, backgroundColor: G.mutedLight, opacity: 0.10 }} />
       {/* Capital Drill-down Header */}
-      <View style={styles.heroContainer}>
+      <TutorialTarget id="ed-header" style={styles.heroContainer}>
           <View style={[styles.heroWash, { backgroundColor: colors.error + '08' }]} />
          <View style={styles.topActions}>
             <TouchableOpacity onPress={onClose} style={[styles.circleBtn, { backgroundColor: G.bgCard }]}>
                <ChevronLeft size={20} color={G.fg} />
             </TouchableOpacity>
+            <TutorialButton tutorialId="expense-details" screenName="Expense Details" />
             <View style={styles.row}>
                {isEditing ? (
                  <View style={styles.editActions}>
@@ -146,6 +149,7 @@ const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => vo
             </View>
          </View>
 
+         <TutorialTarget id="ed-amount">
          <Animated.View style={styles.heroContent}>
             <View style={[styles.badgeContainer, { backgroundColor: colors.error + '15' }]}>
                <TrendingDown size={28} color={colors.error} />
@@ -183,13 +187,15 @@ const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => vo
             </AppText>
             )}
          </Animated.View>
-      </View>
+      </TutorialTarget>
+      </TutorialTarget>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <TutorialScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         
-        {/* Magnitude & Context */}
-        <Animated.View style={styles.section}>
-           <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.sectionTitle, { color: G.fgSecondary }]} numberOfLines={1}>{t('expense.outflow_identity')}</AppText>
+         {/* Magnitude & Context */}
+         <TutorialTarget id="ed-details">
+         <Animated.View style={styles.section}>
+            <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.sectionTitle, { color: G.fgSecondary }]} numberOfLines={1}>{t('expense.outflow_identity')}</AppText>
             <View style={[styles.intelligenceBlock, { backgroundColor: G.bgCard, borderColor: G.border, overflow: 'hidden' }]}>
                <View style={styles.node}>
                   <View style={styles.nodeInfo}>
@@ -223,13 +229,15 @@ const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => vo
                        <AppText variant="caption" weight="bold" transform="uppercase" shrink={false} style={[styles.badgeText, { color: G.fgSecondary }]} numberOfLines={1}>{editForm.category || t('common.none')}</AppText>
                    </View>
                  )}
-              </View>
-           </View>
-        </Animated.View>
+               </View>
+            </View>
+         </Animated.View>
+         </TutorialTarget>
 
-        {/* Orchestration Block (Recurring) */}
-        <Animated.View style={styles.section}>
-          <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.sectionTitle, { color: G.fgSecondary }]} numberOfLines={1}>{t('expense.orchestration_nodes')}</AppText>
+         {/* Orchestration Block (Recurring) */}
+         <TutorialTarget id="ed-budget">
+         <Animated.View style={styles.section}>
+           <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.sectionTitle, { color: G.fgSecondary }]} numberOfLines={1}>{t('expense.orchestration_nodes')}</AppText>
            <View style={[styles.intelligenceBlock, { backgroundColor: G.bgCard, borderColor: G.border, overflow: 'hidden' }]}>
              <View style={styles.node}>
                <View style={styles.nodeInfo}>
@@ -282,17 +290,19 @@ const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => vo
                 </View>
               </View>
             )}
-          </View>
-        </Animated.View>
+            </View>
+          </Animated.View>
+          </TutorialTarget>
 
         <View style={{ height: 120 }} />
-      </ScrollView>
+      </TutorialScrollView>
 
       {/* Action Float */}
+      <TutorialTarget id="ed-actions">
       <View style={[styles.actionFloat, { backgroundColor: colors.background }]}>
          <TouchableOpacity 
             style={[styles.primaryAction, { backgroundColor: G.fg, shadowColor: G.fg }]}
-           onPress={isEditing ? handleSave : () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setIsEditing(true); }}
+            onPress={isEditing ? handleSave : () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setIsEditing(true); }}
          >
             {isEditing ? (
               <ShieldCheck size={20} color={G.bg} />
@@ -304,6 +314,7 @@ const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => vo
             </AppText>
          </TouchableOpacity>
       </View>
+      </TutorialTarget>
 
       <Modal visible={showDeleteConfirm} transparent animationType="fade">
         <PremiumActionModal

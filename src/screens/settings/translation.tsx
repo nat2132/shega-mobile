@@ -3,7 +3,6 @@ import {
   View, 
   StyleSheet, 
   TouchableOpacity, 
-  ScrollView
 } from 'react-native';
 import { 
   Languages, 
@@ -17,6 +16,8 @@ import { useSettings } from '@/context/SettingsContext';
 import { AppText} from '@/components/ui';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { getSettingsGlass } from './glass-settings';
+import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
+import { translationTutorial } from '@/tutorials/definitions';
 type LangId = 'en' | 'am' | 'om' | 'ti';
 
 const LANGUAGES: { id: LangId; title: string; scriptKey: string; preview: string }[] = [
@@ -159,6 +160,7 @@ const TranslationSettings = () => {
   };
 
   const currentPreview = LANGUAGES.find(l => l.id === language)?.preview ?? t('inventory.header');
+  const tutorial = useTutorial({ tutorial: translationTutorial });
 
   return (
     <View style={[styles.container, { backgroundColor: G.bg }]}>
@@ -167,14 +169,17 @@ const TranslationSettings = () => {
         <View style={[styles.glowWash, { backgroundColor: G.mutedLight, bottom: -40, right: -30, width: 160, height: 160, borderRadius: 80 }]} />
         <View style={[styles.glowWash, { backgroundColor: G.mutedLight, top: '40%', right: -50, width: 140, height: 140, borderRadius: 70 }]} />
       </View>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <TutorialScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <Animated.View entering={FadeIn.duration(600)}>
+          <TutorialTarget id="tr-header">
           <View style={styles.headerNode}>
             <AppText variant="body" weight="medium" style={[styles.headerSub, { color: G.fgSecondary }]} numberOfLines={2}>{t('translation.localization')}</AppText>
             <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{t('translation.global_hub')}</AppText>
           </View>
+          </TutorialTarget>
 
           {/* Intelligence Preview Node */}
+          <TutorialTarget id="tr-current">
           <View style={[styles.previewBlueprint, { backgroundColor: G.bgCard, borderColor: G.border }]}>
             <View style={styles.blueprintHead}>
               <View style={[styles.iconTag, { backgroundColor: G.fg + '08' }]}>
@@ -191,9 +196,11 @@ const TranslationSettings = () => {
                <Sparkles size={16} color={colors.primary} />
             </View>
           </View>
+          </TutorialTarget>
 
           <AppText variant="caption" weight="bold" style={[styles.selectionHeading, { color: G.fgSecondary }]} numberOfLines={1}>{t('translation.selection_heading')}</AppText>
 
+          <TutorialTarget id="tr-list">
           {LANGUAGES.map((lang, index) => {
             const isSelected = language === lang.id;
             return (
@@ -223,6 +230,7 @@ const TranslationSettings = () => {
               </Animated.View>
             );
           })}
+          </TutorialTarget>
 
           <View style={[styles.infoNode, { backgroundColor: G.fg + '05' }]}>
              <Zap size={18} color={G.fgSecondary} />
@@ -231,7 +239,10 @@ const TranslationSettings = () => {
              </AppText>
           </View>
         </Animated.View>
-      </ScrollView>
+      </TutorialScrollView>
+      <View style={{ position: 'absolute', top: 50, right: 20, zIndex: 100 }}>
+        <TutorialButton tutorialId="translation-settings" screenName={t('translation.localization')} />
+      </View>
     </View>
   );
 };

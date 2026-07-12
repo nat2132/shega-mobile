@@ -36,6 +36,8 @@ import {
 import Animated, { FadeInDown } from "react-native-reanimated";
 import Svg, { Circle } from "react-native-svg";
 import { getBudgetGlass } from './glass-budget';
+import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
+import { budgetTutorial, createBudgetTutorial } from '@/tutorials/definitions';
 
 const StatusBadge = ({ status }: { status: string }) => {
   const { colors, t } = useSettings();
@@ -95,6 +97,7 @@ const BudgetOverview = () => {
   const { notifCount } = useNotifications();
   const router = useRouter();
   const dialog = useDialog();
+  const tutorial = useTutorial({ tutorial: budgetTutorial });
 
   const [dashboard, setDashboard] = useState<any>(null);
   const [alerts, setAlerts] = useState<any[]>([]);
@@ -178,21 +181,26 @@ const BudgetOverview = () => {
       <View style={{ position: 'absolute', top: -120, left: -100, width: 320, height: 320, borderRadius: 160, backgroundColor: 'rgba(255,255,255,0.03)' }} />
       <View style={{ position: 'absolute', top: 180, right: -80, width: 260, height: 260, borderRadius: 130, backgroundColor: 'rgba(255,255,255,0.02)' }} />
       <View style={{ position: 'absolute', bottom: 160, left: -60, width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(255,255,255,0.025)' }} />
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
+      <TutorialScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
+        <TutorialTarget id="bud-header">
         <View style={s.topBar}>
           <TouchableOpacity style={[s.avatarBox, { borderColor: G.border }]} onPress={openSidebar}>
             <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={s.avatar} />
           </TouchableOpacity>
           <AppText variant="heading" weight="bold">{t("budget.title")}</AppText>
-          <TouchableOpacity onPress={() => router.push("/notifications")} style={[s.iconBtn, { borderColor: G.border }]}>
-            <Bell size={22} color={G.fg} />
-            {notifCount > 0 && (
-              <View style={[s.notifBadge, { backgroundColor: colors.primary }]}>
-                <AppText variant="micro" weight="bold" style={s.notifBadgeText}>{notifCount}</AppText>
-              </View>
-            )}
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TutorialButton tutorialId="budget" screenName="Budget" />
+            <TouchableOpacity onPress={() => router.push("/notifications")} style={[s.iconBtn, { borderColor: G.border }]}>
+              <Bell size={22} color={G.fg} />
+              {notifCount > 0 && (
+                <View style={[s.notifBadge, { backgroundColor: colors.primary }]}>
+                  <AppText variant="micro" weight="bold" style={s.notifBadgeText}>{notifCount}</AppText>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
+        </TutorialTarget>
 
         {/* Budget Switcher */}
         <Animated.View entering={FadeInDown.duration(500)} style={s.budgetSwitcher}>
@@ -226,6 +234,7 @@ const BudgetOverview = () => {
         </Animated.View>
 
         {/* Monthly Summary Card */}
+        <TutorialTarget id="bud-overview">
         <Animated.View entering={FadeInDown.duration(600)} style={[s.summaryCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
           <View style={s.summaryTop}>
             <View style={{ flex: 1, marginRight: 16 }}>
@@ -261,6 +270,7 @@ const BudgetOverview = () => {
             }]} />
           </View>
         </Animated.View>
+        </TutorialTarget>
 
         {/* Budget Alerts */}
         {alerts.length > 0 && (
@@ -298,6 +308,7 @@ const BudgetOverview = () => {
         )}
 
         {/* Monthly Categories */}
+        <TutorialTarget id="bud-categories">
         <Animated.View entering={FadeInDown.duration(600).delay(200)} style={s.categoriesSection}>
           <AppText variant="caption" weight="bold" transform="uppercase" style={[s.sectionTitle, { color: G.fgSecondary }]}>
             {t("budget.categories")}
@@ -344,9 +355,11 @@ const BudgetOverview = () => {
             </View>
           )}
         </Animated.View>
+        </TutorialTarget>
 
         {/* Active Budgets */}
         {summary.activeBudgets?.length > 0 && (
+          <TutorialTarget id="bud-trends">
           <Animated.View entering={FadeInDown.duration(600).delay(300)} style={s.budgetsSection}>
             <AppText variant="caption" weight="bold" transform="uppercase" style={[s.sectionTitle, { color: G.fgSecondary }]}>
               {t("budget.budgets")}
@@ -379,19 +392,22 @@ const BudgetOverview = () => {
               );
             })}
           </Animated.View>
+          </TutorialTarget>
         )}
 
 
 
         <View style={{ height: 120 }} />
-      </ScrollView>
+      </TutorialScrollView>
 
       {/* FAB */}
+      <TutorialTarget id="bud-create-btn">
       <View style={s.fabRow}>
         <TouchableOpacity style={[s.fab, { backgroundColor: G.fg, shadowColor: G.fg }]} onPress={() => setShowCreateModal(true)} activeOpacity={0.8}>
           <Plus size={28} color={G.bg} />
         </TouchableOpacity>
       </View>
+      </TutorialTarget>
 
       {/* Create Budget Modal */}
       <Modal visible={showCreateModal} transparent animationType="slide" onRequestClose={() => setShowCreateModal(false)}>
@@ -501,6 +517,7 @@ const CreateBudgetModal = ({ colors, t, onClose, onSaved }: { colors: any; t: an
   const [categories, setCategories] = useState<{ name: string; amount: string }[]>([]);
   const [customCategoryName, setCustomCategoryName] = useState("");
   const dialog = useDialog();
+  const cbTutorial = useTutorial({ tutorial: createBudgetTutorial });
 
   const draftFormKey = 'budget';
   const draftFormData = useFormDrafts({
@@ -592,87 +609,100 @@ const CreateBudgetModal = ({ colors, t, onClose, onSaved }: { colors: any; t: an
             }}
           />
         )}
-        <AppText variant="title" weight="bold" style={{ color: G.fg, marginBottom: 4 }}>{t('budget.create')}</AppText>
-        <AppText variant="body-sm" style={{ color: G.fgSecondary, marginBottom: 24 }}>{t('budget.set_spending_plan')}</AppText>
+        <TutorialTarget id="cb-header">
+          <AppText variant="title" weight="bold" style={{ color: G.fg, marginBottom: 4 }}>{t('budget.create')}</AppText>
+          <AppText variant="body-sm" style={{ color: G.fgSecondary, marginBottom: 24 }}>{t('budget.set_spending_plan')}</AppText>
+        </TutorialTarget>
 
-        <TextInput
-          style={[s.input, { color: G.fg, borderColor: G.border, backgroundColor: G.bgCard }]}
-          placeholder={t('budget.name_placeholder')}
-          placeholderTextColor={G.fgSecondary}
-          value={name}
-          onChangeText={setName}
-        />
-
-        <AppText variant="caption" weight="bold" transform="uppercase" style={[s.sectionTitle, { color: G.fgSecondary, marginTop: 8, marginBottom: 10 }]}>{t('budget.type_label')}</AppText>
-        <View style={s.chipRow}>
-          {["business", "department", "project", "branch"].map(t => (
-            <TouchableOpacity key={t}
-              style={[s.chip, { backgroundColor: G.bgCard, borderColor: G.border }, type === t && { backgroundColor: G.fg }]}
-              onPress={() => { setType(t); Haptics.selectionAsync(); }}
-            >
-              <AppText variant="body-sm" weight="bold" style={{ color: type === t ? G.bg : G.fg, textTransform: "capitalize" }}>{t}</AppText>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <AppText variant="caption" weight="bold" transform="uppercase" style={[s.sectionTitle, { color: G.fgSecondary, marginTop: 20, marginBottom: 10 }]}>{t('budget.period_label')}</AppText>
-        <View style={s.chipRow}>
-          {PERIOD_OPTIONS.map(p => (
-            <TouchableOpacity key={p}
-              style={[s.chip, { backgroundColor: G.bgCard, borderColor: G.border }, period === p && { backgroundColor: G.fg }]}
-              onPress={() => { setPeriod(p); Haptics.selectionAsync(); }}
-            >
-              <AppText variant="body-sm" weight="bold" style={{ color: period === p ? G.bg : G.fg, textTransform: "capitalize" }}>{p}</AppText>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <AppText variant="caption" weight="bold" transform="uppercase" style={[s.sectionTitle, { color: G.fgSecondary, marginTop: 20, marginBottom: 12 }]}>
-          {t('budget.categories')}
-        </AppText>
-
-        {categories.map((cat, i) => (
-          <View key={cat.name + i} style={s.catInputRow}>
-            <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <AppText variant="body-sm" weight="bold" style={{ color: G.fg }} numberOfLines={1}>
-                {cat.name.replace(/_/g, " ")}
-              </AppText>
-              <TouchableOpacity onPress={() => removeCategory(i)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <X size={14} color={colors.error} />
-              </TouchableOpacity>
-            </View>
-            <TextInput
-              style={[s.amountInput, { color: G.fg, borderColor: G.border, backgroundColor: G.bgCard }]}
-              placeholder="0"
-              placeholderTextColor={G.fgSecondary}
-              keyboardType="numeric"
-              value={cat.amount}
-              onChangeText={(v) => {
-                const updated = [...categories];
-                updated[i] = { ...updated[i], amount: v };
-                setCategories(updated);
-              }}
-            />
-          </View>
-        ))}
-
-        <View style={s.addCatRow}>
+        <TutorialTarget id="cb-name">
           <TextInput
-            style={[s.addCatInput, { color: G.fg, borderColor: G.border, backgroundColor: G.bgCard }]}
-            placeholder={t('budget.custom_category')}
+            style={[s.input, { color: G.fg, borderColor: G.border, backgroundColor: G.bgCard }]}
+            placeholder={t('budget.name_placeholder')}
             placeholderTextColor={G.fgSecondary}
-            value={customCategoryName}
-            onChangeText={setCustomCategoryName}
-            onSubmitEditing={addCustomCategory}
+            value={name}
+            onChangeText={setName}
           />
-          <TouchableOpacity style={[s.addCatBtn, { backgroundColor: G.fg }]} onPress={addCustomCategory}>
-            <Plus size={18} color={G.bg} />
-          </TouchableOpacity>
-        </View>
+        </TutorialTarget>
 
-        <TouchableOpacity style={[s.saveBtn, { backgroundColor: G.fg, marginTop: 24, marginBottom: 40 }]} onPress={handleSave}>
-          <AppText variant="body" weight="bold" style={{ color: G.bg }}>{t('budget.create')}</AppText>
-        </TouchableOpacity>
+        <TutorialTarget id="cb-type">
+          <AppText variant="caption" weight="bold" transform="uppercase" style={[s.sectionTitle, { color: G.fgSecondary, marginTop: 8, marginBottom: 10 }]}>{t('budget.type_label')}</AppText>
+          <View style={s.chipRow}>
+            {["business", "department", "project", "branch"].map(t => (
+              <TouchableOpacity key={t}
+                style={[s.chip, { backgroundColor: G.bgCard, borderColor: G.border }, type === t && { backgroundColor: G.fg }]}
+                onPress={() => { setType(t); Haptics.selectionAsync(); }}
+              >
+                <AppText variant="body-sm" weight="bold" style={{ color: type === t ? G.bg : G.fg, textTransform: "capitalize" }}>{t}</AppText>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TutorialTarget>
+
+        <TutorialTarget id="cb-period">
+          <AppText variant="caption" weight="bold" transform="uppercase" style={[s.sectionTitle, { color: G.fgSecondary, marginTop: 20, marginBottom: 10 }]}>{t('budget.period_label')}</AppText>
+          <View style={s.chipRow}>
+            {PERIOD_OPTIONS.map(p => (
+              <TouchableOpacity key={p}
+                style={[s.chip, { backgroundColor: G.bgCard, borderColor: G.border }, period === p && { backgroundColor: G.fg }]}
+                onPress={() => { setPeriod(p); Haptics.selectionAsync(); }}
+              >
+                <AppText variant="body-sm" weight="bold" style={{ color: period === p ? G.bg : G.fg, textTransform: "capitalize" }}>{p}</AppText>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TutorialTarget>
+
+        <TutorialTarget id="cb-categories">
+          <AppText variant="caption" weight="bold" transform="uppercase" style={[s.sectionTitle, { color: G.fgSecondary, marginTop: 20, marginBottom: 12 }]}>
+            {t('budget.categories')}
+          </AppText>
+
+          {categories.map((cat, i) => (
+            <View key={cat.name + i} style={s.catInputRow}>
+              <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <AppText variant="body-sm" weight="bold" style={{ color: G.fg }} numberOfLines={1}>
+                  {cat.name.replace(/_/g, " ")}
+                </AppText>
+                <TouchableOpacity onPress={() => removeCategory(i)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <X size={14} color={colors.error} />
+                </TouchableOpacity>
+              </View>
+              <TextInput
+                style={[s.amountInput, { color: G.fg, borderColor: G.border, backgroundColor: G.bgCard }]}
+                placeholder="0"
+                placeholderTextColor={G.fgSecondary}
+                keyboardType="numeric"
+                value={cat.amount}
+                onChangeText={(v) => {
+                  const updated = [...categories];
+                  updated[i] = { ...updated[i], amount: v };
+                  setCategories(updated);
+                }}
+              />
+            </View>
+          ))}
+
+          <View style={s.addCatRow}>
+            <TextInput
+              style={[s.addCatInput, { color: G.fg, borderColor: G.border, backgroundColor: G.bgCard }]}
+              placeholder={t('budget.custom_category')}
+              placeholderTextColor={G.fgSecondary}
+              value={customCategoryName}
+              onChangeText={setCustomCategoryName}
+              onSubmitEditing={addCustomCategory}
+            />
+            <TouchableOpacity style={[s.addCatBtn, { backgroundColor: G.fg }]} onPress={addCustomCategory}>
+              <Plus size={18} color={G.bg} />
+            </TouchableOpacity>
+          </View>
+        </TutorialTarget>
+
+        <TutorialTarget id="cb-commit-btn">
+          <TouchableOpacity style={[s.saveBtn, { backgroundColor: G.fg, marginTop: 24, marginBottom: 40 }]} onPress={handleSave}>
+            <AppText variant="body" weight="bold" style={{ color: G.bg }}>{t('budget.create')}</AppText>
+          </TouchableOpacity>
+        </TutorialTarget>
+        <TutorialButton tutorialId="create-budget" screenName="Create Budget" />
       </ScrollView>
     </View>
   );

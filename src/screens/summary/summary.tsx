@@ -31,6 +31,8 @@ import Animated, {
   FadeInUp,
 } from 'react-native-reanimated';
 import { getSummaryGlass } from './glass-summary';
+import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
+import { summaryTutorial } from '@/tutorials/definitions';
 
 type DateRangeOption = 
   | 'today' | 'yesterday' | 'this_week' | 'last_week' 
@@ -173,6 +175,7 @@ const SummaryScreen = () => {
   const G = getSummaryGlass(colors);
   const { notifCount } = useNotifications();
   const router = useRouter();
+  const tutorial = useTutorial({ tutorial: summaryTutorial });
   const [metrics, setMetrics] = useState<any>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [showDateSelector, setShowDateSelector] = useState(false);
@@ -262,12 +265,13 @@ const SummaryScreen = () => {
         <View style={[styles.bgWash, { top: 700, right: -60, backgroundColor: '#FFFFFF', opacity: 0.015 }]} />
       </View>
 
-      <ScrollView 
+      <TutorialScrollView 
         showsVerticalScrollIndicator={false} 
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
         {/* Top Navigation Bar */}
+        <TutorialTarget id="sum-header">
         <View style={styles.topBar}>
           <View style={{ flex: 1 }}>
             <TouchableOpacity 
@@ -279,6 +283,7 @@ const SummaryScreen = () => {
           </View>
           
           <View style={styles.headerActions}>
+            <TutorialButton tutorialId="summary" screenName="Summary" />
             <TouchableOpacity 
               onPress={() => setShowDateSelector(true)}
               style={[styles.headerDateBadge, { 
@@ -306,6 +311,7 @@ const SummaryScreen = () => {
             </TouchableOpacity>
           </View>
         </View>
+        </TutorialTarget>
 
         {/* Period Header */}
         <Animated.View entering={FadeInDown.duration(600)} style={styles.screenHeader}>
@@ -314,6 +320,7 @@ const SummaryScreen = () => {
         </Animated.View>
 
         {/* Metrics Grid */}
+        <TutorialTarget id="sum-financial">
         <Animated.View entering={FadeInDown.delay(200).duration(600)} style={styles.metricsGrid}>
           {/* Row 1: Sales Cash & Sales Items */}
           <View style={styles.metricsRow}>
@@ -358,6 +365,7 @@ const SummaryScreen = () => {
           </View>
 
           {/* Row 4: Price Changes & Net Profit */}
+          <TutorialTarget id="sum-velocity">
           <View style={styles.metricsRow}>
             <MetricCard 
               label={t('summary.price_changes')}
@@ -372,18 +380,23 @@ const SummaryScreen = () => {
               <AppText variant="caption" weight="medium" style={[styles.metricLabel, { color: G.muted }]} numberOfLines={2}>{t('summary.net_profit')}</AppText>
             </View>
           </View>
+          </TutorialTarget>
         </Animated.View>
+        </TutorialTarget>
 
         {/* Performance Rating */}
+        <TutorialTarget id="sum-pulse">
         <Animated.View entering={FadeInUp.delay(600).duration(600)} style={styles.perfSection}>
           <View style={[styles.perfCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
             <View style={styles.perfHeader}>
               <AppText variant="title" weight="bold" style={[styles.perfTitle, { color: G.fg }]} numberOfLines={2}>{t('summary.performance_rating')}</AppText>
               <PerformanceBadge rating={getRating()} />
             </View>
+            <TutorialTarget id="sum-insights">
             <AppText variant="body" weight="medium" style={[styles.perfDesc, { color: G.muted }]} numberOfLines={4}>
               {t('summary.performance_desc')}
             </AppText>
+            </TutorialTarget>
             <View style={[styles.perfFormula, { backgroundColor: G.accentGlass }]}>
               <AppText variant="caption" weight="medium" align="center" style={[styles.perfFormulaLabel, { color: G.muted, marginBottom: 4 }]} numberOfLines={2}>              {t('summary.formula_label')}</AppText>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: 2, marginVertical: 2 }}>
@@ -405,8 +418,9 @@ const SummaryScreen = () => {
             </View>
           </View>
         </Animated.View>
+        </TutorialTarget>
 
-      </ScrollView>
+      </TutorialScrollView>
 
       {/* Date Selector Modal */}
       <Modal visible={showDateSelector} transparent animationType="fade" onRequestClose={() => setShowDateSelector(false)}>

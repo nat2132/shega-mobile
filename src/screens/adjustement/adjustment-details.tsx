@@ -36,6 +36,8 @@ import {
 import { AppNumber, AppText } from '@/components/ui';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { getAdjustmentGlass } from './glass-adjustment';
+import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
+import { adjustmentHistoryTutorial } from '@/tutorials/definitions';
 // →→→ Types →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
 
 interface AdjustmentDetailsProps {
@@ -112,6 +114,7 @@ const AdjustmentListItem = ({ item, onPress }: { item: any; onPress: () => void 
 const AdjustmentAllScreen = ({ onClose, onSelectItem }: { onClose: () => void; onSelectItem: (item: any) => void }) => {
   const { colors, t } = useSettings();
   const G = getAdjustmentGlass(colors);
+  const tutorial = useTutorial({ tutorial: adjustmentHistoryTutorial });
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<string | undefined>(undefined);
   const [periodFilter, setPeriodFilter] = useState<string | undefined>(undefined);
@@ -131,6 +134,7 @@ const AdjustmentAllScreen = ({ onClose, onSelectItem }: { onClose: () => void; o
       <View style={{ position: 'absolute', top: -70, right: -50, width: 200, height: 200, borderRadius: 100, backgroundColor: G.mutedLight, opacity: 0.4, pointerEvents: 'none' }} />
       <View style={{ position: 'absolute', top: 200, left: -60, width: 180, height: 180, borderRadius: 90, backgroundColor: G.mutedLight, opacity: 0.25, pointerEvents: 'none' }} />
       {/* Header */}
+      <TutorialTarget id="ah-header">
       <View style={listStyles.header}>
         <View style={{ flex: 1 }}>
           <AppText variant="micro" weight="bold" transform="uppercase" style={[listStyles.headerSub, { color: G.fgSecondary }]} numberOfLines={1}>CALIBRATION VAULT</AppText>
@@ -139,9 +143,12 @@ const AdjustmentAllScreen = ({ onClose, onSelectItem }: { onClose: () => void; o
         <TouchableOpacity onPress={onClose} style={[listStyles.closeBtn, { borderColor: G.border }]}>
           <X size={20} color={G.fg} />
         </TouchableOpacity>
+        <TutorialButton tutorialId="adjustment-history" screenName="Adjustment History" />
       </View>
+      </TutorialTarget>
 
       {/* Search */}
+      <TutorialTarget id="ah-filter">
       <View style={[listStyles.searchBox, { backgroundColor: G.bgCard, borderColor: G.border }]}>
         <Search size={16} color={G.fgSecondary} />
         <TextInput
@@ -203,8 +210,10 @@ const AdjustmentAllScreen = ({ onClose, onSelectItem }: { onClose: () => void; o
       <AppText variant="micro" weight="bold" style={[listStyles.countText, { color: G.fgSecondary }]} numberOfLines={1}>
         {data.length} record{data.length !== 1 ? 's' : ''}
       </AppText>
+      </TutorialTarget>
 
       {/* List */}
+      <TutorialTarget id="ah-list">
       <FlatList
         data={data}
         keyExtractor={(item, i) => item?.id?.toString() ?? i.toString()}
@@ -222,6 +231,7 @@ const AdjustmentAllScreen = ({ onClose, onSelectItem }: { onClose: () => void; o
           </View>
         }
       />
+      </TutorialTarget>
     </View>
   );
 };
@@ -343,7 +353,7 @@ const AdjustmentDetailsScreen: React.FC<AdjustmentDetailsProps> = ({ adjustment,
       <View style={{ position: 'absolute', top: -60, right: -60, width: 200, height: 200, borderRadius: 100, backgroundColor: G.mutedLight, opacity: 0.4, pointerEvents: 'none' }} />
       <View style={{ position: 'absolute', top: 150, left: -80, width: 220, height: 220, borderRadius: 110, backgroundColor: G.mutedLight, opacity: 0.25, pointerEvents: 'none' }} />
       <View style={{ position: 'absolute', bottom: 100, right: -40, width: 180, height: 180, borderRadius: 90, backgroundColor: G.mutedLight, opacity: 0.2, pointerEvents: 'none' }} />
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={detailStyles.scrollContent}>
+      <TutorialScrollView showsVerticalScrollIndicator={false} contentContainerStyle={detailStyles.scrollContent}>
         {/* Header Block */}
         <Animated.View entering={FadeInDown.duration(400)} style={[detailStyles.headerBlock, { backgroundColor: G.bgCard, borderColor: G.border }]}>
           <View style={detailStyles.headerTop}>
@@ -433,7 +443,7 @@ const AdjustmentDetailsScreen: React.FC<AdjustmentDetailsProps> = ({ adjustment,
             </TouchableOpacity>
           </Animated.View>
         )}
-      </ScrollView>
+      </TutorialScrollView>
 
       <Modal visible={showDeleteConfirm} transparent animationType="fade">
         <PremiumActionModal

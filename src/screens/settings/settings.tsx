@@ -52,6 +52,8 @@ import SecuritySettingsScreen from './security';
 import SupportScreen from './support';
 import TranslationSettingsScreen from './translation';
 import WarehouseSettingsScreen from './warehouse';
+import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
+import { settingsTutorial } from '@/tutorials/definitions';
 
 // →→→ Shared Sub-Components →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
 
@@ -372,6 +374,7 @@ const SettingsScreen = () => {
   const { theme, setTheme, userProfile, pin, colors, t, soundEnabled, setSoundEnabled } = useSettings();
   const { dashboardVisibility, toggleDashboardSection } = useDashboardVisibility();
   const G = getSettingsGlass(colors);
+  const tutorial = useTutorial({ tutorial: settingsTutorial });
 
   const [showProfile, setShowProfile] = useState(false);
   const [showSecurity, setShowSecurity] = useState(false);
@@ -400,20 +403,26 @@ const SettingsScreen = () => {
         <View style={[styles.bgWash, { top: '40%', left: '30%', backgroundColor: '#FFFFFF', opacity: 0.015, width: 200, height: 200, borderRadius: 100 }]} />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <TutorialScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         
         {/* Integrated Header */}
+        <TutorialTarget id="settings-header">
         <View style={styles.integratedHeader}>
           <View>
             <AppText variant="body" weight="medium" style={[styles.headerLabel, { color: G.muted }]} numberOfLines={2}>{t('settings.system_pref')}</AppText>
             <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{t('settings.configuration')}</AppText>
           </View>
-          <View style={[styles.headerIconBox, { backgroundColor: G.bgCard, borderColor: G.border }]}>
-            <Shield size={24} color={G.fg} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TutorialButton tutorialId="settings" screenName="Settings" />
+            <View style={[styles.headerIconBox, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+              <Shield size={24} color={G.fg} />
+            </View>
           </View>
         </View>
+        </TutorialTarget>
 
         {/* Elite Profile Banner */}
+        <TutorialTarget id="settings-profile">
         <Animated.View entering={FadeInDown.duration(600)} style={styles.bannerSection}>
           <TouchableOpacity 
             activeOpacity={0.9} 
@@ -436,30 +445,37 @@ const SettingsScreen = () => {
             </View>
           </TouchableOpacity>
         </Animated.View>
+        </TutorialTarget>
 
         {/* Service Intelligence Grid */}
         <View style={styles.gridSection}>
           <View style={styles.gridRow}>
+            <TutorialTarget id="settings-security">
             <ConfigurationGridItem 
               icon={Shield} 
               title={t('settings.security')} 
               onPress={() => handleOpenSub(setShowSecurity)} 
               color={G.fg}
             />
+            </TutorialTarget>
+            <TutorialTarget id="settings-notifications">
             <ConfigurationGridItem 
               icon={Bell} 
               title={t('settings.notifications')} 
               onPress={() => handleOpenSub(setShowNotification)} 
               color={G.fg}
             />
+            </TutorialTarget>
           </View>
           <View style={styles.gridRow}>
+            <TutorialTarget id="settings-language">
             <ConfigurationGridItem 
               icon={Languages} 
               title={t('settings.language')} 
               onPress={() => handleOpenSub(setShowTranslation)} 
               color={G.fg}
             />
+            </TutorialTarget>
             <ConfigurationGridItem 
               icon={Calendar} 
               title={t('settings.date_time_format')} 
@@ -554,6 +570,7 @@ const SettingsScreen = () => {
         </View>
 
         {/* The Palette — Theme Selection */}
+        <TutorialTarget id="settings-theme">
         <View style={styles.paletteSection}>
           <View style={styles.sectionHead}>
             <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: G.muted }]} numberOfLines={1}>{t('settings.palette')}</AppText>
@@ -578,6 +595,7 @@ const SettingsScreen = () => {
             ))}
           </ScrollView>
         </View>
+        </TutorialTarget>
 
         {/* Advanced System Ledger */}
         <View style={styles.ledgerSection}>
@@ -587,12 +605,14 @@ const SettingsScreen = () => {
             <Sliders size={20} color={G.muted} />
           </View>
           <View style={[styles.ledgerGroup, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+             <TutorialTarget id="settings-export">
              <SettingLedgerItem 
                 icon={Database} 
                 title={t('settings.export_data')} 
                 subtitle={t('settings.export_desc')}
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowExportModal(true); }}
              />
+             </TutorialTarget>
              <SettingLedgerItem 
                 icon={CloudDownload} 
                 title={t('settings.import_data')} 
@@ -637,7 +657,7 @@ const SettingsScreen = () => {
         </View>
 
         <View style={{ height: 40 }} />
-      </ScrollView>
+      </TutorialScrollView>
 
       {/* Bottom Sheet Modals */}
       <BottomSheet visible={showProfile} onClose={() => setShowProfile(false)}>

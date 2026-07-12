@@ -58,6 +58,8 @@ import { UniversalSearch } from '@/components/UniversalSearch';
 import { useDialog } from '@/context/DialogContext';
 import { PROFILE_IMAGES, useDashboardVisibility, useSettings } from '@/context/SettingsContext';
 import { useSidebar } from '@/context/SidebarContext';
+import { useTutorial, TutorialScrollView, TutorialTarget, TutorialButton } from '@/tutorials';
+import { dashboardTutorial } from '@/tutorials/definitions';
 import { useWarehouse } from '@/context/WarehouseContext';
 import { getActivityFeed, getAdjustmentById, getDashboardStats, getDebtCustomers, getExpenseById, getInventoryStats, getLowStockItems, getOnCreditItems, getRecentItems, getSaleWithItemsById, ItemData } from '@/database/db';
 import { generateBulkTestData } from '@/database/generateTestData';
@@ -180,6 +182,7 @@ SparklineChart.displayName = 'SparklineChart';
     const { userProfile, colors, calendarType, language, timeSystem, t } = useSettings();
     const { dashboardVisibility, toggleDashboardSection } = useDashboardVisibility();
     const { refreshTrialDays } = useSubscription();
+    const tutorial = useTutorial({ tutorial: dashboardTutorial });
     const G = getDashGlass(colors);
     const styles = useMemo(() => createStyles(G), [G]);
     useNotifications();
@@ -507,7 +510,7 @@ SparklineChart.displayName = 'SparklineChart';
     <>
       <View style={{ flex: 1, backgroundColor: G.bg }}>
         
-        <ScrollView 
+        <TutorialScrollView 
           showsVerticalScrollIndicator={false} 
           contentContainerStyle={[styles.container, { backgroundColor: 'transparent' }]}
           refreshControl={
@@ -520,6 +523,7 @@ SparklineChart.displayName = 'SparklineChart';
           }
         >
           {/* Header */}
+          <TutorialTarget id="dash-header">
           <View style={styles.glassHeader}>
             <View style={styles.glassHeaderContent}>
               <View style={{ flex: 1 }}>
@@ -547,32 +551,41 @@ SparklineChart.displayName = 'SparklineChart';
                 >
                   <RefreshCw size={18} color={G.muted} />
                 </TouchableOpacity>
+                <TutorialTarget id="dash-alerts">
                 <TouchableOpacity 
                   onPress={() => router.push('/notifications')} 
                   style={styles.headerIconBtn}
                 >
                   <NotificationBell size={20} />
                 </TouchableOpacity>
+                </TutorialTarget>
+                <TutorialTarget id="dash-search">
                 <TouchableOpacity
                   onPress={() => setShowUniversalSearch(true)}
                   style={styles.headerIconBtn}
                 >
                   <Search size={20} color={G.muted} />
                 </TouchableOpacity>
+                </TutorialTarget>
 
-                <TouchableOpacity 
-                  onPress={openSidebar} 
-                  activeOpacity={0.7}
-                  style={styles.headerAvatarWrap}
-                >
-                  <View style={styles.headerAvatarGlow}>
-                    <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={styles.headerAvatar} />
-                  </View>
-                  <View style={[styles.onlineIndicator, { backgroundColor: colors.success }]} />
-                </TouchableOpacity>
+                <TutorialButton tutorialId="dashboard" screenName="Dashboard" />
+
+                <TutorialTarget id="dash-avatar">
+                  <TouchableOpacity 
+                    onPress={openSidebar} 
+                    activeOpacity={0.7}
+                    style={styles.headerAvatarWrap}
+                  >
+                    <View style={styles.headerAvatarGlow}>
+                      <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={styles.headerAvatar} />
+                    </View>
+                    <View style={[styles.onlineIndicator, { backgroundColor: colors.success }]} />
+                  </TouchableOpacity>
+                </TutorialTarget>
               </View>
             </View>
           </View>
+          </TutorialTarget>
 
           {/* Premium Trial Banner */}
           <PremiumTrialBanner />
@@ -586,12 +599,15 @@ SparklineChart.displayName = 'SparklineChart';
 
           {/* Business Health Score */}
           {dashboardVisibility.businessHealth && (
+            <TutorialTarget id="dash-health">
             <View style={{ paddingHorizontal: DASH_SPACING.gutter }}>
               <BusinessHealthCard health={businessHealth} loading={healthLoading} />
             </View>
+            </TutorialTarget>
           )}
 
           {/* Metric Hub */}
+          <TutorialTarget id="dash-sparkline">
           <Animated.View entering={FadeInDown.springify().damping(18).stiffness(120)} style={styles.metricHub}>
             <GestureDetector gesture={panGesture}>
                 <View style={styles.metricCard}>
@@ -661,8 +677,10 @@ SparklineChart.displayName = 'SparklineChart';
                     </View>
             </GestureDetector>
           </Animated.View>
+          </TutorialTarget>
 
           {/* Quick Stats */}
+          <TutorialTarget id="dash-stats">
           <View style={styles.bentoSection}>
             <View style={styles.bentoSectionHeader}>
               <AppText variant="title" weight="bold" style={styles.bentoSectionTitle} numberOfLines={2}>{t('dashboard.quick_status')}</AppText>
@@ -713,6 +731,7 @@ SparklineChart.displayName = 'SparklineChart';
               })}
             </ScrollView>
           </View>
+          </TutorialTarget>
 
           {/* Business Assistant */}
           {dashboardVisibility.businessAssistant && (
@@ -722,6 +741,7 @@ SparklineChart.displayName = 'SparklineChart';
           )}
 
           {/* Activity Feed */}
+          <TutorialTarget id="dash-activity">
           <View style={styles.feedSection}>
             <View style={styles.feedHeader}>
               <View>
@@ -753,7 +773,8 @@ SparklineChart.displayName = 'SparklineChart';
               </View>
             )}
           </View>
-        </ScrollView>
+          </TutorialTarget>
+        </TutorialScrollView>
 
         {/* Smart FAB */}
         <View style={styles.dockedBarWrapper}>

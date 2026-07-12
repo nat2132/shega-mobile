@@ -40,6 +40,8 @@ import { DraftSection } from '@/components/DraftSection';
 import { Draft } from '@/services/draftService';
 import { useFormDrafts } from '@/hooks/useFormDrafts';
 import { getSalesGlass } from './glass-sales';
+import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
+import { saleFormTutorial } from '@/tutorials/definitions';
 const SALES_GLASS = getSalesGlass(LightTheme);
 interface SaleFormProps {
   cart: any[];
@@ -54,6 +56,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
 }) => {
   const { colors, t, theme } = useSettings();
   const SALES_GLASS = useMemo(() => getSalesGlass(colors), [colors]);
+  const tutorial = useTutorial({ tutorial: saleFormTutorial });
   const dialog = useDialog();
   const [paymentMethod, setPaymentMethod] = useState<"Cash" | "Transfer" | "">(
     "Cash",
@@ -287,7 +290,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
         style={{ flex: 1 }}
         enabled={false}
       >
-        <ScrollView
+        <TutorialScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -314,6 +317,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
             />
           )}
           {/* Checkout Header */}
+          <TutorialTarget id="sf-header">
           <Animated.View
             entering={FadeInDown.duration(600)}
             style={styles.header}
@@ -353,8 +357,10 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                   style={styles.bagCount}
                 />
               </View>
+              <TutorialButton tutorialId="sale-form" screenName="Record a Sale" />
             </View>
           </Animated.View>
+          </TutorialTarget>
 
           {/* Settlement Blocks */}
           <Animated.View
@@ -522,6 +528,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
               </View>
             </View>
 
+            <TutorialTarget id="sf-payment">
             {paymentStatus === "Paid" && (
               <View
                 style={[
@@ -626,7 +633,9 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                 </View>
               </View>
             )}
+            </TutorialTarget>
 
+            <TutorialTarget id="sf-customer-info">
             {(paymentStatus === "Debt" || paymentStatus === "Order") && (
               <Animated.View
                 entering={FadeInDown}
@@ -803,6 +812,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                 </View>
               </Animated.View>
             )}
+            </TutorialTarget>
 
             {/* Customer Search Modal */}
             <Modal
@@ -940,6 +950,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
             </Modal>
 
             {/* Pricing Adjustments */}
+            <TutorialTarget id="sf-pricing">
             <View style={styles.pricingSection}>
               <View style={styles.adjRow}>
                 <View style={styles.adjLabelCol}>
@@ -1075,6 +1086,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                 </View>
               </View>
             </View>
+            </TutorialTarget>
 
             {/* Vault Summary */}
             <View
@@ -1165,6 +1177,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
             </View>
           </Animated.View>
 
+          <TutorialTarget id="sf-commit-btn">
           <TouchableOpacity
             onPress={handleCheckout}
             activeOpacity={0.9}
@@ -1185,6 +1198,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
               </AppText>
             </View>
           </TouchableOpacity>
+          </TutorialTarget>
 
           <TouchableOpacity style={styles.backBtn} onPress={onBack}>
             <ChevronLeft size={16} color={SALES_GLASS.fgSecondary} />
@@ -1199,7 +1213,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
           </TouchableOpacity>
 
           <View style={{ height: 100 }} />
-        </ScrollView>
+        </TutorialScrollView>
       </KeyboardAvoidingView>
 
       <CustomDatePicker

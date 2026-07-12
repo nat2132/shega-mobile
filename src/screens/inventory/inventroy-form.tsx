@@ -58,6 +58,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getInventoryGlass } from './glass-inventory';
+import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
+import { inventoryFormTutorial } from '@/tutorials/definitions';
 const QUALITY_GRADES = ['grade1', 'grade2', 'grade3'];
 
 export const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?: () => void }) => {
@@ -332,7 +334,7 @@ const RestockFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?:
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <TutorialScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {draftFormDataRestock.showDrafts && (
           <DraftSection
             drafts={draftFormDataRestock.drafts}
@@ -465,7 +467,7 @@ const RestockFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?:
             <AppText variant="body" weight="bold" shrink={false} style={[styles.nextBtnText, { color: G.bg }]} numberOfLines={1}>{t('form.initialize_asset')}</AppText>
           </TouchableOpacity>
         </View>
-      </ScrollView>
+      </TutorialScrollView>
 
       {/* Supplier Modal */}
       <Modal visible={showSupplierModal} transparent animationType="slide">
@@ -533,6 +535,7 @@ const AddItemFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?:
   const { colors, t } = useSettings();
   const G = getInventoryGlass(colors);
   const styles = useMemo(() => createStyles(G), [G]);
+  const tutorial = useTutorial({ tutorial: inventoryFormTutorial });
   const dialog = useDialog();
   const router = useRouter();
   const [step, setStep] = useState(1);
@@ -763,28 +766,30 @@ const loadCategories = async () => {
       <View style={[styles.glowWash1, { backgroundColor: G.mutedLight }]} />
       <View style={[styles.glowWash2, { backgroundColor: G.mutedLight }]} />
       <View style={[styles.glowWash3, { backgroundColor: G.mutedLight }]} />
-      <View style={styles.header}>
-        <TouchableOpacity 
-          onPress={() => {
-            if (onClose) onClose();
-            else if (router.canGoBack()) router.back();
-          }} 
-          style={[styles.closeBtn, { borderColor: G.border }]}
-        >
-          <X size={20} color={G.fg} />
-        </TouchableOpacity>
-        <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{t('form.intelligence_intake')}</AppText>
-        <View style={{ width: 40 }} />
-      </View>
+        <TutorialTarget id="if-header">
+        <View style={styles.header}>
+          <TouchableOpacity 
+            onPress={() => {
+              if (onClose) onClose();
+              else if (router.canGoBack()) router.back();
+            }} 
+            style={[styles.closeBtn, { borderColor: G.border }]}
+          >
+            <X size={20} color={G.fg} />
+          </TouchableOpacity>
+          <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{t('form.intelligence_intake')}</AppText>
+          <TutorialButton tutorialId="inventory-form" screenName="Add Inventory Item" />
+        </View>
+        </TutorialTarget>
 
-      {renderStepIndicator()}
+        {renderStepIndicator()}
 
       <KeyboardAvoidingView 
         style={{ flex: 1 }} 
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <TutorialScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {draftFormData.showDrafts && (
           <DraftSection
             drafts={draftFormData.drafts}
@@ -822,6 +827,7 @@ const loadCategories = async () => {
             <View style={styles.formCard}>
               <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.cardTitle, { color: G.fgSecondary }]} numberOfLines={1}>{t('form.asset_identification')}</AppText>
               
+                <TutorialTarget id="if-name">
                 <View style={styles.inputNode}>
                   <View style={styles.nodeHeader}>
                      <Tag size={14} color={G.fgSecondary} />
@@ -838,6 +844,7 @@ const loadCategories = async () => {
                   />
                   {errors.itemName && <AppText variant="caption" weight="medium" style={[styles.errorText, { color: colors.error }]} numberOfLines={2}>{errors.itemName}</AppText>}
                 </View>
+                </TutorialTarget>
 
               {/* Category Selector */}
               <View style={styles.inputNode}>
@@ -857,6 +864,7 @@ const loadCategories = async () => {
                  {errors.category && <AppText variant="caption" weight="medium" style={[styles.errorText, { color: colors.error }]} numberOfLines={2}>{errors.category}</AppText>}
               </View>
 
+              <TutorialTarget id="if-brand">
               <View style={styles.inputNode}>
                 <View style={styles.nodeHeader}>
                    <Building2 size={14} color={G.fgSecondary} />
@@ -872,10 +880,12 @@ const loadCategories = async () => {
                   maxLength={50}
                 />
               </View>
+              </TutorialTarget>
             </View>
           )}
 
           {step === 2 && (
+            <TutorialTarget id="if-unit">
             <View style={styles.formCard}>
               <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.cardTitle, { color: G.fgSecondary }]} numberOfLines={1}>{t('form.metrics_scaling')}</AppText>
               
@@ -942,9 +952,11 @@ const loadCategories = async () => {
                  {errors.quantity && <AppText variant="caption" weight="medium" style={[styles.errorText, { color: colors.error }]} numberOfLines={2}>{errors.quantity}</AppText>}
               </View>
             </View>
+            </TutorialTarget>
           )}
 
           {step === 3 && (
+            <TutorialTarget id="if-pricing">
             <View style={styles.formCard}>
               <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.cardTitle, { color: G.fgSecondary }]} numberOfLines={1}>{t('form.financial_strategy')}</AppText>
               
@@ -1017,6 +1029,7 @@ const loadCategories = async () => {
                 </Animated.View>
               )}
             </View>
+            </TutorialTarget>
           )}
 
           {step === 4 && (
@@ -1038,6 +1051,7 @@ const loadCategories = async () => {
                 <ChevronDown size={18} color={G.fgSecondary} />
               </TouchableOpacity>
               
+              <TutorialTarget id="if-expiry">
               <View style={styles.inputNode}>
                 <View style={styles.nodeHeader}>
                    <Calendar size={14} color={G.fgSecondary} />
@@ -1052,6 +1066,7 @@ const loadCategories = async () => {
                 />
                  {errors.expiryDate && <AppText variant="caption" weight="medium" style={[styles.errorText, { color: colors.error }]} numberOfLines={2}>{errors.expiryDate}</AppText>}
               </View>
+              </TutorialTarget>
 
               <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 12 }]} numberOfLines={1}>{t('form.quality_classification')}</AppText>
               <View style={styles.gradeGrid}>
@@ -1066,6 +1081,7 @@ const loadCategories = async () => {
                  ))}
               </View>
 
+              <TutorialTarget id="if-supplier">
               {/* Supplier Selection */}
               <TouchableOpacity
                 style={[styles.intelligenceBlock, { backgroundColor: G.bgCard, borderColor: G.border, flexDirection: 'row', alignItems: 'center' }]}
@@ -1178,10 +1194,12 @@ const loadCategories = async () => {
                    </View>
                 </Animated.View>
               )}
+            </TutorialTarget>
             </View>
           )}
 
           {/* Action Dock */}
+          <TutorialTarget id="if-commit-btn">
           <View style={styles.actionDock}>
              {step > 1 && (
                <TouchableOpacity style={[styles.backBtn, { borderColor: G.border }]} onPress={handleBack}>
@@ -1198,8 +1216,9 @@ const loadCategories = async () => {
                <ArrowRight size={18} color={G.bg} />
              </TouchableOpacity>
           </View>
+          </TutorialTarget>
         </Animated.View>
-      </ScrollView>
+      </TutorialScrollView>
       </KeyboardAvoidingView>
 
       <CustomDatePicker

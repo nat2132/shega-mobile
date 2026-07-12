@@ -7,9 +7,12 @@ import { getRecentAdjustments } from '@/database/db';
 import { useSettings } from '@/context/SettingsContext';
 import { AppNumber, AppText } from '@/components/ui';
 import { getExpenseGlass } from './glass-expense';
+import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
+import { expenseLossTutorial } from '@/tutorials/definitions';
 const InventoryLoss = () => {
   const { colors, t } = useSettings();
   const G = getExpenseGlass(colors);
+  const tutorial = useTutorial({ tutorial: expenseLossTutorial });
   const [data, setData] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -55,11 +58,15 @@ const InventoryLoss = () => {
       {/* Ambient glow washes */}
       <View style={{ position: 'absolute', top: -60, left: -30, width: 180, height: 180, borderRadius: 90, backgroundColor: G.mutedLight, opacity: 0.10 }} />
       <View style={{ position: 'absolute', bottom: -40, right: -40, width: 160, height: 160, borderRadius: 80, backgroundColor: G.mutedLight, opacity: 0.08 }} />
+      <TutorialTarget id="exl-header">
       <View style={styles.header}>
         <AppText variant="title" weight="bold" style={[styles.title, { color: G.fg }]} numberOfLines={2}>{t('expense.loss_inventory')}</AppText>
         <AlertCircle size={24} color={G.fg} />
+        <TutorialButton tutorialId="expense-loss" screenName="Expense Loss" />
       </View>
+      </TutorialTarget>
 
+      <TutorialTarget id="exl-list">
       <FlatList
         data={data}
         keyExtractor={(item) => item.id}
@@ -93,6 +100,7 @@ const InventoryLoss = () => {
           </View>
         )}
       />
+      </TutorialTarget>
     </View>
   );
 };

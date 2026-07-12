@@ -8,7 +8,6 @@ import { Building2, Check, Plus, Trash2, Warehouse } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import {
   Dimensions,
-  ScrollView,
   StyleSheet,
   TextInput,
   TouchableOpacity,
@@ -17,6 +16,8 @@ import {
 
 import { AppText } from '@/components/ui';
 import { getSettingsGlass } from './glass-settings';
+import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
+import { warehouseSettingsTutorial } from '@/tutorials/definitions';
 
 interface WarehouseSettingsScreenProps {
   onClose?: () => void;
@@ -27,6 +28,7 @@ const WarehouseSettingsScreen: React.FC<WarehouseSettingsScreenProps> = ({ onClo
   const { activeWarehouseId, setActiveWarehouseId, warehouses, refreshWarehouses } = useWarehouse();
   const G = getSettingsGlass(colors);
   const dialog = useDialog();
+  const tutorial = useTutorial({ tutorial: warehouseSettingsTutorial });
   const [showForm, setShowForm] = useState(false);
   const [formName, setFormName] = useState('');
   const [formLocation, setFormLocation] = useState('');
@@ -109,7 +111,8 @@ const WarehouseSettingsScreen: React.FC<WarehouseSettingsScreenProps> = ({ onClo
 
   return (
     <View style={{ flex: 1 }}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <TutorialScrollView showsVerticalScrollIndicator={false}>
+        <TutorialTarget id="ws-header">
         <View style={styles.headerRow}>
           <Warehouse size={20} color={G.fg} />
           <AppText variant="title" weight="bold" style={[styles.title, { color: G.fg, marginLeft: 10 }]} numberOfLines={2}>{t('inv.warehouses_title')}</AppText>
@@ -117,9 +120,11 @@ const WarehouseSettingsScreen: React.FC<WarehouseSettingsScreenProps> = ({ onClo
             <Plus size={18} color={colors.primary} />
           </TouchableOpacity>
         </View>
+        </TutorialTarget>
 
         {!showForm ? (
           <View style={styles.whList}>
+            <TutorialTarget id="ws-default">
             {/* All Warehouses option */}
             <TouchableOpacity
               style={[styles.whItem, { backgroundColor: G.bgCard, borderColor: !activeWarehouseId ? colors.primary : G.border, borderWidth: !activeWarehouseId ? 2 : 1 }]}
@@ -134,7 +139,9 @@ const WarehouseSettingsScreen: React.FC<WarehouseSettingsScreenProps> = ({ onClo
               </View>
               {!activeWarehouseId && <Check size={18} color={colors.primary} />}
             </TouchableOpacity>
+            </TutorialTarget>
 
+            <TutorialTarget id="ws-list">
             {warehouses.map((wh) => (
               <TouchableOpacity
                 key={wh.id}
@@ -157,6 +164,7 @@ const WarehouseSettingsScreen: React.FC<WarehouseSettingsScreenProps> = ({ onClo
                 {activeWarehouseId === wh.id && <Check size={18} color={colors.success} style={{ marginLeft: 4 }} />}
               </TouchableOpacity>
             ))}
+            </TutorialTarget>
 
             {warehouses.length === 0 && (
               <View style={styles.emptyContainer}>
@@ -166,6 +174,7 @@ const WarehouseSettingsScreen: React.FC<WarehouseSettingsScreenProps> = ({ onClo
             )}
           </View>
         ) : (
+          <TutorialTarget id="ws-prefs">
           <View style={styles.formSection}>
             <AppText variant="title" weight="bold" style={[styles.formTitle, { color: G.fg }]} numberOfLines={2}>
               {t(editingId ? 'inv.edit_warehouse' : 'inv.new_warehouse')}
@@ -242,8 +251,12 @@ const WarehouseSettingsScreen: React.FC<WarehouseSettingsScreenProps> = ({ onClo
               </TouchableOpacity>
             </View>
           </View>
+          </TutorialTarget>
         )}
-      </ScrollView>
+      </TutorialScrollView>
+      <View style={{ position: 'absolute', top: 50, right: 20, zIndex: 100 }}>
+        <TutorialButton tutorialId="warehouse-settings" screenName={t('inv.warehouses_title')} />
+      </View>
     </View>
   );
 };

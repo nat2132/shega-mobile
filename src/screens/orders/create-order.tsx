@@ -4,7 +4,6 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  ScrollView,
   Platform,
   KeyboardAvoidingView,
 } from "react-native";
@@ -31,6 +30,8 @@ import {
   FileText,
 } from "lucide-react-native";
 import { getOrdersGlass } from './glass-orders';
+import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
+import { createOrderTutorial } from '@/tutorials/definitions';
 
 const ORD_GLASS = getOrdersGlass(LightTheme);
 
@@ -47,6 +48,7 @@ interface CartItem {
 const CreateOrderScreen = () => {
   const { colors, t } = useSettings();
   const ORD_GLASS = useMemo(() => getOrdersGlass(colors), [colors]);
+  const tutorial = useTutorial({ tutorial: createOrderTutorial });
   const router = useRouter();
   const { showToast } = useToast();
   const dialog = useDialog();
@@ -172,6 +174,7 @@ const CreateOrderScreen = () => {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       >
+        <TutorialTarget id="co-header">
         <View style={styles.header}>
           <TouchableOpacity
             onPress={() => router.back()}
@@ -209,18 +212,21 @@ const CreateOrderScreen = () => {
               value={cart.length}
               size="body-sm"
               weight="bold"
-              style={[styles.cartCount, { color: ORD_GLASS.fg }]}
-            />
+                style={[styles.cartCount, { color: ORD_GLASS.fg }]}
+              />
+            </View>
+            <TutorialButton tutorialId="create-order" screenName="Create Order" />
           </View>
-        </View>
+        </TutorialTarget>
 
-        <ScrollView
+        <TutorialScrollView
           style={styles.scrollContent}
           contentContainerStyle={styles.scrollPadding}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
           {/* Search */}
+          <TutorialTarget id="co-item-search">
           <Animated.View entering={FadeInDown.duration(500)}>
             <View
               style={[
@@ -302,6 +308,7 @@ const CreateOrderScreen = () => {
               </View>
             )}
           </Animated.View>
+          </TutorialTarget>
 
           {/* Cart */}
           {cart.length > 0 && (
@@ -390,6 +397,7 @@ const CreateOrderScreen = () => {
           )}
 
           {/* Customer Info */}
+          <TutorialTarget id="co-customer">
           <Animated.View
             entering={FadeInDown.delay(200)}
             style={styles.formSection}
@@ -435,6 +443,7 @@ const CreateOrderScreen = () => {
               />
             </View>
           </Animated.View>
+          </TutorialTarget>
 
           {/* Notes */}
           <Animated.View entering={FadeInDown.delay(300)}>
@@ -456,7 +465,7 @@ const CreateOrderScreen = () => {
               />
             </View>
           </Animated.View>
-        </ScrollView>
+        </TutorialScrollView>
 
         {/* Bottom Bar */}
         <View
@@ -481,6 +490,7 @@ const CreateOrderScreen = () => {
               style={{ color: ORD_GLASS.fg }}
             />
           </View>
+          <TutorialTarget id="co-commit-btn">
           <TouchableOpacity
             style={[
               styles.submitBtn,
@@ -501,6 +511,7 @@ const CreateOrderScreen = () => {
               {submitting ? t('order.creating') : t('order.create_order')}
             </AppText>
           </TouchableOpacity>
+          </TutorialTarget>
         </View>
       </KeyboardAvoidingView>
     </View>

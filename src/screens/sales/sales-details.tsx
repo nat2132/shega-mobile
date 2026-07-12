@@ -56,6 +56,8 @@ import {
 import { AppText, AppNumber } from "@/components/ui";
 import { getSalesGlass } from './glass-sales';
 import Animated, { FadeInDown, ZoomIn } from "react-native-reanimated";
+import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
+import { salesDetailsTutorial } from '@/tutorials/definitions';
 const SALES_GLASS = getSalesGlass(LightTheme);
 
 const SaleDetailsScreen = ({
@@ -69,6 +71,7 @@ const SaleDetailsScreen = ({
     useSettings();
   const SALES_GLASS = useMemo(() => getSalesGlass(colors), [colors]);
   const { showToast } = useToast();
+  const tutorial = useTutorial({ tutorial: salesDetailsTutorial });
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState(sale);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -339,6 +342,7 @@ const SaleDetailsScreen = ({
 
   const debtFieldsSection = (editForm.paymentStatus === "Debt" ||
     editForm.paymentStatus === "Order") && (
+    <TutorialTarget id="sd-customer">
     <Animated.View style={styles.section}>
       <AppText
         variant="micro"
@@ -484,6 +488,7 @@ const SaleDetailsScreen = ({
         </View>
       </View>
     </Animated.View>
+    </TutorialTarget>
   );
 
   return (
@@ -493,7 +498,7 @@ const SaleDetailsScreen = ({
         <View style={{ position: 'absolute', bottom: -80, right: -40, width: 250, height: 250, borderRadius: 125, backgroundColor: SALES_GLASS.glow }} />
       </View>
       {/* Transaction Insight Header */}
-      <View style={styles.heroContainer}>
+      <TutorialTarget id="sd-header" style={styles.heroContainer}>
         <View
           style={[styles.heroWash, { backgroundColor: SALES_GLASS.fg + "05" }]}
         />
@@ -507,6 +512,7 @@ const SaleDetailsScreen = ({
           >
             <ChevronLeft size={20} color={SALES_GLASS.fg} />
           </TouchableOpacity>
+          <TutorialButton tutorialId="sales-details" screenName="Sale Details" />
           <View style={styles.row}>
             {isEditing ? (
               <View style={styles.editActions}>
@@ -578,6 +584,7 @@ const SaleDetailsScreen = ({
           </View>
         </View>
 
+        <TutorialTarget id="sd-summary">
         <Animated.View style={styles.heroContent}>
           <View
             style={[
@@ -662,7 +669,8 @@ const SaleDetailsScreen = ({
             </AppText>
           )}
         </Animated.View>
-      </View>
+      </TutorialTarget>
+      </TutorialTarget>
 
       <ScrollView
         style={{ flex: 1 }}
@@ -671,6 +679,7 @@ const SaleDetailsScreen = ({
         keyboardShouldPersistTaps="handled"
       >
         {/* Settlement Intelligence */}
+        <TutorialTarget id="sd-payment">
         <Animated.View style={styles.section}>
           <AppText
             variant="micro"
@@ -925,8 +934,10 @@ const SaleDetailsScreen = ({
             </View>
           </View>
         </Animated.View>
+        </TutorialTarget>
 
         {/* Intelligence Nodes - Batch Items or Single Item */}
+        <TutorialTarget id="sd-items">
         <Animated.View style={styles.section}>
           <AppText
             variant="micro"
@@ -1602,6 +1613,7 @@ const SaleDetailsScreen = ({
                 </View>
 
                 {/* Financial Core */}
+                <TutorialTarget id="sd-pricing">
                 <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.sectionTitle, { color: SALES_GLASS.fgSecondary }]} numberOfLines={1}>{t('detail.financial_core')}</AppText>
                 <View style={[styles.intelligenceBlock, { backgroundColor: SALES_GLASS.bgCard, borderColor: SALES_GLASS.border }]}>
                   <View style={styles.node}>
@@ -1640,6 +1652,7 @@ const SaleDetailsScreen = ({
                     <AppNumber value={Math.max(0, (editForm.totalPrice || 0))} size="body-sm" weight="bold" prefix={t('common.etb') + ' '} color={SALES_GLASS.fg} style={styles.nodeValue} />
                   </View>
                 </View>
+                </TutorialTarget>
 
                 {/* Tax Configuration */}
                 <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.sectionTitle, { color: SALES_GLASS.fgSecondary }]} numberOfLines={1}>{t('detail.tax_config')}</AppText>
@@ -1708,6 +1721,7 @@ const SaleDetailsScreen = ({
             ) : null}
           </View>
         </Animated.View>
+        </TutorialTarget>
 
         {debtFieldsSection}
 

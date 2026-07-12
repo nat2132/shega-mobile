@@ -4,7 +4,6 @@ import {
   StyleSheet, 
   TextInput, 
   TouchableOpacity, 
-  ScrollView, 
   KeyboardAvoidingView, 
   Platform, 
   Modal 
@@ -38,6 +37,8 @@ import { getAdjustmentGlass } from './glass-adjustment';
 import { useFormDrafts } from '@/hooks/useFormDrafts';
 import { DraftSection } from '@/components/DraftSection';
 import { Draft } from '@/services/draftService';
+import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
+import { damagedItemTutorial } from '@/tutorials/definitions';
 const DamagedItemForm = ({ onComplete }: { onComplete?: () => void }) => {
   const { colors, calendarType, language, t } = useSettings();
   const G = getAdjustmentGlass(colors);
@@ -74,6 +75,8 @@ const DamagedItemForm = ({ onComplete }: { onComplete?: () => void }) => {
     }, [quantity, unitType]),
     enabled: !successDetails,
   });
+
+  const tutorial = useTutorial({ tutorial: damagedItemTutorial });
 
   useEffect(() => {
     if (searchQuery.length > 1) {
@@ -187,7 +190,7 @@ const DamagedItemForm = ({ onComplete }: { onComplete?: () => void }) => {
       <View style={{ position: 'absolute', top: -60, right: -60, width: 200, height: 200, borderRadius: 100, backgroundColor: G.mutedLight, opacity: 0.4, pointerEvents: 'none' }} />
       <View style={{ position: 'absolute', top: 150, left: -80, width: 220, height: 220, borderRadius: 110, backgroundColor: G.mutedLight, opacity: 0.25, pointerEvents: 'none' }} />
       <View style={{ position: 'absolute', bottom: 100, right: -40, width: 180, height: 180, borderRadius: 90, backgroundColor: G.mutedLight, opacity: 0.2, pointerEvents: 'none' }} />
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <TutorialScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         
         {draftFormData.showDrafts && (
           <DraftSection
@@ -211,17 +214,19 @@ const DamagedItemForm = ({ onComplete }: { onComplete?: () => void }) => {
           />
         )}
 
-        <Animated.View entering={FadeInDown.duration(600)} style={styles.header}>
-            <View style={styles.headerRow}>
-               <View>
-                <AppText variant="body-sm" weight="bold" transform="uppercase" style={[styles.headerSub, { color: G.fgSecondary }]} numberOfLines={1}>{t('adj.integrity_audit')}</AppText>
-                <AppText variant="display-lg" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{t('adj.stock_integrity')}</AppText>
-             </View>
-                <View style={[styles.modeBadge, { backgroundColor: warningColor + '15' }]}>
-                   <AppText variant="micro" weight="bold" shrink={false} style={[styles.modeText, { color: warningColor }]} numberOfLines={1}>{t('common.damaged').toUpperCase()}</AppText>
+        <TutorialTarget id="di-header">
+          <Animated.View entering={FadeInDown.duration(600)} style={styles.header}>
+              <View style={styles.headerRow}>
+                 <View>
+                  <AppText variant="body-sm" weight="bold" transform="uppercase" style={[styles.headerSub, { color: G.fgSecondary }]} numberOfLines={1}>{t('adj.integrity_audit')}</AppText>
+                  <AppText variant="display-lg" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{t('adj.stock_integrity')}</AppText>
                </View>
-            </View>
-        </Animated.View>
+                  <View style={[styles.modeBadge, { backgroundColor: warningColor + '15' }]}>
+                     <AppText variant="micro" weight="bold" shrink={false} style={[styles.modeText, { color: warningColor }]} numberOfLines={1}>{t('common.damaged').toUpperCase()}</AppText>
+                 </View>
+              </View>
+          </Animated.View>
+        </TutorialTarget>
 
         {/* Integrity Impact Visualization */}
         <Animated.View entering={FadeInDown.delay(200).duration(600)} style={styles.impactContainer}>
@@ -264,27 +269,31 @@ const DamagedItemForm = ({ onComplete }: { onComplete?: () => void }) => {
                <Search size={14} color={G.fgSecondary} />
                <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('adj.target_asset')}</AppText>
             </View>
-            <View style={[styles.inputWrapper, { backgroundColor: G.bgCard, borderColor: G.border }]}>
-              <TextInput
-                style={[styles.input, { color: G.fg }]}
-                placeholder={t("adj.search_placeholder")}
-                placeholderTextColor={G.fgSecondary}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-              />
-            </View>
+            <TutorialTarget id="di-search">
+              <View style={[styles.inputWrapper, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+                <TextInput
+                  style={[styles.input, { color: G.fg }]}
+                  placeholder={t("adj.search_placeholder")}
+                  placeholderTextColor={G.fgSecondary}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                />
+              </View>
+            </TutorialTarget>
             {showResults && (
-              <Animated.View entering={FadeInDown} style={[styles.resultsPanel, { backgroundColor: G.bgCard, borderColor: G.border }]}>
-                {searchResults.map((item) => (
-                  <TouchableOpacity key={item.id} style={[styles.resultItem, { borderBottomColor: G.border }]} onPress={() => handleSelectItem(item)}>
-                    <View>
-                       <AppText variant="body-lg" weight="bold" style={[styles.resultText, { color: G.fg }]} numberOfLines={1}>{item.name}</AppText>
-                       <AppText variant="caption" weight="medium" style={[styles.resultSubtext, { color: G.fgSecondary }]} numberOfLines={1}>{t('adj.available')}: <AppNumber value={item.totalBaseQuantity} size="caption" weight="medium" style={{ color: G.fgSecondary }} /> {item.baseUnit}</AppText>
-                    </View>
-                    <ChevronRight size={16} color={G.fgSecondary} />
-                  </TouchableOpacity>
-                ))}
-              </Animated.View>
+              <TutorialTarget id="di-item-select">
+                <Animated.View entering={FadeInDown} style={[styles.resultsPanel, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+                  {searchResults.map((item) => (
+                    <TouchableOpacity key={item.id} style={[styles.resultItem, { borderBottomColor: G.border }]} onPress={() => handleSelectItem(item)}>
+                      <View>
+                         <AppText variant="body-lg" weight="bold" style={[styles.resultText, { color: G.fg }]} numberOfLines={1}>{item.name}</AppText>
+                         <AppText variant="caption" weight="medium" style={[styles.resultSubtext, { color: G.fgSecondary }]} numberOfLines={1}>{t('adj.available')}: <AppNumber value={item.totalBaseQuantity} size="caption" weight="medium" style={{ color: G.fgSecondary }} /> {item.baseUnit}</AppText>
+                      </View>
+                      <ChevronRight size={16} color={G.fgSecondary} />
+                    </TouchableOpacity>
+                  ))}
+                </Animated.View>
+              </TutorialTarget>
             )}
           </View>
 
@@ -294,16 +303,18 @@ const DamagedItemForm = ({ onComplete }: { onComplete?: () => void }) => {
                  <Zap size={14} color={G.fgSecondary} />
                  <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('adj.loss_qty')}</AppText>
               </View>
-              <View style={[styles.inputWrapper, { backgroundColor: G.bgCard, borderColor: G.border }]}>
-                <TextInput
-                  style={[styles.input, { color: G.fg, fontFamily: Fonts.bold, fontSize: 18 }]}
-                  value={quantity}
-                  onChangeText={setQuantity}
-                  keyboardType="numeric"
-                  placeholder={t('inv.qty_ph')}
-                  placeholderTextColor={G.fgSecondary}
-                />
-              </View>
+              <TutorialTarget id="di-quantity">
+                <View style={[styles.inputWrapper, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+                  <TextInput
+                    style={[styles.input, { color: G.fg, fontFamily: Fonts.bold, fontSize: 18 }]}
+                    value={quantity}
+                    onChangeText={setQuantity}
+                    keyboardType="numeric"
+                    placeholder={t('inv.qty_ph')}
+                    placeholderTextColor={G.fgSecondary}
+                  />
+                </View>
+              </TutorialTarget>
             </View>
             
             <View style={[styles.inputGroup, { flex: 1 }]}>
@@ -311,68 +322,77 @@ const DamagedItemForm = ({ onComplete }: { onComplete?: () => void }) => {
                  <LayoutGrid size={14} color={G.fgSecondary} />
                  <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('adj.scale')}</AppText>
               </View>
-              <View style={[styles.unitToggleRow, { backgroundColor: G.bgCard, borderColor: G.border }]}>
-                 <TouchableOpacity 
-                   style={[styles.unitBtn, unitType === 'base' && [styles.activeUnit, { backgroundColor: G.fg }]]} 
-                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setUnitType('base'); }}
-                 >
-                   <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.unitBtnText, { color: G.fgSecondary }, unitType === 'base' && { color: G.bg }]} numberOfLines={1}>{t('adj.unit')}</AppText>
-                 </TouchableOpacity>
-                 <TouchableOpacity 
-                   style={[styles.unitBtn, unitType === 'pack' && [styles.activeUnit, { backgroundColor: G.fg }]]} 
-                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setUnitType('pack'); }}
-                 >
-                   <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.unitBtnText, { color: G.fgSecondary }, unitType === 'pack' && { color: G.bg }]} numberOfLines={1}>{t('adj.pack')}</AppText>
-                 </TouchableOpacity>
-              </View>
+              <TutorialTarget id="di-unit-type">
+                <View style={[styles.unitToggleRow, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+                   <TouchableOpacity 
+                     style={[styles.unitBtn, unitType === 'base' && [styles.activeUnit, { backgroundColor: G.fg }]]} 
+                     onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setUnitType('base'); }}
+                   >
+                     <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.unitBtnText, { color: G.fgSecondary }, unitType === 'base' && { color: G.bg }]} numberOfLines={1}>{t('adj.unit')}</AppText>
+                   </TouchableOpacity>
+                   <TouchableOpacity 
+                     style={[styles.unitBtn, unitType === 'pack' && [styles.activeUnit, { backgroundColor: G.fg }]]} 
+                     onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setUnitType('pack'); }}
+                   >
+                     <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.unitBtnText, { color: G.fgSecondary }, unitType === 'pack' && { color: G.bg }]} numberOfLines={1}>{t('adj.pack')}</AppText>
+                   </TouchableOpacity>
+                </View>
+              </TutorialTarget>
             </View>
           </View>
 
-          <View style={styles.inputGroup}>
-            <View style={styles.labelRow}>
-               <Info size={14} color={G.fgSecondary} />
-               <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('adj.loss_reason')}</AppText>
+          <TutorialTarget id="di-reason">
+            <View style={styles.inputGroup}>
+              <View style={styles.labelRow}>
+                 <Info size={14} color={G.fgSecondary} />
+                 <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('adj.loss_reason')}</AppText>
+              </View>
+              <TouchableOpacity style={[styles.dropdownWrapper, { backgroundColor: G.bgCard, borderColor: G.border }]} onPress={() => Haptics.selectionAsync()}>
+                <AppText variant="subtitle" weight="bold" style={[styles.dropdownText, { color: G.fg }]} numberOfLines={1}>{reason}</AppText>
+                <ChevronDown color={G.fgSecondary} size={20} />
+              </TouchableOpacity>
+              <View style={styles.reasonsRow}>
+                {[t('adj.reason_broken'), t('adj.reason_expired'), t('adj.reason_defective'), t('adj.reason_water')].map(r => (
+                  <TouchableOpacity 
+                    key={r} 
+                    style={[styles.reasonTag, { backgroundColor: G.bgCard, borderColor: reason === r ? warningColor : G.border }]} 
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setReason(r); }}
+                  >
+                    <AppText variant="caption" weight="bold" shrink={false} style={[styles.reasonTagText, { color: reason === r ? warningColor : G.fgSecondary }]} numberOfLines={1}>{r}</AppText>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
-            <TouchableOpacity style={[styles.dropdownWrapper, { backgroundColor: G.bgCard, borderColor: G.border }]} onPress={() => Haptics.selectionAsync()}>
-              <AppText variant="subtitle" weight="bold" style={[styles.dropdownText, { color: G.fg }]} numberOfLines={1}>{reason}</AppText>
-              <ChevronDown color={G.fgSecondary} size={20} />
-            </TouchableOpacity>
-            <View style={styles.reasonsRow}>
-              {[t('adj.reason_broken'), t('adj.reason_expired'), t('adj.reason_defective'), t('adj.reason_water')].map(r => (
-                <TouchableOpacity 
-                  key={r} 
-                  style={[styles.reasonTag, { backgroundColor: G.bgCard, borderColor: reason === r ? warningColor : G.border }]} 
-                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setReason(r); }}
-                >
-                  <AppText variant="caption" weight="bold" shrink={false} style={[styles.reasonTagText, { color: reason === r ? warningColor : G.fgSecondary }]} numberOfLines={1}>{r}</AppText>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
+          </TutorialTarget>
         </Animated.View>
 
         {/* Record Date */}
-        <TouchableOpacity 
-          style={[{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderWidth: 1, borderColor: G.border, borderRadius: 20, padding: 16, marginBottom: 15 }]}
-          onPress={() => setShowDatePicker(true)}
-        >
-          <Calendar size={18} color={warningColor} style={{ marginRight: 10 }} />
-          <View style={{ flex: 1 }}>
-            <AppText variant="micro" weight="semibold" transform="uppercase" style={{ color: G.fgSecondary }} numberOfLines={1}>{t('common.record_date') || 'Record Date'}</AppText>
-            <AppText variant="subtitle" weight="bold" style={{ color: recordDate ? G.fg : G.fgSecondary, marginTop: 2 }} numberOfLines={1}>
-              {recordDate ? formatDate(new Date(recordDate), calendarType, language) : (t('common.today') || 'Today (Default)')}
-            </AppText>
-          </View>
-        </TouchableOpacity>
+        <TutorialTarget id="di-date">
+          <TouchableOpacity 
+            style={[{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderWidth: 1, borderColor: G.border, borderRadius: 20, padding: 16, marginBottom: 15 }]}
+            onPress={() => setShowDatePicker(true)}
+          >
+            <Calendar size={18} color={warningColor} style={{ marginRight: 10 }} />
+            <View style={{ flex: 1 }}>
+              <AppText variant="micro" weight="semibold" transform="uppercase" style={{ color: G.fgSecondary }} numberOfLines={1}>{t('common.record_date') || 'Record Date'}</AppText>
+              <AppText variant="subtitle" weight="bold" style={{ color: recordDate ? G.fg : G.fgSecondary, marginTop: 2 }} numberOfLines={1}>
+                {recordDate ? formatDate(new Date(recordDate), calendarType, language) : (t('common.today') || 'Today (Default)')}
+              </AppText>
+            </View>
+          </TouchableOpacity>
+        </TutorialTarget>
 
-        <TouchableOpacity 
-          style={[styles.confirmBtn, { backgroundColor: G.fg }]} 
-          activeOpacity={0.8} 
-          onPress={handleConfirm}
-        >
-          <ShieldAlert color={G.bg} size={20} />
-          <AppText variant="subtitle" weight="bold" style={[styles.confirmText, { color: G.bg }]} numberOfLines={1}>{t('adj.authorize_loss')}</AppText>
-        </TouchableOpacity>
+        <TutorialTarget id="di-commit-btn">
+          <TouchableOpacity 
+            style={[styles.confirmBtn, { backgroundColor: G.fg }]} 
+            activeOpacity={0.8} 
+            onPress={handleConfirm}
+          >
+            <ShieldAlert color={G.bg} size={20} />
+            <AppText variant="subtitle" weight="bold" style={[styles.confirmText, { color: G.bg }]} numberOfLines={1}>{t('adj.authorize_loss')}</AppText>
+          </TouchableOpacity>
+        </TutorialTarget>
+        <TutorialButton tutorialId="damaged-item" screenName="Damaged Item" />
         
         <View style={{ height: 100 }} />
 
@@ -392,7 +412,7 @@ const DamagedItemForm = ({ onComplete }: { onComplete?: () => void }) => {
           onSelectDate={(date) => { setRecordDate(date); setShowDatePicker(false); }}
           initialDate={recordDate}
         />
-      </ScrollView>
+      </TutorialScrollView>
     </KeyboardAvoidingView>
   );
 };

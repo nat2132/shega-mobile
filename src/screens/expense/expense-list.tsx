@@ -44,6 +44,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import ExpenseDetailsScreen from './expense-details';
 import { getExpenseGlass } from './glass-expense';
+import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
+import { expenseListTutorial } from '@/tutorials/definitions';
 
 const BillsAndTransactions = ({ filterCategory }: { filterCategory?: string }) => {
   const { colors, t } = useSettings();
@@ -67,6 +69,7 @@ const BillsAndTransactions = ({ filterCategory }: { filterCategory?: string }) =
   const [selectedExpense, setSelectedExpense] = useState<any>(null);
 
   const debouncedSearch = useDebounce(searchQuery, 250);
+  const tutorial = useTutorial({ tutorial: expenseListTutorial });
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -155,6 +158,7 @@ const BillsAndTransactions = ({ filterCategory }: { filterCategory?: string }) =
       <View style={{ position: 'absolute', top: -100, left: -60, width: 240, height: 240, borderRadius: 120, backgroundColor: G.mutedLight, opacity: 0.12 }} />
       <View style={{ position: 'absolute', bottom: -80, right: -40, width: 200, height: 200, borderRadius: 100, backgroundColor: G.mutedLight, opacity: 0.08 }} />
       {/* Header */}
+      <TutorialTarget id="el-header">
       <View style={styles.header}>
         <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.headerSub, { color: G.fgSecondary }]}>
           {t('expense.capital_bills')}
@@ -166,10 +170,13 @@ const BillsAndTransactions = ({ filterCategory }: { filterCategory?: string }) =
           <TouchableOpacity onPress={handleDownload} style={[styles.downloadBtn, { backgroundColor: G.fg }]}>
             <Download size={18} color={G.bg} />
           </TouchableOpacity>
+          <TutorialButton tutorialId="expense-list" screenName="Expense Records" />
         </View>
       </View>
+      </TutorialTarget>
 
       {/* Search */}
+      <TutorialTarget id="el-filter">
       <View style={styles.searchRow}>
         <View style={[styles.searchBox, { backgroundColor: G.bgCard, borderColor: G.border, overflow: 'hidden' }]}>
           <Search size={18} color={G.fgSecondary} />
@@ -240,6 +247,7 @@ const BillsAndTransactions = ({ filterCategory }: { filterCategory?: string }) =
           </ScrollView>
         </View>
       )}
+      </TutorialTarget>
 
       {/* Import/Export Section */}
       <View style={styles.actionRow}>
@@ -274,6 +282,7 @@ const BillsAndTransactions = ({ filterCategory }: { filterCategory?: string }) =
       </View>
 
       {/* List */}
+      <TutorialTarget id="el-list">
       <FlatList
         data={filteredData}
         keyExtractor={(item) => item.id.toString()}
@@ -293,6 +302,7 @@ const BillsAndTransactions = ({ filterCategory }: { filterCategory?: string }) =
           </View>
         }
       />
+      </TutorialTarget>
 
       {/* Expense Details Modal */}
       <Modal visible={!!selectedExpense} transparent animationType="slide">

@@ -52,6 +52,8 @@ import { getExpenseGlass } from './glass-expense';
 import { LineChartSkeleton} from '@/components/ChartSkeleton';
 import { ChartEmpty } from '@/components/ChartStateView';
 import { AppNumber, AppText } from '@/components/ui';
+import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
+import { expenseTutorial } from '@/tutorials/definitions';
 
 const _tooltipCtx = { colors: null as any, t: null as any, G: null as any };
 const PointerLabel = (items: any) => {
@@ -74,6 +76,7 @@ const PointerLabel = (items: any) => {
     _tooltipCtx.t = t;
     _tooltipCtx.G = G;
     const router = useRouter();
+    const tutorial = useTutorial({ tutorial: expenseTutorial });
 
     const [dateFilterMode, setDateFilterMode] = useState('this_month');
     const [summary, setSummary] = useState<any>(null);
@@ -211,8 +214,9 @@ const PointerLabel = (items: any) => {
         <View style={[styles.bgWash, { top: 600, right: -40, backgroundColor: '#FFFFFF', opacity: 0.015 }]} />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <TutorialScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* Top Bar */}
+        <TutorialTarget id="exp-header">
         <View style={styles.topBar}>
           <View style={{ flex: 1 }}>
             <TouchableOpacity style={[styles.avatarBox, { borderColor: G.border, backgroundColor: G.bgCard }]} onPress={openSidebar}>
@@ -220,6 +224,7 @@ const PointerLabel = (items: any) => {
             </TouchableOpacity>
           </View>
           <View style={styles.headerActions}>
+            <TutorialButton tutorialId="expense" screenName="Expense" />
             <TouchableOpacity style={[styles.iconBtn, { borderColor: G.border, backgroundColor: G.bgCard }]} onPress={() => router.push('/(tabs)/budget')}>
               <DollarSign size={22} color={G.fgSecondary} />
             </TouchableOpacity>
@@ -236,6 +241,7 @@ const PointerLabel = (items: any) => {
             </TouchableOpacity>
           </View>
         </View>
+        </TutorialTarget>
 
         {/* Header */}
         <Animated.View entering={FadeInDown.duration(600)} style={styles.screenHeader}>
@@ -305,6 +311,7 @@ const PointerLabel = (items: any) => {
         </Animated.View>
 
         {/* Disbursement Hero Card */}
+        <TutorialTarget id="exp-summary">
         <Animated.View entering={FadeInDown.delay(200)} style={[styles.heroCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
           <View style={styles.heroTop}>
             <View>
@@ -328,6 +335,7 @@ const PointerLabel = (items: any) => {
 
           {/* Budget Summary Row */}
           {budgetSummary && budgetSummary.hasBudget && (
+            <TutorialTarget id="exp-budget">
             <TouchableOpacity
               style={[styles.budgetSummaryRow, { borderTopColor: G.border }]}
               onPress={() => router.push('/(tabs)/budget')}
@@ -355,8 +363,10 @@ const PointerLabel = (items: any) => {
               </View>
               <ChevronRight size={20} color={G.muted} />
             </TouchableOpacity>
+            </TutorialTarget>
           )}
         </Animated.View>
+        </TutorialTarget>
 
         {/* Spending Pulse Chart */}
         {dateFilterMode !== 'today' && dateFilterMode !== 'yesterday' && (
@@ -393,6 +403,7 @@ const PointerLabel = (items: any) => {
 
         {/* Overdue / Due Today */}
         {overdueItems.length > 0 && (
+          <TutorialTarget id="exp-health">
           <Animated.View entering={FadeInDown.delay(350)} style={styles.overdueSection}>
             <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.sectionLabel, { color: G.muted }]}>
               {t('expense.due_today')}
@@ -410,6 +421,7 @@ const PointerLabel = (items: any) => {
               </View>
             ))}
           </Animated.View>
+          </TutorialTarget>
         )}
 
         {/* Upcoming Recurring */}
@@ -474,6 +486,7 @@ const PointerLabel = (items: any) => {
         )}
 
         {/* Recent Expenses Ledger */}
+        <TutorialTarget id="exp-ledger">
         <View style={styles.ledgerSection}>
           <View style={styles.ledgerHeader}>
             <AppText variant="body" weight="bold" style={{ color: G.fg }}>{t('expense.recent')}</AppText>
@@ -530,9 +543,10 @@ const PointerLabel = (items: any) => {
             </View>
           )}
         </View>
+        </TutorialTarget>
 
         <View style={{ height: 140 }} />
-      </ScrollView>
+      </TutorialScrollView>
 
       {/* Expanding Smart FAB */}
       <View style={styles.dockedBarWrapper}>
@@ -540,9 +554,11 @@ const PointerLabel = (items: any) => {
           <View style={[styles.dockedBar, { borderColor: G.borderLight, backgroundColor: G.bgCardStrong, paddingHorizontal: isBarExpanded ? 12 : 0 }]}>
             {isBarExpanded && (
               <Animated.View entering={FadeIn.delay(100)} exiting={FadeOut.duration(100)}>
+                <TutorialTarget id="exp-add-btn">
                 <TouchableOpacity style={styles.dockBtn} onPress={() => { setShowExpenseForm(true); setIsBarExpanded(false); }}>
                   <Plus size={22} color={G.muted} />
                 </TouchableOpacity>
+                </TutorialTarget>
               </Animated.View>
             )}
             

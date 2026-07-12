@@ -28,6 +28,8 @@ import { ScheduledReminder } from '@/database/notifications';
 import { formatTime } from '@/utils/date-utils';
 import { AppText} from '@/components/ui';
 import { getNotifGlass } from './glass-notifications';
+import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
+import { remindersTutorial } from '@/tutorials/definitions';
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
@@ -248,6 +250,7 @@ const ReminderHistoryScreen: React.FC = () => {
   const G = getNotifGlass(colors);
   const dialog = useDialog();
   const router = useRouter();
+  const tutorial = useTutorial({ tutorial: remindersTutorial });
   const {
     reminders,
     refresh,
@@ -351,6 +354,7 @@ const ReminderHistoryScreen: React.FC = () => {
       <View style={glowStyles.glowBottomLeft} />
       <View style={glowStyles.glowCenter} />
       {/* Header */}
+      <TutorialTarget id="rm-header">
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
@@ -367,9 +371,12 @@ const ReminderHistoryScreen: React.FC = () => {
           <TouchableOpacity onPress={refresh} style={styles.refreshBtn}>
             <RefreshCw size={20} color={G.fg} />
           </TouchableOpacity>
+          <TutorialButton tutorialId="reminders" screenName="Reminder History" />
         </View>
       </View>
+      </TutorialTarget>
 
+      <TutorialTarget id="rm-list">
       <FlatList
         data={reminders}
         renderItem={renderItem}
@@ -394,6 +401,7 @@ const ReminderHistoryScreen: React.FC = () => {
           </View>
         }
       />
+      </TutorialTarget>
     </View>
   );
 };

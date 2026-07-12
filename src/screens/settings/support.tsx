@@ -4,7 +4,6 @@ import {
   StyleSheet, 
   TouchableOpacity, 
   Linking,
-  ScrollView
 } from 'react-native';
 import { Mail, Phone, Headphones, ExternalLink } from 'lucide-react-native';
 import { Fonts } from '@/constants/theme';
@@ -12,9 +11,12 @@ import { useSettings } from '@/context/SettingsContext';
 import { AppText} from '@/components/ui';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { getSettingsGlass } from './glass-settings';
+import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
+import { supportTutorial } from '@/tutorials/definitions';
 const SupportCenter = () => {
    const { t, colors } = useSettings();
   const G = getSettingsGlass(colors);
+  const tutorial = useTutorial({ tutorial: supportTutorial });
 
   const handleContact = (type: 'email' | 'phone') => {
     if (type === 'email') {
@@ -34,12 +36,15 @@ const SupportCenter = () => {
       </View>
 
       <Animated.View entering={FadeIn.duration(600)} style={styles.content}>
+        <TutorialTarget id="su-header">
         <View style={styles.headerNode}>
           <AppText variant="body" weight="medium" style={[styles.headerSub, { color: G.fgSecondary }]} numberOfLines={2}>{t('support.assistance')}</AppText>
           <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{t('support.concierge')}</AppText>
         </View>
+        </TutorialTarget>
 
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        <TutorialScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          <TutorialTarget id="su-contact">
           <Animated.View entering={FadeInDown.delay(200).duration(500)}>
             <TouchableOpacity 
               style={[styles.conciergeCard, { backgroundColor: G.bgCard, borderColor: G.border }]}
@@ -79,7 +84,9 @@ const SupportCenter = () => {
               </View>
             </TouchableOpacity>
           </Animated.View>
+          </TutorialTarget>
 
+          <TutorialTarget id="su-info">
           <Animated.View entering={FadeInDown.delay(400).duration(500)}>
             <View style={[styles.infoBanner, { backgroundColor: G.fg + '05' }]}>
                <Headphones size={20} color={G.fg} />
@@ -88,16 +95,22 @@ const SupportCenter = () => {
                </AppText>
             </View>
           </Animated.View>
+          </TutorialTarget>
 
+          <TutorialTarget id="su-faq">
           <View style={styles.footerNode}>
              <AppText variant="caption" weight="bold" style={[styles.footerLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('support.orchestration')} v4.2.0</AppText>
              <AppText variant="caption" weight="medium" style={[styles.footerSub, { color: G.fgSecondary }]} numberOfLines={1}>{t('support.cloud_sync')}</AppText>
           </View>
-        </ScrollView>
+          </TutorialTarget>
+        </TutorialScrollView>
       </Animated.View>
+      <View style={{ position: 'absolute', top: 50, right: 20, zIndex: 100 }}>
+        <TutorialButton tutorialId="support" screenName={t('support.assistance')} />
+      </View>
     </View>
    );
- };
+  };
 
  const styles = StyleSheet.create({
   container: { flex: 1 },

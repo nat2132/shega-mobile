@@ -17,6 +17,8 @@ import { AppNumber, AppText, AppListItem, AppCard} from '@/components/ui';
 
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { getDashGlass } from './glass-dashboard';
+import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
+import { oncreditListTutorial } from '@/tutorials/definitions';
 const OnCreditRow = React.memo(({
   item,
   index,
@@ -95,6 +97,7 @@ const OnCreditItemsScreen = () => {
   const { colors, t } = useSettings();
   const G = getDashGlass(colors);
   const styles = useMemo(() => createStyles(G), [G]);
+  const tutorial = useTutorial({ tutorial: oncreditListTutorial });
   const [items, setItems] = useState<ItemData[]>([]);
 
   const loadData = async () => {
@@ -116,6 +119,7 @@ const OnCreditItemsScreen = () => {
     <View style={[styles.container, { backgroundColor: G.bg }]}>
       <View style={{ position: 'absolute', top: -80, left: -30, width: 180, height: 180, borderRadius: 90, backgroundColor: G.mutedLight, opacity: 0.3 }} />
       <View style={{ position: 'absolute', bottom: -50, right: -20, width: 160, height: 160, borderRadius: 80, backgroundColor: G.mutedLight, opacity: 0.2 }} />
+      <TutorialTarget id="ocl-list">
       <FlatList
         data={items}
         keyExtractor={keyExtractor}
@@ -127,6 +131,7 @@ const OnCreditItemsScreen = () => {
         windowSize={7}
         removeClippedSubviews={true}
         ListHeaderComponent={
+          <TutorialTarget id="ocl-header">
           <View style={styles.headerNode}>
             <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.headerSub, { color: G.fgSecondary }]} numberOfLines={1}>
               {t('dash.supply_intel')}
@@ -134,7 +139,9 @@ const OnCreditItemsScreen = () => {
             <AppText variant="heading-lg" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>
               {t('dash.credit_inventory')}
             </AppText>
+            <TutorialButton tutorialId="oncredit-list" screenName="On-Credit List" />
           </View>
+          </TutorialTarget>
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
@@ -150,6 +157,7 @@ const OnCreditItemsScreen = () => {
           </View>
         }
       />
+      </TutorialTarget>
     </View>
   );
 };

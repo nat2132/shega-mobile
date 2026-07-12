@@ -70,6 +70,8 @@ import { getInventoryGlass } from './glass-inventory';
 import InventoryRecordScreen from './inventory-record';
 import AddAssetFlow from './inventroy-form';
 import ItemDetailsScreen from './item-details';
+import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
+import { inventoryTutorial } from '@/tutorials/definitions';
 
 
 const SparklineChart = React.memo(({ data, loading }: { data?: number[]; loading?: boolean } = {}) => {
@@ -193,6 +195,7 @@ const InventoryDashboard = () => {
   const G = getInventoryGlass(colors);
   const { notifCount } = useNotifications();
   const { activeWarehouseId, warehouses } = useWarehouse();
+  const tutorial = useTutorial({ tutorial: inventoryTutorial });
   const dialog = useDialog();
   const [showInventoryRecord, setShowInventoryRecord] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -306,7 +309,7 @@ const loadRecentItems = () => {
       </View>
 
       <Animated.View entering={FadeIn.duration(400)} style={{ flex: 1 }}>
-        <ScrollView 
+        <TutorialScrollView 
           showsVerticalScrollIndicator={false} 
           contentContainerStyle={styles.scrollContent}
           refreshControl={
@@ -319,6 +322,7 @@ const loadRecentItems = () => {
           }
         >
           {/* Top Navigation Bar */}
+          <TutorialTarget id="inv-header">
           <View style={styles.topBar}>
             <View style={{ flex: 1 }}>
               <TouchableOpacity onPress={openSidebar} style={[styles.headerAvatarBox, { borderColor: G.borderLight }]}>
@@ -328,6 +332,7 @@ const loadRecentItems = () => {
             </View>
             
             <View style={styles.headerActions}>
+              <TutorialButton tutorialId="inventory" screenName="Inventory" />
               <TouchableOpacity 
                 onPress={() => router.push('/notifications')} 
                 style={[styles.headerIconBtn, { backgroundColor: G.bgCard, borderColor: G.border }]}
@@ -341,6 +346,7 @@ const loadRecentItems = () => {
               </TouchableOpacity>
             </View>
           </View>
+          </TutorialTarget>
 
           {/* Hero Page Header */}
           <Animated.View entering={FadeInDown.duration(600)} style={styles.screenHeader}>
@@ -381,6 +387,7 @@ const loadRecentItems = () => {
           )}
 
           {/* Vault Hero Section */}
+          <TutorialTarget id="inv-valuation">
           <View style={styles.heroSection}>
             <View style={[styles.vaultCard, { backgroundColor: G.bgCard, borderColor: G.border, overflow: 'hidden' }]}>
               <View style={[styles.vaultGlow, { backgroundColor: G.reflection }]} />
@@ -432,8 +439,10 @@ const loadRecentItems = () => {
               </View>
             </View>
           </View>
+          </TutorialTarget>
 
            {/* Business Insights Bento */}
+            <TutorialTarget id="inv-stats">
             <View style={styles.bentoSection}>
                {/* High Value Item Card - Clickable to Top 10 */}
                <View style={styles.bentoRow}>
@@ -491,6 +500,7 @@ const loadRecentItems = () => {
 
                {/* Product Order Card */}
                 <View style={styles.bentoRow}>
+                  <TutorialTarget id="inv-restock-btn">
                   <TouchableOpacity 
                       style={[styles.smallBento, { backgroundColor: G.bgCard, borderColor: G.border, overflow: 'hidden' }]}
                       onPress={() => {
@@ -504,6 +514,7 @@ const loadRecentItems = () => {
                      <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.bentoLabel, { color: G.muted }]} numberOfLines={1}>{t('inventory.product_order')}</AppText>
                      <AppNumber value={summary?.lowStockCount} fallback="0" size="body" style={[styles.bentoMainVal, { fontSize: (summary?.lowStockCount || 0) >= 1000 ? 16 : 18 }]} />
                    </TouchableOpacity>
+                   </TutorialTarget>
                 </View>
 
                {/* Category Distribution - Fixed percentages */}
@@ -539,8 +550,10 @@ const loadRecentItems = () => {
                   </TouchableOpacity>
                </View>
              </View>
+            </TutorialTarget>
 
           {/* Action Ledger Section */}
+          <TutorialTarget id="inv-list">
           <View style={styles.ledgerSection}>
             <View style={styles.sectionHeader}>
               <View>
@@ -555,6 +568,7 @@ const loadRecentItems = () => {
             <View style={styles.ledgerList}>
               {recentItems.map((item, idx) => (
                 <Animated.View key={item.id} entering={FadeInDown.delay(300 + (idx * 50)).duration(500)}>
+                  <TutorialTarget id="inv-item-card">
                   <InventoryLedgerItem 
                     item={item} 
                     onPress={() => {
@@ -562,6 +576,7 @@ const loadRecentItems = () => {
                       setShowItemDetails(true);
                     }} 
                   />
+                  </TutorialTarget>
                 </Animated.View>
               ))}
               {recentItems.length === 0 && (
@@ -574,8 +589,9 @@ const loadRecentItems = () => {
               )}
             </View>
           </View>
+          </TutorialTarget>
 
-        </ScrollView>
+        </TutorialScrollView>
       </Animated.View>
 
       {/* Expanding Smart FAB */}
@@ -607,6 +623,7 @@ const loadRecentItems = () => {
 
             {isBarExpanded && (
               <Animated.View entering={FadeIn.delay(120)} exiting={FadeOut.duration(100)}>
+                <TutorialTarget id="inv-add-btn">
                 <TouchableOpacity style={styles.dockBtn} onPress={() => { 
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setShowAddForm(true);
@@ -614,6 +631,7 @@ const loadRecentItems = () => {
                 }}>
                   <Plus size={22} color={G.muted} />
                 </TouchableOpacity>
+                </TutorialTarget>
               </Animated.View>
             )}
           </View>

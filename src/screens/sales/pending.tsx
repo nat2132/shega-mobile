@@ -21,6 +21,8 @@ import * as Haptics from "expo-haptics";
 import Animated, { FadeInDown, Layout } from "react-native-reanimated";
 import { getSalesGlass } from "./glass-sales";
 import { AppText, AppNumber } from "@/components/ui";
+import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
+import { pendingSalesTutorial } from '@/tutorials/definitions';
 const PendingRow = React.memo(
   ({
     item,
@@ -211,6 +213,7 @@ const PendingSales: React.FC<PendingSalesProps> = ({
 }) => {
   const { colors, t, theme } = useSettings();
   const SALES_GLASS = useMemo(() => getSalesGlass(colors), [colors]);
+  const tutorial = useTutorial({ tutorial: pendingSalesTutorial });
   const safeItems = useMemo(() => (Array.isArray(items) ? items : []), [items]);
   const totalAmount = useMemo(
     () =>
@@ -246,6 +249,7 @@ const PendingSales: React.FC<PendingSalesProps> = ({
         <View style={{ position: 'absolute', bottom: -100, right: -50, width: 280, height: 280, borderRadius: 140, backgroundColor: SALES_GLASS.glow }} />
         <View style={{ position: 'absolute', top: '40%', left: '30%', width: 200, height: 200, borderRadius: 100, backgroundColor: SALES_GLASS.mutedLight }} />
       </View>
+      <TutorialTarget id="ps-header">
       <View style={styles.headerRow}>
         <View>
           <AppText
@@ -287,8 +291,11 @@ const PendingSales: React.FC<PendingSalesProps> = ({
           </AppText>
         </View>
         </View>
+        <TutorialButton tutorialId="pending-sales" screenName="Pending Sales" />
       </View>
+      </TutorialTarget>
 
+      <TutorialTarget id="ps-list">
       <Animated.FlatList
         data={safeItems}
         keyExtractor={keyExtractor}
@@ -346,8 +353,10 @@ const PendingSales: React.FC<PendingSalesProps> = ({
           </View>
         )}
       />
+      </TutorialTarget>
 
       {safeItems.length > 0 && (
+        <TutorialTarget id="ps-totals">
         <View
           style={[styles.checkoutAnchor, { borderTopColor: SALES_GLASS.border }]}
         >
@@ -376,6 +385,7 @@ const PendingSales: React.FC<PendingSalesProps> = ({
                 />
               </View>
 
+              <TutorialTarget id="ps-actions">
               <View style={styles.actionCluster}>
                 <TouchableOpacity
                   style={[styles.moreBtn, { borderColor: SALES_GLASS.border }]}
@@ -402,9 +412,11 @@ const PendingSales: React.FC<PendingSalesProps> = ({
                   <ArrowRight size={18} color={SALES_GLASS.bg} />
                 </TouchableOpacity>
               </View>
+              </TutorialTarget>
             </View>
           </View>
         </View>
+        </TutorialTarget>
       )}
     </View>
   );

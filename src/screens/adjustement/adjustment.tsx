@@ -20,7 +20,7 @@ import {
     X
 } from 'lucide-react-native';
 import React, { useCallback, useState } from 'react';
-import { Dimensions, Image, Modal, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Dimensions, Image, Modal, RefreshControl, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { AppNumber, AppText} from '@/components/ui';
 import Animated, {
     FadeInDown,
@@ -34,6 +34,8 @@ import DamagedScreen from './damaged';
 import DecreaseScreen from './decrease';
 import IncreaseScreen from './increase';
 import { getAdjustmentGlass } from './glass-adjustment';
+import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
+import { adjustmentTutorial } from '@/tutorials/definitions';
 const TYPE_CONFIG: Record<string, { icon: any; iconBg: string; labelKey: string }> = {
   price_up: { icon: TrendingUp, iconBg: '#30D158', labelKey: 'adjustment.price_increase' },
   price_down: { icon: TrendingDown, iconBg: '#FF453A', labelKey: 'adjustment.price_decrease' },
@@ -112,6 +114,7 @@ const AdjustmentScreen = () => {
   const { openSidebar } = useSidebar();
   const { notifCount } = useNotifications();
   const router = useRouter();
+  const tutorial = useTutorial({ tutorial: adjustmentTutorial });
   const [showOptions, setShowOptions] = useState(false);
   const [showIncrease, setShowIncrease] = useState(false);
   const [showDecrease, setShowDecrease] = useState(false);
@@ -165,12 +168,13 @@ const AdjustmentScreen = () => {
         <View style={[styles.bgWash, { top: 700, left: -50, backgroundColor: '#FFFFFF', opacity: 0.015 }]} />
       </View>
 
-      <ScrollView 
+      <TutorialScrollView 
         showsVerticalScrollIndicator={false} 
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={false} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
         {/* Integrated Header */}
+        <TutorialTarget id="adj-header">
         <View style={styles.integratedHeader}>
           <View style={{ flex: 1 }}>
             <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.headerLabel, { color: G.muted }]} numberOfLines={1}>{t('adj.stock_rectification')}</AppText>
@@ -178,6 +182,7 @@ const AdjustmentScreen = () => {
           </View>
           
           <View style={styles.headerActions}>
+            <TutorialButton tutorialId="adjustment" screenName="Adjustment" />
             <TouchableOpacity 
               onPress={() => router.push('/notifications')} 
               style={[styles.headerIconBtn, { borderColor: G.border, backgroundColor: G.bgCard }]}
@@ -198,8 +203,10 @@ const AdjustmentScreen = () => {
             </TouchableOpacity>
           </View>
         </View>
+        </TutorialTarget>
 
         {/* Dashboard Metrics Grid */}
+        <TutorialTarget id="adj-types">
         <Animated.View entering={FadeInDown.delay(200).duration(600)} style={styles.metricsGrid}>
           <View style={styles.metricsRow}>
             <MetricCard 
@@ -219,11 +226,13 @@ const AdjustmentScreen = () => {
               value={<AppNumber value={metrics?.damagedItems ?? 0} size="heading" weight="bold" />}
               icon={AlertTriangle}
             />
+            <TutorialTarget id="adj-stats">
             <MetricCard 
               label={t('adj.metric_value_lost')}
               value={<AppNumber value={metrics?.estimatedValueLost ?? 0} prefix="ETB " size="heading" weight="bold" />}
               icon={DollarSign}
             />
+            </TutorialTarget>
           </View>
           <View style={styles.metricsRow}>
             <View style={[styles.netMetricCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
@@ -235,8 +244,10 @@ const AdjustmentScreen = () => {
             </View>
           </View>
         </Animated.View>
+        </TutorialTarget>
 
         {/* Recent Adjustments Section */}
+        <TutorialTarget id="adj-ledger">
         <Animated.View entering={FadeInDown.delay(400).duration(600)} style={styles.recentSection}>
           <View style={styles.sectionHeader}>
             <View>
@@ -268,8 +279,9 @@ const AdjustmentScreen = () => {
             </View>
           )}
         </Animated.View>
+        </TutorialTarget>
 
-      </ScrollView>
+      </TutorialScrollView>
       
       {/* Quick Actions FAB */}
       <View style={styles.dockedBarWrapper}>

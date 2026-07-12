@@ -3,7 +3,6 @@ import {
   View,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
   Linking
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,6 +14,8 @@ import { useDialog } from '@/context/DialogContext';
 import { getContactsGlass } from './glass-contacts';
 import { Fonts } from '@/constants/theme';
 import { deleteContact } from '@/database/db';
+import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
+import { contactDetailsTutorial } from '@/tutorials/definitions';
 import { AppText} from '@/components/ui';
 
 const CATEGORY_ICONS: Record<string, { labelKey: string }> = {
@@ -45,6 +46,7 @@ export default function ContactDetails({ contact, onClose, onEdit, onDeleted }: 
   const { colors, t } = useSettings();
   const G = getContactsGlass(colors);
   const dialog = useDialog();
+  const tutorial = useTutorial({ tutorial: contactDetailsTutorial });
 
   const handleCall = (phone: string) => {
     if (phone) {
@@ -87,18 +89,20 @@ export default function ContactDetails({ contact, onClose, onEdit, onDeleted }: 
         <View style={[styles.glowWash, { backgroundColor: G.mutedLight, top: '40%', right: -50, width: 140, height: 140, borderRadius: 70 }]} />
       </View>
       {/* Header */}
-      <View style={styles.header}>
+      <TutorialTarget id="cd-header" style={styles.header}>
         <TouchableOpacity onPress={onClose} style={[styles.headerBtn, { borderColor: G.border }]}>
           <X size={22} color={G.fg} />
         </TouchableOpacity>
         <AppText variant="title" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{t('contacts.details_title')}</AppText>
+        <TutorialButton tutorialId="contact-details" screenName="Contact Details" />
         <TouchableOpacity onPress={onEdit} style={[styles.headerBtn, { backgroundColor: colors.primary }]}>
           <Edit2 size={18} color="#FFF" />
         </TouchableOpacity>
-      </View>
+      </TutorialTarget>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <TutorialScrollView contentContainerStyle={styles.content}>
         {/* Profile Section */}
+        <TutorialTarget id="cd-info">
         <View style={styles.profileSection}>
           <View style={[styles.avatarLarge, { backgroundColor: catColor + '20' }]}>
             <User size={40} color={catColor} />
@@ -111,6 +115,7 @@ export default function ContactDetails({ contact, onClose, onEdit, onDeleted }: 
             <AppText variant="body" weight="medium" align="center" style={[styles.subText, { color: G.fgSecondary }]} numberOfLines={2}>{t('contacts.sub_' + subCatKey(contact.subCategory))}</AppText>
           )}
         </View>
+        </TutorialTarget>
 
         {/* Action Buttons */}
         {contact.phone && (
@@ -124,6 +129,7 @@ export default function ContactDetails({ contact, onClose, onEdit, onDeleted }: 
         )}
 
         {/* Details Card */}
+        <TutorialTarget id="cd-balance">
         <View style={[styles.detailsCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
           {contact.phone && (
             <View style={styles.detailRow}>
@@ -165,8 +171,10 @@ export default function ContactDetails({ contact, onClose, onEdit, onDeleted }: 
             </View>
           )}
         </View>
+        </TutorialTarget>
 
         {/* Delete Button */}
+        <TutorialTarget id="cd-actions">
         <TouchableOpacity
           style={[styles.deleteBtn, { backgroundColor: colors.error + '20', borderColor: colors.error }]}
           onPress={handleDelete}
@@ -174,7 +182,8 @@ export default function ContactDetails({ contact, onClose, onEdit, onDeleted }: 
           <Trash2 size={20} color={colors.error} />
           <AppText variant="body" weight="bold" shrink={false} style={[styles.deleteBtnText, { color: colors.error }]} numberOfLines={1}>{t('contacts.details_delete_btn')}</AppText>
         </TouchableOpacity>
-      </ScrollView>
+        </TutorialTarget>
+      </TutorialScrollView>
     </SafeAreaView>
   );
 }

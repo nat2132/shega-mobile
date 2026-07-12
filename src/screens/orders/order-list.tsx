@@ -27,6 +27,8 @@ import {
   User,
 } from "lucide-react-native";
 import { getOrdersGlass } from './glass-orders';
+import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
+import { ordersTutorial } from '@/tutorials/definitions';
 
 const ORD_GLASS = getOrdersGlass(LightTheme);
 
@@ -146,6 +148,7 @@ const OrdersScreen = () => {
   const ORD_GLASS = useMemo(() => getOrdersGlass(colors), [colors]);
   const { openSidebar } = useSidebar();
   const router = useRouter();
+  const tutorial = useTutorial({ tutorial: ordersTutorial });
   const [activeTab, setActiveTab] = useState<OrderTab>("active");
   const [orders, setOrders] = useState<any[]>([]);
   const [summary, setSummary] = useState<any>(null);
@@ -302,6 +305,7 @@ const OrdersScreen = () => {
       <View style={styles.glowTopRight} />
       <View style={styles.glowBottomLeft} />
       <View style={styles.glowCenter} />
+      <TutorialTarget id="ord-header">
       <View style={styles.header}>
         <TouchableOpacity onPress={openSidebar} style={styles.menuBtn}>
           <View style={[styles.menuDot, { backgroundColor: ORD_GLASS.fg }]} />
@@ -327,8 +331,11 @@ const OrdersScreen = () => {
             Order Management
           </AppText>
         </View>
+        <TutorialButton tutorialId="orders" screenName="Orders" />
       </View>
+      </TutorialTarget>
 
+      <TutorialTarget id="ord-list">
       <FlatList
         data={orders}
         keyExtractor={(item) => String(item.id)}
@@ -356,7 +363,9 @@ const OrdersScreen = () => {
           />
         }
       />
+      </TutorialTarget>
 
+      <TutorialTarget id="ord-add-btn">
       <TouchableOpacity
         style={[styles.fab, { backgroundColor: ORD_GLASS.fg }]}
         activeOpacity={0.8}
@@ -367,6 +376,7 @@ const OrdersScreen = () => {
       >
         <Plus size={24} color={ORD_GLASS.bg} />
       </TouchableOpacity>
+      </TutorialTarget>
     </View>
   );
 };

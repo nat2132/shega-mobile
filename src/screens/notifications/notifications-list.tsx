@@ -66,6 +66,8 @@ import {
 } from '@/utils/notification-display';
 import { AppText, AppNumber} from '@/components/ui';
 import { getNotifGlass } from './glass-notifications';
+import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
+import { notificationsTutorial } from '@/tutorials/definitions';
 const iconFor = (name: NotificationIcon, color: string, size = 20) => {
   switch (name) {
     case 'package': return <Package size={size} color={color} />;
@@ -455,6 +457,7 @@ export const NotificationsListScreen: React.FC = () => {
   const G = getNotifGlass(colors);
   const dialog = useDialog();
   const router = useRouter();
+  const tutorial = useTutorial({ tutorial: notificationsTutorial });
   const {
     notifications,
     unreadCount,
@@ -580,6 +583,7 @@ export const NotificationsListScreen: React.FC = () => {
       <View style={glowStyles.glowBottomLeft} />
       <View style={glowStyles.glowCenter} />
       {/* Header */}
+      <TutorialTarget id="nt-header">
       <View style={styles.headerNode}>
         <View style={styles.headerTopRow}>
           <TouchableOpacity
@@ -607,6 +611,7 @@ export const NotificationsListScreen: React.FC = () => {
               )}
             </AppText>
           </View>
+          <TutorialButton tutorialId="notifications" screenName="Notifications" />
         </View>
 
         {/* Search */}
@@ -666,6 +671,7 @@ export const NotificationsListScreen: React.FC = () => {
         </ScrollView>
 
         {/* Bulk action row */}
+        <TutorialTarget id="nt-actions">
         {filtered.length > 0 && (
           <View style={styles.bulkRow}>
             <TouchableOpacity
@@ -684,9 +690,12 @@ export const NotificationsListScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
         )}
+        </TutorialTarget>
       </View>
+      </TutorialTarget>
 
       {/* List */}
+      <TutorialTarget id="nt-list">
       {loading ? (
         <SkeletonList
           count={6}
@@ -723,6 +732,7 @@ export const NotificationsListScreen: React.FC = () => {
           }
         />
       )}
+      </TutorialTarget>
 
       {/* Detail bottom sheet */}
       <NotificationDetailSheet

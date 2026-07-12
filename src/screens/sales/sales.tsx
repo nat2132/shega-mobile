@@ -89,6 +89,8 @@ import GlobalCheckout from "./sale-form";
 import SaleDetailsScreen from "./sales-details";
 import SalesRecordScreen from "./sales-record";
 import SearchScreen from "./search";
+import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
+import { salesHubTutorial, collectPaymentsTutorial } from '@/tutorials/definitions';
 
 const isDarkBg = (c: typeof LightTheme) => {
   const bg = c.background.toLowerCase();
@@ -119,6 +121,8 @@ const SalesDashboard = () => {
     useSettings();
   const SALES_GLASS = useMemo(() => getSalesGlass(colors), [colors]);
   const { showToast } = useToast();
+  const tutorial = useTutorial({ tutorial: salesHubTutorial });
+  const cpTutorial = useTutorial({ tutorial: collectPaymentsTutorial });
   const { notifCount } = useNotifications();
   const router = useRouter();
   const { consumeIntent, intent: pendingIntent } = useNavigationIntent();
@@ -729,7 +733,7 @@ const SalesDashboard = () => {
       </View>
 
       <Animated.View entering={FadeIn.duration(400)} style={{ flex: 1 }}>
-        <ScrollView
+        <TutorialScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[
             styles.scrollContent,
@@ -745,6 +749,7 @@ const SalesDashboard = () => {
           }
         >
           {/* Integrated Header */}
+          <TutorialTarget id="sales-header">
           <View style={styles.integratedHeader}>
             <View style={{ flex: 1 }}>
               <AppText
@@ -767,6 +772,7 @@ const SalesDashboard = () => {
             </View>
 
             <View style={styles.headerActions}>
+              <TutorialButton tutorialId="sales-hub" screenName="Sales Hub" />
               <View style={[styles.glassIconBtn, { backgroundColor: colors.card, borderColor: SALES_GLASS.border }]}>
                 <TouchableOpacity
                   onPress={() => router.push("/notifications")}
@@ -812,8 +818,10 @@ const SalesDashboard = () => {
               </View>
             </View>
           </View>
+          </TutorialTarget>
 
           {/* Revenue Hero Section */}
+          <TutorialTarget id="sales-revenue">
           <View style={styles.heroSection}>
             <View style={[styles.revenueGlassCard, { borderColor: SALES_GLASS.border, backgroundColor: colors.card }]}>
               <View style={styles.revenueMainDisplay}>
@@ -907,6 +915,7 @@ const SalesDashboard = () => {
                 </Animated.View>
               )}
 
+            <TutorialTarget id="sales-chart">
             <View style={styles.chartContainer}>
               {!chartLoaded ? (
                 <BarChartSkeleton height={150} barCount={numBars} />
@@ -952,6 +961,7 @@ const SalesDashboard = () => {
                 </ScrollView>
               )}
             </View>
+            </TutorialTarget>
 
             {/* Time Period Selectors */}
             <View style={styles.periodRow}>
@@ -1024,6 +1034,7 @@ const SalesDashboard = () => {
               </View>
             </View>
           </View>
+          </TutorialTarget>
 
           {/* Business Intelligence Bento - Updated KPIs */}
           <View style={styles.bentoSection}>
@@ -1091,6 +1102,7 @@ const SalesDashboard = () => {
 
           {/* Top Selling Products */}
           {topItems.length > 0 && (
+            <TutorialTarget id="sales-top-items">
             <View style={styles.topItemsSection}>
               <View style={styles.sectionHead}>
                 <AppText
@@ -1168,9 +1180,11 @@ const SalesDashboard = () => {
                 ))}
               </ScrollView>
             </View>
+            </TutorialTarget>
           )}
 
           {/* Transaction Ledger */}
+          <TutorialTarget id="sales-ledger">
           <View style={styles.ledgerSection}>
             <View style={styles.sectionHead}>
               <View>
@@ -1254,7 +1268,8 @@ const SalesDashboard = () => {
               )}
             </View>
           </View>
-        </ScrollView>
+          </TutorialTarget>
+        </TutorialScrollView>
       </Animated.View>
 
       {/* Expanding Smart FAB */}
@@ -1313,6 +1328,7 @@ const SalesDashboard = () => {
                   entering={FadeIn.delay(100)}
                   exiting={FadeOut.duration(100)}
                 >
+                  <TutorialTarget id="sales-pending">
                   <TouchableOpacity
                     style={styles.dockBtn}
                     onPress={() => {
@@ -1322,6 +1338,7 @@ const SalesDashboard = () => {
                   >
                     <DollarSign size={22} color={SALES_GLASS.fgSecondary} />
                   </TouchableOpacity>
+                  </TutorialTarget>
                 </Animated.View>
               )}
 
@@ -1330,6 +1347,7 @@ const SalesDashboard = () => {
                   entering={FadeIn.delay(120)}
                   exiting={FadeOut.duration(100)}
                 >
+                  <TutorialTarget id="sales-add-btn">
                   <TouchableOpacity
                     style={styles.dockBtn}
                     onPress={() => {
@@ -1342,6 +1360,7 @@ const SalesDashboard = () => {
                   >
                     <Plus size={22} color={SALES_GLASS.fgSecondary} />
                   </TouchableOpacity>
+                  </TutorialTarget>
                 </Animated.View>
               )}
             </View>
@@ -1747,6 +1766,7 @@ const SalesDashboard = () => {
               { backgroundColor: colors.background, height: Dimensions.get('window').height * 0.85 },
             ]}
           >
+            <TutorialTarget id="cp-header">
             <View style={styles.modalHeader}>
               <View
                 style={[styles.modalHandle, { backgroundColor: colors.border }]}
@@ -1768,6 +1788,7 @@ const SalesDashboard = () => {
                 >
                   {t("sales.collect_payments")}
                 </AppText>
+                <TutorialButton tutorialId="collect-payments" screenName="Collect Payments" />
                 <View
                   style={{ flexDirection: "row", gap: 8, alignItems: "center" }}
                 >
@@ -1808,10 +1829,12 @@ const SalesDashboard = () => {
                 </View>
               </View>
             </View>
+            </TutorialTarget>
 
             {!selectedCustomer ? (
               /* →→ Customer List: name Â· amount Â· due date only →→ */
               <View style={{ flex: 1, paddingHorizontal: 20 }}>
+                <TutorialTarget id="cp-customer-search">
                 <View
                   style={[
                     styles.searchBox,
@@ -1836,6 +1859,7 @@ const SalesDashboard = () => {
                     </TouchableOpacity>
                   )}
                 </View>
+                </TutorialTarget>
                 <FlatList
                   data={filteredDebtCustomers}
                   keyExtractor={(item, idx) => item.customerName + idx}
@@ -2081,6 +2105,7 @@ const SalesDashboard = () => {
 
                 {!showCustomerActivity ? (
                   /* →→ Items Tab →→ */
+                  <TutorialTarget id="cp-items">
                   <View style={{ flex: 1 }}>
                     <FlatList
                       data={customerDebts}
@@ -2426,6 +2451,7 @@ const SalesDashboard = () => {
                     />
 
                     {/* Sticky footer */}
+                    <TutorialTarget id="cp-commit-btn">
                     <View
                       style={[
                         styles.cpFooter,
@@ -2435,6 +2461,7 @@ const SalesDashboard = () => {
                         },
                       ]}
                     >
+                      <TutorialTarget id="cp-amount">
                       <View
                         style={[
                           styles.cpTotalRow,
@@ -2463,6 +2490,7 @@ const SalesDashboard = () => {
                           style={styles.cpTotalValue}
                         />
                       </View>
+                      </TutorialTarget>
                       <View style={styles.cpBtnRow}>
                         <TouchableOpacity
                           style={[
@@ -2566,7 +2594,9 @@ const SalesDashboard = () => {
                         </AppText>
                       </TouchableOpacity>
                     </View>
+                    </TutorialTarget>
                   </View>
+                  </TutorialTarget>
                 ) : (
                   /* →→ Activity Tab →→ */
                   <FlatList
@@ -3025,6 +3055,7 @@ const SalesDashboard = () => {
               overflow: "hidden",
             }}
           >
+            <TutorialTarget id="cp-method">
             <AppText
               variant="heading"
               weight="bold"
@@ -3215,6 +3246,7 @@ const SalesDashboard = () => {
                 </AppText>
               </TouchableOpacity>
             </View>
+            </TutorialTarget>
             <TouchableOpacity
               style={{ marginTop: 12, alignSelf: "center" }}
               onPress={() => {

@@ -41,6 +41,8 @@ import { getExpenseGlass } from './glass-expense';
 import { useFormDrafts } from '@/hooks/useFormDrafts';
 import { DraftSection } from '@/components/DraftSection';
 import { Draft } from '@/services/draftService';
+import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
+import { expenseFormTutorial } from '@/tutorials/definitions';
 
 const FREQUENT_CATEGORIES_KEY = 'frequent_expense_categories';
 
@@ -92,6 +94,8 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
     getSubtitle: useCallback(() => (amount ? t('draft.expense_subtitle', { amount }) : t('draft.expense_no_amount')), [amount, t]),
     enabled: !successDetails,
   });
+
+  const tutorial = useTutorial({ tutorial: expenseFormTutorial });
 
   useEffect(() => {
     try {
@@ -302,7 +306,7 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
       <View style={{ position: 'absolute', top: -80, left: -40, width: 200, height: 200, borderRadius: 100, backgroundColor: G.mutedLight, opacity: 0.12 }} />
       <View style={{ position: 'absolute', bottom: -40, right: -60, width: 180, height: 180, borderRadius: 90, backgroundColor: G.mutedLight, opacity: 0.08 }} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <TutorialScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {draftFormData.showDrafts && (
             <DraftSection
               drafts={draftFormData.drafts}
@@ -324,156 +328,168 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
               }}
             />
           )}
-          <View style={styles.header}>
-            <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.headerSub, { color: G.fgSecondary }]}>
-              {t('expense.capital_management')}
-            </AppText>
-            <AppText variant="title" weight="bold" style={[styles.headerTitle, { color: G.fg }]}>
-              {t('expense.new_expense')}
-            </AppText>
-          </View>
-
-          {/* Amount Input */}
-          <Animated.View entering={FadeInDown.duration(400)} style={[styles.amountCard, { backgroundColor: G.bgCard, borderColor: G.border, overflow: 'hidden' }]}>
-            <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.amountLabel, { color: G.fgSecondary }]}>
-              {t('expense.magnitude')}
-            </AppText>
-            <View style={styles.amountRow}>
-              <TextInput
-                style={[styles.amountInput, { color: G.fg }]}
-                placeholder="0.00"
-                keyboardType="numeric"
-                value={amount}
-                onChangeText={setAmount}
-                placeholderTextColor={G.border}
-                autoFocus
-              />
-              <AppText variant="heading" weight="bold" style={[styles.currency, { color: G.fgSecondary }]}>
-                {t('common.etb')}
+          <TutorialTarget id="ef-header">
+            <View style={styles.header}>
+              <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.headerSub, { color: G.fgSecondary }]}>
+                {t('expense.capital_management')}
+              </AppText>
+              <AppText variant="title" weight="bold" style={[styles.headerTitle, { color: G.fg }]}>
+                {t('expense.new_expense')}
               </AppText>
             </View>
-          </Animated.View>
+          </TutorialTarget>
+
+          {/* Amount Input */}
+          <TutorialTarget id="ef-amount">
+            <Animated.View entering={FadeInDown.duration(400)} style={[styles.amountCard, { backgroundColor: G.bgCard, borderColor: G.border, overflow: 'hidden' }]}>
+              <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.amountLabel, { color: G.fgSecondary }]}>
+                {t('expense.magnitude')}
+              </AppText>
+              <View style={styles.amountRow}>
+                <TextInput
+                  style={[styles.amountInput, { color: G.fg }]}
+                  placeholder="0.00"
+                  keyboardType="numeric"
+                  value={amount}
+                  onChangeText={setAmount}
+                  placeholderTextColor={G.border}
+                  autoFocus
+                />
+                <AppText variant="heading" weight="bold" style={[styles.currency, { color: G.fgSecondary }]}>
+                  {t('common.etb')}
+                </AppText>
+              </View>
+            </Animated.View>
+          </TutorialTarget>
 
           {/* Category */}
-          <Animated.View entering={FadeInDown.duration(400).delay(100)}>
-            <TouchableOpacity
-              style={[styles.fieldCard, { backgroundColor: G.bgCard, borderColor: G.border, overflow: 'hidden' }]}
-              onPress={() => setShowCategoryPicker(!showCategoryPicker)}
-            >
-              <View style={styles.fieldRow}>
-                <Tag size={18} color={G.fgSecondary} />
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary }]}>
-                    {t('common.category')}
-                  </AppText>
-                  <AppText variant="body" weight="bold" style={[styles.fieldValue, { color: category ? G.fg : G.fgSecondary }]}>
-                    {category || t('common.select_category')}
-                  </AppText>
-                </View>
-              </View>
-            </TouchableOpacity>
-
-            {showCategoryPicker && (
-              <Animated.View entering={FadeIn} style={styles.categoryGrid}>
-                {frequentCategories.length > 0 && (
-                  <>
-                    <AppText variant="caption" weight="bold" style={[styles.sectionLabel, { color: G.fgSecondary }]}>
-                      {t('expense.recent')}
+          <TutorialTarget id="ef-category">
+            <Animated.View entering={FadeInDown.duration(400).delay(100)}>
+              <TouchableOpacity
+                style={[styles.fieldCard, { backgroundColor: G.bgCard, borderColor: G.border, overflow: 'hidden' }]}
+                onPress={() => setShowCategoryPicker(!showCategoryPicker)}
+              >
+                <View style={styles.fieldRow}>
+                  <Tag size={18} color={G.fgSecondary} />
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary }]}>
+                      {t('common.category')}
                     </AppText>
-                    <View style={styles.chipRow}>
-                      {frequentCategories.map(cat => (
-                        <TouchableOpacity key={cat} style={[styles.chip, { backgroundColor: G.bgCard, borderColor: G.border }]}
-                          onPress={() => handleCategoryChange(cat)}>
-                          <AppText variant="body-sm" weight="bold" style={{ color: G.fg }}>{cat}</AppText>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </>
-                )}
-                <AppText variant="caption" weight="bold" style={[styles.sectionLabel, { color: G.fgSecondary }]}>
-                  {selectedBudgetId && budgetCategoryNames.length > 0 ? `Budget: ${budgets.find((b: any) => b.id === selectedBudgetId)?.name || ''} Categories` : t('common.categories')}
-                </AppText>
-                <View style={styles.chipRow}>
-                  {(selectedBudgetId && budgetCategoryNames.length > 0 ? budgetCategoryNames : DEFAULT_CATEGORY_KEYS).map(key => (
-                    <TouchableOpacity key={key} style={[styles.chip, { backgroundColor: G.bgCard, borderColor: G.border }]}
-                      onPress={() => handleCategoryChange(t(key))}>
-                      <AppText variant="body-sm" weight="bold" style={{ color: G.fg }}>{t(key)}</AppText>
-                    </TouchableOpacity>
-                  ))}
+                    <AppText variant="body" weight="bold" style={[styles.fieldValue, { color: category ? G.fg : G.fgSecondary }]}>
+                      {category || t('common.select_category')}
+                    </AppText>
+                  </View>
                 </View>
-              </Animated.View>
-            )}
-          </Animated.View>
+              </TouchableOpacity>
+
+              {showCategoryPicker && (
+                <Animated.View entering={FadeIn} style={styles.categoryGrid}>
+                  {frequentCategories.length > 0 && (
+                    <>
+                      <AppText variant="caption" weight="bold" style={[styles.sectionLabel, { color: G.fgSecondary }]}>
+                        {t('expense.recent')}
+                      </AppText>
+                      <View style={styles.chipRow}>
+                        {frequentCategories.map(cat => (
+                          <TouchableOpacity key={cat} style={[styles.chip, { backgroundColor: G.bgCard, borderColor: G.border }]}
+                            onPress={() => handleCategoryChange(cat)}>
+                            <AppText variant="body-sm" weight="bold" style={{ color: G.fg }}>{cat}</AppText>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </>
+                  )}
+                  <AppText variant="caption" weight="bold" style={[styles.sectionLabel, { color: G.fgSecondary }]}>
+                    {selectedBudgetId && budgetCategoryNames.length > 0 ? `Budget: ${budgets.find((b: any) => b.id === selectedBudgetId)?.name || ''} Categories` : t('common.categories')}
+                  </AppText>
+                  <View style={styles.chipRow}>
+                    {(selectedBudgetId && budgetCategoryNames.length > 0 ? budgetCategoryNames : DEFAULT_CATEGORY_KEYS).map(key => (
+                      <TouchableOpacity key={key} style={[styles.chip, { backgroundColor: G.bgCard, borderColor: G.border }]}
+                        onPress={() => handleCategoryChange(t(key))}>
+                        <AppText variant="body-sm" weight="bold" style={{ color: G.fg }}>{t(key)}</AppText>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </Animated.View>
+              )}
+            </Animated.View>
+          </TutorialTarget>
 
           {/* Date */}
-          <Animated.View entering={FadeInDown.duration(400).delay(150)}>
-            <TouchableOpacity
-              style={[styles.fieldCard, { backgroundColor: G.bgCard, borderColor: G.border }]}
-              onPress={() => setShowDatePicker(true)}
-            >
-              <View style={styles.fieldRow}>
-                <CalendarIcon size={18} color={G.fgSecondary} />
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary }]}>
-                    {t('common.date')}
-                  </AppText>
-                  <AppText variant="body" weight="bold" style={[styles.fieldValue, { color: G.fg }]}>
-                    {formatDate(new Date(date), calendarType, language)}
-                  </AppText>
+          <TutorialTarget id="ef-date">
+            <Animated.View entering={FadeInDown.duration(400).delay(150)}>
+              <TouchableOpacity
+                style={[styles.fieldCard, { backgroundColor: G.bgCard, borderColor: G.border }]}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <View style={styles.fieldRow}>
+                  <CalendarIcon size={18} color={G.fgSecondary} />
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary }]}>
+                      {t('common.date')}
+                    </AppText>
+                    <AppText variant="body" weight="bold" style={[styles.fieldValue, { color: G.fg }]}>
+                      {formatDate(new Date(date), calendarType, language)}
+                    </AppText>
+                  </View>
                 </View>
-              </View>
-            </TouchableOpacity>
-          </Animated.View>
+              </TouchableOpacity>
+            </Animated.View>
+          </TutorialTarget>
 
           {/* Description (optional) */}
-          <Animated.View entering={FadeInDown.duration(400).delay(200)}>
-            <View style={[styles.fieldCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
-              <TextInput
-                style={[styles.descInput, { color: G.fg }]}
-                placeholder={t('expense.desc_placeholder') || 'Description (optional)'}
-                placeholderTextColor={G.fgSecondary}
-                value={description}
-                onChangeText={setDescription}
-                maxLength={100}
-              />
-            </View>
-          </Animated.View>
+          <TutorialTarget id="ef-description">
+            <Animated.View entering={FadeInDown.duration(400).delay(200)}>
+              <View style={[styles.fieldCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+                <TextInput
+                  style={[styles.descInput, { color: G.fg }]}
+                  placeholder={t('expense.desc_placeholder') || 'Description (optional)'}
+                  placeholderTextColor={G.fgSecondary}
+                  value={description}
+                  onChangeText={setDescription}
+                  maxLength={100}
+                />
+              </View>
+            </Animated.View>
+          </TutorialTarget>
 
           {/* Budget Selector */}
           {budgets.length > 0 && (
-            <Animated.View entering={FadeInDown.duration(400).delay(250)}>
-              <View style={[styles.fieldCard, { backgroundColor: G.bgCard, borderColor: G.border, marginBottom: 12, overflow: 'hidden' }]}>
-                <View style={styles.fieldRow}>
-                  <Wallet size={18} color={G.fgSecondary} />
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary }]}>
-                      {t('expense.budget_label')}
-                    </AppText>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginTop: 8 }}>
-                      <TouchableOpacity
-                        style={[styles.miniChip, { backgroundColor: selectedBudgetId === null ? G.fg : G.bgCard, borderColor: G.border }]}
-                        onPress={() => handleBudgetSelect(null)}
-                      >
-                        <AppText variant="micro" weight="bold" style={{ color: selectedBudgetId === null ? G.bg : G.fg }}>
-                          {t('expense.auto')}
-                        </AppText>
-                      </TouchableOpacity>
-                      {budgets.map((b: any) => (
+            <TutorialTarget id="ef-budget">
+              <Animated.View entering={FadeInDown.duration(400).delay(250)}>
+                <View style={[styles.fieldCard, { backgroundColor: G.bgCard, borderColor: G.border, marginBottom: 12, overflow: 'hidden' }]}>
+                  <View style={styles.fieldRow}>
+                    <Wallet size={18} color={G.fgSecondary} />
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary }]}>
+                        {t('expense.budget_label')}
+                      </AppText>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginTop: 8 }}>
                         <TouchableOpacity
-                          key={b.id}
-                          style={[styles.miniChip, { backgroundColor: selectedBudgetId === b.id ? G.fg : G.bgCard, borderColor: G.border }]}
-                          onPress={() => handleBudgetSelect(b.id)}
+                          style={[styles.miniChip, { backgroundColor: selectedBudgetId === null ? G.fg : G.bgCard, borderColor: G.border }]}
+                          onPress={() => handleBudgetSelect(null)}
                         >
-                          <AppText variant="micro" weight="bold" style={{ color: selectedBudgetId === b.id ? G.bg : G.fg }}>
-                            {b.name}
+                          <AppText variant="micro" weight="bold" style={{ color: selectedBudgetId === null ? G.bg : G.fg }}>
+                            {t('expense.auto')}
                           </AppText>
                         </TouchableOpacity>
-                      ))}
-                    </ScrollView>
+                        {budgets.map((b: any) => (
+                          <TouchableOpacity
+                            key={b.id}
+                            style={[styles.miniChip, { backgroundColor: selectedBudgetId === b.id ? G.fg : G.bgCard, borderColor: G.border }]}
+                            onPress={() => handleBudgetSelect(b.id)}
+                          >
+                            <AppText variant="micro" weight="bold" style={{ color: selectedBudgetId === b.id ? G.bg : G.fg }}>
+                              {b.name}
+                            </AppText>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
                   </View>
                 </View>
-              </View>
-            </Animated.View>
+              </Animated.View>
+            </TutorialTarget>
           )}
 
           {/* Ambiguous category selection */}
@@ -546,80 +562,85 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
           )}
 
           {/* Recurring Toggle */}
-          <Animated.View entering={FadeInDown.duration(400).delay(350)}>
-            <TouchableOpacity
-              style={[styles.fieldCard, { backgroundColor: G.bgCard, borderColor: isRecurring ? G.fg : G.border, marginBottom: isRecurring ? 8 : 12, overflow: 'hidden' }]}
-              onPress={() => { setIsRecurring(!isRecurring); Haptics.selectionAsync(); }}
-              activeOpacity={0.7}
-            >
-              <View style={styles.fieldRow}>
-                <Repeat size={18} color={isRecurring ? G.fg : G.fgSecondary} />
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary }]}>
-                    {t('expense.recurring')}
-                  </AppText>
-                  <AppText variant="body" weight="bold" style={[styles.fieldValue, { color: isRecurring ? G.fg : G.fgSecondary }]}>
-                    {isRecurring ? `${recurFrequency} · ${formatDate(new Date(recurStartDate), calendarType, language)}` : t('expense.one_time')}
-                  </AppText>
-                </View>
-                <View style={[styles.toggleTrack, { backgroundColor: isRecurring ? G.fg : G.border }]}>
-                  <View style={[styles.toggleThumb, { backgroundColor: isRecurring ? G.bg : G.bgCard }]} />
-                </View>
-              </View>
-            </TouchableOpacity>
-
-            {isRecurring && (
-              <Animated.View entering={FadeIn} style={{ marginBottom: 12 }}>
-                <View style={[styles.fieldCard, { backgroundColor: G.bgCard, borderColor: G.border, marginBottom: 8, overflow: 'hidden' }]}>
-                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary, marginBottom: 10 }]}>{t('expense.frequency')}</AppText>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                    {[{ key: 'Daily', label: t('expense.daily') }, { key: 'Weekly', label: t('expense.weekly') }, { key: 'Monthly', label: t('expense.monthly') }, { key: 'Yearly', label: t('expense.yearly') }].map(freq => (
-                      <TouchableOpacity key={freq.key}
-                        style={[styles.chip, { backgroundColor: G.bgCard, borderColor: G.border, paddingVertical: 8, paddingHorizontal: 14 }, recurFrequency === freq.key && { backgroundColor: G.fg }]}
-                        onPress={() => { setRecurFrequency(freq.key); Haptics.selectionAsync(); }}
-                      >
-                        <AppText variant="body-sm" weight="bold" style={{ color: recurFrequency === freq.key ? G.bg : G.fg }}>{freq.label}</AppText>
-                      </TouchableOpacity>
-                    ))}
+          <TutorialTarget id="ef-recurring">
+            <Animated.View entering={FadeInDown.duration(400).delay(350)}>
+              <TouchableOpacity
+                style={[styles.fieldCard, { backgroundColor: G.bgCard, borderColor: isRecurring ? G.fg : G.border, marginBottom: isRecurring ? 8 : 12, overflow: 'hidden' }]}
+                onPress={() => { setIsRecurring(!isRecurring); Haptics.selectionAsync(); }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.fieldRow}>
+                  <Repeat size={18} color={isRecurring ? G.fg : G.fgSecondary} />
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary }]}>
+                      {t('expense.recurring')}
+                    </AppText>
+                    <AppText variant="body" weight="bold" style={[styles.fieldValue, { color: isRecurring ? G.fg : G.fgSecondary }]}>
+                      {isRecurring ? `${recurFrequency} · ${formatDate(new Date(recurStartDate), calendarType, language)}` : t('expense.one_time')}
+                    </AppText>
+                  </View>
+                  <View style={[styles.toggleTrack, { backgroundColor: isRecurring ? G.fg : G.border }]}>
+                    <View style={[styles.toggleThumb, { backgroundColor: isRecurring ? G.bg : G.bgCard }]} />
                   </View>
                 </View>
+              </TouchableOpacity>
 
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <TouchableOpacity
-                    style={[styles.dateField, { backgroundColor: G.bgCard, borderColor: G.border, flex: 1 }]}
-                    onPress={() => setShowStartPicker(true)}
-                  >
-                    <CalendarIcon size={16} color={G.fgSecondary} />
-                    <AppText variant="caption" weight="bold" style={{ color: G.fg, marginLeft: 6 }} numberOfLines={1}>
-                      {formatDate(new Date(recurStartDate), calendarType, language)}
-                    </AppText>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.dateField, { backgroundColor: G.bgCard, borderColor: G.border, flex: 1 }]}
-                    onPress={() => setShowEndPicker(true)}
-                  >
-                    <CalendarIcon size={16} color={G.fgSecondary} />
-                    <AppText variant="caption" weight="bold" style={{ color: G.fg, marginLeft: 6 }} numberOfLines={1}>
-                      {formatDate(new Date(recurEndDate), calendarType, language)}
-                    </AppText>
-                  </TouchableOpacity>
-                </View>
-              </Animated.View>
-            )}
-          </Animated.View>
+              {isRecurring && (
+                <Animated.View entering={FadeIn} style={{ marginBottom: 12 }}>
+                  <View style={[styles.fieldCard, { backgroundColor: G.bgCard, borderColor: G.border, marginBottom: 8, overflow: 'hidden' }]}>
+                     <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary, marginBottom: 10 }]}>{t('expense.frequency')}</AppText>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                      {[{ key: 'Daily', label: t('expense.daily') }, { key: 'Weekly', label: t('expense.weekly') }, { key: 'Monthly', label: t('expense.monthly') }, { key: 'Yearly', label: t('expense.yearly') }].map(freq => (
+                        <TouchableOpacity key={freq.key}
+                          style={[styles.chip, { backgroundColor: G.bgCard, borderColor: G.border, paddingVertical: 8, paddingHorizontal: 14 }, recurFrequency === freq.key && { backgroundColor: G.fg }]}
+                          onPress={() => { setRecurFrequency(freq.key); Haptics.selectionAsync(); }}
+                        >
+                          <AppText variant="body-sm" weight="bold" style={{ color: recurFrequency === freq.key ? G.bg : G.fg }}>{freq.label}</AppText>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <TouchableOpacity
+                      style={[styles.dateField, { backgroundColor: G.bgCard, borderColor: G.border, flex: 1 }]}
+                      onPress={() => setShowStartPicker(true)}
+                    >
+                      <CalendarIcon size={16} color={G.fgSecondary} />
+                      <AppText variant="caption" weight="bold" style={{ color: G.fg, marginLeft: 6 }} numberOfLines={1}>
+                        {formatDate(new Date(recurStartDate), calendarType, language)}
+                      </AppText>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.dateField, { backgroundColor: G.bgCard, borderColor: G.border, flex: 1 }]}
+                      onPress={() => setShowEndPicker(true)}
+                    >
+                      <CalendarIcon size={16} color={G.fgSecondary} />
+                      <AppText variant="caption" weight="bold" style={{ color: G.fg, marginLeft: 6 }} numberOfLines={1}>
+                        {formatDate(new Date(recurEndDate), calendarType, language)}
+                      </AppText>
+                    </TouchableOpacity>
+                  </View>
+                </Animated.View>
+              )}
+            </Animated.View>
+          </TutorialTarget>
 
           {/* Save Button */}
-          <TouchableOpacity
-            style={[styles.saveBtn, { backgroundColor: G.fg, overflow: 'hidden' }]}
-            onPress={handleSave}
-            activeOpacity={0.8}
-          >
-            <ShieldCheck size={22} color={G.bg} />
-            <AppText variant="body" weight="bold" style={[styles.saveBtnText, { color: G.bg }]}>
-              {isRecurring ? t('expense.save_schedule') : t('expense.commit_ledger')}
-            </AppText>
-          </TouchableOpacity>
-        </ScrollView>
+          <TutorialTarget id="ef-commit-btn">
+            <TouchableOpacity
+              style={[styles.saveBtn, { backgroundColor: G.fg, overflow: 'hidden' }]}
+              onPress={handleSave}
+              activeOpacity={0.8}
+            >
+              <ShieldCheck size={22} color={G.bg} />
+              <AppText variant="body" weight="bold" style={[styles.saveBtnText, { color: G.bg }]}>
+                {isRecurring ? t('expense.save_schedule') : t('expense.commit_ledger')}
+              </AppText>
+            </TouchableOpacity>
+          </TutorialTarget>
+          <TutorialButton tutorialId="expense-form" screenName="Add Expense" />
+        </TutorialScrollView>
       </KeyboardAvoidingView>
 
       <CustomDatePicker
