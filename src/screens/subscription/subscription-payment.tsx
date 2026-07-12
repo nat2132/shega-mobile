@@ -45,7 +45,7 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
   onBack,
   onSuccess,
 }) => {
-  const { colors, theme } = useSettings();
+  const { colors, theme, t } = useSettings();
   const { submitPayment } = useSubscription();
   const gold = '#D4AF37';
 
@@ -99,7 +99,7 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
           <ArrowLeft size={22} color={colors.text} />
         </TouchableOpacity>
         <AppText variant="heading" weight="bold" style={{ color: colors.text }}>
-          Payment
+          {t('subscription.payment')}
         </AppText>
         <View style={{ width: 32 }} />
       </View>
@@ -113,14 +113,14 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
             <View style={[styles.planBadge, { backgroundColor: gold + '20' }]}>
               <Crown size={20} color={gold} />
               <AppText variant="body" weight="bold" style={{ color: gold }}>
-                {plan === 'premium' ? 'Premium' : 'Basic'} Plan
+                {t('subscription.plan_name', { plan: plan === 'premium' ? t('subscription.plan_premium') : t('subscription.plan_basic') })}
               </AppText>
             </View>
             <AppText variant="display" weight="black" style={{ color: colors.text }}>
-              {price.toLocaleString()} <AppText variant="body" weight="medium" style={{ color: colors.textSecondary }}>ETB</AppText>
+              {price.toLocaleString()} <AppText variant="body" weight="medium" style={{ color: colors.textSecondary }}>{t('subscription.etb')}</AppText>
             </AppText>
             <AppText variant="body" weight="medium" style={{ color: colors.textSecondary }}>
-              {durationMonths} Month{durationMonths > 1 ? 's' : ''}
+              {durationMonths} {durationMonths > 1 ? t('subscription.duration_months') : t('subscription.duration_month')}
             </AppText>
           </Animated.View>
 
@@ -128,7 +128,7 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
             <View style={styles.instructionsHeader}>
               <Smartphone size={22} color={gold} />
               <AppText variant="title-sm" weight="bold" style={{ color: colors.text }}>
-                Pay with Telebirr
+                {t('subscription.pay_telebirr')}
               </AppText>
             </View>
             <View style={styles.stepsList}>
@@ -137,7 +137,7 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
                   <AppText variant="caption" weight="bold" style={{ color: gold }}>1</AppText>
                 </View>
                 <AppText variant="body" weight="medium" style={{ color: colors.text, flex: 1 }}>
-                  Dial *127# on your phone
+                  {t('subscription.dial_code')}
                 </AppText>
               </View>
               <View style={styles.step}>
@@ -145,13 +145,13 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
                   <AppText variant="caption" weight="bold" style={{ color: gold }}>2</AppText>
                 </View>
                 <AppText variant="body" weight="medium" style={{ color: colors.text, flex: 1 }}>
-                  Select "Send Money" and enter:
+                  {t('subscription.select_send_money')}
                 </AppText>
               </View>
               <View style={[styles.telebirrInfo, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <View style={styles.infoRow}>
                   <AppText variant="caption" weight="bold" style={{ color: colors.textSecondary, letterSpacing: 1 }}>
-                    ACCOUNT
+                    {t('subscription.account_label')}
                   </AppText>
                   <View style={styles.copyRow}>
                     <AppText variant="body" weight="bold" style={{ color: colors.text }}>{telebirrNumber}</AppText>
@@ -162,7 +162,7 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
                 </View>
                 <View style={styles.infoRow}>
                   <AppText variant="caption" weight="bold" style={{ color: colors.textSecondary, letterSpacing: 1 }}>
-                    NAME
+                    {t('subscription.name_label')}
                   </AppText>
                   <View style={styles.copyRow}>
                     <AppText variant="body" weight="bold" style={{ color: colors.text }}>{telebirrName}</AppText>
@@ -173,9 +173,9 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
                 </View>
                 <View style={styles.infoRow}>
                   <AppText variant="caption" weight="bold" style={{ color: colors.textSecondary, letterSpacing: 1 }}>
-                    AMOUNT
+                    {t('subscription.amount_label')}
                   </AppText>
-                  <AppText variant="body" weight="bold" style={{ color: gold }}>{price.toLocaleString()} ETB</AppText>
+                  <AppText variant="body" weight="bold" style={{ color: gold }}>{price.toLocaleString()} {t('subscription.etb')}</AppText>
                 </View>
               </View>
               <View style={styles.step}>
@@ -183,7 +183,7 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
                   <AppText variant="caption" weight="bold" style={{ color: gold }}>3</AppText>
                 </View>
                 <AppText variant="body" weight="medium" style={{ color: colors.text, flex: 1 }}>
-                  Enter your transaction details below
+                  {t('subscription.enter_details_below')}
                 </AppText>
               </View>
             </View>
@@ -191,18 +191,18 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
 
           <Animated.View entering={FadeInDown.delay(300).duration(600)} style={styles.formSection}>
             <AppText variant="title-sm" weight="bold" style={{ color: colors.text, marginBottom: 20 }}>
-              Transaction Details
+              {t('subscription.transaction_details')}
             </AppText>
 
             <View style={styles.inputGroup}>
               <AppText variant="caption" weight="bold" style={{ color: colors.textSecondary, marginBottom: 8 }}>
-                Transaction ID *
+                {t('subscription.transaction_id_required')}
               </AppText>
               <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <FileText size={18} color={colors.textSecondary} />
                 <TextInput
                   style={[styles.input, { color: colors.text }]}
-                  placeholder="Enter Telebirr transaction ID"
+                  placeholder={t('subscription.transaction_id_placeholder')}
                   placeholderTextColor={colors.textSecondary}
                   value={transactionId}
                   onChangeText={setTransactionId}
@@ -213,13 +213,13 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
 
             <View style={styles.inputGroup}>
               <AppText variant="caption" weight="bold" style={{ color: colors.textSecondary, marginBottom: 8 }}>
-                Business Name *
+                {t('subscription.business_name_required')}
               </AppText>
               <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <Building2 size={18} color={colors.textSecondary} />
                 <TextInput
                   style={[styles.input, { color: colors.text }]}
-                  placeholder="Enter your business name"
+                  placeholder={t('subscription.business_name_placeholder')}
                   placeholderTextColor={colors.textSecondary}
                   value={businessName}
                   onChangeText={setBusinessName}
@@ -229,13 +229,13 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
 
             <View style={styles.inputGroup}>
               <AppText variant="caption" weight="bold" style={{ color: colors.textSecondary, marginBottom: 8 }}>
-                Phone Number *
+                {t('subscription.phone_number_required')}
               </AppText>
               <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <Phone size={18} color={colors.textSecondary} />
                 <TextInput
                   style={[styles.input, { color: colors.text }]}
-                  placeholder="Enter your phone number"
+                  placeholder={t('subscription.phone_number_placeholder')}
                   placeholderTextColor={colors.textSecondary}
                   value={phoneNumber}
                   onChangeText={setPhoneNumber}
@@ -246,13 +246,13 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
 
             <View style={styles.inputGroup}>
               <AppText variant="caption" weight="bold" style={{ color: colors.textSecondary, marginBottom: 8 }}>
-                Payment Date
+                {t('subscription.payment_date')}
               </AppText>
               <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <Calendar size={18} color={colors.textSecondary} />
                 <TextInput
                   style={[styles.input, { color: colors.text }]}
-                  placeholder="YYYY-MM-DD"
+                  placeholder={t('subscription.date_placeholder')}
                   placeholderTextColor={colors.textSecondary}
                   value={paymentDate}
                   onChangeText={setPaymentDate}
@@ -262,12 +262,12 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
 
             <View style={styles.inputGroup}>
               <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary, marginBottom: 8 }}>
-                Notes (Optional)
+                {t('subscription.notes_optional')}
               </AppText>
               <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border, minHeight: 80 }]}>
                 <TextInput
                   style={[styles.input, { color: colors.text, minHeight: 80 }]}
-                  placeholder="Any additional notes..."
+                  placeholder={t('subscription.notes_placeholder')}
                   placeholderTextColor={colors.textSecondary}
                   value={notes}
                   onChangeText={setNotes}
@@ -281,7 +281,7 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
           <View style={[styles.infoBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Info size={18} color={colors.warning} />
             <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary, flex: 1 }}>
-              Your subscription will be activated after admin verification. This usually takes 1-24 hours.
+              {t('subscription.verification_info')}
             </AppText>
           </View>
         </ScrollView>
@@ -305,13 +305,13 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
           >
             {isSubmitting ? (
               <AppText variant="heading" weight="bold" style={{ color: '#FFF' }}>
-                Submitting...
+                {t('subscription.submitting')}
               </AppText>
             ) : (
               <>
                 <Check size={20} color="#FFF" strokeWidth={3} />
                 <AppText variant="heading" weight="bold" style={{ color: '#FFF' }}>
-                  Submit for Verification
+                  {t('subscription.submit')}
                 </AppText>
               </>
             )}

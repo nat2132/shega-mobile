@@ -46,10 +46,10 @@ const TRANSACTIONS = [
 ];
 
 function TransactionRow({
-  tx, index, G,
+  tx, index, G, t,
 }: {
   tx: { type: string; amount: string; status: string; icon: string };
-  index: number; G: ReturnType<typeof getGlass>;
+  index: number; G: ReturnType<typeof getGlass>; t: (key: string) => string;
 }) {
   const translateX = useSharedValue(40);
   const opacity = useSharedValue(0);
@@ -102,7 +102,7 @@ function TransactionRow({
             numberOfLines={1}
             style={{ color: G.textGlass, letterSpacing: 0.8, fontSize: 9 }}
           >
-            PENDING
+            {t('onboarding.pending_badge')}
           </AppText>
         </View>
       )}
@@ -149,7 +149,7 @@ function FloatingIcon({
   );
 }
 
-function CardPreview({ G }: { G: ReturnType<typeof getGlass> }) {
+function CardPreview({ G, t }: { G: ReturnType<typeof getGlass>; t: (key: string) => string }) {
   const glowPulse = useSharedValue(0);
 
   useEffect(() => {
@@ -190,7 +190,7 @@ function CardPreview({ G }: { G: ReturnType<typeof getGlass> }) {
               numberOfLines={1}
               style={{ color: G.textGlass, letterSpacing: 0.3 }}
             >
-              Today&apos;s Sales
+              {t('onboarding.todays_sales')}
             </AppText>
           </View>
           <ArrowUpRight size={14} color={G.accentGlass} />
@@ -209,7 +209,7 @@ function CardPreview({ G }: { G: ReturnType<typeof getGlass> }) {
 
         <View style={styles.txList}>
           {TRANSACTIONS.map((tx, i) => (
-            <TransactionRow key={i} tx={tx} index={i} G={G} />
+            <TransactionRow key={i} tx={tx} index={i} G={G} t={t} />
           ))}
         </View>
       </View>
@@ -218,7 +218,7 @@ function CardPreview({ G }: { G: ReturnType<typeof getGlass> }) {
 }
 
 const SalesOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNext, onBack, onSkip }) => {
-  const { colors } = useSettings();
+  const { colors, t } = useSettings();
   const G = getGlass(colors);
 
   return (
@@ -230,7 +230,7 @@ const SalesOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNext, onBack
           numberOfLines={1}
           style={{ color: G.textGlass, letterSpacing: 1.2 }}
         >
-          SKIP
+          {t('onboarding.skip')}
         </AppText>
       </TouchableOpacity>
 
@@ -243,7 +243,7 @@ const SalesOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNext, onBack
           entering={FadeInDown.duration(900).springify().damping(18)}
           style={styles.mediaContainer}
         >
-          <CardPreview G={G} />
+          <CardPreview G={G} t={t} />
         </Animated.View>
 
         <Animated.View
@@ -257,7 +257,7 @@ const SalesOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNext, onBack
             align="center"
             style={{ color: G.fg, textAlign: 'center', marginBottom: 12 }}
           >
-            Record Sales
+            {t('onboarding.record_sales')}
           </AppText>
           <AppText
             variant="body-lg"
@@ -266,7 +266,7 @@ const SalesOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNext, onBack
             align="center"
             style={{ color: G.muted, textAlign: 'center', lineHeight: 24 }}
           >
-            Easily track every transaction{'\n'}as it happens
+            {t('onboarding.record_sales_desc')}
           </AppText>
         </Animated.View>
 
@@ -297,7 +297,7 @@ const SalesOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNext, onBack
               numberOfLines={1}
               style={{ color: G.buttonFg, letterSpacing: 0.3 }}
             >
-              Next
+              {t('onboarding.next')}
             </AppText>
             <MoveRight size={18} color={G.buttonFg} />
           </TouchableOpacity>

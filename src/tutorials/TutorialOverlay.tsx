@@ -88,17 +88,17 @@ function computePos(
   return { top, left, arrowDir, arrowCenter };
 }
 
-function getActionHint(actionType?: string, completed?: boolean): string {
-  if (completed) return '✓ Done!';
+function getActionHint(actionType?: string, completed?: boolean, t?: (key: string) => string): string {
+  if (completed) return t ? t('tutorial.action_done') : '✓ Done!';
   switch (actionType) {
     case 'tap':
-      return 'Tap the highlighted element';
+      return t ? t('tutorial.action_tap') : 'Tap the highlighted element';
     case 'swipe':
-      return 'Swipe the highlighted area';
+      return t ? t('tutorial.action_swipe') : 'Swipe the highlighted area';
     case 'input':
-      return 'Type in the highlighted field';
+      return t ? t('tutorial.action_type') : 'Type in the highlighted field';
     case 'scroll':
-      return 'Scroll the highlighted area';
+      return t ? t('tutorial.action_scroll') : 'Scroll the highlighted area';
     default:
       return '';
   }
@@ -427,7 +427,7 @@ function ScrollActionCue({
 }
 
 export const TutorialOverlay: React.FC = () => {
-  const { colors } = useSettings();
+  const { colors, t } = useSettings();
   const insets = useSafeAreaInsets();
   const ctx = useTutorialContext();
 
@@ -601,7 +601,7 @@ export const TutorialOverlay: React.FC = () => {
   const isLast = ctx.currentStepIndex === ctx.totalSteps - 1;
   const completedTop = SCREEN_H * 0.35 + insets.top;
   const isActionPending = ctx.isActionRequired && !ctx.actionCompleted;
-  const actionHint = getActionHint(step?.actionType, ctx.actionCompleted);
+  const actionHint = getActionHint(step?.actionType, ctx.actionCompleted, t);
 
   return (
     <Modal transparent animationType="none" visible statusBarTranslucent>
@@ -659,10 +659,10 @@ export const TutorialOverlay: React.FC = () => {
             </View>
 
             <AppText variant="body" weight="bold" color={colors.text} style={styles.title}>
-              {step.title}
+              {t(`tutorial.${ctx.activeTutorialId}.steps.${step.id}.title`) || step.title}
             </AppText>
             <AppText variant="caption" weight="regular" color={colors.textSecondary} style={styles.desc}>
-              {step.description}
+              {t(`tutorial.${ctx.activeTutorialId}.steps.${step.id}.desc`) || step.description}
             </AppText>
 
             {actionHint ? (
@@ -727,7 +727,7 @@ export const TutorialOverlay: React.FC = () => {
                   ]}
                 >
                   <AppText variant="label" weight="semibold" color={isActionPending ? colors.textSecondary : colors.background}>
-                    {isLast ? 'Done' : 'Next'}
+                    {isLast ? t('tutorial.done') : t('tutorial.next')}
                   </AppText>
                   {!isLast && (
                     <ChevronRight
@@ -789,27 +789,27 @@ export const TutorialOverlay: React.FC = () => {
           <View style={[styles.completedIcon, { backgroundColor: colors.success }]}>
             <BookOpen size={24} color="#FFF" />
           </View>
-          <AppText variant="body" weight="bold" color={colors.text} style={{ marginTop: 12 }}>
-            Tutorial Complete!
-          </AppText>
-          <AppText
-            variant="caption"
-            weight="regular"
-            color={colors.textSecondary}
-            style={{ marginTop: 4, textAlign: 'center', lineHeight: 18 }}
-          >
-            You've completed the {ctx.activeTutorialTitle} tutorial.
-          </AppText>
-          <View style={styles.completedRow}>
-            <TouchableOpacity onPress={ctx.restartTutorial} style={[styles.completedBtn, { backgroundColor: colors.tint }]}>
-              <RefreshCw size={16} color={colors.background} />
-              <AppText variant="label" weight="semibold" color={colors.background} style={{ marginLeft: 8 }}>
-                Restart
-              </AppText>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={ctx.endTutorial} style={[styles.completedBtn, { borderColor: colors.border, borderWidth: 1 }]}>
-              <AppText variant="label" weight="semibold" color={colors.text}>Close</AppText>
-            </TouchableOpacity>
+            <AppText variant="body" weight="bold" color={colors.text} style={{ marginTop: 12 }}>
+              {t('tutorial.complete_title')}
+            </AppText>
+            <AppText
+              variant="caption"
+              weight="regular"
+              color={colors.textSecondary}
+              style={{ marginTop: 4, textAlign: 'center', lineHeight: 18 }}
+            >
+              {t('tutorial.complete_desc', { name: ctx.activeTutorialTitle })}
+            </AppText>
+            <View style={styles.completedRow}>
+              <TouchableOpacity onPress={ctx.restartTutorial} style={[styles.completedBtn, { backgroundColor: colors.tint }]}>
+                <RefreshCw size={16} color={colors.background} />
+                <AppText variant="label" weight="semibold" color={colors.background} style={{ marginLeft: 8 }}>
+                  {t('tutorial.restart')}
+                </AppText>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={ctx.endTutorial} style={[styles.completedBtn, { borderColor: colors.border, borderWidth: 1 }]}>
+                <AppText variant="label" weight="semibold" color={colors.text}>{t('tutorial.close')}</AppText>
+              </TouchableOpacity>
           </View>
         </Animated.View>
       )}

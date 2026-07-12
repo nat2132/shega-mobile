@@ -30,7 +30,7 @@ interface SubscriptionWelcomeProps {
 }
 
 const SubscriptionWelcomeScreen: React.FC<SubscriptionWelcomeProps> = ({ onContinue }) => {
-  const { colors, theme } = useSettings();
+  const { colors, theme, t } = useSettings();
   const { trialDaysRemaining } = useSubscription();
   const crownScale = useSharedValue(0);
   const ringScale = useSharedValue(0);
@@ -84,10 +84,10 @@ const SubscriptionWelcomeScreen: React.FC<SubscriptionWelcomeProps> = ({ onConti
 
         <Animated.View entering={FadeInDown.delay(500).duration(800)} style={styles.textSection}>
           <AppText variant="hero" weight="black" align="center" style={[styles.title, { color: colors.text }]}>
-            Welcome to Premium
+            {t('subscription.welcome_title')}
           </AppText>
           <AppText variant="body-lg" weight="medium" align="center" style={[styles.subtitle, { color: colors.textSecondary }]}>
-            You've unlocked a 7-day free trial of all Premium features. Explore everything and see how Shega can transform your business.
+            {t('subscription.welcome_desc')}
           </AppText>
         </Animated.View>
 
@@ -97,7 +97,7 @@ const SubscriptionWelcomeScreen: React.FC<SubscriptionWelcomeProps> = ({ onConti
               <Gift size={18} color={gold} />
             </View>
             <AppText variant="body" weight="semibold" style={[styles.benefitText, { color: colors.text }]}>
-              7 Days Free Premium Access
+              {t('subscription.7day_trial')}
             </AppText>
           </View>
           <View style={styles.benefitRow}>
@@ -105,7 +105,7 @@ const SubscriptionWelcomeScreen: React.FC<SubscriptionWelcomeProps> = ({ onConti
               <Sparkles size={18} color={gold} />
             </View>
             <AppText variant="body" weight="semibold" style={[styles.benefitText, { color: colors.text }]}>
-              All Premium Features Unlocked
+              {t('subscription.all_features')}
             </AppText>
           </View>
           <View style={styles.benefitRow}>
@@ -113,7 +113,7 @@ const SubscriptionWelcomeScreen: React.FC<SubscriptionWelcomeProps> = ({ onConti
               <Crown size={18} color={gold} />
             </View>
             <AppText variant="body" weight="semibold" style={[styles.benefitText, { color: colors.text }]}>
-              No Payment Required During Trial
+              {t('subscription.no_payment_required')}
             </AppText>
           </View>
         </Animated.View>
@@ -127,7 +127,7 @@ const SubscriptionWelcomeScreen: React.FC<SubscriptionWelcomeProps> = ({ onConti
           >
             <Crown size={16} color={gold} />
             <AppText variant="body" weight="bold" style={[styles.trialBadgeText, { color: gold }]}>
-              Premium Trial · {trialDaysRemaining} Days Remaining
+              {t('subscription.trial_banner', { days: String(trialDaysRemaining) })}
             </AppText>
           </LinearGradient>
         </Animated.View>
@@ -146,7 +146,7 @@ const SubscriptionWelcomeScreen: React.FC<SubscriptionWelcomeProps> = ({ onConti
             style={styles.continueGradient}
           >
             <AppText variant="heading" weight="bold" style={styles.continueText}>
-              Start Exploring
+              {t('subscription.welcome_cta')}
             </AppText>
             <ArrowRight size={22} color="#FFF" strokeWidth={2.5} />
           </LinearGradient>

@@ -90,12 +90,12 @@ interface ModuleInfo {
 
 // ——— Constants ————————————————————————————————————————————————————————
 
-const STEP_LABELS_EXPORT = ['Format', 'Select', 'Export'];
-const STEP_LABELS_IMPORT = ['Format', 'Select', 'Guide', 'Map', 'Done'];
+const STEP_LABELS_EXPORT = ['dt.step_format', 'dt.step_select', 'dt.step_export'];
+const STEP_LABELS_IMPORT = ['dt.step_format', 'dt.step_select', 'dt.step_guide', 'dt.step_map', 'dt.step_done'];
 
 // ——— Sub-components ———————————————————————————————————————————————————
 
-const StepIndicator = ({ steps, current, colors }: { steps: string[]; current: number; colors: any }) => (
+const StepIndicator = ({ steps, current, colors, t }: { steps: string[]; current: number; colors: any; t: (key: string) => string }) => (
   <View style={si.row}>
     {steps.map((label, i) => {
       const n = i + 1;
@@ -110,7 +110,7 @@ const StepIndicator = ({ steps, current, colors }: { steps: string[]; current: n
             ]}>
               {done && <CheckCircle2 size={10} color="#FFF" />}
             </View>
-            <AppText variant="micro" weight={active || done ? 'bold' : 'medium'} style={{ color: active ? colors.primary : colors.textSecondary }}>{label}</AppText>
+            <AppText variant="micro" weight={active || done ? 'bold' : 'medium'} style={{ color: active ? colors.primary : colors.textSecondary }}>{t(label)}</AppText>
           </View>
           {i < steps.length - 1 && <View style={[si.line, { backgroundColor: done ? colors.primary : colors.border }]} />}
         </React.Fragment>
@@ -403,7 +403,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
     const filename = `${spec.name.replace(/\s+/g, '_')}_Template.csv`;
     const dest = `${FileSystem.cacheDirectory}${filename}`;
     await FileSystem.writeAsStringAsync(dest, csv, { encoding: FileSystem.EncodingType.UTF8 });
-    await Sharing.shareAsync(dest, { mimeType: 'text/csv', dialogTitle: 'Download Template' });
+    await Sharing.shareAsync(dest, { mimeType: 'text/csv', dialogTitle: t('dt.download_template') });
   };
 
   // ——— Module metadata ————————————————————————————————————————————————
@@ -439,15 +439,15 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
   };
 
   const DATA_TYPE_LABELS: Record<DataType, string> = {
-    items: 'Inventory Items',
-    sales: 'Sales Records',
-    expenses: 'Expenses',
-    categories: 'Categories',
-    contacts: 'Contacts',
-    adjustments: 'Adjustments',
-    warehouses: 'Warehouses',
-    debt_payments: 'Debt Payments',
-    returns: 'Returns',
+    items: 'dt.inventory_items',
+    sales: 'dt.sales_records',
+    expenses: 'dt.expenses',
+    categories: 'dt.categories',
+    contacts: 'dt.contacts',
+    adjustments: 'dt.adjustments',
+    warehouses: 'dt.warehouses',
+    debt_payments: 'dt.debt_payments',
+    returns: 'dt.returns',
   };
 
   // ——— Determine steps ————————————————————————————————————————————————
@@ -458,15 +458,15 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
 
   const stepTitle = (() => {
     if (mode === 'export') {
-      if (step === 1) return 'Choose Format';
-      if (step === 2) return 'Select Data';
-      return 'Review & Export';
+      if (step === 1) return t('dt.choose_format');
+      if (step === 2) return t('dt.select_data');
+      return t('dt.review_export');
     } else {
       if (step === 1) return 'Choose Format';
-      if (step === 2) return 'Select Data Type';
-      if (step === 3) return 'Formatting Guide';
-      if (step === 4) return 'Validate & Map';
-      return 'Import Complete';
+      if (step === 2) return t('dt.select_data_type');
+      if (step === 3) return t('dt.formatting_guide');
+      if (step === 4) return t('dt.validate_map');
+      return t('dt.import_complete');
     }
   })();
 
@@ -511,7 +511,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
                   <View style={{ flex: 1, marginLeft: 16 }}>
                     <AppText variant="body-lg" weight="bold" style={{ color: colors.text }}>Full Database Backup</AppText>
                     <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary, marginTop: 4, lineHeight: 18 }}>
-                      {mode === 'export' ? 'Complete .db file with all app data. Best for full backups & device migration.' : 'Restore from a .db backup file. Replaces all existing data.'}
+                      {mode === 'export' ? t('dt.full_backup_desc') : t('dt.full_backup_desc_import')}
                     </AppText>
                   </View>
                   <ChevronRight size={18} color={colors.textSecondary} />
@@ -524,7 +524,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
                   <View style={{ flex: 1, marginLeft: 16 }}>
                     <AppText variant="body-lg" weight="bold" style={{ color: colors.text }}>Spreadsheet (CSV)</AppText>
                     <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary, marginTop: 4, lineHeight: 18 }}>
-                      {mode === 'export' ? 'Export specific data tables to CSV. Compatible with Excel, Google Sheets.' : 'Import records from a CSV file into a specific data table.'}
+                      {mode === 'export' ? t('dt.spreadsheet_desc_export') : t('dt.spreadsheet_desc_import')}
                     </AppText>
                   </View>
                   <ChevronRight size={18} color={colors.textSecondary} />
@@ -701,10 +701,10 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
                   </AppText>
 
                   {[
-                    { label: 'Required columns', value: CSV_SPECS[dataType].requiredColumns.join(', ') },
-                    { label: 'Date format', value: 'YYYY-MM-DD (e.g. 2024-03-15)' },
-                    { label: 'Boolean format', value: 'true / false / yes / no / 1 / 0' },
-                    { label: 'Numbers', value: 'No currency symbols. Use decimals.' },
+                    { label: t('dt.required_columns'), value: CSV_SPECS[dataType].requiredColumns.join(', ') },
+                    { label: t('dt.date_format'), value: t('dt.date_format_example') },
+                    { label: t('dt.boolean_format'), value: t('dt.boolean_format_example') },
+                    { label: t('dt.numbers'), value: t('dt.numbers_example') },
                   ].map((item, i) => (
                     <View key={i} style={[s.guideRow, { borderBottomColor: colors.border }]}>
                       <AppText variant="caption" weight="bold" style={{ color: colors.text, flex: 0.4 }}>{item.label}</AppText>
@@ -836,7 +836,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
                     {importResult.errors.length === 0 ? <CheckCircle2 size={52} color={colors.success} /> : <AlertTriangle size={52} color={colors.warning} />}
                   </View>
                   <AppText variant="heading-lg" weight="bold" style={{ color: colors.text, marginTop: 16 }}>
-                    {importResult.errors.length === 0 ? 'Import Successful' : 'Completed with Issues'}
+                    {importResult.errors.length === 0 ? t('dt.import_successful') : t('dt.completed_issues')}
                   </AppText>
                 </View>
 

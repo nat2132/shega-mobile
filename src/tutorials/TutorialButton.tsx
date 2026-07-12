@@ -14,7 +14,7 @@ interface TutorialButtonProps {
 }
 
 export const TutorialButton: React.FC<TutorialButtonProps> = ({ tutorialId, screenName }) => {
-  const { colors } = useSettings();
+  const { colors, t } = useSettings();
   const ctx = useTutorialContext();
   const [showMenu, setShowMenu] = useState(false);
 
@@ -55,14 +55,14 @@ export const TutorialButton: React.FC<TutorialButtonProps> = ({ tutorialId, scre
               <GraduationCap size={24} color={colors.tint} />
             </View>
             <AppText variant="body" weight="bold" color={colors.text} style={styles.menuTitle}>
-              {screenName} Tutorial
+              {t('tutorial.menu_title', { name: screenName })}
             </AppText>
             <AppText variant="caption" weight="regular" color={colors.textSecondary} style={styles.menuDesc}>
               {isCompleted
-                ? 'You completed this tutorial! Take a refresher or restart.'
+                ? t('tutorial.menu_completed')
                 : progress
-                  ? `Continue from step ${progress.currentStepIndex + 1}`
-                  : 'Learn how to use this screen step by step.'}
+                  ? t('tutorial.menu_continue', { step: String(progress.currentStepIndex + 1) })
+                  : t('tutorial.menu_learn')}
             </AppText>
 
             <View style={styles.menuActions}>
@@ -72,7 +72,7 @@ export const TutorialButton: React.FC<TutorialButtonProps> = ({ tutorialId, scre
                   style={[styles.menuBtn, { backgroundColor: colors.tint }]}
                 >
                   <AppText variant="label" weight="semibold" color={colors.background}>
-                    Continue ({progress.currentStepIndex + 1}/{ctx.getTutorialStepsCount(tutorialId)})
+                    {t('tutorial.menu_continue_btn', { current: String(progress.currentStepIndex + 1), total: String(ctx.getTutorialStepsCount(tutorialId)) })}
                   </AppText>
                 </TouchableOpacity>
               ) : (
@@ -81,7 +81,7 @@ export const TutorialButton: React.FC<TutorialButtonProps> = ({ tutorialId, scre
                   style={[styles.menuBtn, { backgroundColor: colors.tint }]}
                 >
                   <AppText variant="label" weight="semibold" color={colors.background}>
-                    Start Tutorial
+                    {t('tutorial.menu_start')}
                   </AppText>
                 </TouchableOpacity>
               )}
@@ -92,7 +92,7 @@ export const TutorialButton: React.FC<TutorialButtonProps> = ({ tutorialId, scre
                   style={[styles.menuBtnSecondary, { borderColor: colors.border }]}
                 >
                   <AppText variant="label" weight="semibold" color={colors.text}>
-                    Restart
+                    {t('tutorial.restart')}
                   </AppText>
                 </TouchableOpacity>
               )}
@@ -103,7 +103,7 @@ export const TutorialButton: React.FC<TutorialButtonProps> = ({ tutorialId, scre
               style={[styles.menuCancel, { borderTopColor: colors.border }]}
             >
               <AppText variant="label" weight="medium" color={colors.textSecondary}>
-                Cancel
+                {t('common.cancel')}
               </AppText>
             </TouchableOpacity>
           </Animated.View>

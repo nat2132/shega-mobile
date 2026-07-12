@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { AppText } from '@/components/ui';
 import Animated, {
@@ -18,6 +18,8 @@ import {
   DIMENSIONS,
   getGlass,
 } from './glass-theme';
+import { TouchableOpacity } from 'react-native';
+import { Check } from 'lucide-react-native';
 
 const { W, H } = DIMENSIONS;
 
@@ -181,8 +183,9 @@ interface FirstOnboardingScreenProps {
 }
 
 const FirstOnboardingScreen: React.FC<FirstOnboardingScreenProps> = ({ onNext }) => {
-  const { colors } = useSettings();
+  const { colors, language, setLanguage, t } = useSettings();
   const G = getGlass(colors);
+  const [showLanguagePicker, setShowLanguagePicker] = useState(false);
 
   const logoScale = useSharedValue(0);
   const logoOpacity = useSharedValue(0);
@@ -294,9 +297,9 @@ const FirstOnboardingScreen: React.FC<FirstOnboardingScreenProps> = ({ onNext })
       ),
     );
 
-    const timer = setTimeout(onNextCallback, INTRO_DURATION);
+    const timer = setTimeout(() => setShowLanguagePicker(true), INTRO_DURATION);
     return () => clearTimeout(timer);
-  }, [onNextCallback]);
+  }, []);
 
   const logoAnimatedStyle = useAnimatedStyle(() => ({
     opacity: logoOpacity.value,
@@ -461,6 +464,55 @@ const FirstOnboardingScreen: React.FC<FirstOnboardingScreenProps> = ({ onNext })
           </AppText>
         </Animated.View>
       </View>
+
+      {/* Language Picker Overlay */}
+      {showLanguagePicker && (
+        <View style={styles.langOverlay}>
+          <View style={[styles.langCard, { backgroundColor: G.glassCard, borderColor: G.glassBorder }]}>
+            <AppText variant="heading-lg" weight="bold" align="center" style={{ color: G.fg, marginBottom: 8 }}>
+              {t('onboarding.welcome_title')}
+            </AppText>
+            <AppText variant="body" weight="medium" align="center" style={{ color: G.muted, marginBottom: 28 }}>
+              {t('onboarding.choose_language')}
+            </AppText>
+
+            {[
+              { id: 'en', label: 'English', sub: 'System Default' },
+              { id: 'am', label: '\u1200\u1273\u1275\u122d\u129b', sub: 'Amharic' },
+              { id: 'om', label: 'Afaan Oromo', sub: 'Oromo' },
+              { id: 'ti', label: '\u1275\u130d\u1295\u1295\u1293', sub: 'Tigrinya' },
+            ].map((lang) => (
+              <TouchableOpacity
+                key={lang.id}
+                onPress={() => setLanguage(lang.id as any)}
+                style={[
+                  styles.langOption,
+                  { backgroundColor: G.bgCard, borderColor: G.border },
+                  language === lang.id && { borderColor: G.fg, borderWidth: 2 },
+                ]}
+              >
+                <View style={{ flex: 1 }}>
+                  <AppText variant="body" weight="bold" style={{ color: G.fg }}>{lang.label}</AppText>
+                  <AppText variant="caption" weight="medium" style={{ color: G.muted }}>{lang.sub}</AppText>
+                </View>
+                {language === lang.id && (
+                  <View style={[styles.langCheck, { backgroundColor: G.fg }]}>
+                    <Check size={14} color={G.bg} />
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))}
+
+            <TouchableOpacity
+              onPress={onNext}
+              style={[styles.langContinueBtn, { backgroundColor: G.fg }]}
+              activeOpacity={0.85}
+            >
+              <AppText variant="body" weight="bold" style={{ color: G.bg }}>{t('onboarding.continue')}</AppText>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </View>
   );
 };
@@ -579,6 +631,42 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 56,
     alignSelf: 'center',
+  },
+  langOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  langCard: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 28,
+    borderWidth: 1,
+    padding: 28,
+  },
+  langOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 10,
+  },
+  langCheck: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  langContinueBtn: {
+    height: 56,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 16,
   },
 });
 

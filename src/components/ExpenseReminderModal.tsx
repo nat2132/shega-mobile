@@ -67,7 +67,7 @@ const ExpenseReminderModal: React.FC<ExpenseReminderModalProps> = ({
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
             <View style={styles.detailRow}>
               <AppText variant="caption" weight="bold" numberOfLines={1} style={[styles.detailLabel, { color: colors.textSecondary }]}>{t('expense.recurring')}</AppText>
-              <AppText variant="body" weight="bold" numberOfLines={1} style={[styles.detailValue, { color: colors.text }]}>{expense.frequency || 'One-time'}</AppText>
+              <AppText variant="body" weight="bold" numberOfLines={1} style={[styles.detailValue, { color: colors.text }]}>{expense.frequency || t('common.none')}</AppText>
             </View>
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
             <View style={styles.detailRow}>

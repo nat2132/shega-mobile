@@ -31,18 +31,11 @@ interface OnboardingScreenProps {
   onSkip?: () => void;
 }
 
-const INVENTORY_ITEMS = [
-  { name: 'Tomatoes', qty: '240 kg', status: 'ok' as const },
-  { name: 'Cooking Oil', qty: '48 L', status: 'ok' as const },
-  { name: 'Sugar', qty: '12 kg', status: 'low' as const },
-  { name: 'Rice', qty: '85 kg', status: 'ok' as const },
-];
-
 function StockRow({
-  item, index, G,
+  item, index, G, t,
 }: {
   item: { name: string; qty: string; status: 'ok' | 'low' | 'critical' };
-  index: number; G: ReturnType<typeof getGlass>;
+  index: number; G: ReturnType<typeof getGlass>; t: (key: string) => string;
 }) {
   const translateX = useSharedValue(50);
   const opacity = useSharedValue(0);
@@ -101,7 +94,7 @@ function StockRow({
           <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: G.accentGlow, borderRadius: 999 }, glowStyle]} />
           <AlertCircle size={8} color={G.accent} />
           <AppText variant="micro" weight="bold" numberOfLines={1} style={{ color: G.accent, letterSpacing: 0.8, fontSize: 9 }}>
-            LOW
+            {t('onboarding.low_badge')}
           </AppText>
         </View>
       )}
@@ -122,8 +115,15 @@ function PhoneFrame({ children, G }: { children: React.ReactNode; G: ReturnType<
 }
 
 const InventoryOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNext, onBack, onSkip }) => {
-  const { colors } = useSettings();
+  const { colors, t } = useSettings();
   const G = getGlass(colors);
+
+  const INVENTORY_ITEMS = [
+    { name: t('onboarding.tomatoes'), qty: '240 kg', status: 'ok' as const },
+    { name: t('onboarding.cooking_oil'), qty: '48 L', status: 'ok' as const },
+    { name: t('onboarding.sugar'), qty: '12 kg', status: 'low' as const },
+    { name: t('onboarding.rice'), qty: '85 kg', status: 'ok' as const },
+  ];
   const glowPulse = useSharedValue(0);
 
   useEffect(() => {
@@ -153,7 +153,7 @@ const InventoryOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNext, on
           numberOfLines={1}
           style={{ color: G.textGlass, letterSpacing: 1.2 }}
         >
-          SKIP
+          {t('onboarding.skip')}
         </AppText>
       </TouchableOpacity>
 
@@ -176,12 +176,12 @@ const InventoryOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNext, on
                 numberOfLines={1}
                 style={{ color: G.textGlass, letterSpacing: 0.3 }}
               >
-                Inventory
+                {t('onboarding.inventory_label')}
               </AppText>
             </View>
             <View style={styles.stockList}>
               {INVENTORY_ITEMS.map((item, i) => (
-                <StockRow key={item.name} item={item} index={i} G={G} />
+                <StockRow key={item.name} item={item} index={i} G={G} t={t} />
               ))}
             </View>
             <View style={[styles.phoneFooter, { borderTopColor: G.glassBorder }]}>
@@ -191,7 +191,7 @@ const InventoryOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNext, on
                 numberOfLines={1}
                 style={{ color: G.textGlassFaint, letterSpacing: 0.3 }}
               >
-                4 items tracked
+                {t('onboarding.items_tracked')}
               </AppText>
             </View>
           </PhoneFrame>
@@ -208,7 +208,7 @@ const InventoryOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNext, on
             align="center"
             style={{ color: G.fg, textAlign: 'center', marginBottom: 12 }}
           >
-            Track Inventory
+            {t('onboarding.track_inventory')}
           </AppText>
           <AppText
             variant="body-lg"
@@ -217,7 +217,7 @@ const InventoryOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNext, on
             align="center"
             style={{ color: G.muted, textAlign: 'center', lineHeight: 24 }}
           >
-            Manage your stock in real-time{'\n'}with ease and precision
+            {t('onboarding.track_inventory_desc')}
           </AppText>
         </Animated.View>
 
@@ -248,7 +248,7 @@ const InventoryOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNext, on
               numberOfLines={1}
               style={{ color: G.buttonFg, letterSpacing: 0.3 }}
             >
-              Next
+              {t('onboarding.next')}
             </AppText>
             <MoveRight size={18} color={G.buttonFg} />
           </TouchableOpacity>

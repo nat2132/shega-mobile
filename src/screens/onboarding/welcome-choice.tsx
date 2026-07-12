@@ -80,7 +80,7 @@ function FloatingOrb({
 }
 
 const WelcomeChoiceScreen: React.FC<WelcomeChoiceProps> = ({ onRegisterChoose }) => {
-  const { colors } = useSettings();
+  const { colors, t } = useSettings();
   const G = getGlass(colors);
 
   return (
@@ -117,7 +117,7 @@ const WelcomeChoiceScreen: React.FC<WelcomeChoiceProps> = ({ onRegisterChoose })
           align="center"
           style={{ color: G.fg, letterSpacing: -0.5, marginBottom: 8 }}
         >
-          Welcome to Shega
+          {t('onboarding.welcome_title')}
         </AppText>
         <AppText
           variant="body-lg"
@@ -126,7 +126,7 @@ const WelcomeChoiceScreen: React.FC<WelcomeChoiceProps> = ({ onRegisterChoose })
           align="center"
           style={{ color: G.muted, lineHeight: 22 }}
         >
-          Let&apos;s set up your business
+          {t('onboarding.welcome_subtitle')}
         </AppText>
       </Animated.View>
 
@@ -151,7 +151,7 @@ const WelcomeChoiceScreen: React.FC<WelcomeChoiceProps> = ({ onRegisterChoose })
               numberOfLines={2}
               style={{ color: G.fg, marginBottom: 8 }}
             >
-              Register New Business
+              {t('onboarding.register_business')}
             </AppText>
             <AppText
               variant="body"
@@ -159,7 +159,7 @@ const WelcomeChoiceScreen: React.FC<WelcomeChoiceProps> = ({ onRegisterChoose })
               numberOfLines={3}
               style={{ color: G.muted, lineHeight: 22, marginBottom: 28 }}
             >
-              Start fresh — set up your store, add inventory, and begin tracking sales from scratch.
+              {t('onboarding.register_desc')}
             </AppText>
             <View style={[styles.cardAction, { backgroundColor: G.accent }]}>
               <AppText
@@ -168,7 +168,7 @@ const WelcomeChoiceScreen: React.FC<WelcomeChoiceProps> = ({ onRegisterChoose })
                 numberOfLines={1}
                 style={{ color: G.fg }}
               >
-                Get Started
+                {t('onboarding.get_started')}
               </AppText>
               <ArrowRight size={16} color={G.fg} />
             </View>

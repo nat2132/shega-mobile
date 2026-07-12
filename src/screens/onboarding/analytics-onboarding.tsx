@@ -37,26 +37,13 @@ interface OnboardingScreenProps {
   onSkip?: () => void;
 }
 
-const BAR_DATA = [
-  { day: 'Mon', value: 0.6 },
-  { day: 'Tue', value: 0.8 },
-  { day: 'Wed', value: 0.45 },
-  { day: 'Thu', value: 0.9 },
-  { day: 'Fri', value: 0.7 },
-  { day: 'Sat', value: 0.55 },
-  { day: 'Sun', value: 0.35 },
-];
-
-const STATS = [
-  { label: 'Revenue', value: 'Br 125.4k', change: '+12.5%', positive: true },
-  { label: 'Profit', value: 'Br 38.2k', change: '+8.3%', positive: true },
-  { label: 'Expenses', value: 'Br 24.1k', change: '-3.1%', positive: false },
-];
+const BAR_DATA_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+const BAR_DATA_VALUES = [0.6, 0.8, 0.45, 0.9, 0.7, 0.55, 0.35];
 
 function AnimatedBar({
-  height, index, total, G,
+  height, index, G, t,
 }: {
-  height: number; index: number; total: number; G: ReturnType<typeof getGlass>;
+  height: number; index: number; G: ReturnType<typeof getGlass>; t: (key: string) => string;
 }) {
   const scaleY = useSharedValue(0);
   const maxH = 80;
@@ -94,7 +81,7 @@ function AnimatedBar({
         align="center"
         style={{ color: G.textGlassFaint, letterSpacing: 0.2 }}
       >
-        {BAR_DATA[index].day}
+        {t(`onboarding.${BAR_DATA_KEYS[index]}`)}
       </AppText>
     </View>
   );
@@ -157,7 +144,7 @@ function StatCard({
   );
 }
 
-function AnalyticsCard({ G }: { G: ReturnType<typeof getGlass> }) {
+function AnalyticsCard({ G, t }: { G: ReturnType<typeof getGlass>; t: (key: string) => string }) {
   const glowPulse = useSharedValue(0);
 
   useEffect(() => {
@@ -198,7 +185,7 @@ function AnalyticsCard({ G }: { G: ReturnType<typeof getGlass> }) {
               numberOfLines={1}
               style={{ color: G.textGlass, letterSpacing: 0.3 }}
             >
-              Revenue Overview
+              {t('onboarding.revenue_overview')}
             </AppText>
           </View>
           <AppText
@@ -207,20 +194,24 @@ function AnalyticsCard({ G }: { G: ReturnType<typeof getGlass> }) {
             numberOfLines={1}
             style={{ color: G.textGlassFaint }}
           >
-            This Week
+            {t('onboarding.this_week')}
           </AppText>
         </View>
 
         <View style={styles.chartArea}>
           <View style={styles.chartRow}>
-            {BAR_DATA.map((b, i) => (
-              <AnimatedBar key={i} height={b.value} index={i} total={BAR_DATA.length} G={G} />
+            {BAR_DATA_VALUES.map((value, i) => (
+              <AnimatedBar key={i} height={value} index={i} G={G} t={t} />
             ))}
           </View>
         </View>
 
         <View style={styles.statsRow}>
-          {STATS.map((s, i) => (
+          {[
+            { label: t('onboarding.revenue'), value: 'Br 125.4k', change: '+12.5%', positive: true },
+            { label: t('onboarding.profit'), value: 'Br 38.2k', change: '+8.3%', positive: true },
+            { label: t('onboarding.expenses'), value: 'Br 24.1k', change: '-3.1%', positive: false },
+          ].map((s, i) => (
             <StatCard key={i} stat={s} index={i} G={G} />
           ))}
         </View>
@@ -230,7 +221,7 @@ function AnalyticsCard({ G }: { G: ReturnType<typeof getGlass> }) {
 }
 
 const AnalyticsOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onGetStarted, onBack, onSkip }) => {
-  const { colors } = useSettings();
+  const { colors, t } = useSettings();
   const G = getGlass(colors);
 
   return (
@@ -242,7 +233,7 @@ const AnalyticsOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onGetStart
           numberOfLines={1}
           style={{ color: G.textGlass, letterSpacing: 1.2 }}
         >
-          SKIP
+          {t('onboarding.skip')}
         </AppText>
       </TouchableOpacity>
 
@@ -251,7 +242,7 @@ const AnalyticsOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onGetStart
           entering={FadeInDown.duration(900).springify().damping(18)}
           style={styles.mediaContainer}
         >
-          <AnalyticsCard G={G} />
+          <AnalyticsCard G={G} t={t} />
         </Animated.View>
 
         <Animated.View
@@ -265,7 +256,7 @@ const AnalyticsOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onGetStart
             align="center"
             style={{ color: G.fg, textAlign: 'center', marginBottom: 12 }}
           >
-            Get Insights
+            {t('onboarding.get_insights')}
           </AppText>
           <AppText
             variant="body-lg"
@@ -274,7 +265,7 @@ const AnalyticsOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onGetStart
             align="center"
             style={{ color: G.muted, textAlign: 'center', lineHeight: 24 }}
           >
-            Understand profits, losses, and trends{'\n'}at a glance
+            {t('onboarding.get_insights_desc')}
           </AppText>
         </Animated.View>
 
@@ -298,7 +289,7 @@ const AnalyticsOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onGetStart
               numberOfLines={1}
               style={{ color: G.fg, letterSpacing: 0.3 }}
             >
-              Get Started
+              {t('onboarding.get_started')}
             </AppText>
             <MoveRight size={18} color={G.fg} />
           </TouchableOpacity>

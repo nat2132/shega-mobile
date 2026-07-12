@@ -36,29 +36,29 @@ const { width } = Dimensions.get('window');
 
 const PLANS = {
   basic: {
-    name: 'Basic',
+    nameKey: 'subscription.plan_basic',
     icon: Shield,
     color: '#6366F1',
     gradient: ['#6366F1', '#4F46E5'] as const,
     prices: [
-      { label: '1 Month', months: 1, price: 1999 },
-      { label: '3 Months', months: 3, price: 2499 },
+      { labelKey: 'subscription.month_1', months: 1, price: 1999 },
+      { labelKey: 'subscription.months_3', months: 3, price: 2499 },
     ],
   },
   premium: {
-    name: 'Premium',
+    nameKey: 'subscription.plan_premium',
     icon: Crown,
     color: '#D4AF37',
     gradient: ['#F0D060', '#D4AF37', '#B8960C'] as const,
     prices: [
-      { label: '1 Month', months: 1, price: 2499 },
-      { label: '3 Months', months: 3, price: 5499 },
+      { labelKey: 'subscription.month_1', months: 1, price: 2499 },
+      { labelKey: 'subscription.months_3', months: 3, price: 5499 },
     ],
   },
 };
 
-const SubscriptionManageScreen: React.FC = () => {
-  const { colors, theme } = useSettings();
+  const SubscriptionManageScreen: React.FC = () => {
+  const { colors, theme, t } = useSettings();
   const {
     subscription,
     isPremium,
@@ -80,13 +80,13 @@ const SubscriptionManageScreen: React.FC = () => {
     setExpandedSection(expandedSection === section ? null : section);
   };
 
-  const statusConfig: Record<string, { label: string; color: string }> = {
-    trial: { label: 'Trial Active', color: gold },
-    pending_payment: { label: 'Pending Payment', color: colors.warning },
-    pending_verification: { label: 'Pending Verification', color: colors.warning },
-    active: { label: 'Active', color: colors.success },
-    expired: { label: 'Expired', color: colors.error },
-    cancelled: { label: 'Cancelled', color: colors.textSecondary },
+  const statusConfig: Record<string, { labelKey: string; color: string }> = {
+    trial: { labelKey: 'subscription.trial_active', color: gold },
+    pending_payment: { labelKey: 'subscription.pending_payment', color: colors.warning },
+    pending_verification: { labelKey: 'subscription.pending_verification', color: colors.warning },
+    active: { labelKey: 'subscription.active', color: colors.success },
+    expired: { labelKey: 'subscription.expired', color: colors.error },
+    cancelled: { labelKey: 'subscription.cancelled', color: colors.textSecondary },
     rejected: { label: 'Rejected', color: colors.error },
     renewing: { label: 'Renewing', color: colors.warning },
   };
@@ -111,11 +111,11 @@ const SubscriptionManageScreen: React.FC = () => {
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <AppText variant="body" weight="semibold" style={{ color: colors.textSecondary }}>
-            Back
+            {t('subscription.back')}
           </AppText>
         </TouchableOpacity>
         <AppText variant="heading" weight="bold" style={{ color: colors.text }}>
-          Subscription
+          {t('subscription.manage')}
         </AppText>
         <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); refresh(); }}>
           <RefreshCw size={20} color={colors.textSecondary} />
@@ -137,11 +137,11 @@ const SubscriptionManageScreen: React.FC = () => {
               </View>
               <View style={{ flex: 1 }}>
                 <AppText variant="title" weight="bold" style={{ color: colors.text }}>
-                  {planName} Plan
+                  {t('subscription.plan_name', { plan: planName })}
                 </AppText>
                 <View style={[styles.statusDot, { backgroundColor: config.color }]}>
                   <AppText variant="micro" weight="bold" style={{ color: '#FFF', letterSpacing: 0.5 }}>
-                    {config.label.toUpperCase()}
+                    {t(config.labelKey).toUpperCase()}
                   </AppText>
                 </View>
               </View>
@@ -155,14 +155,14 @@ const SubscriptionManageScreen: React.FC = () => {
                     {trialDaysRemaining}
                   </AppText>
                   <AppText variant="body" weight="medium" style={{ color: colors.textSecondary }}>
-                    days remaining
+                    {t('subscription.days_remaining', { days: String(trialDaysRemaining) })}
                   </AppText>
                 </View>
                 <View style={[styles.progressBar, { backgroundColor: colors.border }]}>
                   <View style={[styles.progressFill, { width: `${(trialDaysRemaining / 7) * 100}%`, backgroundColor: gold }]} />
                 </View>
                 <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }}>
-                  Trial ends {formatDate(subscription?.trialEndsAt)}
+                  {t('subscription.trial_ends', { date: formatDate(subscription?.trialEndsAt) })}
                 </AppText>
               </View>
             )}
@@ -171,7 +171,7 @@ const SubscriptionManageScreen: React.FC = () => {
               <View style={[styles.expiryRow, { borderTopColor: colors.border }]}>
                 <Calendar size={16} color={colors.textSecondary} />
                 <AppText variant="body-sm" weight="medium" style={{ color: colors.textSecondary }}>
-                  Expires: {formatDate(subscription.expiresAt)}
+                  {t('subscription.expires', { date: formatDate(subscription.expiresAt) })}
                 </AppText>
               </View>
             )}
@@ -194,7 +194,7 @@ const SubscriptionManageScreen: React.FC = () => {
               >
                 <Crown size={18} color="#FFF" />
                 <AppText variant="heading" weight="bold" style={{ color: '#FFF' }}>
-                  Upgrade to Premium
+                  {t('subscription.upgrade')}
                 </AppText>
                 <ArrowRight size={20} color="#FFF" />
               </LinearGradient>
@@ -214,7 +214,7 @@ const SubscriptionManageScreen: React.FC = () => {
             >
               <RefreshCw size={18} color={gold} />
               <AppText variant="body" weight="bold" style={{ color: gold }}>
-                Renew Subscription
+                {t('subscription.renew')}
               </AppText>
             </TouchableOpacity>
           </Animated.View>
@@ -229,7 +229,7 @@ const SubscriptionManageScreen: React.FC = () => {
               activeOpacity={0.7}
             >
               <AppText variant="title-sm" weight="bold" style={{ color: colors.text }}>
-                Available Plans
+                {t('subscription.available_plans')}
               </AppText>
               <ChevronRight size={18} color={colors.textSecondary} />
             </TouchableOpacity>
@@ -245,13 +245,13 @@ const SubscriptionManageScreen: React.FC = () => {
                         {isP && (
                           <View style={[styles.recommendedBadge, { backgroundColor: gold }]}>
                             <Star size={12} color="#FFF" />
-                            <AppText variant="micro" weight="bold" style={{ color: '#FFF' }}>POPULAR</AppText>
+                            <AppText variant="micro" weight="bold" style={{ color: '#FFF' }}>{t('subscription.popular')}</AppText>
                           </View>
                         )}
                         <View style={[styles.priceCardIcon, { backgroundColor: isP ? gold + '20' : '#6366F1' + '20' }]}>
                           {isP ? <Crown size={20} color={gold} /> : <Shield size={20} color={pl.color} />}
                         </View>
-                        <AppText variant="title-sm" weight="bold" style={{ color: colors.text }}>{pl.name}</AppText>
+                        <AppText variant="title-sm" weight="bold" style={{ color: colors.text }}>{t(pl.nameKey)}</AppText>
                         {pl.prices.map((pr, idx) => (
                           <TouchableOpacity
                             key={idx}
@@ -262,10 +262,10 @@ const SubscriptionManageScreen: React.FC = () => {
                             }}
                           >
                             <AppText variant="body-sm" weight="medium" style={{ color: colors.textSecondary }}>
-                              {pr.label}
+                              {t(pr.labelKey)}
                             </AppText>
                             <AppText variant="title" weight="black" style={{ color: colors.text }}>
-                              {pr.price.toLocaleString()} <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }}>ETB</AppText>
+                              {pr.price.toLocaleString()} <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }}>{t('subscription.etb')}</AppText>
                             </AppText>
                           </TouchableOpacity>
                         ))}
@@ -286,7 +286,7 @@ const SubscriptionManageScreen: React.FC = () => {
             activeOpacity={0.7}
           >
             <AppText variant="title-sm" weight="bold" style={{ color: colors.text }}>
-              Feature Comparison
+              {t('subscription.feature_comparison')}
             </AppText>
             <ChevronRight size={18} color={colors.textSecondary} />
           </TouchableOpacity>
@@ -295,32 +295,32 @@ const SubscriptionManageScreen: React.FC = () => {
             <View style={styles.featuresList}>
               <View style={[styles.featureHeader, { borderBottomColor: colors.border }]}>
                 <AppText variant="caption" weight="bold" style={{ color: colors.textSecondary, flex: 1 }}>
-                  Feature
+                  {t('subscription.feature_label')}
                 </AppText>
                 <AppText variant="caption" weight="bold" style={{ color: PLANS.basic.color, width: 60, textAlign: 'center' }}>
-                  Basic
+                  {t(PLANS.basic.nameKey)}
                 </AppText>
                 <AppText variant="caption" weight="bold" style={{ color: gold, width: 60, textAlign: 'center' }}>
-                  Premium
+                  {t(PLANS.premium.nameKey)}
                 </AppText>
               </View>
               <View style={styles.featureRow}>
-                <AppText variant="body-sm" weight="medium" style={{ color: colors.text, flex: 1 }}>Inventory</AppText>
+                <AppText variant="body-sm" weight="medium" style={{ color: colors.text, flex: 1 }}>{t('subscription.inventory_feature')}</AppText>
                 <Check size={16} color={colors.success} style={{ width: 60, alignSelf: 'center' }} />
                 <Check size={16} color={colors.success} style={{ width: 60, alignSelf: 'center' }} />
               </View>
               <View style={styles.featureRow}>
-                <AppText variant="body-sm" weight="medium" style={{ color: colors.text, flex: 1 }}>Sales</AppText>
+                <AppText variant="body-sm" weight="medium" style={{ color: colors.text, flex: 1 }}>{t('subscription.sales_feature')}</AppText>
                 <Check size={16} color={colors.success} style={{ width: 60, alignSelf: 'center' }} />
                 <Check size={16} color={colors.success} style={{ width: 60, alignSelf: 'center' }} />
               </View>
               <View style={styles.featureRow}>
-                <AppText variant="body-sm" weight="medium" style={{ color: colors.text, flex: 1 }}>Contacts</AppText>
+                <AppText variant="body-sm" weight="medium" style={{ color: colors.text, flex: 1 }}>{t('subscription.contacts_feature')}</AppText>
                 <Check size={16} color={colors.success} style={{ width: 60, alignSelf: 'center' }} />
                 <Check size={16} color={colors.success} style={{ width: 60, alignSelf: 'center' }} />
               </View>
               <View style={styles.featureRow}>
-                <AppText variant="body-sm" weight="medium" style={{ color: colors.text, flex: 1 }}>Stock Adjustments</AppText>
+                <AppText variant="body-sm" weight="medium" style={{ color: colors.text, flex: 1 }}>{t('subscription.stock_adjustments_feature')}</AppText>
                 <Check size={16} color={colors.success} style={{ width: 60, alignSelf: 'center' }} />
                 <Check size={16} color={colors.success} style={{ width: 60, alignSelf: 'center' }} />
               </View>
@@ -345,7 +345,7 @@ const SubscriptionManageScreen: React.FC = () => {
             activeOpacity={0.7}
           >
             <AppText variant="title-sm" weight="bold" style={{ color: colors.text }}>
-              Transaction History
+              {t('subscription.transaction_history')}
             </AppText>
             <ChevronRight size={18} color={colors.textSecondary} />
           </TouchableOpacity>
@@ -356,7 +356,7 @@ const SubscriptionManageScreen: React.FC = () => {
                 <View style={[styles.emptyState, { backgroundColor: colors.card, borderColor: colors.border }]}>
                   <History size={24} color={colors.textSecondary} />
                   <AppText variant="body" weight="medium" style={{ color: colors.textSecondary }}>
-                    No payment history yet
+                    {t('subscription.no_payment_history')}
                   </AppText>
                 </View>
               ) : (
@@ -375,10 +375,10 @@ const SubscriptionManageScreen: React.FC = () => {
                     </View>
                     <View>
                       <AppText variant="body" weight="bold" style={{ color: colors.text }}>
-                        {payment.amount?.toLocaleString()} ETB
+                        {payment.amount?.toLocaleString()} {t('subscription.etb')}
                       </AppText>
                       <AppText variant="micro" weight="medium" style={{ color: payment.status === 'pending_verification' ? colors.warning : colors.success, textAlign: 'right' }}>
-                        {payment.status === 'pending_verification' ? 'Pending' : 'Verified'}
+                        {payment.status === 'pending_verification' ? t('subscription.pending') : t('subscription.verified')}
                       </AppText>
                     </View>
                   </View>
@@ -399,7 +399,7 @@ const SubscriptionManageScreen: React.FC = () => {
           >
             <RefreshCw size={18} color={colors.textSecondary} />
             <AppText variant="body" weight="medium" style={{ color: colors.text }}>
-              Restore Purchase
+              {t('subscription.restore')}
             </AppText>
           </TouchableOpacity>
 
@@ -411,7 +411,7 @@ const SubscriptionManageScreen: React.FC = () => {
           >
             <HeadphonesIcon size={18} color={colors.textSecondary} />
             <AppText variant="body" weight="medium" style={{ color: colors.text }}>
-              Contact Support
+              {t('subscription.support')}
             </AppText>
           </TouchableOpacity>
         </Animated.View>

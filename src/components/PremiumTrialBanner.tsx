@@ -13,7 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 
 const PremiumTrialBanner: React.FC<{ compact?: boolean }> = ({ compact }) => {
-  const { colors, theme } = useSettings();
+  const { colors, theme, t } = useSettings();
   const { isTrial, trialDaysRemaining } = useSubscription();
   const router = useRouter();
   const gold = '#D4AF37';
@@ -30,7 +30,7 @@ const PremiumTrialBanner: React.FC<{ compact?: boolean }> = ({ compact }) => {
         >
           <Crown size={14} color={gold} />
           <AppText variant="caption" weight="bold" style={{ color: gold, flex: 1 }}>
-            Premium Trial
+            {t('subscription.trial')}
           </AppText>
           <View style={styles.compactDays}>
             <Clock size={12} color={gold} />
@@ -61,10 +61,10 @@ const PremiumTrialBanner: React.FC<{ compact?: boolean }> = ({ compact }) => {
           </View>
           <View style={styles.bannerText}>
             <AppText variant="body" weight="bold" style={{ color: gold }}>
-              Premium Trial
+              {t('subscription.trial')}
             </AppText>
             <AppText variant="caption" weight="medium" style={{ color: gold + 'CC' }}>
-              {trialDaysRemaining} Day{trialDaysRemaining !== 1 ? 's' : ''} Remaining
+              {t('subscription.trial_banner', { days: String(trialDaysRemaining) })}
             </AppText>
           </View>
           <View style={[styles.daysBadge, { backgroundColor: gold + '30' }]}>
@@ -72,7 +72,7 @@ const PremiumTrialBanner: React.FC<{ compact?: boolean }> = ({ compact }) => {
               {trialDaysRemaining}
             </AppText>
             <AppText variant="micro" weight="medium" style={{ color: gold + 'CC' }}>
-              days
+              {t('common.d')}
             </AppText>
           </View>
         </LinearGradient>

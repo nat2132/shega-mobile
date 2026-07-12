@@ -59,12 +59,12 @@ const CSVManagerScreen = () => {
   const G = getSettingsGlass(colors);
 
   const MODULES: ModuleOption[] = [
-    { key: 'items', label: 'Inventory Items', icon: Package, description: 'Products and stock items', color: colors.primary },
-    { key: 'sales', label: 'Sales Records', icon: Wallet, description: 'Completed transactions', color: colors.success },
-    { key: 'expenses', label: 'Expenses', icon: ClipboardList, description: 'Business expenses', color: colors.warning },
-    { key: 'categories', label: 'Categories', icon: Tag, description: 'Item and expense categories', color: colors.tint },
-    { key: 'contacts', label: 'Contacts', icon: Users, description: 'Suppliers and customers', color: colors.error },
-    { key: 'adjustments', label: 'Adjustments', icon: ClipboardList, description: 'Price and stock adjustments', color: colors.tint },
+    { key: 'items', label: 'Inventory Items', icon: Package, descKey: 'dt.inventory_items', color: colors.primary },
+    { key: 'sales', label: 'Sales Records', icon: Wallet, descKey: 'dt.sales_records', color: colors.success },
+    { key: 'expenses', label: 'Expenses', icon: ClipboardList, descKey: 'dt.expenses', color: colors.warning },
+    { key: 'categories', label: 'Categories', icon: Tag, descKey: 'dt.categories', color: colors.tint },
+    { key: 'contacts', label: 'Contacts', icon: Users, descKey: 'dt.contacts', color: colors.error },
+    { key: 'adjustments', label: 'Adjustments', icon: ClipboardList, descKey: 'dt.adjustments', color: colors.tint },
   ];
   const { showToast } = useToast();
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
@@ -107,7 +107,7 @@ const CSVManagerScreen = () => {
       setCsvContent(content);
       setCurrentStep('preview');
     } catch {
-      showToast('Failed to read CSV file', 'error');
+      showToast(t('common.error'), 'error');
     }
   }, [selectedModule, showToast]);
 
@@ -123,7 +123,7 @@ const CSVManagerScreen = () => {
       setMapping(result.mapping);
       setCurrentStep('validate');
     } else {
-      showToast('Invalid CSV file', 'error');
+      showToast(t('common.error'), 'error');
     }
   }, [csvContent, selectedModule, showToast]);
 
@@ -180,13 +180,13 @@ const CSVManagerScreen = () => {
           });
           setCurrentStep('result');
           if (result.errors.length === 0) {
-            showToast({ title: 'Import Complete', message: `${result.imported} records imported`, type: 'success' });
+            showToast({ title: t('dt.import_complete'), message: `${result.imported} records imported`, type: 'success' });
           } else {
             showToast({ title: 'Import Complete', message: `${result.imported} records imported with ${result.errors.length} issue(s)`, type: 'warning' });
             playBad();
           }
         } catch {
-          showToast('Import failed', 'error');
+          showToast(t('common.error'), 'error');
         } finally {
           setProcessing(false);
         }
@@ -194,11 +194,11 @@ const CSVManagerScreen = () => {
 
       if (dupes.length > 0) {
         Alert.alert(
-          'Duplicates Found',
+          t('common.error'),
           `${dupes.length} record(s) already exist. Continue with import?`,
           [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Continue', onPress: () => doImport() },
+            { text: t('common.cancel'), style: 'cancel' },
+            { text: t('dt.validate_map'), onPress: () => doImport() },
           ]
         );
       } else {
@@ -240,9 +240,9 @@ const CSVManagerScreen = () => {
       }
 
       await exportToCSV(data, selectedModule);
-      showToast({ title: 'Export Complete', message: `${data.length} records exported to CSV`, type: 'success' });
+      showToast({ title: t('dt.export_summary'), message: `${data.length} records exported to CSV`, type: 'success' });
     } catch {
-      showToast('Export failed', 'error');
+      showToast(t('common.error'), 'error');
     }
   }, [selectedModule, showToast]);
 
@@ -517,7 +517,7 @@ const CSVManagerScreen = () => {
               disabled={processing}
             >
               <AppText variant="body" weight="bold" style={{ color: G.bg }}>
-                {processing ? 'Importing...' : 'Confirm Import'}
+                {processing ? t('dt.import_complete') : t('dt.validate_map')}
               </AppText>
               <Upload size={20} color={G.bg} />
             </TouchableOpacity>
@@ -534,7 +534,7 @@ const CSVManagerScreen = () => {
                 <AlertTriangle size={48} color={colors.warning} />
               )}
               <AppText variant="display" weight="bold" style={{ color: importResult.errors.length === 0 ? colors.success : colors.warning }}>
-                {importResult.errors.length === 0 ? 'Success!' : 'Completed with Warnings'}
+                {importResult.errors.length === 0 ? t('dt.import_successful') : t('dt.completed_issues')}
               </AppText>
             </View>
 

@@ -37,7 +37,7 @@ const PremiumFeatureLockScreen: React.FC<PremiumFeatureLockProps> = ({
   onUpgrade,
   onBack,
 }) => {
-  const { colors, theme } = useSettings();
+  const { colors, theme, t } = useSettings();
   const lockScale = useSharedValue(0);
   const crownScale = useSharedValue(0);
 
@@ -63,7 +63,7 @@ const PremiumFeatureLockScreen: React.FC<PremiumFeatureLockProps> = ({
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <AppText variant="body" weight="semibold" style={{ color: colors.textSecondary }}>
-            Back
+            {t('subscription.back')}
           </AppText>
         </TouchableOpacity>
       </View>
@@ -85,7 +85,7 @@ const PremiumFeatureLockScreen: React.FC<PremiumFeatureLockProps> = ({
             <View style={styles.premiumBadge}>
               <Crown size={14} color={gold} />
               <AppText variant="micro" weight="bold" style={{ color: gold, letterSpacing: 1 }}>
-                PREMIUM
+                {t('subscription.feature_locked')}
               </AppText>
             </View>
           </View>
@@ -99,7 +99,7 @@ const PremiumFeatureLockScreen: React.FC<PremiumFeatureLockProps> = ({
 
         <Animated.View entering={FadeInDown.delay(500).duration(600)} style={styles.benefitsSection}>
           <AppText variant="title-sm" weight="bold" style={{ color: colors.text, marginBottom: 16 }}>
-            Benefits
+            {t('subscription.benefits')}
           </AppText>
           {benefits.map((benefit, idx) => (
             <View key={idx} style={styles.benefitRow}>
@@ -118,10 +118,10 @@ const PremiumFeatureLockScreen: React.FC<PremiumFeatureLockProps> = ({
             <Sparkles size={20} color={gold} />
             <View style={{ flex: 1 }}>
               <AppText variant="body" weight="bold" style={{ color: colors.text, marginBottom: 4 }}>
-                Why Upgrade?
+                {t('subscription.why_upgrade')}
               </AppText>
               <AppText variant="body-sm" weight="regular" style={{ color: colors.textSecondary }}>
-                Premium features help you grow your business with powerful tools and insights.
+                {t('subscription.why_upgrade_desc')}
               </AppText>
             </View>
           </View>

@@ -34,47 +34,47 @@ interface SubscriptionPlansProps {
 
 const PLANS = {
   basic: {
-    name: 'Basic',
+    nameKey: 'subscription.plan_basic',
     icon: Shield,
     color: '#6366F1',
     gradient: ['#6366F1', '#4F46E5'] as const,
     prices: [
-      { label: '1 Month', months: 1, price: 1999 },
-      { label: '3 Months', months: 3, price: 2499 },
+      { labelKey: 'subscription.month_1', months: 1, price: 1999 },
+      { labelKey: 'subscription.months_3', months: 3, price: 2499 },
     ],
-    features: [
-      'Inventory Management',
-      'Sales Tracking',
-      'Contact Management',
-      'Stock Adjustments',
+    featureKeys: [
+      'subscription.feature_inventory',
+      'subscription.feature_sales_tracking',
+      'subscription.feature_contact_mgmt',
+      'subscription.feature_stock_adj',
     ],
   },
   premium: {
-    name: 'Premium',
+    nameKey: 'subscription.plan_premium',
     icon: Crown,
     color: '#D4AF37',
     gradient: ['#F0D060', '#D4AF37', '#B8960C'] as const,
     prices: [
-      { label: '1 Month', months: 1, price: 2499 },
-      { label: '3 Months', months: 3, price: 5499 },
+      { labelKey: 'subscription.month_1', months: 1, price: 2499 },
+      { labelKey: 'subscription.months_3', months: 3, price: 5499 },
     ],
-    features: [
-      'Everything in Basic',
-      'Reports & Analytics',
-      'Dashboard Overview',
-      'PDF Receipt Downloads',
-      'CSV Import/Export',
-      'Expense Management',
-      'Budget Management',
-      'Debt Management',
-      'Customer Orders',
-      'Purchase Orders',
-      'Multi Warehouse',
-      'AI Business Assistant',
-      'Business Health Score',
-      'Biometrics',
-      'Premium Themes',
-      'Supplier Credit Reminders',
+    featureKeys: [
+      'subscription.feature_everything_basic',
+      'subscription.feature_reports',
+      'subscription.feature_dashboard',
+      'subscription.feature_pdf',
+      'subscription.feature_csv',
+      'subscription.feature_expense',
+      'subscription.feature_budget',
+      'subscription.feature_debt',
+      'subscription.feature_orders',
+      'subscription.feature_purchase_orders',
+      'subscription.feature_multi_warehouse',
+      'subscription.feature_ai',
+      'subscription.feature_health',
+      'subscription.feature_biometrics',
+      'subscription.feature_themes',
+      'subscription.feature_suppliers',
     ],
   },
 };
@@ -100,17 +100,17 @@ const SubscriptionPlansScreen: React.FC<SubscriptionPlansProps> = ({ onSelectPla
         <View style={styles.header}>
           <TouchableOpacity onPress={onBack} style={styles.backButton}>
             <AppText variant="body" weight="semibold" style={{ color: colors.textSecondary }}>
-              Back
+              {t('subscription.back')}
             </AppText>
           </TouchableOpacity>
         </View>
 
         <Animated.View entering={FadeInDown.delay(100).duration(600)} style={styles.titleSection}>
           <AppText variant="display" weight="black" align="center" style={{ color: colors.text, marginBottom: 8 }}>
-            Choose Your Plan
+            {t('subscription.plans')}
           </AppText>
           <AppText variant="body-lg" weight="medium" align="center" style={{ color: colors.textSecondary }}>
-            Unlock the full power of Shega Business
+            {t('subscription.unlock_power')}
           </AppText>
         </Animated.View>
 
@@ -124,7 +124,7 @@ const SubscriptionPlansScreen: React.FC<SubscriptionPlansProps> = ({ onSelectPla
           >
             <Shield size={18} color={selectedPlan === 'basic' ? colors.text : colors.textSecondary} />
             <AppText variant="body" weight={selectedPlan === 'basic' ? 'bold' : 'medium'} style={{ color: selectedPlan === 'basic' ? colors.text : colors.textSecondary }}>
-              Basic
+              {t(PLANS.basic.nameKey)}
             </AppText>
           </TouchableOpacity>
           <TouchableOpacity
@@ -136,7 +136,7 @@ const SubscriptionPlansScreen: React.FC<SubscriptionPlansProps> = ({ onSelectPla
           >
             <Crown size={18} color={isPremium ? gold : colors.textSecondary} />
             <AppText variant="body" weight={isPremium ? 'bold' : 'medium'} style={{ color: isPremium ? gold : colors.textSecondary }}>
-              Premium
+              {t(PLANS.premium.nameKey)}
             </AppText>
           </TouchableOpacity>
         </View>
@@ -152,8 +152,8 @@ const SubscriptionPlansScreen: React.FC<SubscriptionPlansProps> = ({ onSelectPla
                 style={[
                   styles.priceCard,
                   {
-                    backgroundColor: selectedPrice.label === p.label ? colors.card : colors.surface,
-                    borderColor: selectedPrice.label === p.label ? plan.color : colors.border,
+                    backgroundColor: selectedPrice.months === p.months ? colors.card : colors.surface,
+                    borderColor: selectedPrice.months === p.months ? plan.color : colors.border,
                   },
                 ]}
                 onPress={() => { setSelectedPrice(p); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
@@ -162,19 +162,19 @@ const SubscriptionPlansScreen: React.FC<SubscriptionPlansProps> = ({ onSelectPla
                 {isPremium && idx === 1 && (
                   <View style={styles.bestValueBadge}>
                     <Star size={12} color="#FFF" />
-                    <AppText variant="micro" weight="bold" style={{ color: '#FFF' }}>BEST VALUE</AppText>
+                    <AppText variant="micro" weight="bold" style={{ color: '#FFF' }}>{t('subscription.best_value')}</AppText>
                   </View>
                 )}
                 <AppText variant="caption" weight="bold" transform="uppercase" style={{ color: colors.textSecondary, letterSpacing: 1 }}>
-                  {p.label}
+                  {t(p.labelKey)}
                 </AppText>
                 <AppText variant="display" weight="black" style={[styles.price, { color: colors.text }]}>
                   {p.price.toLocaleString()}
                 </AppText>
                 <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }}>
-                  ETB
+                  {t('subscription.etb')}
                 </AppText>
-                {selectedPrice.label === p.label && (
+                {selectedPrice.months === p.months && (
                   <View style={[styles.selectedDot, { backgroundColor: plan.color }]}>
                     <Check size={14} color="#FFF" strokeWidth={3} />
                   </View>
@@ -186,9 +186,9 @@ const SubscriptionPlansScreen: React.FC<SubscriptionPlansProps> = ({ onSelectPla
 
         <Animated.View entering={FadeInDown.delay(400).duration(600)} style={styles.featuresSection}>
           <AppText variant="title" weight="bold" style={{ color: colors.text, marginBottom: 16 }}>
-            {plan.name} Features
+            {t('subscription.plan_features', { plan: t(plan.nameKey) })}
           </AppText>
-          {plan.features.map((feature, idx) => (
+          {plan.featureKeys.map((featureKey, idx) => (
             <View key={idx} style={styles.featureRow}>
               <View style={[styles.featureCheck, { backgroundColor: plan.color + '20' }]}>
                 {isPremium ? (
@@ -198,7 +198,7 @@ const SubscriptionPlansScreen: React.FC<SubscriptionPlansProps> = ({ onSelectPla
                 )}
               </View>
               <AppText variant="body" weight="medium" style={{ color: colors.text, flex: 1 }}>
-                {feature}
+                {t(featureKey)}
               </AppText>
             </View>
           ))}
@@ -208,10 +208,10 @@ const SubscriptionPlansScreen: React.FC<SubscriptionPlansProps> = ({ onSelectPla
       <Animated.View entering={FadeIn.delay(500).duration(600)} style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
         <View style={styles.footerPriceRow}>
           <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }}>
-            {selectedPrice.label}
+            {t(selectedPrice.labelKey)}
           </AppText>
           <AppText variant="display-lg" weight="black" style={{ color: colors.text }}>
-            {selectedPrice.price.toLocaleString()} <AppText variant="body" weight="medium" style={{ color: colors.textSecondary }}>ETB</AppText>
+            {selectedPrice.price.toLocaleString()} <AppText variant="body" weight="medium" style={{ color: colors.textSecondary }}>{t('subscription.etb')}</AppText>
           </AppText>
         </View>
         <TouchableOpacity
@@ -226,7 +226,7 @@ const SubscriptionPlansScreen: React.FC<SubscriptionPlansProps> = ({ onSelectPla
             style={styles.subscribeGradient}
           >
             <AppText variant="heading" weight="bold" style={styles.subscribeText}>
-              {isPremium ? 'Go Premium' : 'Get Started'}
+              {isPremium ? t('subscription.go_premium') : t('subscription.get_started')}
             </AppText>
             <ArrowRight size={22} color="#FFF" strokeWidth={2.5} />
           </LinearGradient>
