@@ -1,6 +1,6 @@
 import { AppText } from '@/components/ui';
 import { Image } from 'expo-image';
-import { ArrowRight, Sparkles, Store, Wifi } from 'lucide-react-native';
+import { ArrowRight, Store } from 'lucide-react-native';
 import React, { useEffect } from 'react';
 import {
   StyleSheet,
@@ -9,7 +9,6 @@ import {
 } from 'react-native';
 import Animated, {
   Easing,
-  FadeIn,
   FadeInDown,
   useAnimatedStyle,
   useSharedValue,
@@ -24,7 +23,6 @@ import { getGlass, DIMENSIONS } from './glass-theme';
 const { W: w } = DIMENSIONS;
 
 interface WelcomeChoiceProps {
-  onSyncChoose: () => void;
   onRegisterChoose: () => void;
 }
 
@@ -81,7 +79,7 @@ function FloatingOrb({
   );
 }
 
-const WelcomeChoiceScreen: React.FC<WelcomeChoiceProps> = ({ onSyncChoose, onRegisterChoose }) => {
+const WelcomeChoiceScreen: React.FC<WelcomeChoiceProps> = ({ onRegisterChoose }) => {
   const { colors } = useSettings();
   const G = getGlass(colors);
 
@@ -128,7 +126,7 @@ const WelcomeChoiceScreen: React.FC<WelcomeChoiceProps> = ({ onSyncChoose, onReg
           align="center"
           style={{ color: G.muted, lineHeight: 22 }}
         >
-          Choose how you&apos;d like to get started
+          Let&apos;s set up your business
         </AppText>
       </Animated.View>
 
@@ -138,93 +136,28 @@ const WelcomeChoiceScreen: React.FC<WelcomeChoiceProps> = ({ onSyncChoose, onReg
           style={styles.cardWrapper}
         >
           <TouchableOpacity
-            style={[styles.card, { backgroundColor: G.glassCard, borderColor: G.glassBorder }]}
-            onPress={onSyncChoose}
-            activeOpacity={0.85}
-          >
-            <View style={styles.cardHeader}>
-              <View style={[styles.iconCircle, { backgroundColor: G.glassCard, borderColor: G.glassBorder }]}>
-                <Wifi size={22} color={G.textGlassStrong} />
-              </View>
-              <View style={[styles.badge, { backgroundColor: G.glassCard }]}>
-                <Sparkles size={9} color={G.textGlass} />
-                <AppText
-                  variant="micro"
-                  weight="bold"
-                  numberOfLines={1}
-                  style={{ color: G.textGlass, letterSpacing: 0.5 }}
-                >
-                  INSTANT
-                </AppText>
-              </View>
-            </View>
-            <AppText
-              variant="title"
-              weight="bold"
-              numberOfLines={2}
-              style={{ color: G.fg, marginBottom: 6 }}
-            >
-              Sync from Desktop
-            </AppText>
-            <AppText
-              variant="body-sm"
-              weight="medium"
-              numberOfLines={3}
-              style={{ color: G.muted, lineHeight: 19, marginBottom: 20 }}
-            >
-              Connect to your Shega Desktop app via WiFi and import all your existing business data instantly.
-            </AppText>
-            <View style={[styles.cardAction, { backgroundColor: G.fg }]}>
-              <AppText
-                variant="body"
-                weight="bold"
-                numberOfLines={1}
-                style={{ color: G.buttonFg }}
-              >
-                Connect via WiFi
-              </AppText>
-              <ArrowRight size={16} color={G.buttonFg} />
-            </View>
-          </TouchableOpacity>
-        </Animated.View>
-
-        <Animated.View
-          entering={FadeInDown.delay(450).duration(700).springify().damping(18)}
-          style={styles.cardWrapper}
-        >
-          <TouchableOpacity
             style={[styles.card, styles.cardHighlight, { backgroundColor: G.glassCard, borderColor: G.accentGlass }]}
             onPress={onRegisterChoose}
             activeOpacity={0.85}
           >
             <View style={styles.cardHeader}>
               <View style={[styles.iconCircle, { backgroundColor: G.glassCard, borderColor: G.glassBorder }]}>
-                <Store size={22} color={G.textGlassStrong} />
-              </View>
-              <View style={[styles.badge, { backgroundColor: G.accentGlass }]}>
-                <AppText
-                  variant="micro"
-                  weight="bold"
-                  numberOfLines={1}
-                  style={{ color: G.accent, letterSpacing: 0.5 }}
-                >
-                  NEW
-                </AppText>
+                <Store size={28} color={G.textGlassStrong} />
               </View>
             </View>
             <AppText
-              variant="title"
+              variant="heading-lg"
               weight="bold"
               numberOfLines={2}
-              style={{ color: G.fg, marginBottom: 6 }}
+              style={{ color: G.fg, marginBottom: 8 }}
             >
               Register New Business
             </AppText>
             <AppText
-              variant="body-sm"
+              variant="body"
               weight="medium"
               numberOfLines={3}
-              style={{ color: G.muted, lineHeight: 19, marginBottom: 20 }}
+              style={{ color: G.muted, lineHeight: 22, marginBottom: 28 }}
             >
               Start fresh — set up your store, add inventory, and begin tracking sales from scratch.
             </AppText>
@@ -243,20 +176,6 @@ const WelcomeChoiceScreen: React.FC<WelcomeChoiceProps> = ({ onSyncChoose, onReg
         </Animated.View>
       </View>
 
-      <Animated.View
-        entering={FadeIn.delay(700).duration(600)}
-        style={styles.footer}
-      >
-        <AppText
-          variant="caption"
-          weight="medium"
-          numberOfLines={2}
-          align="center"
-          style={{ color: G.textGlassFaint, textAlign: 'center' }}
-        >
-          You can always set up sync later from Settings
-        </AppText>
-      </Animated.View>
     </View>
   );
 };
@@ -297,7 +216,6 @@ const styles = StyleSheet.create({
   },
   cardsContainer: {
     flex: 1,
-    gap: 16,
     justifyContent: 'center',
   },
   cardWrapper: {
@@ -305,7 +223,7 @@ const styles = StyleSheet.create({
   },
   card: {
     borderRadius: 28,
-    padding: 24,
+    padding: 32,
     borderWidth: 1,
   },
   cardHighlight: {
@@ -318,32 +236,20 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   iconCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-  },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
   },
   cardAction: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 14,
+    paddingVertical: 16,
     borderRadius: 999,
-  },
-  footer: {
-    alignItems: 'center',
-    paddingTop: 20,
   },
 });
 

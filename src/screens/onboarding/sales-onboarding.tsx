@@ -223,21 +223,16 @@ const SalesOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNext, onBack
 
   return (
     <View style={[styles.container, { backgroundColor: G.bg }]}>
-      <View style={styles.topBar}>
-        <TouchableOpacity style={[styles.topBarBtn, { backgroundColor: G.glassCard, borderColor: G.glassBorder }]} onPress={onBack}>
-          <MoveLeft size={18} color={G.textGlass} />
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.topBarBtn, { backgroundColor: G.glassCard, borderColor: G.glassBorder }]} onPress={onSkip}>
-          <AppText
-            variant="caption"
-            weight="bold"
-            numberOfLines={1}
-            style={{ color: G.textGlass, letterSpacing: 1.2 }}
-          >
-            SKIP
-          </AppText>
-        </TouchableOpacity>
-      </View>
+      <TouchableOpacity style={[styles.skipBtn, { backgroundColor: G.glassCard, borderColor: G.glassBorder }]} onPress={onSkip}>
+        <AppText
+          variant="caption"
+          weight="bold"
+          numberOfLines={1}
+          style={{ color: G.textGlass, letterSpacing: 1.2 }}
+        >
+          SKIP
+        </AppText>
+      </TouchableOpacity>
 
       <View style={styles.mainContent}>
         <FloatingIcon Icon={ShoppingCart} x={w * 0.04} y={w * 0.12} delay={300} size={16} G={G} />
@@ -316,18 +311,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  topBar: {
+  skipBtn: {
     position: 'absolute',
     top: 60,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 24,
+    right: 24,
     zIndex: 10,
-  },
-  topBarBtn: {
-    padding: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 20,
     borderRadius: 999,
     borderWidth: 1,
   },

@@ -3,9 +3,9 @@ import SalesOnboardingScreen from '../src/screens/onboarding/sales-onboarding';
 
 export default function SalesOnboarding() {
   return (
-    <SalesOnboardingScreen 
+    <SalesOnboardingScreen
       onNext={() => {
-        router.replace('/analytics-onboarding');
+        router.push('/analytics-onboarding');
       }}
       onBack={() => {
         router.back();

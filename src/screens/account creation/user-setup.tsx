@@ -14,7 +14,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
-import { User, Briefcase, ChevronRight, Sparkles, Globe, Palette, Calendar, ChevronLeft, Check } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { User, Briefcase, ChevronRight, Sparkles, Globe, Palette, Calendar, ChevronLeft, Check, Camera } from 'lucide-react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { getAccountGlass } from './glass-account';
 import { useSettings } from '@/context/SettingsContext';
@@ -41,6 +42,7 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
   const [fullName, setFullName] = useState('');
   const [businessName, setBusinessName] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState(0);
+  const [customAvatarUri, setCustomAvatarUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ fullName?: string; businessName?: string }>({});
   const [touched, setTouched] = useState<{ fullName?: boolean; businessName?: boolean }>({});
@@ -57,10 +59,24 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
 
   const LANGUAGES = [
     { id: 'en', title: 'English', sub: 'System Default' },
-    { id: 'am', title: 'áŠ áˆ›áˆ­áŠ›', sub: 'Amharic' },
+    { id: 'am', title: 'አማርኛ', sub: 'Amharic' },
     { id: 'om', title: 'Afaan Oromo', sub: 'Oromo' },
-    { id: 'ti', title: 'á‰µáŒáˆ­áŠ›', sub: 'Tigrinya' },
+    { id: 'ti', title: 'ትግርኛ', sub: 'Tigrinya' },
   ];
+
+  const handlePickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setCustomAvatarUri(result.assets[0].uri);
+    }
+  };
 
   const handleContinue = async () => {
     if (step === 0) {
@@ -91,6 +107,7 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
         name: fullName.trim(),
         businessName: businessName.trim(),
         avatarIndex: selectedAvatar,
+        avatarUri: customAvatarUri || undefined,
       });
       
       // All other settings (theme, language, calendar) are already persisted 
@@ -160,16 +177,14 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
     height: 120,
     borderRadius: 60,
   },
-  sparkleBadge: {
+  cameraBtn: {
     position: 'absolute',
     bottom: 5,
     right: 5,
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: G.fg,
     borderWidth: 4,
-    borderColor: G.bg,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -408,13 +423,14 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
             <View style={styles.avatarOrchestration}>
               <View style={styles.mainAvatarBox}>
                 <View style={[styles.avatarRing, { borderColor: G.border }]}>
-                  <Image 
-                    source={PROFILE_IMAGES[selectedAvatar]} 
-                    style={styles.mainProfileImage}
-                  />
-                  <View style={[styles.sparkleBadge, { backgroundColor: G.fg, borderColor: G.bg }]}>
-                     <Sparkles size={14} color={G.bg} />
-                  </View>
+                  {customAvatarUri ? (
+                    <Image source={{ uri: customAvatarUri }} style={styles.mainProfileImage} />
+                  ) : (
+                    <Image source={PROFILE_IMAGES[selectedAvatar]} style={styles.mainProfileImage} />
+                  )}
+                  <TouchableOpacity style={[styles.cameraBtn, { backgroundColor: G.fg, borderColor: G.bg }]} onPress={handlePickImage} activeOpacity={0.8}>
+                    <Camera size={14} color={G.bg} />
+                  </TouchableOpacity>
                 </View>
                 <AppText style={[styles.avatarMeta, { color: G.fg }]} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>{t('account.selected_curator_id')}</AppText>
               </View>
@@ -430,7 +446,7 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
                   return (
                     <TouchableOpacity
                       key={index}
-                      onPress={() => setSelectedAvatar(index)}
+                      onPress={() => { setSelectedAvatar(index); setCustomAvatarUri(null); }}
                       style={[
                         styles.libraryThumbnail,
                         { borderColor: G.border },

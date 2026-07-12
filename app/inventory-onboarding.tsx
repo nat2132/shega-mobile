@@ -3,10 +3,13 @@ import InventoryOnboardingScreen from '../src/screens/onboarding/inventory-onboa
 
 export default function InventoryOnboarding() {
   return (
-    <InventoryOnboardingScreen 
+    <InventoryOnboardingScreen
       onNext={() => {
-        router.replace('/sales-onboarding');
-      }} 
+        router.push('/sales-onboarding');
+      }}
+      onBack={() => {
+        router.back();
+      }}
       onSkip={() => {
         router.replace('/user-setup');
       }}

@@ -6,7 +6,7 @@ export default function FirstOnboardingRoute() {
   return (
     <OnboardingScreen
       onNext={() => {
-        router.replace('/welcome-choice');
+        router.push('/welcome-choice');
       }}
     />
   );

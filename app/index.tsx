@@ -9,19 +9,11 @@ export default function Index() {
       const pin = await SecureStore.getItemAsync('user_pin');
       const setupComplete = await SecureStore.getItemAsync('user_setupComplete');
 
-      if (pin) {
-        // If PIN is set, verify security first
-        router.replace('/verify-pin');
-      } else if (setupComplete === 'true') {
-        // If no PIN but setup is done, go to dashboard
-        router.replace('/(tabs)/dashboard');
-      } else {
-        // New user or incomplete setup - show first onboarding experience
-        router.replace('/first-onboarding');
-      }
+      const target = pin ? '/verify-pin' : setupComplete === 'true' ? '/(tabs)/dashboard' : '/first-onboarding';
+      setTimeout(() => router.replace(target), 0);
     } catch (error) {
       console.error('[AuthCheck] Initialization failed:', error);
-      router.replace('/first-onboarding');
+      setTimeout(() => router.replace('/first-onboarding'), 0);
     }
   };
 

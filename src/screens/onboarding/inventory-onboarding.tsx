@@ -4,7 +4,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { MoveRight, Package, AlertCircle } from 'lucide-react-native';
+import { MoveLeft, MoveRight, Package, AlertCircle } from 'lucide-react-native';
 import { AppText } from '@/components/ui';
 import Animated, {
   Easing,
@@ -27,6 +27,7 @@ const { W: w } = DIMENSIONS;
 
 interface OnboardingScreenProps {
   onNext?: () => void;
+  onBack?: () => void;
   onSkip?: () => void;
 }
 
@@ -120,7 +121,7 @@ function PhoneFrame({ children, G }: { children: React.ReactNode; G: ReturnType<
   );
 }
 
-const InventoryOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNext, onSkip }) => {
+const InventoryOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNext, onBack, onSkip }) => {
   const { colors } = useSettings();
   const G = getGlass(colors);
   const glowPulse = useSharedValue(0);
@@ -145,7 +146,7 @@ const InventoryOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNext, on
 
   return (
     <View style={[styles.container, { backgroundColor: G.bg }]}>
-      <TouchableOpacity style={[styles.skipContainer, { backgroundColor: G.glassCard, borderColor: G.glassBorder }]} onPress={onSkip}>
+      <TouchableOpacity style={[styles.skipBtn, { backgroundColor: G.glassCard, borderColor: G.glassBorder }]} onPress={onSkip}>
         <AppText
           variant="caption"
           weight="bold"
@@ -227,9 +228,17 @@ const InventoryOnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNext, on
           <View style={[styles.dot, { backgroundColor: G.textGlassVeryFaint }]} />
         </Animated.View>
 
-        <Animated.View entering={FadeInUp.delay(700).duration(600)} style={styles.actionNode}>
+        <Animated.View entering={FadeInUp.delay(700).duration(600)} style={[styles.actionRow, { width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 }]}>
           <TouchableOpacity
-            style={[styles.nextBtn, { backgroundColor: G.fg }]}
+            style={[styles.backBtn, { backgroundColor: G.glassCard, borderColor: G.glassBorder }]}
+            onPress={onBack}
+            activeOpacity={0.7}
+          >
+            <MoveLeft size={18} color={G.textGlass} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.nextBtn, { backgroundColor: G.fg, flex: 1 }]}
             onPress={onNext}
             activeOpacity={0.85}
           >
@@ -253,10 +262,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  skipContainer: {
+  skipBtn: {
     position: 'absolute',
     top: 60,
-    alignSelf: 'center',
+    right: 24,
     zIndex: 10,
     paddingVertical: 8,
     paddingHorizontal: 20,
@@ -366,12 +375,24 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     height: 6,
   },
-  actionNode: {
+  actionRow: {
     width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  backBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
   },
   nextBtn: {
     flexDirection: 'row',
-    height: 58,
+    height: 56,
     borderRadius: 999,
     justifyContent: 'center',
     alignItems: 'center',
