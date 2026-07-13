@@ -19,7 +19,7 @@ const PremiumFeatureGate: React.FC<PremiumFeatureGateProps> = ({
   children,
   fallback,
 }) => {
-  const { colors, theme } = useSettings();
+  const { colors, theme, t } = useSettings();
   const { isFeatureUnlocked, isBasicFeature } = useSubscription();
   const router = useRouter();
   const gold = '#D4AF37';
@@ -43,10 +43,10 @@ const PremiumFeatureGate: React.FC<PremiumFeatureGateProps> = ({
       </View>
       <View style={styles.textSection}>
         <AppText variant="body" weight="bold" style={{ color: colors.text }}>
-          {featureName || 'Premium Feature'}
+          {featureName || t('common.premium_feature')}
         </AppText>
         <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }}>
-          Upgrade to unlock this feature
+          {t('common.upgrade_unlock')}
         </AppText>
       </View>
       <TouchableOpacity
@@ -55,7 +55,7 @@ const PremiumFeatureGate: React.FC<PremiumFeatureGateProps> = ({
         activeOpacity={0.8}
       >
         <AppText variant="caption" weight="bold" style={{ color: '#FFF' }}>
-          Upgrade
+          {t('common.upgrade')}
         </AppText>
         <ArrowRight size={14} color="#FFF" strokeWidth={2.5} />
       </TouchableOpacity>

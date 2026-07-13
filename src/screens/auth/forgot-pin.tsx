@@ -161,7 +161,7 @@ const ForgotPinScreen: React.FC<ForgotPinScreenProps> = ({ onVerified, onBack })
             <Animated.View entering={FadeInDown.delay(600).duration(800)} style={styles.bioSection}>
               <View style={styles.divider}>
                 <View style={[styles.dividerLine, { backgroundColor: G.border }]} />
-                <AppText variant="caption" weight="bold" style={[styles.dividerText, { color: G.fgSecondary }]}>OR</AppText>
+                <AppText variant="caption" weight="bold" style={[styles.dividerText, { color: G.fgSecondary }]}>{t('common.or')}</AppText>
                 <View style={[styles.dividerLine, { backgroundColor: G.border }]} />
               </View>
 

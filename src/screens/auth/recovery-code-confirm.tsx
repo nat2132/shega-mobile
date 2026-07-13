@@ -58,11 +58,11 @@ const RecoveryCodeConfirmScreen: React.FC<RecoveryCodeConfirmScreenProps> = ({ o
 
         <Animated.View entering={FadeInDown.delay(200).duration(800)} style={styles.textNode}>
           <AppText style={[styles.title, { color: G.fg }]} variant="display" weight="bold" numberOfLines={2}>
-            Recovery Code
+            {t('auth.recovery_code')}
           </AppText>
           <AppText style={[styles.subtitle, { color: G.fgSecondary }]} variant="body" weight="medium" numberOfLines={4}>
-            This is your unique recovery code. Save it somewhere safe.{'\n'}
-            If you forget your PIN, this code is the only way to regain access.
+            {t('auth.recovery_code_line1')}{'\n'}
+            {t('auth.recovery_code_line2')}
           </AppText>
         </Animated.View>
 

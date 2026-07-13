@@ -575,7 +575,7 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
                <View style={styles.prefSection}>
                   <View style={styles.prefHeader}>
                     <Globe size={18} color={G.fg} />
-                    <AppText style={[styles.prefTitle, { color: G.fg }]} variant="title" weight="bold" numberOfLines={2}>Linguistic Schema</AppText>
+                    <AppText style={[styles.prefTitle, { color: G.fg }]} variant="title" weight="bold" numberOfLines={2}>{t('setup.linguistic_schema')}</AppText>
                   </View>
                   <View style={styles.langGrid}>
                     {LANGUAGES.map((lang) => (
@@ -599,7 +599,7 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
                <View style={styles.prefSection}>
                   <View style={styles.prefHeader}>
                     <Palette size={18} color={G.fg} />
-                    <AppText style={[styles.prefTitle, { color: G.fg }]} variant="title" weight="bold" numberOfLines={2}>Visual Palette</AppText>
+                    <AppText style={[styles.prefTitle, { color: G.fg }]} variant="title" weight="bold" numberOfLines={2}>{t('setup.visual_palette')}</AppText>
                   </View>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.themeRow}>
                     {THEMES.map((themeOption) => (
@@ -630,13 +630,13 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
                        style={[styles.calBtn, calendarType === 'ethiopian' && { backgroundColor: G.fg }]}
                        onPress={() => setCalendarType('ethiopian')}
                      >
-                        <AppText style={[styles.calBtnText, { color: calendarType === 'ethiopian' ? G.bg : G.fg }]} variant="body" weight="bold" numberOfLines={1}>Ethiopian</AppText>
+                        <AppText style={[styles.calBtnText, { color: calendarType === 'ethiopian' ? G.bg : G.fg }]} variant="body" weight="bold" numberOfLines={1}>{t('common.ethiopian')}</AppText>
                      </TouchableOpacity>
                      <TouchableOpacity 
                        style={[styles.calBtn, calendarType === 'gregorian' && { backgroundColor: G.fg }]}
                        onPress={() => setCalendarType('gregorian')}
                      >
-                        <AppText style={[styles.calBtnText, { color: calendarType === 'gregorian' ? G.bg : G.fg }]} variant="body" weight="bold" numberOfLines={1}>Gregorian</AppText>
+                        <AppText style={[styles.calBtnText, { color: calendarType === 'gregorian' ? G.bg : G.fg }]} variant="body" weight="bold" numberOfLines={1}>{t('common.gregorian')}</AppText>
                      </TouchableOpacity>
                   </View>
                </View>

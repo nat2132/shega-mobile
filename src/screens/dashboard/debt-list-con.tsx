@@ -71,7 +71,7 @@ const DebtManagementFlow = () => {
 
         <TouchableOpacity style={styles.fullWidthButton}>
           <Check size={18} color={G.fg} />
-          <AppText variant="body" weight="bold" shrink={false} style={styles.buttonText}>Mark as Paid</AppText>
+          <AppText variant="body" weight="bold" shrink={false} style={styles.buttonText}>{t('common.mark_paid')}</AppText>
         </TouchableOpacity>
       </View>
       </SafeAreaView>

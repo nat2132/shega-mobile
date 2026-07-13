@@ -288,7 +288,7 @@ const VerifyPinScreen: React.FC<VerifyPinScreenProps> = ({ onSuccess }) => {
           {lockoutTimer > 0 ? (
             <View style={styles.lockoutBadge}>
                <Timer size={14} color={G.error} />
-               <AppText style={[styles.lockoutText, { color: G.error }]} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>PROTOCOL COOL-DOWN ACTIVE</AppText>
+               <AppText style={[styles.lockoutText, { color: G.error }]} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>{t('pin.cool_down_active')}</AppText>
             </View>
           ) : (
             [...Array(pinLength)].map((_, i) => {

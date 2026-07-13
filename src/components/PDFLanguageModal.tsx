@@ -125,7 +125,7 @@ export const PDFLanguageModal: React.FC<PDFLanguageModalProps> = ({ visible, onC
           <View style={styles.calendarSection}>
             <View style={styles.calendarHeader}>
               <Calendar size={16} color={colors.textSecondary} />
-              <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.calendarTitle, { color: colors.textSecondary }]} numberOfLines={1}>Calendar</AppText>
+              <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.calendarTitle, { color: colors.textSecondary }]} numberOfLines={1}>{t('common.calendar')}</AppText>
             </View>
             <View style={styles.calendarRow}>
               {CALENDARS.map((cal) => {

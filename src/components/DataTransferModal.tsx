@@ -609,10 +609,10 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
             {step === 3 && mode === 'export' && format === 'csv' && dataType && (
               <Animated.View entering={FadeInDown.duration(300)} style={s.section}>
                 <View style={[s.reviewCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <AppText variant="body-lg" weight="bold" style={{ color: colors.text, marginBottom: 12 }}>Export Summary</AppText>
+                  <AppText variant="body-lg" weight="bold" style={{ color: colors.text, marginBottom: 12 }}>{t('dt.export_summary')}</AppText>
 
                   <View style={s.reviewRow}>
-                    <AppText variant="body-sm" weight="medium" style={{ color: colors.textSecondary }}>Format</AppText>
+                    <AppText variant="body-sm" weight="medium" style={{ color: colors.textSecondary }}>{t('dt.format_label')}</AppText>
                     <AppText variant="body-sm" weight="bold" style={{ color: colors.text }}>{t('dt.csv_spreadsheet')}</AppText>
                   </View>
                   <View style={s.reviewRow}>

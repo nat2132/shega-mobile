@@ -193,7 +193,7 @@ const SuccessScreen: React.FC<SuccessScreenProps> = ({ onGoToDashboard }) => {
 
       {/* Footer Branding */}
       <Animated.View entering={FadeInUp.delay(600).duration(800)} style={styles.footerBranding}>
-         <AppText style={styles.footerTag} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>ESTABLISHED SECURE SESSION • AES-256</AppText>
+         <AppText style={styles.footerTag} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>{t('auth.secure_session')}</AppText>
       </Animated.View>
     </SafeAreaView>
   );

@@ -248,7 +248,7 @@ export function UniversalSearch({ visible, onClose, onNavigate }: UniversalSearc
                <View style={[styles.handle, { backgroundColor: colors.border }]} />
                <View style={styles.headerTitleRow}>
                  <AppText variant="title" weight="bold" style={{ color: colors.text }}>
-                   {t('sale.global_retrieval') || 'Universal Search'}
+                    {t('sale.global_retrieval')}
                  </AppText>
                  <TouchableOpacity onPress={onClose} style={[styles.closeBtn, { backgroundColor: colors.card, borderColor: colors.border }]} activeOpacity={0.7}>
                    <X size={18} color={colors.textSecondary} />
@@ -266,7 +266,7 @@ export function UniversalSearch({ visible, onClose, onNavigate }: UniversalSearc
                 <TextInput
                   ref={inputRef}
                   style={[styles.input, { color: colors.text }]}
-                  placeholder={t('search.placeholder') || "Search anything..."}
+                   placeholder={t('search.placeholder')}
                   placeholderTextColor={colors.textSecondary}
                   value={query}
                   onChangeText={setQuery}
@@ -296,10 +296,10 @@ export function UniversalSearch({ visible, onClose, onNavigate }: UniversalSearc
                     <Search size={32} color={colors.primary} />
                   </View>
                   <AppText variant="heading" weight="bold" style={{ color: colors.text, marginTop: 16 }}>
-                    {t('search.hint') || 'What are you looking for?'}
+                    {t('search.hint')}
                   </AppText>
                   <AppText variant="body-sm" weight="medium" align="center" style={{ color: colors.textSecondary, marginTop: 6, paddingHorizontal: 40 }}>
-                    Search across items, sales, expenses, contacts, and more.
+                    {t('search.hint_desc')}
                   </AppText>
                 </Animated.View>
               ) : results.length === 0 && query.trim().length > 0 ? (
@@ -308,10 +308,10 @@ export function UniversalSearch({ visible, onClose, onNavigate }: UniversalSearc
                     <AlertTriangle size={32} color={colors.error} />
                   </View>
                   <AppText variant="heading" weight="bold" style={{ color: colors.text, marginTop: 16 }}>
-                    {t('search.no_results') || 'No results found'}
+                    {t('search.no_results')}
                   </AppText>
                   <AppText variant="body-sm" weight="medium" align="center" style={{ color: colors.textSecondary, marginTop: 6, paddingHorizontal: 40 }}>
-                    We couldn't find anything matching "{query}". Try a different keyword.
+                    {t('search.no_results_msg', { query })}
                   </AppText>
                 </Animated.View>
               ) : (
