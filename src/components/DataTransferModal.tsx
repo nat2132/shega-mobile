@@ -277,7 +277,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
       const dest = `${FileSystem.cacheDirectory}${filename}`;
       await FileSystem.writeAsStringAsync(dest, csv, { encoding: FileSystem.EncodingType.UTF8 });
       await Sharing.shareAsync(dest, { mimeType: 'text/csv', dialogTitle: `Export ${spec.name}` });
-      showToast({ title: `${spec.name} Exported`, message: `${data.length} records exported to CSV`, type: 'success' });
+      showToast({ title: t('dt.export_complete'), message: t('dt.records_exported', { count: data.length }), type: 'success' });
       handleClose();
       onSuccess('export');
     } catch (e) {
@@ -298,17 +298,17 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
         if (result.canceled || !result.assets?.length) { setLoading(false); return; }
         const file = result.assets[0];
         if (!file.name.toLowerCase().endsWith('.db')) {
-          showToast('Please select a .db file', 'warning');
+          showToast(t('dt.select_db_prompt'), 'warning');
           setLoading(false);
           return;
         }
         const dbPath = `${FileSystem.documentDirectory}SQLite/shegabe.db`;
         await FileSystem.copyAsync({ from: file.uri, to: dbPath });
-        showToast({ title: 'Database Restored', message: 'Your data has been restored from backup. Please restart the app.', type: 'success' });
+        showToast({ title: t('dt.db_restored'), message: t('dt.db_restored_msg'), type: 'success' });
         handleClose();
         onSuccess('import');
       } catch (e: any) {
-        showToast(e.message || 'Failed to restore database', 'error');
+        showToast(e.message || t('dt.restore_failed'), 'error');
       } finally {
         setLoading(false);
       }
@@ -351,7 +351,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
       revalidate(rows, initialOverrides, spec);
       setStep(4);
     } catch (e) {
-      showToast('Failed to pick file', 'error');
+      showToast(t('dt.pick_file_failed'), 'error');
     } finally {
       setLoading(false);
     }
@@ -388,7 +388,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
       const result = await executeImport(transformed, dataType!);
       setImportResult(result);
       setStep(5);
-      showToast({ title: t('data.import_complete'), message: `${result.imported} records imported`, type: 'success' });
+      showToast({ title: t('data.import_complete'), message: t('dt.records_imported', { count: result.imported }), type: 'success' });
     } catch (e: any) {
       showToast(e.message || t('data.import_failed'), 'error');
     } finally {
@@ -462,7 +462,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
       if (step === 2) return t('dt.select_data');
       return t('dt.review_export');
     } else {
-      if (step === 1) return 'Choose Format';
+      if (step === 1) return t('dt.choose_format');
       if (step === 2) return t('dt.select_data_type');
       if (step === 3) return t('dt.formatting_guide');
       if (step === 4) return t('dt.validate_map');
@@ -497,7 +497,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
           </View>
 
           {/* Step indicator */}
-          <StepIndicator steps={stepLabels} current={step} colors={colors} />
+          <StepIndicator steps={stepLabels} current={step} colors={colors} t={t} />
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.body}>
 
@@ -509,7 +509,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
                     <Database size={26} color={colors.primary} />
                   </View>
                   <View style={{ flex: 1, marginLeft: 16 }}>
-                    <AppText variant="body-lg" weight="bold" style={{ color: colors.text }}>Full Database Backup</AppText>
+                    <AppText variant="body-lg" weight="bold" style={{ color: colors.text }}>{t('dt.full_backup')}</AppText>
                     <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary, marginTop: 4, lineHeight: 18 }}>
                       {mode === 'export' ? t('dt.full_backup_desc') : t('dt.full_backup_desc_import')}
                     </AppText>
@@ -522,7 +522,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
                     <FileSpreadsheet size={26} color={colors.success} />
                   </View>
                   <View style={{ flex: 1, marginLeft: 16 }}>
-                    <AppText variant="body-lg" weight="bold" style={{ color: colors.text }}>Spreadsheet (CSV)</AppText>
+                    <AppText variant="body-lg" weight="bold" style={{ color: colors.text }}>{t('dt.spreadsheet')}</AppText>
                     <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary, marginTop: 4, lineHeight: 18 }}>
                       {mode === 'export' ? t('dt.spreadsheet_desc_export') : t('dt.spreadsheet_desc_import')}
                     </AppText>
@@ -545,10 +545,10 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
                         <Icon size={20} color={iconColor} />
                       </View>
                       <View style={{ flex: 1, marginLeft: 14 }}>
-                        <AppText variant="body" weight="bold" style={{ color: colors.text }}>{DATA_TYPE_LABELS[key]}</AppText>
+                        <AppText variant="body" weight="bold" style={{ color: colors.text }}>{t(DATA_TYPE_LABELS[key])}</AppText>
                         {mode === 'export' && (
                           <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary, marginTop: 2 }}>
-                            {count} {count === 1 ? 'record' : 'records'}
+                            {count} {count === 1 ? t('dt.record') : t('dt.records')}
                           </AppText>
                         )}
                       </View>
@@ -558,7 +558,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
                 })}
 
                 <TouchableOpacity onPress={() => setStep(1)} style={s.backBtn}>
-                  <AppText variant="body" weight="medium" style={{ color: colors.textSecondary }}>Back</AppText>
+                  <AppText variant="body" weight="medium" style={{ color: colors.textSecondary }}>{t('dt.back')}</AppText>
                 </TouchableOpacity>
               </Animated.View>
             )}
@@ -567,18 +567,18 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
             {step === 3 && mode === 'export' && format === 'db' && (
               <Animated.View entering={FadeInDown.duration(300)} style={s.section}>
                 <View style={[s.reviewCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <AppText variant="body-lg" weight="bold" style={{ color: colors.text, marginBottom: 12 }}>Export Summary</AppText>
+                  <AppText variant="body-lg" weight="bold" style={{ color: colors.text, marginBottom: 12 }}>{t('dt.export_summary')}</AppText>
 
                   <View style={s.reviewRow}>
-                    <AppText variant="body-sm" weight="medium" style={{ color: colors.textSecondary }}>Format</AppText>
-                    <AppText variant="body-sm" weight="bold" style={{ color: colors.text }}>SQLite Database (.db)</AppText>
+                    <AppText variant="body-sm" weight="medium" style={{ color: colors.textSecondary }}>{t('dt.format_label')}</AppText>
+                    <AppText variant="body-sm" weight="bold" style={{ color: colors.text }}>{t('dt.sqlite_db')}</AppText>
                   </View>
                   <View style={s.reviewRow}>
-                    <AppText variant="body-sm" weight="medium" style={{ color: colors.textSecondary }}>Scope</AppText>
-                    <AppText variant="body-sm" weight="bold" style={{ color: colors.text }}>All Data</AppText>
+                    <AppText variant="body-sm" weight="medium" style={{ color: colors.textSecondary }}>{t('dt.scope')}</AppText>
+                    <AppText variant="body-sm" weight="bold" style={{ color: colors.text }}>{t('dt.all_data')}</AppText>
                   </View>
                   <View style={[s.reviewRow, { borderBottomWidth: 0 }]}>
-                    <AppText variant="body-sm" weight="medium" style={{ color: colors.textSecondary }}>Total Records</AppText>
+                    <AppText variant="body-sm" weight="medium" style={{ color: colors.textSecondary }}>{t('dt.total_records')}</AppText>
                     <AppText variant="body-sm" weight="bold" style={{ color: colors.primary }}>
                       {Object.values(moduleCounts).reduce((a, b) => a + b, 0)}
                     </AppText>
@@ -588,7 +588,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
                 <View style={[s.infoBox, { backgroundColor: colors.primary + '08', borderColor: colors.primary + '20' }]}>
                   <Info size={18} color={colors.primary} />
                   <AppText variant="caption" weight="medium" style={{ color: colors.primary, flex: 1, lineHeight: 18 }}>
-                    This creates an exact copy of your entire database. You can use it to restore your data on any device running this app.
+                    {t('dt.backup_desc')}
                   </AppText>
                 </View>
 
@@ -596,12 +596,12 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
                   {loading ? <ActivityIndicator color="#FFF" /> : (
                     <>
                       <Share2 size={20} color="#FFF" style={{ marginRight: 8 }} />
-                      <AppText variant="body" weight="bold" style={{ color: '#FFF' }}>Export & Share</AppText>
+                      <AppText variant="body" weight="bold" style={{ color: '#FFF' }}>{t('dt.export_share')}</AppText>
                     </>
                   )}
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => setStep(1)} style={s.backBtn}>
-                  <AppText variant="body" weight="medium" style={{ color: colors.textSecondary }}>Back</AppText>
+                  <AppText variant="body" weight="medium" style={{ color: colors.textSecondary }}>{t('dt.back')}</AppText>
                 </TouchableOpacity>
               </Animated.View>
             )}
@@ -613,25 +613,25 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
 
                   <View style={s.reviewRow}>
                     <AppText variant="body-sm" weight="medium" style={{ color: colors.textSecondary }}>Format</AppText>
-                    <AppText variant="body-sm" weight="bold" style={{ color: colors.text }}>CSV Spreadsheet</AppText>
+                    <AppText variant="body-sm" weight="bold" style={{ color: colors.text }}>{t('dt.csv_spreadsheet')}</AppText>
                   </View>
                   <View style={s.reviewRow}>
-                    <AppText variant="body-sm" weight="medium" style={{ color: colors.textSecondary }}>Data</AppText>
-                    <AppText variant="body-sm" weight="bold" style={{ color: colors.text }}>{DATA_TYPE_LABELS[dataType]}</AppText>
+                    <AppText variant="body-sm" weight="medium" style={{ color: colors.textSecondary }}>{t('dt.data_label')}</AppText>
+                    <AppText variant="body-sm" weight="bold" style={{ color: colors.text }}>{t(DATA_TYPE_LABELS[dataType])}</AppText>
                   </View>
                   <View style={s.reviewRow}>
-                    <AppText variant="body-sm" weight="medium" style={{ color: colors.textSecondary }}>Records</AppText>
+                    <AppText variant="body-sm" weight="medium" style={{ color: colors.textSecondary }}>{t('dt.records_label')}</AppText>
                     <AppText variant="body-sm" weight="bold" style={{ color: colors.primary }}>{moduleCounts[dataType] || 0}</AppText>
                   </View>
                   <View style={[s.reviewRow, { borderBottomWidth: 0 }]}>
-                    <AppText variant="body-sm" weight="medium" style={{ color: colors.textSecondary }}>Columns</AppText>
+                    <AppText variant="body-sm" weight="medium" style={{ color: colors.textSecondary }}>{t('dt.columns_label')}</AppText>
                     <AppText variant="body-sm" weight="bold" style={{ color: colors.text }}>{CSV_SPECS[dataType].columns.length}</AppText>
                   </View>
                 </View>
 
                 {/* Column preview */}
                 <View style={[s.reviewCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <AppText variant="body-sm" weight="bold" style={{ color: colors.text, marginBottom: 10 }}>Included Columns</AppText>
+                  <AppText variant="body-sm" weight="bold" style={{ color: colors.text, marginBottom: 10 }}>{t('dt.included_columns')}</AppText>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                     {CSV_SPECS[dataType].columns.map((col, i) => (
                       <View key={i} style={[s.colChip, {
@@ -649,7 +649,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
                 <View style={[s.infoBox, { backgroundColor: colors.success + '08', borderColor: colors.success + '20' }]}>
                   <FileSpreadsheet size={18} color={colors.success} />
                   <AppText variant="caption" weight="medium" style={{ color: colors.success, flex: 1, lineHeight: 18 }}>
-                    CSV files can be opened in Excel, Google Sheets, or imported back into this app.
+                    {t('dt.csv_hint')}
                   </AppText>
                 </View>
 
@@ -657,12 +657,12 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
                   {loading ? <ActivityIndicator color="#FFF" /> : (
                     <>
                       <Share2 size={20} color="#FFF" style={{ marginRight: 8 }} />
-                      <AppText variant="body" weight="bold" style={{ color: '#FFF' }}>Export {DATA_TYPE_LABELS[dataType]}</AppText>
+                      <AppText variant="body" weight="bold" style={{ color: '#FFF' }}>{t('dt.export_type', { type: t(DATA_TYPE_LABELS[dataType]) })}</AppText>
                     </>
                   )}
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => setStep(2)} style={s.backBtn}>
-                  <AppText variant="body" weight="medium" style={{ color: colors.textSecondary }}>Back</AppText>
+                  <AppText variant="body" weight="medium" style={{ color: colors.textSecondary }}>{t('dt.back')}</AppText>
                 </TouchableOpacity>
               </Animated.View>
             )}
@@ -673,7 +673,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
                 <View style={[s.warningBox, { backgroundColor: colors.error + '10', borderColor: colors.error + '30' }]}>
                   <AlertTriangle size={20} color={colors.error} />
                   <AppText variant="body-sm" weight="medium" style={{ color: colors.error, flex: 1, lineHeight: 18 }}>
-                    Restoring a database backup will replace ALL current data. This action cannot be undone. Consider exporting a backup first.
+                    {t('dt.restore_desc')}
                   </AppText>
                 </View>
 
@@ -681,12 +681,12 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
                   {loading ? <ActivityIndicator color={colors.background} /> : (
                     <>
                       <UploadCloud size={20} color={colors.background} style={{ marginRight: 8 }} />
-                      <AppText variant="body" weight="bold" style={{ color: colors.background }}>Select .db File</AppText>
+                      <AppText variant="body" weight="bold" style={{ color: colors.background }}>{t('dt.select_db_file')}</AppText>
                     </>
                   )}
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => setStep(1)} style={s.backBtn}>
-                  <AppText variant="body" weight="medium" style={{ color: colors.textSecondary }}>Back</AppText>
+                  <AppText variant="body" weight="medium" style={{ color: colors.textSecondary }}>{t('dt.back')}</AppText>
                 </TouchableOpacity>
               </Animated.View>
             )}
@@ -695,9 +695,9 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
             {step === 3 && mode === 'import' && format === 'csv' && dataType && (
               <Animated.View entering={FadeInDown.duration(300)} style={s.section}>
                 <View style={[s.guideCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <AppText variant="body-lg" weight="bold" style={{ color: colors.text, marginBottom: 10 }}>CSV Formatting Guide</AppText>
+                  <AppText variant="body-lg" weight="bold" style={{ color: colors.text, marginBottom: 10 }}>{t('dt.csv_guide_title')}</AppText>
                   <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary, marginBottom: 16, lineHeight: 18 }}>
-                    Format your CSV file according to these rules for a smooth import, or download our template.
+                    {t('dt.csv_guide_desc')}
                   </AppText>
 
                   {[
@@ -714,7 +714,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
 
                   <TouchableOpacity style={[s.templateBtn, { backgroundColor: colors.primary + '10', borderColor: colors.primary + '25' }]} onPress={handleTemplateDownload}>
                     <Download size={18} color={colors.primary} />
-                    <AppText variant="body-sm" weight="bold" style={{ color: colors.primary }}>Download Template</AppText>
+                    <AppText variant="body-sm" weight="bold" style={{ color: colors.primary }}>{t('dt.download_template')}</AppText>
                   </TouchableOpacity>
                 </View>
 
@@ -722,12 +722,12 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
                   {loading ? <ActivityIndicator color={colors.background} /> : (
                     <>
                       <UploadCloud size={20} color={colors.background} style={{ marginRight: 8 }} />
-                      <AppText variant="body" weight="bold" style={{ color: colors.background }}>Select CSV File</AppText>
+                      <AppText variant="body" weight="bold" style={{ color: colors.background }}>{t('dt.select_csv_file')}</AppText>
                     </>
                   )}
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => setStep(2)} style={s.backBtn}>
-                  <AppText variant="body" weight="medium" style={{ color: colors.textSecondary }}>Back</AppText>
+                  <AppText variant="body" weight="medium" style={{ color: colors.textSecondary }}>{t('dt.back')}</AppText>
                 </TouchableOpacity>
               </Animated.View>
             )}
@@ -738,11 +738,11 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
                 {/* Stats */}
                 <View style={s.statsRow}>
                   <View style={[s.statBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }}>Rows</AppText>
+                    <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }}>{t('dt.rows')}</AppText>
                     <AppText variant="heading" weight="bold" style={{ color: colors.text }}>{csvData.length}</AppText>
                   </View>
                   <View style={[s.statBox, { backgroundColor: validationErrors.length > 0 ? colors.error + '10' : colors.success + '10', borderColor: validationErrors.length > 0 ? colors.error + '25' : colors.success + '25' }]}>
-                    <AppText variant="caption" weight="medium" style={{ color: validationErrors.length > 0 ? colors.error : colors.success }}>Errors</AppText>
+                    <AppText variant="caption" weight="medium" style={{ color: validationErrors.length > 0 ? colors.error : colors.success }}>{t('dt.errors')}</AppText>
                     <AppText variant="heading" weight="bold" style={{ color: validationErrors.length > 0 ? colors.error : colors.success }}>{validationErrors.length}</AppText>
                   </View>
                 </View>
@@ -752,7 +752,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
                   <View style={[s.warningBox, { backgroundColor: colors.error + '12', borderColor: colors.error + '30' }]}>
                     <AlertTriangle size={18} color={colors.error} />
                     <View style={{ flex: 1 }}>
-                      <AppText variant="body-sm" weight="bold" style={{ color: colors.error }}>Missing Required Fields</AppText>
+                      <AppText variant="body-sm" weight="bold" style={{ color: colors.error }}>{t('dt.missing_fields')}</AppText>
                       <AppText variant="caption" weight="medium" style={{ color: colors.error, marginTop: 4 }}>{mapping.missingRequired.join(', ')}</AppText>
                     </View>
                   </View>
@@ -760,9 +760,9 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
 
                 {/* Column Mapping */}
                 <View style={[s.reviewCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <AppText variant="body-lg" weight="bold" style={{ color: colors.text, marginBottom: 6 }}>Column Mapping</AppText>
+                  <AppText variant="body-lg" weight="bold" style={{ color: colors.text, marginBottom: 6 }}>{t('dt.column_mapping')}</AppText>
                   <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary, marginBottom: 14 }}>
-                    Auto-mapped from your CSV headers. Tap a chip to change the mapping.
+                    {t('dt.auto_mapped')}
                   </AppText>
 
                   {csvHeaders.map((csvCol, idx) => {
@@ -778,7 +778,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
                               style={[s.mapChip, currentValue === 'IGNORE' && { backgroundColor: colors.border }]}
                               onPress={() => handleMappingChange(csvCol, 'IGNORE')}
                             >
-                              <AppText variant="micro" weight={currentValue === 'IGNORE' ? 'bold' : 'medium'} style={{ color: currentValue === 'IGNORE' ? colors.text : colors.textSecondary }}>Skip</AppText>
+                              <AppText variant="micro" weight={currentValue === 'IGNORE' ? 'bold' : 'medium'} style={{ color: currentValue === 'IGNORE' ? colors.text : colors.textSecondary }}>{t('dt.skip')}</AppText>
                             </TouchableOpacity>
                             {dbFields.map(f => (
                               <TouchableOpacity
@@ -801,13 +801,13 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
                 {/* Validation errors */}
                 {validationErrors.length > 0 && (
                   <View style={[s.reviewCard, { backgroundColor: colors.error + '06', borderColor: colors.error + '18' }]}>
-                    <AppText variant="body-sm" weight="bold" style={{ color: colors.error, marginBottom: 8 }}>Validation Details</AppText>
+                    <AppText variant="body-sm" weight="bold" style={{ color: colors.error, marginBottom: 8 }}>{t('dt.validation_details')}</AppText>
                     <ScrollView style={{ maxHeight: 120 }} showsVerticalScrollIndicator={false}>
                       {validationErrors.slice(0, 20).map((err, idx) => (
-                        <AppText key={idx} variant="caption" weight="medium" style={{ color: colors.error, marginBottom: 4 }}>Row {err.row}: {err.message}</AppText>
+                        <AppText key={idx} variant="caption" weight="medium" style={{ color: colors.error, marginBottom: 4 }}>{t('dt.row_label')} {err.row}: {err.message}</AppText>
                       ))}
                       {validationErrors.length > 20 && (
-                        <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary, marginTop: 4 }}>+ {validationErrors.length - 20} more</AppText>
+                        <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary, marginTop: 4 }}>{t('dt.and_more_errors', { count: validationErrors.length - 20 })}</AppText>
                       )}
                     </ScrollView>
                   </View>
@@ -819,11 +819,11 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
                   disabled={loading || validationErrors.length > 0 || mapping.missingRequired.length > 0}
                 >
                   {loading ? <ActivityIndicator color="#FFF" /> : (
-                    <AppText variant="body" weight="bold" style={{ color: '#FFF' }}>Import {csvData.length} Rows</AppText>
+                    <AppText variant="body" weight="bold" style={{ color: '#FFF' }}>{t('dt.import_rows', { count: csvData.length })}</AppText>
                   )}
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => setStep(3)} style={s.backBtn}>
-                  <AppText variant="body" weight="medium" style={{ color: colors.textSecondary }}>Back</AppText>
+                  <AppText variant="body" weight="medium" style={{ color: colors.textSecondary }}>{t('dt.back')}</AppText>
                 </TouchableOpacity>
               </Animated.View>
             )}
@@ -842,12 +842,12 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
 
                 <View style={s.statsRow}>
                   <View style={[s.statBox, { backgroundColor: colors.success + '10', borderColor: colors.success + '25' }]}>
-                    <AppText variant="caption" weight="medium" style={{ color: colors.success }}>Imported</AppText>
+                    <AppText variant="caption" weight="medium" style={{ color: colors.success }}>{t('dt.imported')}</AppText>
                     <AppText variant="heading" weight="bold" style={{ color: colors.success }}>{importResult.imported}</AppText>
                   </View>
                   {importResult.skipped > 0 && (
                     <View style={[s.statBox, { backgroundColor: colors.warning + '10', borderColor: colors.warning + '25' }]}>
-                      <AppText variant="caption" weight="medium" style={{ color: colors.warning }}>Skipped</AppText>
+                      <AppText variant="caption" weight="medium" style={{ color: colors.warning }}>{t('dt.skipped')}</AppText>
                       <AppText variant="heading" weight="bold" style={{ color: colors.warning }}>{importResult.skipped}</AppText>
                     </View>
                   )}
@@ -855,7 +855,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
 
                 {importResult.errors.length > 0 && (
                   <View style={[s.reviewCard, { backgroundColor: colors.error + '06', borderColor: colors.error + '18', marginTop: 12 }]}>
-                    <AppText variant="body-sm" weight="bold" style={{ color: colors.error, marginBottom: 8 }}>Skipped Row Details</AppText>
+                    <AppText variant="body-sm" weight="bold" style={{ color: colors.error, marginBottom: 8 }}>{t('dt.skipped_details')}</AppText>
                     <ScrollView style={{ maxHeight: 120 }} showsVerticalScrollIndicator={false}>
                       {importResult.errors.slice(0, 15).map((err: string, idx: number) => (
                         <AppText key={idx} variant="caption" weight="medium" style={{ color: colors.error, marginBottom: 4 }}>• {err}</AppText>
@@ -865,7 +865,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
                 )}
 
                 <TouchableOpacity style={[s.primaryBtn, { backgroundColor: colors.text, marginTop: 16 }]} onPress={handleClose}>
-                  <AppText variant="body" weight="bold" style={{ color: colors.background }}>Done</AppText>
+                  <AppText variant="body" weight="bold" style={{ color: colors.background }}>{t('dt.done')}</AppText>
                 </TouchableOpacity>
               </Animated.View>
             )}
