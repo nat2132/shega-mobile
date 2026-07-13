@@ -111,7 +111,7 @@ const LowStockItemsScreen = () => {
                <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.headerSub, { color: G.fgSecondary }]} numberOfLines={1}>{t('dash.inventory_health')}</AppText>
                <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{t('dash.deficit_intel')}</AppText>
             </View>
-            <TutorialButton tutorialId="low-stock-list" screenName="Low Stock Items" />
+            <TutorialButton tutorialId="low-stock-list" screenName={t('screen.low_stock_items')} />
           </View>
           </TutorialTarget>
         }

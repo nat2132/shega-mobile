@@ -57,7 +57,7 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const telebirrNumber = 'XXXXXXX';
-  const telebirrName = 'Shega Business';
+  const telebirrName = t('subscription.telebirr_account_name');
 
   const copyToClipboard = async (text: string) => {
     await Clipboard.setStringAsync(text);
@@ -76,7 +76,7 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
         transactionId: transactionId.trim(),
         businessName: businessName.trim(),
         phoneNumber: phoneNumber.trim(),
-        planName: `${plan.toUpperCase()} - ${durationMonths} Month${durationMonths > 1 ? 's' : ''}`,
+        planName: `${plan.toUpperCase()} - ${durationMonths} ${durationMonths > 1 ? t('subscription.duration_months') : t('subscription.duration_month')}`,
         amount: price,
         paymentDate,
         notes: notes.trim() || undefined,

@@ -91,6 +91,7 @@ import SalesRecordScreen from "./sales-record";
 import SearchScreen from "./search";
 import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
 import { salesHubTutorial, collectPaymentsTutorial } from '@/tutorials/definitions';
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const isDarkBg = (c: typeof LightTheme) => {
   const bg = c.background.toLowerCase();
@@ -119,6 +120,7 @@ const SalesDashboard = () => {
   const { openSidebar } = useSidebar();
   const { userProfile, colors, calendarType, language, timeSystem, t } =
     useSettings();
+  const insets = useSafeAreaInsets();
   const SALES_GLASS = useMemo(() => getSalesGlass(colors), [colors]);
   const { showToast } = useToast();
   const tutorial = useTutorial({ tutorial: salesHubTutorial });
@@ -694,8 +696,8 @@ const SalesDashboard = () => {
         );
       }
       showToast({
-        title: "Invoice Exported",
-        message: "PDF document is ready to share",
+        title: t('toast.invoice_exported'),
+        message: t('toast.invoice_exported_desc'),
         type: "success",
       });
     } catch {
@@ -750,7 +752,7 @@ const SalesDashboard = () => {
         >
           {/* Integrated Header */}
           <TutorialTarget id="sales-header">
-          <View style={styles.integratedHeader}>
+          <View style={[styles.integratedHeader, { paddingTop: insets.top + 10 }]}>
             <View style={{ flex: 1 }}>
               <AppText
                 variant="caption"
@@ -772,7 +774,7 @@ const SalesDashboard = () => {
             </View>
 
             <View style={styles.headerActions}>
-              <TutorialButton tutorialId="sales-hub" screenName="Sales Hub" />
+              <TutorialButton tutorialId="sales-hub" screenName={t('screen.sales_hub')} />
               <View style={[styles.glassIconBtn, { backgroundColor: colors.card, borderColor: SALES_GLASS.border }]}>
                 <TouchableOpacity
                   onPress={() => router.push("/notifications")}
@@ -966,7 +968,7 @@ const SalesDashboard = () => {
             {/* Time Period Selectors */}
             <View style={styles.periodRow}>
               <View
-                style={[styles.periodBar, { backgroundColor: colors.surface }]}
+                style={[styles.periodBar, { backgroundColor: SALES_GLASS.bgCardStrong }]}
               >
                 {[
                   { key: "W", label: t("sales.wk_label") },
@@ -980,6 +982,11 @@ const SalesDashboard = () => {
                       styles.periodTab,
                       activeTab === tab.key && {
                         backgroundColor: colors.primary,
+                        shadowColor: colors.primary,
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.3,
+                        shadowRadius: 8,
+                        elevation: 3,
                       },
                     ]}
                   >
@@ -1010,12 +1017,12 @@ const SalesDashboard = () => {
                   style={[
                     styles.navBtn,
                     {
-                      backgroundColor: colors.card,
-                      borderColor: colors.border,
+                      backgroundColor: SALES_GLASS.bgCard,
+                      borderColor: SALES_GLASS.border,
                     },
                   ]}
                 >
-                  <ChevronLeft size={18} color={colors.textSecondary} />
+                  <ChevronLeft size={18} color={SALES_GLASS.fgSecondary} />
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => setPeriodOffset((prev) => prev + 1)}
@@ -1023,13 +1030,13 @@ const SalesDashboard = () => {
                   style={[
                     styles.navBtn,
                     {
-                      backgroundColor: colors.card,
-                      borderColor: colors.border,
+                      backgroundColor: SALES_GLASS.bgCard,
+                      borderColor: SALES_GLASS.border,
                     },
                     periodOffset >= 0 && { opacity: 0.3 },
                   ]}
                 >
-                  <ChevronRight size={18} color={colors.textSecondary} />
+                  <ChevronRight size={18} color={SALES_GLASS.fgSecondary} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -1053,7 +1060,9 @@ const SalesDashboard = () => {
                         styles.bentoCard,
                         {
                           backgroundColor: SALES_GLASS.bgCard,
-                          borderColor: SALES_GLASS.border,
+                          borderColor: kpi.color + "30",
+                          borderTopWidth: 4,
+                          borderTopColor: kpi.color,
                         },
                       ]}
                     >
@@ -1120,64 +1129,74 @@ const SalesDashboard = () => {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.topItemsScroll}
               >
-                {topItems.map((item, idx) => (
-                  <View
-                    key={idx}
-                    style={[
-                      styles.topItemCard,
-                      {
-                        backgroundColor: SALES_GLASS.bgCard,
-                        borderColor: SALES_GLASS.border,
-                      },
-                    ]}
-                  >
+                {topItems.map((item, idx) => {
+                  const rankColor =
+                    idx === 0 ? '#FFD700' :
+                    idx === 1 ? '#C0C0C0' :
+                    idx === 2 ? '#CD7F32' :
+                    colors.border;
+                  const rankTextColor =
+                    idx < 3 ? '#000000' : colors.textSecondary;
+                  return (
                     <View
+                      key={idx}
                       style={[
-                        styles.rankBadge,
-                        { backgroundColor: '#FFFFFF' },
+                        styles.topItemCard,
+                        {
+                          backgroundColor: SALES_GLASS.bgCard,
+                          borderColor: idx < 3 ? rankColor + "60" : SALES_GLASS.border,
+                          borderWidth: idx < 3 ? 1.5 : 1,
+                        },
                       ]}
                     >
+                      <View
+                        style={[
+                          styles.rankBadge,
+                          { backgroundColor: rankColor },
+                        ]}
+                      >
+                        <AppNumber
+                          value={idx + 1}
+                          size="caption"
+                          weight="extrabold"
+                          color={rankTextColor}
+                          style={styles.rankText}
+                        />
+                      </View>
+                      <AppText
+                        variant="body"
+                        weight="bold"
+                        numberOfLines={1}
+                        style={[styles.topItemName, { color: SALES_GLASS.fg }]}
+                      >
+                        {item.name}
+                      </AppText>
                       <AppNumber
-                        value={idx + 1}
-                        size="caption"
-                        weight="extrabold"
-                        color={SALES_GLASS.bg}
-                        style={styles.rankText}
+                        value={item.totalRevenue}
+                        size="body"
+                        prefix={"ETB "}
+                        color={SALES_GLASS.fgSecondary}
+                        style={styles.topItemRevenue}
                       />
+                      <AppText
+                        variant="caption"
+                        weight="medium"
+                        style={[
+                          styles.topItemVolume,
+                          { color: SALES_GLASS.muted },
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {t("common.item_sold_count", {
+                          count: item.totalQty,
+                          unit: t(
+                            "form." + (item.baseUnit || "pieces").toLowerCase(),
+                          ),
+                        })}
+                      </AppText>
                     </View>
-                    <AppText
-                      variant="body"
-                      weight="bold"
-                      numberOfLines={1}
-                      style={[styles.topItemName, { color: SALES_GLASS.fg }]}
-                    >
-                      {item.name}
-                    </AppText>
-                    <AppNumber
-                      value={item.totalRevenue}
-                      size="body"
-                      prefix={"ETB "}
-                      color={SALES_GLASS.fgSecondary}
-                      style={styles.topItemRevenue}
-                    />
-                    <AppText
-                      variant="caption"
-                      weight="medium"
-                      style={[
-                        styles.topItemVolume,
-                        { color: SALES_GLASS.muted },
-                      ]}
-                      numberOfLines={2}
-                    >
-                      {t("common.item_sold_count", {
-                        count: item.totalQty,
-                        unit: t(
-                          "form." + (item.baseUnit || "pieces").toLowerCase(),
-                        ),
-                      })}
-                     </AppText>
-                   </View>
-                ))}
+                  );
+                })}
               </ScrollView>
             </View>
             </TutorialTarget>
@@ -1273,7 +1292,7 @@ const SalesDashboard = () => {
       </Animated.View>
 
       {/* Expanding Smart FAB */}
-      <View style={styles.dockedBarWrapper}>
+      <View style={[styles.dockedBarWrapper, { bottom: 100 + (insets.bottom > 0 ? insets.bottom : 10) }]}>
         <Animated.View
           style={[
             expandStyle,
@@ -1788,7 +1807,7 @@ const SalesDashboard = () => {
                 >
                   {t("sales.collect_payments")}
                 </AppText>
-                <TutorialButton tutorialId="collect-payments" screenName="Collect Payments" />
+                <TutorialButton tutorialId="collect-payments" screenName={t('screen.collect_payments')} />
                 <View
                   style={{ flexDirection: "row", gap: 8, alignItems: "center" }}
                 >
@@ -3516,33 +3535,40 @@ const SalesDashboard = () => {
     </Modal>
 
       {showSaleSuccess && completedSaleData && (
-        <SaleSuccessModal
-          saleData={completedSaleData}
-          onClose={() => setShowSaleSuccess(false)}
-          onPrint={() =>
-            showToast(
-              t("sales.receipt_ready") || "Receipt available in sale details",
-              "info",
-            )
-          }
-          onShare={() =>
-            showToast(
-              t("sales.receipt_ready") || "Receipt available in sale details",
-              "info",
-            )
-          }
-          onViewDetails={() => {
-            const batchId = completedSaleData.transactionId;
-            const sales = getRecentSales(1);
-            const found = sales.find((s: any) => s.batchId === batchId);
-            if (found) {
-              setSelectedSale(found);
-              setShowSaleDetails(true);
-            } else {
-              showToast("Sale not found", "error");
+        <Modal
+          visible={showSaleSuccess}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowSaleSuccess(false)}
+        >
+          <SaleSuccessModal
+            saleData={completedSaleData}
+            onClose={() => setShowSaleSuccess(false)}
+            onPrint={() =>
+              showToast(
+                t("sales.receipt_ready") || "Receipt available in sale details",
+                "info",
+              )
             }
-          }}
-        />
+            onShare={() =>
+              showToast(
+                t("sales.receipt_ready") || "Receipt available in sale details",
+                "info",
+              )
+            }
+            onViewDetails={() => {
+              const batchId = completedSaleData.transactionId;
+              const sales = getRecentSales(1);
+              const found = sales.find((s: any) => s.batchId === batchId);
+              if (found) {
+                setSelectedSale(found);
+                setShowSaleDetails(true);
+              } else {
+                showToast("Sale not found", "error");
+              }
+            }}
+          />
+        </Modal>
       )}
     </View>
   );
@@ -4388,7 +4414,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(0,0,0,0.6)",
   },
   bottomSheetContainer: {

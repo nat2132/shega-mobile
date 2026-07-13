@@ -131,7 +131,7 @@ const InventoryRecordScreen = () => {
             <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.headerSub, { color: G.fgSecondary }]} numberOfLines={1}>{t('inventory.header')}</AppText>
             <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{t('inv.asset_vault')}</AppText>
           </View>
-          <TutorialButton tutorialId="inventory-records" screenName="Inventory Records" />
+          <TutorialButton tutorialId="inventory-records" screenName={t('screen.inventory_records')} />
         </View>
 
         {/* Summary + Warehouse Selector */}

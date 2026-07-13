@@ -34,6 +34,7 @@ import { Fonts } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 const { width, height } = Dimensions.get('window');
 
 // Premium Confetti Particle
@@ -95,7 +96,7 @@ interface SaleSuccessModalProps {
 }
 
 const SaleSuccessModal: React.FC<SaleSuccessModalProps> = ({ saleData, onClose, onPrint, onShare, onViewDetails }) => {
-  const { colors, t, theme } = useSettings();
+  const { colors, t } = useSettings();
   const insets = useSafeAreaInsets();
   const checkScale = useSharedValue(0);
   const ringScale = useSharedValue(0);
@@ -126,7 +127,8 @@ const SaleSuccessModal: React.FC<SaleSuccessModalProps> = ({ saleData, onClose, 
   }));
 
   return (
-    <Pressable style={styles.overlay} onPress={onClose}>
+    <View style={styles.overlay}>
+      {/* Backdrop */}
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
         <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.50)' }]} />
       </Pressable>
@@ -138,145 +140,164 @@ const SaleSuccessModal: React.FC<SaleSuccessModalProps> = ({ saleData, onClose, 
         ))}
       </View>
 
-      <Pressable 
-        style={[
-          styles.container, 
-          { 
-            maxHeight: height - insets.top - insets.bottom - 20,
-            paddingTop: insets.top + 10,
-            paddingBottom: insets.bottom + 10,
-          }
-        ]} 
-        onPress={(e) => e.stopPropagation()}
+      {/* Scrollable Modal Container */}
+      <ScrollView 
+        style={StyleSheet.absoluteFill}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
       >
-        {/* Close button */}
-        <TouchableOpacity
-          style={[styles.closeBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+        <Pressable 
+          style={[
+            styles.scrollContentInner,
+            {
+              paddingTop: Math.max(insets.top, 20),
+              paddingBottom: Math.max(insets.bottom, 20),
+            }
+          ]}
           onPress={onClose}
         >
-          <X size={20} color={colors.text} />
-        </TouchableOpacity>
-
-        {/* Animated Check Container with Radial Glow */}
-        <View style={styles.iconContainer}>
-          <Animated.View style={[styles.glowAura, { backgroundColor: colors.success }, animatedGlowStyle]} />
-          <Animated.View style={[styles.successRing, { borderColor: colors.success + '40' }, animatedRingStyle]} />
-          <Animated.View style={[styles.successRingInner, { borderColor: colors.success }, animatedRingStyle]} />
-          <Animated.View style={[styles.iconCircle, { backgroundColor: colors.success }, animatedCheckStyle]}>
-            <Check size={48} color={colors.background} strokeWidth={3} />
-          </Animated.View>
-        </View>
-
-        <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Animated.View entering={FadeInDown.delay(700)} style={styles.content}>
-  <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.title, { color: colors.text, opacity: 0.6 }]} numberOfLines={1}>{t('common.success').toUpperCase()}</AppText>
-  <AppText variant="heading" weight="bold" style={[styles.subtitle, { color: colors.text }]} numberOfLines={2}>
-            {saleData.paymentStatus === 'Debt' ? (t('sale.debt_credit') || 'Credit Sale') : (t('sales.sale_success') || 'Sale Completed')}
-          </AppText>
-
-          {/* Premium Receipt Card */}
-          <Animated.View entering={FadeInDown.delay(900)} style={[styles.receiptCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-             <View style={styles.receiptTop}>
-                <View>
-                   <AppText variant="caption" weight="medium" style={[styles.receiptLabel, { color: colors.textSecondary }]} numberOfLines={2}>{t('sale.total_settlement')}</AppText>
-                   <AppNumber value={saleData.totalPrice} size="display" prefix="ETB " decimals={2} />
-                </View>
-                 <View style={[styles.methodBadge, { backgroundColor: colors.text + '08' }]}>
-                    {saleData.paymentMethod === 'Cash' ? (
-                      <Banknote size={16} color={colors.text} />
-                    ) : (
-                      <CreditCard size={16} color={colors.text} />
-                    )}
-                    <AppText variant="caption" weight="bold" transform="uppercase" shrink={false} style={[styles.methodText, { color: colors.text }]} numberOfLines={2}>{saleData.paymentMethod.toUpperCase()}</AppText>
-                 </View>
-             </View>
-
-             <View style={[styles.receiptDivider, { backgroundColor: colors.border }]} />
-
-             <View style={styles.receiptBody}>
-                <View style={styles.detailRow}>
-                   <View style={[styles.detailIconBox, { backgroundColor: colors.primary + '10' }]}>
-                      <ShoppingBag size={14} color={colors.primary} />
-                   </View>
-                <AppText variant="caption" weight="medium" style={[styles.detailText, { color: colors.textSecondary }]} numberOfLines={2}>{t('common.items')}</AppText>
-                <AppNumber value={saleData.itemCount} size="body" />
-                </View>
-                <View style={styles.detailRow}>
-<View style={[styles.detailIconBox, { backgroundColor: (saleData.paymentStatus === 'Paid' ? colors.success : colors.warning) + '10' }]}>
-                       <TrendingUp size={14} color={saleData.paymentStatus === 'Paid' ? colors.success : colors.warning} />
-                   </View>
-                <AppText variant="caption" weight="medium" style={[styles.detailText, { color: colors.textSecondary }]} numberOfLines={2}>{t('expense.status')}</AppText>
-                <AppText variant="body" weight="bold" shrink={false} style={[styles.detailValue, { color: saleData.paymentStatus === 'Paid' ? colors.success : colors.warning }]} numberOfLines={2}>
-                     {(saleData.paymentStatus === 'Paid' ? t('sale.settled_full') : t('sale.debt_credit')).toUpperCase()}
-                   </AppText>
-                </View>
-                {saleData.customerName && (
-                  <View style={styles.detailRow}>
-                     <View style={[styles.detailIconBox, { backgroundColor: colors.text + '10' }]}>
-                        <Navigation size={14} color={colors.text} />
-                     </View>
-                <AppText variant="caption" weight="medium" style={[styles.detailText, { color: colors.textSecondary }]} numberOfLines={2}>{t('sales.customer_name')}</AppText>
-                <AppText variant="body" weight="bold" style={[styles.detailValue, { color: colors.text }]} numberOfLines={2}>{saleData.customerName}</AppText>
-                  </View>
-                )}
-             </View>
-          </Animated.View>
-
-          {/* Action Row */}
-          <View style={styles.actionRow}>
-              <TouchableOpacity
-                style={[styles.subBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
-                activeOpacity={0.7}
-                onPress={() => { onPrint?.(); onClose(); }}
-              >
-                 <Printer size={20} color={colors.text} />
-                 <AppText variant="caption" weight="bold" shrink={false} style={[styles.subBtnText, { color: colors.text }]} numberOfLines={1}>{t('common.print')}</AppText>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.subBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
-                activeOpacity={0.7}
-                onPress={() => { onShare?.(); onClose(); }}
-              >
-                 <Share2 size={20} color={colors.text} />
-                 <AppText variant="caption" weight="bold" shrink={false} style={[styles.subBtnText, { color: colors.text }]} numberOfLines={1}>{t('common.share')}</AppText>
-              </TouchableOpacity>
-          </View>
-
-          {/* Bottom actions */}
-          <View style={{ width: '100%', gap: 12 }}>
-            {onViewDetails && (
-              <TouchableOpacity
-                style={[styles.subBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
-                activeOpacity={0.7}
-                onPress={() => { onViewDetails(); onClose(); }}
-              >
-                <AppText variant="caption" weight="bold" style={[styles.subBtnText, { color: colors.text }]} numberOfLines={1}>{t('sales.view_details') || 'View Details'}</AppText>
-              </TouchableOpacity>
-            )}
+          <Pressable 
+            style={styles.container} 
+            onPress={(e) => e.stopPropagation()}
+          >
+            {/* Close button */}
             <TouchableOpacity
-              style={[styles.finishBtn, { backgroundColor: colors.text }]}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                onClose();
-              }}
-              activeOpacity={0.9}
+              style={[styles.closeBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+              onPress={onClose}
             >
-              <AppText variant="caption" weight="bold" transform="uppercase" shrink={false} style={[styles.finishBtnText, { color: colors.background }]} numberOfLines={1}>{t('common.done').toUpperCase()}</AppText>
-              <ChevronRight size={20} color={colors.background} />
+              <X size={20} color={colors.text} />
             </TouchableOpacity>
-          </View>
-        </Animated.View>
-        </ScrollView>
-      </Pressable>
-    </Pressable>
+
+            {/* Animated Check Container with Radial Glow */}
+            <View style={styles.iconContainer}>
+              <Animated.View style={[styles.glowAura, { backgroundColor: colors.success }, animatedGlowStyle]} />
+              <Animated.View style={[styles.successRing, { borderColor: colors.success + '40' }, animatedRingStyle]} />
+              <Animated.View style={[styles.successRingInner, { borderColor: colors.success }, animatedRingStyle]} />
+              <Animated.View style={[styles.iconCircle, { backgroundColor: colors.success }, animatedCheckStyle]}>
+                <Check size={48} color={colors.background} strokeWidth={3} />
+              </Animated.View>
+            </View>
+
+            <Animated.View entering={FadeInDown.delay(700)} style={styles.content}>
+              <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.title, { color: colors.text, opacity: 0.6 }]} numberOfLines={1}>{t('common.success').toUpperCase()}</AppText>
+              <AppText variant="heading" weight="bold" style={[styles.subtitle, { color: colors.text }]} numberOfLines={2}>
+                {saleData.paymentStatus === 'Debt' ? (t('sale.debt_credit') || 'Credit Sale') : (t('sales.sale_success') || 'Sale Completed')}
+              </AppText>
+
+              {/* Premium Receipt Card */}
+              <Animated.View entering={FadeInDown.delay(900)} style={[styles.receiptCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                 <View style={styles.receiptTop}>
+                    <View>
+                       <AppText variant="caption" weight="medium" style={[styles.receiptLabel, { color: colors.textSecondary }]} numberOfLines={2}>{t('sale.total_settlement')}</AppText>
+                       <AppNumber value={saleData.totalPrice} size="display" prefix="ETB " decimals={2} />
+                    </View>
+                     <View style={[styles.methodBadge, { backgroundColor: colors.text + '08' }]}>
+                        {saleData.paymentMethod === 'Cash' ? (
+                          <Banknote size={16} color={colors.text} />
+                        ) : (
+                          <CreditCard size={16} color={colors.text} />
+                        )}
+                        <AppText variant="caption" weight="bold" transform="uppercase" shrink={false} style={[styles.methodText, { color: colors.text }]} numberOfLines={2}>{saleData.paymentMethod.toUpperCase()}</AppText>
+                     </View>
+                 </View>
+
+                 <View style={[styles.receiptDivider, { backgroundColor: colors.border }]} />
+
+                 <View style={styles.receiptBody}>
+                    <View style={styles.detailRow}>
+                       <View style={[styles.detailIconBox, { backgroundColor: colors.primary + '10' }]}>
+                          <ShoppingBag size={14} color={colors.primary} />
+                       </View>
+                    <AppText variant="caption" weight="medium" style={[styles.detailText, { color: colors.textSecondary }]} numberOfLines={2}>{t('common.items')}</AppText>
+                    <AppNumber value={saleData.itemCount} size="body" />
+                    </View>
+                    <View style={styles.detailRow}>
+                       <View style={[styles.detailIconBox, { backgroundColor: (saleData.paymentStatus === 'Paid' ? colors.success : colors.warning) + '10' }]}>
+                           <TrendingUp size={14} color={saleData.paymentStatus === 'Paid' ? colors.success : colors.warning} />
+                       </View>
+                    <AppText variant="caption" weight="medium" style={[styles.detailText, { color: colors.textSecondary }]} numberOfLines={2}>{t('expense.status')}</AppText>
+                    <AppText variant="body" weight="bold" shrink={false} style={[styles.detailValue, { color: saleData.paymentStatus === 'Paid' ? colors.success : colors.warning }]} numberOfLines={2}>
+                         {(saleData.paymentStatus === 'Paid' ? t('sale.settled_full') : t('sale.debt_credit')).toUpperCase()}
+                       </AppText>
+                    </View>
+                    {saleData.customerName && (
+                      <View style={styles.detailRow}>
+                         <View style={[styles.detailIconBox, { backgroundColor: colors.text + '10' }]}>
+                            <Navigation size={14} color={colors.text} />
+                         </View>
+                      <AppText variant="caption" weight="medium" style={[styles.detailText, { color: colors.textSecondary }]} numberOfLines={2}>{t('sales.customer_name')}</AppText>
+                      <AppText variant="body" weight="bold" style={[styles.detailValue, { color: colors.text }]} numberOfLines={2}>{saleData.customerName}</AppText>
+                      </View>
+                    )}
+                 </View>
+              </Animated.View>
+
+              {/* Action Row */}
+              <View style={styles.actionRow}>
+                  <TouchableOpacity
+                    style={[styles.subBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    activeOpacity={0.7}
+                    onPress={() => { onPrint?.(); onClose(); }}
+                  >
+                     <Printer size={20} color={colors.text} />
+                     <AppText variant="caption" weight="bold" shrink={false} style={[styles.subBtnText, { color: colors.text }]} numberOfLines={1}>{t('common.print')}</AppText>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.subBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    activeOpacity={0.7}
+                    onPress={() => { onShare?.(); onClose(); }}
+                  >
+                     <Share2 size={20} color={colors.text} />
+                     <AppText variant="caption" weight="bold" shrink={false} style={[styles.subBtnText, { color: colors.text }]} numberOfLines={1}>{t('common.share')}</AppText>
+                  </TouchableOpacity>
+              </View>
+
+              {/* Bottom actions */}
+              <View style={{ width: '100%', gap: 12 }}>
+                {onViewDetails && (
+                  <TouchableOpacity
+                    style={[styles.subBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    activeOpacity={0.7}
+                    onPress={() => { onViewDetails(); onClose(); }}
+                  >
+                    <AppText variant="caption" weight="bold" style={[styles.subBtnText, { color: colors.text }]} numberOfLines={1}>{t('sales.view_details') || 'View Details'}</AppText>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={[styles.finishBtn, { backgroundColor: colors.text }]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    onClose();
+                  }}
+                  activeOpacity={0.9}
+                >
+                  <AppText variant="caption" weight="bold" transform="uppercase" shrink={false} style={[styles.finishBtnText, { color: colors.background }]} numberOfLines={1}>{t('common.done').toUpperCase()}</AppText>
+                  <ChevronRight size={20} color={colors.background} />
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
+          </Pressable>
+        </Pressable>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   overlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  scrollContentInner: {
+    flexGrow: 1,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
   },
   container: {
     width: width * 0.9,
@@ -293,10 +314,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
-  },
-  scrollContent: {
-    width: '100%',
-    flex: 1,
   },
   iconContainer: {
     width: 160,

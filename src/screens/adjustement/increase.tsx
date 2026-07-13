@@ -422,7 +422,7 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
             </TouchableOpacity>
             </TutorialTarget>
             </TutorialTarget>
-            <TutorialButton tutorialId={mode === 'increase' ? 'price-increase' : 'price-decrease'} screenName={mode === 'increase' ? 'Price Increase' : 'Price Decrease'} />
+            <TutorialButton tutorialId={mode === 'increase' ? 'price-increase' : 'price-decrease'} screenName={mode === 'increase' ? t('screen.price_increase') : t('screen.price_decrease')} />
           </>
         )}
       </Animated.View>

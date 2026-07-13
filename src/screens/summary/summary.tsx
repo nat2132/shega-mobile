@@ -283,7 +283,7 @@ const SummaryScreen = () => {
           </View>
           
           <View style={styles.headerActions}>
-            <TutorialButton tutorialId="summary" screenName="Summary" />
+            <TutorialButton tutorialId="summary" screenName={t('screen.summary')} />
             <TouchableOpacity 
               onPress={() => setShowDateSelector(true)}
               style={[styles.headerDateBadge, { 

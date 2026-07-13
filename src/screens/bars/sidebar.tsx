@@ -110,10 +110,10 @@ const MyStoreMenu: React.FC<SidebarProps> = ({ onClose }) => {
                   <Crown size={18} color={gold} />
                   <View style={{ flex: 1 }}>
                     <AppText variant="body-sm" weight="bold" style={{ color: gold }}>
-                      Premium Trial
+                      {t('subscription.trial')}
                     </AppText>
                     <AppText variant="micro" weight="medium" style={{ color: gold + 'CC' }}>
-                      {trialDaysRemaining} day{trialDaysRemaining !== 1 ? 's' : ''} left
+                      {t('subscription.trial_banner', { days: String(trialDaysRemaining) })}
                     </AppText>
                   </View>
                   <ChevronRight size={16} color={gold} />
@@ -162,7 +162,7 @@ const MyStoreMenu: React.FC<SidebarProps> = ({ onClose }) => {
               />
               <MenuItem 
                 icon={Crown} 
-                label="Subscription" 
+                label={t('subscription.manage')} 
                 onPress={() => handleRoute('/subscription/manage')} 
                 delay={460}
               />
@@ -181,7 +181,7 @@ const MyStoreMenu: React.FC<SidebarProps> = ({ onClose }) => {
       {/* Footer Meta */}
       <View style={styles.footerNode}>
          <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.footerText, { color: G.border }]} numberOfLines={1}>
-           ORCHESTRATION v4.2.0 • {theme.toUpperCase()}
+            {t('common.app_name')} {(theme ?? '').toUpperCase()}
          </AppText>
       </View>
     </SafeAreaView>

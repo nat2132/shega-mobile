@@ -332,7 +332,7 @@ const loadRecentItems = () => {
             </View>
             
             <View style={styles.headerActions}>
-              <TutorialButton tutorialId="inventory" screenName="Inventory" />
+              <TutorialButton tutorialId="inventory" screenName={t('screen.inventory')} />
               <TouchableOpacity 
                 onPress={() => router.push('/notifications')} 
                 style={[styles.headerIconBtn, { backgroundColor: G.bgCard, borderColor: G.border }]}

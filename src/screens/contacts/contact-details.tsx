@@ -94,7 +94,7 @@ export default function ContactDetails({ contact, onClose, onEdit, onDeleted }: 
           <X size={22} color={G.fg} />
         </TouchableOpacity>
         <AppText variant="title" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{t('contacts.details_title')}</AppText>
-        <TutorialButton tutorialId="contact-details" screenName="Contact Details" />
+        <TutorialButton tutorialId="contact-details" screenName={t('screen.contact_details')} />
         <TouchableOpacity onPress={onEdit} style={[styles.headerBtn, { backgroundColor: colors.primary }]}>
           <Edit2 size={18} color="#FFF" />
         </TouchableOpacity>

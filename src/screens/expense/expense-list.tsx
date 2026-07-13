@@ -98,7 +98,7 @@ const BillsAndTransactions = ({ filterCategory }: { filterCategory?: string }) =
     try {
       await exportToCSV(filteredData, 'Capital_Ledger_Export', 'expenses');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showToast({ title: 'Ledger Exported', message: 'Capital ledger saved to CSV', type: 'success' });
+      showToast({ title: t('toast.ledger_exported'), message: t('toast.ledger_exported_desc'), type: 'success' });
     } catch (e: any) {
       showToast(e.message || 'Export failed', 'error');
     }
@@ -107,7 +107,7 @@ const BillsAndTransactions = ({ filterCategory }: { filterCategory?: string }) =
   const handleTemplate = async () => {
     const { downloadCSVTemplate } = await import('@/utils/csv-utils');
     await downloadCSVTemplate('expenses');
-    showToast({ title: 'Template Ready', message: 'Expense CSV template downloaded', type: 'success' });
+    showToast({ title: t('toast.template_ready'), message: t('toast.template_ready_desc'), type: 'success' });
   };
 
   const handleImport = async () => {
@@ -170,7 +170,7 @@ const BillsAndTransactions = ({ filterCategory }: { filterCategory?: string }) =
           <TouchableOpacity onPress={handleDownload} style={[styles.downloadBtn, { backgroundColor: G.fg }]}>
             <Download size={18} color={G.bg} />
           </TouchableOpacity>
-          <TutorialButton tutorialId="expense-list" screenName="Expense Records" />
+          <TutorialButton tutorialId="expense-list" screenName={t('screen.expense_records')} />
         </View>
       </View>
       </TutorialTarget>

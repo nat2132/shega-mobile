@@ -413,7 +413,7 @@ const SettingsScreen = () => {
             <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{t('settings.configuration')}</AppText>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <TutorialButton tutorialId="settings" screenName="Settings" />
+            <TutorialButton tutorialId="settings" screenName={t('screen.settings')} />
             <View style={[styles.headerIconBox, { backgroundColor: G.bgCard, borderColor: G.border }]}>
               <Shield size={24} color={G.fg} />
             </View>

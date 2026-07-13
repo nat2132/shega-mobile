@@ -291,7 +291,7 @@ const PendingSales: React.FC<PendingSalesProps> = ({
           </AppText>
         </View>
         </View>
-        <TutorialButton tutorialId="pending-sales" screenName="Pending Sales" />
+        <TutorialButton tutorialId="pending-sales" screenName={t('screen.pending_sales')} />
       </View>
       </TutorialTarget>
 

@@ -144,7 +144,7 @@ const SubscriptionPlansScreen: React.FC<SubscriptionPlansProps> = ({ onSelectPla
         <View style={styles.pricingRow}>
           {plan.prices.map((p, idx) => (
             <Animated.View
-              key={p.label}
+              key={p.labelKey}
               entering={FadeInDown.delay(200 + idx * 100).duration(600)}
               style={{ flex: 1 }}
             >

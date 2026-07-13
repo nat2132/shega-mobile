@@ -152,7 +152,7 @@ const SubscriptionWelcomeScreen: React.FC<SubscriptionWelcomeProps> = ({ onConti
           </LinearGradient>
         </TouchableOpacity>
         <AppText variant="caption" weight="medium" align="center" style={[styles.footerText, { color: colors.textSecondary }]}>
-          No charges. Cancel anytime during trial.
+          {t('subscription.footer_no_charges')}
         </AppText>
       </Animated.View>
     </View>

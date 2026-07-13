@@ -86,7 +86,7 @@ const OrderDetailScreen = () => {
 
     if (result.success) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showToast({ title: 'Order Converted', message: t('order.converted_sale'), type: 'success' });
+      showToast({ title: t('toast.order_converted'), message: t('order.converted_sale'), type: 'success' });
       loadOrder();
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -115,7 +115,7 @@ const OrderDetailScreen = () => {
 
     if (result.success) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showToast({ title: 'Order Converted', message: t('order.converted_debt'), type: 'success' });
+      showToast({ title: t('toast.order_converted'), message: t('order.converted_debt'), type: 'success' });
       loadOrder();
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -146,7 +146,7 @@ const OrderDetailScreen = () => {
     if (result.success) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       playBad();
-      showToast({ title: 'Order Cancelled', message: t('order.cancelled_msg'), type: 'info' });
+      showToast({ title: t('toast.order_cancelled'), message: t('order.cancelled_msg'), type: 'info' });
       loadOrder();
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -208,7 +208,7 @@ const OrderDetailScreen = () => {
         >
           <ChevronLeft size={20} color={ORD_GLASS.fg} />
         </TouchableOpacity>
-        <TutorialButton tutorialId="order-detail" screenName="Order Details" />
+        <TutorialButton tutorialId="order-detail" screenName={t('screen.order_details')} />
         <View style={{ flex: 1 }}>
           <AppText
             variant="micro"

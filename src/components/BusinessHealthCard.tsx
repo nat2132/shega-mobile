@@ -69,7 +69,7 @@ export function BusinessHealthCard({ health, loading, onRefresh }: BusinessHealt
         <View style={styles.body}>
           <View style={[styles.scoreRing, { borderColor: ratingConf.color(colors) + '30' }]}>
             <AppText variant="heading-lg" weight="bold" style={{ color: ratingConf.color(colors) }}>
-              {health.score}%
+              {health.score}{t('common.percent')}
             </AppText>
           </View>
 
@@ -116,7 +116,7 @@ export function BusinessHealthCard({ health, loading, onRefresh }: BusinessHealt
 
               <View style={[styles.bigScore, { borderColor: ratingConf.color(colors) + '30' }]}>
                 <AppText variant="hero" weight="black" style={{ color: ratingConf.color(colors) }}>
-                  {health.score}%
+                  {health.score}{t('common.percent')}
                 </AppText>
                 <AppText variant="body" weight="bold" style={{ color: ratingConf.color(colors), marginTop: 4 }}>
                   {t(`health.${health.rating}`)}

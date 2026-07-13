@@ -1,20 +1,25 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, TouchableOpacity, StyleSheet, Dimensions, Platform, LayoutChangeEvent } from 'react-native';
+import React, { useEffect, useCallback, useRef } from 'react';
+import { View, TouchableOpacity, StyleSheet, Platform, LayoutChangeEvent } from 'react-native';
 type BottomTabBarProps = {
   state: { index: number; routes: any[] };
   descriptors: Record<string, any>;
   navigation: any;
 };
-import Animated, { SharedValue, useAnimatedStyle, withSpring, useSharedValue } from 'react-native-reanimated';
+import Animated, {
+  useAnimatedStyle,
+  withSpring,
+  withSequence,
+  useSharedValue,
+} from 'react-native-reanimated';
 import { Home, Store, Warehouse, Settings as SettingsIcon } from 'lucide-react-native';
 import { useSettings } from '@/context/SettingsContext';
 import { AppText } from '@/components/ui';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const TAB_BAR_PADDING = 20;
 const TAB_BAR_INNER_PADDING = 8;
 const TAB_HEIGHT = 72;
 const PILL_HEIGHT = 44;
+const SPRING_CFG = { damping: 20, stiffness: 260, mass: 0.8 };
 
 type TabBarItemProps = {
   state: any;
@@ -22,8 +27,6 @@ type TabBarItemProps = {
   navigation: any;
   route: any;
   index: number;
-  activePillX: SharedValue<number>;
-  activePillWidth: SharedValue<number>;
   onTabLayout: (index: number, x: number, w: number) => void;
 };
 
@@ -33,8 +36,6 @@ const TabBarItem: React.FC<TabBarItemProps> = ({
   navigation,
   route,
   index,
-  activePillX,
-  activePillWidth,
   onTabLayout,
 }) => {
   const isFocused = state.index === index;
@@ -43,24 +44,15 @@ const TabBarItem: React.FC<TabBarItemProps> = ({
   const displayName = route.name.replace('(tabs)/', '').replace('-hub', '');
   const label = isFocused || true
     ? t(`tabs.${displayName}`)
-    : (options.tabBarLabel !== undefined
-      ? options.tabBarLabel
-      : options.title !== undefined
-        ? options.title
-        : route.name);
+    : (options.tabBarLabel ?? options.title ?? route.name);
 
   const scale = useSharedValue(1);
 
-  useEffect(() => {
-    if (isFocused) {
-      // pill position is driven by onTabLayout measurements
-    }
-  }, [isFocused]);
-
   const onPress = () => {
-    scale.value = withSpring(0.92, { damping: 12, stiffness: 400 }, () => {
-      scale.value = withSpring(1, { damping: 12, stiffness: 400 });
-    });
+    scale.value = withSequence(
+      withSpring(0.92, { damping: 12, stiffness: 400 }),
+      withSpring(1, { damping: 12, stiffness: 400 }),
+    );
 
     const event = navigation.emit({
       type: 'tabPress',
@@ -84,22 +76,17 @@ const TabBarItem: React.FC<TabBarItemProps> = ({
 
   const getIcon = () => {
     const color = isFocused ? colors.tint : colors.textSecondary;
-    const strokeWidth = isFocused ? 2.5 : 2;
+    const sw = isFocused ? 2.5 : 2;
     const size = 24;
-
-    if (route.name.includes('dashboard')) return <Home size={size} color={color} strokeWidth={strokeWidth} />;
-    if (route.name.includes('sales')) return <Store size={size} color={color} strokeWidth={strokeWidth} />;
-    if (route.name.includes('inventory')) return <Warehouse size={size} color={color} strokeWidth={strokeWidth} />;
-    if (route.name.includes('settings')) return <SettingsIcon size={size} color={color} strokeWidth={strokeWidth} />;
-
-    return <Home size={size} color={color} strokeWidth={strokeWidth} />;
+    if (route.name.includes('dashboard')) return <Home size={size} color={color} strokeWidth={sw} />;
+    if (route.name.includes('sales')) return <Store size={size} color={color} strokeWidth={sw} />;
+    if (route.name.includes('inventory')) return <Warehouse size={size} color={color} strokeWidth={sw} />;
+    if (route.name.includes('settings')) return <SettingsIcon size={size} color={color} strokeWidth={sw} />;
+    return <Home size={size} color={color} strokeWidth={sw} />;
   };
 
   return (
-    <Animated.View
-      style={[styles.tabItemWrapper, containerAnimatedStyle]}
-      onLayout={handleLayout}
-    >
+    <Animated.View style={[styles.tabItemWrapper, containerAnimatedStyle]} onLayout={handleLayout}>
       <TouchableOpacity
         accessibilityRole="button"
         accessibilityState={isFocused ? { selected: true } : {}}
@@ -109,20 +96,12 @@ const TabBarItem: React.FC<TabBarItemProps> = ({
         style={styles.tabItem}
         activeOpacity={0.7}
       >
-        <View style={styles.iconContainer}>
-          {getIcon()}
-        </View>
+        <View style={styles.iconContainer}>{getIcon()}</View>
         <AppText
           variant="caption"
           weight={isFocused ? 'semibold' : 'medium'}
           shrink={false}
-          style={[
-            styles.tabText,
-            {
-              color: isFocused ? colors.tint : colors.textSecondary,
-              opacity: isFocused ? 1 : 0.7,
-            },
-          ]}
+          style={[styles.tabText, { color: isFocused ? colors.tint : colors.textSecondary, opacity: isFocused ? 1 : 0.7 }]}
           numberOfLines={1}
         >
           {typeof label === 'string' ? label : 'Tab'}
@@ -132,66 +111,59 @@ const TabBarItem: React.FC<TabBarItemProps> = ({
   );
 };
 
+// ─── Main Tab Bar ───────────────────────────────────────────────
+
 export const CustomTabBar = (props: BottomTabBarProps) => {
   const { colors } = useSettings();
-  const [tabLayouts, setTabLayouts] = useState<Record<number, { x: number; w: number }>>({});
+  const layoutsRef = useRef<Record<number, { x: number; w: number }>>({});
+  const pillReadyRef = useRef(false);
+  const activeIndexRef = useRef(props.state.index);
 
-  const routes = props.state.routes.filter(route => {
-    const n = route.name;
-    return !['expense', 'adjustment', 'summary', 'contacts', 'orders', 'budget'].includes(n);
-  });
+  const routes = props.state.routes.filter(
+    (r) => !['expense', 'adjustment', 'summary', 'contacts', 'orders', 'budget'].includes(r.name),
+  );
 
-  const activePillX = useSharedValue(0);
-  const activePillWidth = useSharedValue(0);
+  const pillX = useSharedValue(0);
+  const pillW = useSharedValue(0);
 
-  const handleTabLayout = useCallback((index: number, x: number, w: number) => {
-    setTabLayouts(prev => {
-      const next = { ...prev, [index]: { x, w } };
-      return next;
-    });
+  // Store layout measurements — never writes to shared values
+  const onTabLayout = useCallback((index: number, x: number, w: number) => {
+    const prev = layoutsRef.current[index];
+    if (prev && prev.x === x && prev.w === w) return;
+    layoutsRef.current[index] = { x, w };
   }, []);
 
-  // Update pill position when active tab changes or layouts are measured
+  // React to tab index changes — writes to shared values inside useEffect (safe)
   useEffect(() => {
-    const activeIndex = props.state.index;
-    const layout = tabLayouts[activeIndex];
-    if (layout) {
-      activePillX.value = withSpring(layout.x, {
-        damping: 20,
-        stiffness: 260,
-        mass: 0.8,
-      });
-      activePillWidth.value = withSpring(layout.w, {
-        damping: 20,
-        stiffness: 260,
-        mass: 0.8,
-      });
-    }
-  }, [props.state.index, tabLayouts, activePillX, activePillWidth]);
+    const idx = props.state.index;
+    if (idx === activeIndexRef.current && pillReadyRef.current) return;
+    activeIndexRef.current = idx;
 
-  const pillAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: activePillX.value }],
-    width: activePillWidth.value,
+    const lay = layoutsRef.current[idx];
+    if (!lay) return;
+
+    if (!pillReadyRef.current) {
+      pillReadyRef.current = true;
+      pillX.value = lay.x;
+      pillW.value = lay.w;
+    } else {
+      pillX.value = withSpring(lay.x, SPRING_CFG);
+      pillW.value = withSpring(lay.w, SPRING_CFG);
+    }
+  }, [props.state.index, pillX, pillW]);
+
+  const pillStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: pillX.value }],
+    width: pillW.value,
   }));
 
   return (
     <View style={styles.tabBarContainer}>
       <View style={[styles.shadowWrapper, { shadowColor: colors.border }]}>
-        <View
-          style={[
-            styles.tabBar,
-            { backgroundColor: colors.tabBar },
-          ]}
-        >
-          <Animated.View
-            style={[
-              styles.activePill,
-              { backgroundColor: colors.tint + '15' },
-              pillAnimatedStyle,
-            ]}
-          />
+        <View style={[styles.tabBar, { backgroundColor: colors.tabBar }]}>
+          <Animated.View style={[styles.activePill, { backgroundColor: colors.tint + '15' }, pillStyle]} />
           {routes.map((route) => {
-            const index = props.state.routes.indexOf(route);
+            const idx = props.state.routes.indexOf(route);
             return (
               <TabBarItem
                 key={route.key}
@@ -199,10 +171,8 @@ export const CustomTabBar = (props: BottomTabBarProps) => {
                 descriptors={props.descriptors}
                 navigation={props.navigation}
                 route={route}
-                index={index}
-                activePillX={activePillX}
-                activePillWidth={activePillWidth}
-                onTabLayout={handleTabLayout}
+                index={idx}
+                onTabLayout={onTabLayout}
               />
             );
           })}
@@ -246,24 +216,8 @@ const styles = StyleSheet.create({
     top: (TAB_HEIGHT - PILL_HEIGHT) / 2,
     left: 0,
   },
-  tabItemWrapper: {
-    flex: 1,
-    zIndex: 1,
-  },
-  tabItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '100%',
-  },
-  iconContainer: {
-    marginBottom: 2,
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tabText: {
-    fontSize: 10,
-    letterSpacing: 0.3,
-  },
+  tabItemWrapper: { flex: 1, zIndex: 1 },
+  tabItem: { alignItems: 'center', justifyContent: 'center', height: '100%' },
+  iconContainer: { marginBottom: 2, width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
+  tabText: { fontSize: 10, letterSpacing: 0.3 },
 });

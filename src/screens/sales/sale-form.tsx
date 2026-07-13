@@ -262,8 +262,8 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
         const unitLabel =
           item.unitType === "pack" ? item.purchaseUnit : item.baseUnit;
         await dialog.alert({
-          title: "Insufficient Stock",
-          message: `${item.name}: Required ${requiredQty} ${unitLabel}, but only ${availableStock} available.`,
+          title: t('dialog.insufficient_stock'),
+          message: t('dialog.insufficient_stock_desc', { name: item.name, required: String(requiredQty), unit: unitLabel, available: String(availableStock) }),
           iconType: "danger",
         });
         return;
@@ -372,7 +372,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                   style={styles.bagCount}
                 />
               </View>
-              <TutorialButton tutorialId="sale-form" screenName="Record a Sale" />
+              <TutorialButton tutorialId="sale-form" screenName={t('screen.record_sale')} />
             </View>
           </Animated.View>
           </TutorialTarget>

@@ -392,7 +392,7 @@ const DamagedItemForm = ({ onComplete }: { onComplete?: () => void }) => {
             <AppText variant="subtitle" weight="bold" style={[styles.confirmText, { color: G.bg }]} numberOfLines={1}>{t('adj.authorize_loss')}</AppText>
           </TouchableOpacity>
         </TutorialTarget>
-        <TutorialButton tutorialId="damaged-item" screenName="Damaged Item" />
+        <TutorialButton tutorialId="damaged-item" screenName={t('screen.damaged_item')} />
         
         <View style={{ height: 100 }} />
 

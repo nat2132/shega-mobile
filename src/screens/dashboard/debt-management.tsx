@@ -255,7 +255,7 @@ const DebtManagementScreen: React.FC = () => {
             {t('debt.title')}
           </AppText>
         </View>
-        <TutorialButton tutorialId="debt-management" screenName="Debt Management" />
+        <TutorialButton tutorialId="debt-management" screenName={t('screen.debt_management')} />
       </View>
       </TutorialTarget>
 

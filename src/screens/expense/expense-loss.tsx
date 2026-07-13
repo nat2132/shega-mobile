@@ -62,7 +62,7 @@ const InventoryLoss = () => {
       <View style={styles.header}>
         <AppText variant="title" weight="bold" style={[styles.title, { color: G.fg }]} numberOfLines={2}>{t('expense.loss_inventory')}</AppText>
         <AlertCircle size={24} color={G.fg} />
-        <TutorialButton tutorialId="expense-loss" screenName="Expense Loss" />
+        <TutorialButton tutorialId="expense-loss" screenName={t('screen.expense_loss')} />
       </View>
       </TutorialTarget>
 

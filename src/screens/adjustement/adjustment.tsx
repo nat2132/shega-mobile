@@ -182,7 +182,7 @@ const AdjustmentScreen = () => {
           </View>
           
           <View style={styles.headerActions}>
-            <TutorialButton tutorialId="adjustment" screenName="Adjustment" />
+            <TutorialButton tutorialId="adjustment" screenName={t('screen.adjustment')} />
             <TouchableOpacity 
               onPress={() => router.push('/notifications')} 
               style={[styles.headerIconBtn, { borderColor: G.border, backgroundColor: G.bgCard }]}

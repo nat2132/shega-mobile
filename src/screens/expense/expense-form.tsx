@@ -641,7 +641,7 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
               </AppText>
             </TouchableOpacity>
           </TutorialTarget>
-          <TutorialButton tutorialId="expense-form" screenName="Add Expense" />
+          <TutorialButton tutorialId="expense-form" screenName={t('screen.add_expense')} />
         </TutorialScrollView>
       </KeyboardAvoidingView>
 

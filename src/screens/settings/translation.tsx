@@ -20,15 +20,14 @@ import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from 
 import { translationTutorial } from '@/tutorials/definitions';
 type LangId = 'en' | 'am' | 'om' | 'ti';
 
-const LANGUAGES: { id: LangId; title: string; scriptKey: string; preview: string }[] = [
-  { id: 'en', title: 'English', scriptKey: 'settings.script_primary', preview: 'Inventory Management' },
-  { id: 'am', title: 'Amharic', scriptKey: 'settings.script_ethiopic', preview: 'Inventory Management' },
-  { id: 'om', title: 'Afaan Oromo', scriptKey: 'settings.script_latin', preview: 'Bulchiinsa Kuusaa' },
-  { id: 'ti', title: 'Tigrinya', scriptKey: 'settings.script_ethiopic', preview: 'Inventory Management' },
-];
-
 const TranslationSettings = () => {
-   const { language, setLanguage, colors, t } = useSettings();
+  const { language, setLanguage, colors, t } = useSettings();
+  const LANGUAGES: { id: LangId; title: string; scriptKey: string; preview: string }[] = [
+    { id: 'en', title: t('language.english'), scriptKey: 'settings.script_primary', preview: t('language.preview_inv') },
+    { id: 'am', title: t('language.amharic'), scriptKey: 'settings.script_ethiopic', preview: t('language.preview_inv') },
+    { id: 'om', title: t('language.oromo'), scriptKey: 'settings.script_latin', preview: t('language.preview_inv_om') },
+    { id: 'ti', title: t('language.tigrinya'), scriptKey: 'settings.script_ethiopic', preview: t('language.preview_inv') },
+  ];
   const G = getSettingsGlass(colors);
   const styles = useMemo(() => StyleSheet.create({
   container: { flex: 1 },

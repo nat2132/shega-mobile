@@ -143,7 +143,7 @@ const AdjustmentAllScreen = ({ onClose, onSelectItem }: { onClose: () => void; o
         <TouchableOpacity onPress={onClose} style={[listStyles.closeBtn, { borderColor: G.border }]}>
           <X size={20} color={G.fg} />
         </TouchableOpacity>
-        <TutorialButton tutorialId="adjustment-history" screenName="Adjustment History" />
+        <TutorialButton tutorialId="adjustment-history" screenName={t('screen.adjustment_history')} />
       </View>
       </TutorialTarget>
 

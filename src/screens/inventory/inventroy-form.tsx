@@ -801,7 +801,7 @@ const loadCategories = async () => {
             <X size={20} color={G.fg} />
           </TouchableOpacity>
           <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{t('form.intelligence_intake')}</AppText>
-          <TutorialButton tutorialId="inventory-form" screenName="Add Inventory Item" />
+          <TutorialButton tutorialId="inventory-form" screenName={t('screen.add_inventory_item')} />
         </View>
         </TutorialTarget>
 

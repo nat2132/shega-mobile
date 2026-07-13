@@ -282,7 +282,7 @@ data.forEach((item: any) => {
               <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.liveText, { color: G.fgSecondary }]} numberOfLines={1}>{t('common.live_audit')}</AppText>
             </View>
           </View>
-          <TutorialButton tutorialId="activity-ledger" screenName="Activity Ledger" />
+          <TutorialButton tutorialId="activity-ledger" screenName={t('screen.activity_ledger')} />
         </View>
 
         <TutorialTarget id="al-filter">

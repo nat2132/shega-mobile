@@ -611,7 +611,7 @@ export const NotificationsListScreen: React.FC = () => {
               )}
             </AppText>
           </View>
-          <TutorialButton tutorialId="notifications" screenName="Notifications" />
+          <TutorialButton tutorialId="notifications" screenName={t('screen.notifications')} />
         </View>
 
         {/* Search */}

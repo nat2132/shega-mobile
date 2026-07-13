@@ -261,7 +261,7 @@ export default function ContactsList() {
           <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{t('contacts.title')}</AppText>
         </View>
         <View style={styles.headerActions}>
-          <TutorialButton tutorialId="contacts" screenName="Contacts" />
+          <TutorialButton tutorialId="contacts" screenName={t('screen.contacts')} />
           <TouchableOpacity
             onPress={() => router.push('/notifications')}
             style={[styles.headerIconBtn, { backgroundColor: G.bgCard, borderColor: G.border }]}

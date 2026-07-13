@@ -261,24 +261,24 @@ const ReminderHistoryScreen: React.FC = () => {
 
   const handleSnooze = async (r: ScheduledReminder) => {
     await dialog.choose({
-      title: 'Snooze Reminder',
+      title: t('dialog.snooze_reminder'),
       message: r.title,
-      cancelText: 'Cancel',
+      cancelText: t('dialog.cancel'),
       choices: [
-        { label: '15 min', onPress: () => snoozeReminderById(r.id, 15) },
-        { label: '1 hour', onPress: () => snoozeReminderById(r.id, 60) },
-        { label: 'Tomorrow', onPress: () => snoozeReminderById(r.id, 60 * 24) },
-        { label: 'Next week', onPress: () => snoozeReminderById(r.id, 60 * 24 * 7) },
+        { label: t('snooze.15min'), onPress: () => snoozeReminderById(r.id, 15) },
+        { label: t('snooze.1hour'), onPress: () => snoozeReminderById(r.id, 60) },
+        { label: t('snooze.tomorrow'), onPress: () => snoozeReminderById(r.id, 60 * 24) },
+        { label: t('snooze.next_week'), onPress: () => snoozeReminderById(r.id, 60 * 24 * 7) },
       ],
     });
   };
 
   const handleComplete = async (r: ScheduledReminder) => {
     const ok = await dialog.confirm({
-      title: 'Mark as Complete',
+      title: t('dialog.mark_complete'),
       message: r.title,
-      confirmText: 'Complete',
-      cancelText: 'Cancel',
+      confirmText: t('dialog.complete'),
+      cancelText: t('dialog.cancel'),
     });
     if (ok) {
       completeReminder(r.id);
@@ -287,10 +287,10 @@ const ReminderHistoryScreen: React.FC = () => {
 
   const handleRemove = async (r: ScheduledReminder) => {
     const ok = await dialog.confirm({
-      title: 'Remove Reminder',
-      message: `Are you sure you want to remove "${r.title}"?`,
-      confirmText: 'Remove',
-      cancelText: 'Cancel',
+      title: t('dialog.remove_reminder'),
+      message: t('dialog.remove_reminder_desc', { title: r.title }),
+      confirmText: t('dialog.remove'),
+      cancelText: t('dialog.cancel'),
       destructive: true,
     });
     if (ok) {
@@ -371,7 +371,7 @@ const ReminderHistoryScreen: React.FC = () => {
           <TouchableOpacity onPress={refresh} style={styles.refreshBtn}>
             <RefreshCw size={20} color={G.fg} />
           </TouchableOpacity>
-          <TutorialButton tutorialId="reminders" screenName="Reminder History" />
+          <TutorialButton tutorialId="reminders" screenName={t('screen.reminder_history')} />
         </View>
       </View>
       </TutorialTarget>

@@ -139,7 +139,7 @@ const OnCreditItemsScreen = () => {
             <AppText variant="heading-lg" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>
               {t('dash.credit_inventory')}
             </AppText>
-            <TutorialButton tutorialId="oncredit-list" screenName="On-Credit List" />
+            <TutorialButton tutorialId="oncredit-list" screenName={t('screen.on_credit_list')} />
           </View>
           </TutorialTarget>
         }

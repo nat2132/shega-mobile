@@ -705,7 +705,7 @@ export const TutorialOverlay: React.FC = () => {
                   <TouchableOpacity onPress={ctx.resumeTutorial} style={[styles.pauseBtn, { backgroundColor: colors.success }]}>
                     <Play size={16} color={colors.background} />
                     <AppText variant="label" weight="semibold" color={colors.background} style={{ marginLeft: 6 }}>
-                      Resume
+                      {t('tutorial.resume')}
                     </AppText>
                   </TouchableOpacity>
                 ) : (
@@ -714,7 +714,7 @@ export const TutorialOverlay: React.FC = () => {
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity onPress={ctx.skipTutorial} style={styles.skipBtn}>
-                  <AppText variant="micro" weight="medium" color={colors.textSecondary}>Skip</AppText>
+                  <AppText variant="micro" weight="medium" color={colors.textSecondary}>{t('tutorial.skip')}</AppText>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={isActionPending ? undefined : ctx.nextStep}
@@ -756,10 +756,10 @@ export const TutorialOverlay: React.FC = () => {
             <Pause size={28} color={colors.tint} />
           </View>
           <AppText variant="heading" weight="bold" color={colors.text} style={{ marginTop: 12 }}>
-            Tutorial Paused
+            {t('tutorial.paused_title')}
           </AppText>
           <AppText variant="caption" weight="regular" color={colors.textSecondary} style={{ marginTop: 4, textAlign: 'center', lineHeight: 18 }}>
-            Tap Resume to continue where you left off.
+            {t('tutorial.paused_desc')}
           </AppText>
           <TouchableOpacity
             onPress={ctx.resumeTutorial}
@@ -767,7 +767,7 @@ export const TutorialOverlay: React.FC = () => {
           >
             <Play size={18} color={colors.background} />
             <AppText variant="label" weight="semibold" color={colors.background} style={{ marginLeft: 8 }}>
-              Resume
+              {t('tutorial.resume')}
             </AppText>
           </TouchableOpacity>
         </Animated.View>

@@ -34,6 +34,25 @@ import * as Haptics from 'expo-haptics';
 
 const { width } = Dimensions.get('window');
 
+const FEATURE_KEY_MAP: Record<string, string> = {
+  reports: 'subscription.feature_reports',
+  dashboard_overview: 'subscription.feature_dashboard',
+  pdf_download: 'subscription.feature_pdf',
+  csv_import: 'subscription.feature_csv',
+  csv_export: 'subscription.feature_csv',
+  expense: 'subscription.feature_expense',
+  budget: 'subscription.feature_budget',
+  debt: 'subscription.feature_debt',
+  orders: 'subscription.feature_orders',
+  purchase_orders: 'subscription.feature_purchase_orders',
+  multi_warehouse: 'subscription.feature_multi_warehouse',
+  ai_assistant: 'subscription.feature_ai',
+  health_score: 'subscription.feature_health',
+  biometrics: 'subscription.feature_biometrics',
+  themes: 'subscription.feature_themes',
+  supplier_reminders: 'subscription.feature_suppliers',
+};
+
 const PLANS = {
   basic: {
     nameKey: 'subscription.plan_basic',
@@ -87,23 +106,23 @@ const PLANS = {
     active: { labelKey: 'subscription.active', color: colors.success },
     expired: { labelKey: 'subscription.expired', color: colors.error },
     cancelled: { labelKey: 'subscription.cancelled', color: colors.textSecondary },
-    rejected: { label: 'Rejected', color: colors.error },
-    renewing: { label: 'Renewing', color: colors.warning },
+    rejected: { labelKey: 'subscription.rejected_status', color: colors.error },
+    renewing: { labelKey: 'subscription.renewing_status', color: colors.warning },
   };
 
   const status = subscription?.status || 'trial';
-  const config = statusConfig[status] || { label: status, color: colors.textSecondary };
-  const planName = subscription?.plan === 'premium' ? 'Premium' : 'Basic';
+  const config = statusConfig[status] || { labelKey: status, color: colors.textSecondary };
+  const planName = subscription?.plan === 'premium' ? t('subscription.plan_premium') : t('subscription.plan_basic');
 
   const formatDate = (dateStr: string | null | undefined) => {
-    if (!dateStr) return 'N/A';
+    if (!dateStr) return t('common.na');
     try {
       return new Date(dateStr).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
       });
-    } catch { return 'N/A'; }
+    } catch { return t('common.na'); }
   };
 
   return (
@@ -327,7 +346,7 @@ const PLANS = {
               {PREMIUM_FEATURES.map((f) => (
                 <View key={f} style={styles.featureRow}>
                   <AppText variant="body-sm" weight="medium" style={{ color: colors.text, flex: 1 }}>
-                    {FEATURE_LABELS[f as PremiumFeature]?.name || f}
+                    {t(FEATURE_KEY_MAP[f]) || FEATURE_LABELS[f as PremiumFeature]?.name || f}
                   </AppText>
                   <X size={16} color={colors.error} style={{ width: 60, alignSelf: 'center' }} />
                   <Check size={16} color={colors.success} style={{ width: 60, alignSelf: 'center' }} />

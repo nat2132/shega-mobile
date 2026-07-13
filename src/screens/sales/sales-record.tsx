@@ -412,7 +412,7 @@ const SalesRecordScreen: React.FC<SalesRecordProps> = ({ onClose }) => {
               {getHeaderLabel()}
             </AppText>
           </View>
-          <TutorialButton tutorialId="sales-records" screenName="Sales Records" />
+          <TutorialButton tutorialId="sales-records" screenName={t('screen.sales_records')} />
         </View>
 
         {/* Summary Cards */}
@@ -794,8 +794,8 @@ const SalesRecordScreen: React.FC<SalesRecordProps> = ({ onClose }) => {
                 ts,
               );
               showToast({
-                title: "Receipt Ready",
-                message: "PDF receipt generated successfully",
+                title: t('toast.receipt_ready'),
+                message: t('toast.receipt_ready_desc'),
                 type: "success",
               });
             } catch {

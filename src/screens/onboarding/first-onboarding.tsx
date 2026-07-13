@@ -426,7 +426,7 @@ const FirstOnboardingScreen: React.FC<FirstOnboardingScreenProps> = ({ onNext })
             align="center"
             style={{ color: G.fg, letterSpacing: -0.5, lineHeight: 44 }}
           >
-            Manage Your Shop{'\n'}Smartly
+            {t('onboarding.manage_shop')}
           </AppText>
         </Animated.View>
 
@@ -442,7 +442,7 @@ const FirstOnboardingScreen: React.FC<FirstOnboardingScreenProps> = ({ onNext })
             align="center"
             style={{ color: G.muted, lineHeight: 22 }}
           >
-            Real-time inventory, sales tracking,{'\n'}and insights at your fingertips
+            {t('onboarding.real_time_desc')}
           </AppText>
         </Animated.View>
       </View>
@@ -460,7 +460,7 @@ const FirstOnboardingScreen: React.FC<FirstOnboardingScreenProps> = ({ onNext })
             numberOfLines={1}
             align="center"
           >
-            SHEGA
+            {t('common.shega')}
           </AppText>
         </Animated.View>
       </View>
@@ -477,10 +477,10 @@ const FirstOnboardingScreen: React.FC<FirstOnboardingScreenProps> = ({ onNext })
             </AppText>
 
             {[
-              { id: 'en', label: 'English', sub: 'System Default' },
-              { id: 'am', label: '\u1200\u1273\u1275\u122d\u129b', sub: 'Amharic' },
-              { id: 'om', label: 'Afaan Oromo', sub: 'Oromo' },
-              { id: 'ti', label: '\u1275\u130d\u1295\u1295\u1293', sub: 'Tigrinya' },
+              { id: 'en', label: t('onboarding.lang_en'), sub: t('onboarding.lang_en_sub') },
+              { id: 'am', label: '\u1200\u1273\u1275\u122d\u129b', sub: t('onboarding.lang_am') },
+              { id: 'om', label: 'Afaan Oromo', sub: t('onboarding.lang_om') },
+              { id: 'ti', label: '\u1275\u130d\u1295\u1295\u1293', sub: t('onboarding.lang_ti') },
             ].map((lang) => (
               <TouchableOpacity
                 key={lang.id}

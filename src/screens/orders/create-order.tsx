@@ -152,7 +152,7 @@ const CreateOrderScreen = () => {
 
       if (orderId) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        showToast({ title: 'Order Created', message: t('order.create_success'), type: 'success' });
+        showToast({ title: t('toast.order_created'), message: t('order.create_success'), type: 'success' });
         router.back();
       } else {
         playBad();
@@ -221,7 +221,7 @@ const CreateOrderScreen = () => {
                 style={[styles.cartCount, { color: ORD_GLASS.fg }]}
               />
             </View>
-            <TutorialButton tutorialId="create-order" screenName="Create Order" />
+            <TutorialButton tutorialId="create-order" screenName={t('screen.create_order')} />
           </View>
         </TutorialTarget>
 

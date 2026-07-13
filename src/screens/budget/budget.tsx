@@ -189,7 +189,7 @@ const BudgetOverview = () => {
           </TouchableOpacity>
           <AppText variant="heading" weight="bold">{t("budget.title")}</AppText>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <TutorialButton tutorialId="budget" screenName="Budget" />
+            <TutorialButton tutorialId="budget" screenName={t('screen.budget')} />
             <TouchableOpacity onPress={() => router.push("/notifications")} style={[s.iconBtn, { borderColor: G.border }]}>
               <Bell size={22} color={G.fg} />
               {notifCount > 0 && (
@@ -703,7 +703,7 @@ const CreateBudgetModal = ({ colors, t, onClose, onSaved }: { colors: any; t: an
             <AppText variant="body" weight="bold" style={{ color: G.bg }}>{t('budget.create')}</AppText>
           </TouchableOpacity>
         </TutorialTarget>
-        <TutorialButton tutorialId="create-budget" screenName="Create Budget" />
+        <TutorialButton tutorialId="create-budget" screenName={t('screen.create_budget')} />
       </ScrollView>
     </View>
   );

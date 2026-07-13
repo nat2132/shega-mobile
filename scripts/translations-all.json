@@ -1,0 +1,1586 @@
+[
+  {
+    "en": "Close",
+    "am": "ዝጋ",
+    "om": "Cufi",
+    "ti": "ዕጸው"
+  },
+  {
+    "en": "Done",
+    "am": "ተከናውኗል",
+    "om": "Xumurame",
+    "ti": "ተፈጺሙ"
+  },
+  {
+    "en": "Next",
+    "am": "ቀጣይ",
+    "om": "Kan itti aanuu",
+    "ti": "ዝቕጽል"
+  },
+  {
+    "en": "Restart",
+    "am": "እንደገና ጀምር",
+    "om": "Irra deebii jalqabi",
+    "ti": "ዳግማይ ጀምር"
+  },
+  {
+    "en": "Start Tutorial",
+    "am": "አጋዥ ስልጠና ይጀምሩ",
+    "om": "Leenjii jalqabi",
+    "ti": "መምርሒ ጀምር"
+  },
+  {
+    "en": "Scroll the highlighted area",
+    "am": "የደመቀውን ቦታ ያሸብልሉ",
+    "om": "Bakka ibsames suuqi",
+    "ti": "ነቲ ዝተሓበረ ቦታ ስብልልዎ"
+  },
+  {
+    "en": "Swipe the highlighted area",
+    "am": "የደመቀውን ቦታ ያንሸራትቱ",
+    "om": "Bakka ibsames siigi",
+    "ti": "ነቲ ዝተሓበረ ቦታ ኣንሸራትዎ"
+  },
+  {
+    "en": "Tap the highlighted element",
+    "am": "የደመቀውን አካል ይንኩ",
+    "om": "Qaama ibsames tuqi",
+    "ti": "ነቲ ዝተሓበረ ክፋል ጠውቑ"
+  },
+  {
+    "en": "Type in the highlighted field",
+    "am": "የደመቀውን መስክ ያስገቡ",
+    "om": "Dirree ibsames keessa barreessi",
+    "ti": "ኣብቲ ዝተሓበረ ቦታ ጸሓፉ"
+  },
+  {
+    "en": "You completed this tutorial! Take a refresher or restart.",
+    "am": "ይህን አጋዥ ስልጠና አጠናቀዋል! እንደገና ይከልሱ ወይም እንደገና ይጀምሩ።",
+    "om": "Leenjii kana xumurte! Irra deebii ilaali ykn irra deebii jalqabi.",
+    "ti": "ነዚ መምርሒ ፈጺምኩሞ! ብድጋሚ ምርምር ወይ ዳግማይ ጀምሩ።"
+  },
+  {
+    "en": "Continue from step {step}",
+    "am": "ከ{step} ደረጃ ቀጥል",
+    "om": "Tarkaanfata {step} irraa itti fufi",
+    "ti": "ካብ ደረጃ {step} ቀጽል"
+  },
+  {
+    "en": "Continue ({current}/{total})",
+    "am": "ቀጥል ({current}/{total})",
+    "om": "Itti fufi ({current}/{total})",
+    "ti": "ቀጽል ({current}/{total})"
+  },
+  {
+    "en": "Learn how to use this screen step by step.",
+    "am": "ይህን ስክሪን ደረጃ በደረጃ እንዴት እንደሚጠቀሙ ይማሩ።",
+    "om": "Iskiriinii kana tarkaanfataan tarkaanfataan akka itti fayyadamtu baradhu.",
+    "ti": "ነዛ ስክሪን ደረጃ ብደረጃ ከመይ ከም እትጥቀምዋ ተምሃሩ።"
+  },
+  {
+    "en": "Tutorial Complete!",
+    "am": "አጋዥ ስልጠና ተጠናቋል!",
+    "om": "Leenjii xumurameera!",
+    "ti": "መምርሒ ተወዲኡ!"
+  },
+  {
+    "en": "{name} Tutorial",
+    "am": "የ{name} አጋዥ ስልጠና",
+    "om": "Leenjii {name}",
+    "ti": "መምርሒ {name}"
+  },
+  {
+    "en": "Tutorial Complete!",
+    "am": "አጋዥ ስልጠና ተጠናቋል!",
+    "om": "Leenjii xumurameera!",
+    "ti": "መምርሒ ተወዲኡ!"
+  },
+  {
+    "en": "Activity Ledger",
+    "am": "የእንቅስቃሴ መዝገብ",
+    "om": "Galmee Sochii",
+    "ti": "መዝገብ ንጥፈታት"
+  },
+  {
+    "en": "View all business activity",
+    "am": "ሁሉንም የንግድ እንቅስቃሴ ይመልከቱ",
+    "om": "Sochii daldalaa hunda ilaali",
+    "ti": "ንጥፈታት ንግዲ ብምሉኡ ርአ"
+  },
+  {
+    "en": "Activity Feed",
+    "am": "የእንቅስቃሴ መግብ",
+    "om": "Sochii Feedii",
+    "ti": "መጋብ ንጥፈታት"
+  },
+  {
+    "en": "This is your business activity feed — every transaction, adjustment, and event recorded in chronological order.",
+    "am": "ይህ የንግድ እንቅስቃሴ መግብዎ ነው — እያንዳንዱ ግብይት፣ ማስተካከያ እና ክስተት በጊዜ ቅደም ተከተል የተመዘገበ።",
+    "om": "Kun sochii daldalaa kee feedii — jijjiirama gatii, sirreeffamoota, fi gochiiwwan hunduu yeroo tartiibaan galmeeffaman.",
+    "ti": "እዚ መጋብ ንጥፈታት ንግድኩም እዩ — ነፍሲ ወከፍ ልውውጥ፣ ምትእርራይ ከምኡውን ኣጋጣሚ ብቅደም ተከተል ዝተመዝገበ።"
+  },
+  {
+    "en": "Filter Activity",
+    "am": "እንቅስቃሴ አጣራ",
+    "om": "Sochii calleessii",
+    "ti": "ንጥፈታት ኣጣርሩ"
+  },
+  {
+    "en": "Every action is listed here: sales, expenses, inventory changes, price adjustments, and payments received.",
+    "am": "እያንዳንዱ ድርጊት እዚህ ተዘርዝሯል፦ ሽያጮች፣ ወጪዎች፣ የክምችት ለውጦች፣ የዋጋ ማስተካከያዎች እና የተቀበሉ ክፍያዎች።",
+    "om": "Gochiiwwan hunduma asitti tarreeffaman: gurgurtaalee, baasii, jijjiirama kuusaa, sirreeffama gatii, fi kaffaltiiwwan fudhataman.",
+    "ti": "ነፍሲ ወከፍ ተግባር ኣብዚ ተዘርዚሩ ኣሎ፦ ሽያጣት፣ ወጻኢታት፣ ምቕያር ክምችት፣ ምትእርራይ ዋጋ ከምኡውን እተቐበሉ ክፍሊታት።"
+  },
+  {
+    "en": "Filter by activity type (sales, expenses, inventory, payments) or date range to find specific events.",
+    "am": "የተወሰኑ ክስተቶችን ለማግኘት በእንቅስቃሴ አይነት (ሽያጭ፣ ወጪ፣ ክምችት፣ ክፍያ) ወይም በቀን ክልል አጣራ።",
+    "om": "Gosa sochii (gurgurtaa, baasii, kuusaa, kaffaltii) ykn daangaa guyyaatiin calleessii gochaalee addaa argachuuf.",
+    "ti": "ብኣይነት ንጥፈታት (ሽያጥ፣ ወጻኢ፣ ክምችት፣ ክፍሊት) ወይ ብዝምድና መዓልቲ ንፍሉያት ኣጋጣሚታት ንምርካብ ኣጣርሩ።"
+  },
+  {
+    "en": "Add Order Item",
+    "am": "የትእዛዝ ዕቃ ጨምር",
+    "om": "Meelata Ajaja Idaatii",
+    "ti": "ዕቃ ትእዛዝ ወስኽ"
+  },
+  {
+    "en": "Add products to a purchase order",
+    "am": "ምርቶችን ወደ የግዢ ትእዛዝ ያክሉ",
+    "om": "Oomishaalee ajaja bitaa irratti idaati",
+    "ti": "ምርታት ናብ ትእዛዝ ግዢ ወስኹ"
+  },
+  {
+    "en": "Adding an Order Item",
+    "am": "የትእዛዝ ዕቃ በመጨመር ላይ",
+    "om": "Meelata Ajaja Idachaatti",
+    "ti": "ዕቃ ትእዛዝ ይውሰኽ ኣሎ"
+  },
+  {
+    "en": "Follow these steps to add a product to your purchase order. You can search for existing inventory items or enter a custom description.",
+    "am": "ምርት ወደ የግዢ ትእዛዝዎ ለመጨመር እነዚህን ደረጃዎች ይከተሉ። ያሉትን የክምችት ዕቃዎች መፈለግ ወይም ብጁ መግለጫ ማስገባት ይችላሉ።",
+    "om": "Tarkaanfiiwwan kana hordofi oomishaa ajaja bitaa keetti idaasuuf. Meelawwan kuusaa jiran barbaaduu ykn ibsa ofii barreessuu dandeessa.",
+    "ti": "ነዞም ደረጃታት ተኸተሉ ምርት ናብ ትእዛዝ ግዢኩም ንምውስኽ። ንዘለዉ እቃታት ክምችት ክትደልዩ ወይ ብጁ መግለጺ ከተእትዉ ትኽእሉ ኢኹም።"
+  },
+  {
+    "en": "Item Name",
+    "am": "የዕቃ ስም",
+    "om": "Maqaa Meelataa",
+    "ti": "ስም ዕቃ"
+  },
+  {
+    "en": "Enter the name of the product you want to order. If it exists in inventory, it will auto-fill details.",
+    "am": "ማዘዝ የሚፈልጉትን ምርት ስም ያስገቡ። በክምችት ውስጥ ካለ ዝርዝሮቹን በራስ-ሰር ይሞላል።",
+    "om": "Maqaa oomishaa ajajuu barbaadduu galchi. Yoo kuusaa keessa jiraate, ofumaan guutama.",
+    "ti": "ስም እቲ ክትእዝዝዎ እትደልዩ ምርት ኣእትዉ። ኣብ ክምችት እንተሎ ዝርዝራት ብርእሱ ይመልእ።"
+  },
+  {
+    "en": "Supplier / Company",
+    "am": "አቅራቢ / ኩባንያ",
+    "om": "Dhiyeessaa / Kaampaanii",
+    "ti": "ኣቕራቢ / ኩባንያ"
+  },
+  {
+    "en": "Enter the supplier or company name for this item. This is useful for tracking purchases by vendor.",
+    "am": "ለዚህ ዕቃ የአቅራቢውን ወይም የኩባንያውን ስም ያስገቡ። ይህ ግዢዎችን በአቅራቢ ለመከታተል ጠቃሚ ነው።",
+    "om": "Maqaa dhiyeessaa ykn kaampaanii meelata kanaaf galchi. Kun bitoota dhiyeessaan hordofuuf fayya.",
+    "ti": "ስም ኣቕራቢ ወይ ኩባንያ ንዛ ዕቃ ኣእትዉ። እዚ ንምክትታል ግዚ በኣቕራቢ ይጠቅም እዩ።"
+  },
+  {
+    "en": "Order Quantity",
+    "am": "የትእዛዝ ብዛት",
+    "om": "Hamma Ajajaa",
+    "ti": "ብዝሒ ትእዛዝ"
+  },
+  {
+    "en": "Enter the quantity you want to order. This will be added to your purchase order.",
+    "am": "ማዘዝ የሚፈልጉትን ብዛት ያስገቡ። ይህ ወደ የግዢ ትእዛዝዎ ይጨመራል።",
+    "om": "Hamma ajajuu barbaaddu galchi. Kun ajaja bitaa keetti idaatama.",
+    "ti": "እቲ ክትእዝዝዎ እትደልዩ ብዝሒ ኣእትዉ። እዚ ናብ ትእዛዝ ግዢኩም ይውሰኽ እዩ።"
+  },
+  {
+    "en": "Add to Order",
+    "am": "ወደ ትእዛዝ ጨምር",
+    "om": "Ajaja Irratti Idaati",
+    "ti": "ናብ ትእዛዝ ወስኽ"
+  },
+  {
+    "en": "Tap to add this item to your purchase order. You can add multiple items before finalizing.",
+    "am": "ይህን ዕቃ ወደ የግዢ ትእዛዝዎ ለመጨመር ይንኩ። ከማጠናቀቅዎ በፊት በርካታ ዕቃዎችን መጨመር ይችላሉ።",
+    "om": "Tuqi meelata kana ajaja bitaa keetti idaasuuf. Meelawwan baayee isaan xumuruu dura idaatuu dandeessa.",
+    "ti": "ነዛ ዕቃ ናብ ትእዛዝ ግዢኩም ንምውስኽ ጠውቑ። ቅድሚ ምውዳእኩም ብዙሓት እቃታት ክትወስኹ ትኽእሉ ኢኹም።"
+  },
+  {
+    "en": "Adjustments",
+    "am": "ማስተካከያዎች",
+    "om": "Sirreeffamoota",
+    "ti": "ምትእርራያት"
+  },
+  {
+    "en": "Adjustments Hub",
+    "am": "የማስተካከያ ማዕከል",
+    "om": "Waltajjii Sirreeffamaa",
+    "ti": "ማእከል ምትእርራይ"
+  },
+  {
+    "en": "Adjustment Types",
+    "am": "የማስተካከያ ዓይነቶች",
+    "om": "Gosa Sirreeffamaa",
+    "ti": "ኣይነታት ምትእርራይ"
+  },
+  {
+    "en": "Calibration Ledger",
+    "am": "የማስተካከያ መዝገብ",
+    "om": "Galmee Sirreeffamaa",
+    "ti": "መዝገብ ምትእርራይ"
+  },
+  {
+    "en": "Integrity Statistics",
+    "am": "የታማኝነት ስታቲስቲክስ",
+    "om": "Istaatistiksii Amanamummaa",
+    "ti": "ስታቲስቲክስ ቅንዕና"
+  },
+  {
+    "en": "Manage price and stock changes",
+    "am": "የዋጋ እና የክምችት ለውጦችን ያስተዳድሩ",
+    "om": "Jijjiirama gatii fi kuusaa bulchi",
+    "ti": "ምቕያር ዋጋን ክምችትን ኣመሓድሩ"
+  },
+  {
+    "en": "Make corrections to your inventory — price changes, damaged items, stock adjustments.",
+    "am": "በክምችትዎ ላይ እርማቶችን ያድርጉ — የዋጋ ለውጦች፣ የተበላሹ ዕቃዎች፣ የክምችት ማስተካከያዎች።",
+    "om": "Kuusaa kee irratti sirreeffama hojii — jijjiirama gatii, meelawwan miidhaman, sirreeffama kuusaa.",
+    "ti": "ኣብ ክምችትኩም ምትእርራይ ግበሩ — ምቕያር ዋጋ፣ እተበላሹ እቃታት፣ ምትእርራይ ክምችት።"
+  },
+  {
+    "en": "Choose from three types: Price Increase, Price Decrease, or Damaged Items.",
+    "am": "ከሶስት ዓይነቶች ይምረጡ፦ የዋጋ መጨመሪያ፣ የዋጋ መቀነሻ፣ ወይም የተበላሹ ዕቃዎች።",
+    "om": "Gosa sadii irraa filadhu: Gatiin Dabaluu, Gatiin Hirisuu, ykn Meelata Miidhame.",
+    "ti": "ካብ ሰለስተ ኣይነታት ምረጹ፦ ዋጋ ምውሳኽ፣ ዋጋ ምቕናስ፣ ወይ እተበላሹ እቃታት።"
+  },
+  {
+    "en": "All past adjustments are recorded here. View the audit trail for every change.",
+    "am": "ሁሉም ያለፉ ማስተካከያዎች እዚህ ተመዝግበዋል። የእያንዳንዱን ለውጥ የኦዲት ዱካ ይመልከቱ።",
+    "om": "Sirreeffamoota darbe hunda asitti galmeeffame. Jijjiirama hundaaf karaa qorumsaa ilaali.",
+    "ti": "ኩሎም ዝሓለፉ ምትእርራያት ኣብዚ ተመዝጊቦም ኣለዉ። ንነፍሲ ወከፍ ምቕያር መንገዲ ምርመራ ርአ።"
+  },
+  {
+    "en": "Track monthly corrections, capital leakage from damaged items, and overall inventory integrity.",
+    "am": "ወርሃዊ እርማቶችን፣ ከተበላሹ ዕቃዎች የካፒታል ፍሳሽን እና አጠቃላይ የክምችት ትክክለኛነትን ይከታተሉ።",
+    "om": "Sirreeffamoota jiisaa, hoongoo kaapitaalaa meelawwan miidhaman irraa, fi amanamummaa kuusaa walii galaa hordofi.",
+    "ti": "ወርሓዊ ምትእርራያት፣ ምጥፋእ ካፒታል ካብ እተበላሹ እቃታት ከምኡውን ምሉእ ቅንዕና ክምችት ክታበሉ።"
+  },
+  {
+    "en": "Budget Management",
+    "am": "የበጀት አስተዳደር",
+    "om": "Bulchiinsa Baajetaa",
+    "ti": "ምሕደራ በጀት"
+  },
+  {
+    "en": "Plan and track spending",
+    "am": "ወጪን ያቅዱ እና ይከታተሉ",
+    "om": "Baasii karoorfadhuu fi hordofi",
+    "ti": "ወጻኢ ምድላውን ምክትታልን"
+  },
+  {
+    "en": "Budget Dashboard",
+    "am": "የበጀት ዳሽቦርድ",
+    "om": "Daashboordii Baajetaa",
+    "ti": "ዳሽቦርድ በጀት"
+  },
+  {
+    "en": "Create a Budget",
+    "am": "በጀት ይፍጠሩ",
+    "om": "Baajeta Uumi",
+    "ti": "በጀት ፍጠሩ"
+  },
+  {
+    "en": "Budget Overview",
+    "am": "የበጀት አጠቃላይ እይታ",
+    "om": "Irradeebii Baajetaa",
+    "ti": "ጠቕላላ በጀት"
+  },
+  {
+    "en": "Category Breakdown",
+    "am": "የምድብ ትንተና",
+    "om": "Qoodinsa Ramaddii",
+    "ti": "ምብራህ መደብ"
+  },
+  {
+    "en": "Monthly Trends",
+    "am": "ወርሃዊ አዝማሚያዎች",
+    "om": "Mallattowwan Jiisaa",
+    "ti": "ወርሓዊ ኣዝማሚታት"
+  },
+  {
+    "en": "Create and manage budgets for your business. Track planned vs actual spending.",
+    "am": "ለንግድዎ በጀቶችን ይፍጠሩ እና ያስተዳድሩ። የታቀደ እና ትክክለኛ ወጪን ይከታተሉ።",
+    "om": "Daldala keetiif baajetota uumuu fi bulchi. Baasii karoorfamee fi dhugaa hordofi.",
+    "ti": "ንንግድኩም በጀታት ፍጠሩ ከምኡውን ኣመሓድሩ። እተዳለወን ሃቆን ወጻኢ ክታበሉ።"
+  },
+  {
+    "en": "Tap to create a new budget. Set a name, type, period, and categories.",
+    "am": "አዲስ በጀት ለመፍጠር ይንኩ። ስም፣ ዓይነት፣ ጊዜ እና ምድቦች ያዘጋጁ።",
+    "om": "Tuqi baajeta haaraa uumuuf. Maqaa, gosa, yeroo, fi ramaddiiwwan galchi.",
+    "ti": "ሓድሽ በጀት ንምፍጣር ጠውቑ። ስም፣ ኣይነት፣ እዋን ከምኡውን መደባት ኣዘጋጅሉ።"
+  },
+  {
+    "en": "View spending by category. Each category shows planned vs actual spend.",
+    "am": "ወጪን በምድብ ይመልከቱ። እያንዳንዱ ምድብ የታቀደ እና ትክክለኛ ወጪን ያሳያል።",
+    "om": "Baasii ramaddiidhaan ilaali. Ramaddii tokkoon tokkoon baasii karoorfamee fi dhugaa agarsiisa.",
+    "ti": "ወጻኢ ብመደብ ርአ። ነፍሲ ወከፍ መደብ እተዳለወን ሃቆን ወጻኢ የርእይ እዩ።"
+  },
+  {
+    "en": "Track your budget performance over time. See monthly trends based on historical patterns.",
+    "am": "የበጀት አፈጻጸምዎን በጊዜ ሂደት ይከታተሉ። በታሪካዊ መረጃ ላይ የተመሰረቱ ወርሃዊ አዝማሚያዎችን ይመልከቱ።",
+    "om": "Hojiilee baajeta kee yeroo irratti hordofi. Mallattowwan jiisaa seenaa irratti hundaaan ilaali.",
+    "ti": "ንጥፈት በጀትኩም ኣብ ግዜ ክታበሉ። ኣብ ታሪኻዊ ልምዲ እተመርኰሱ ወርሓዊ ኣዝማሚታት ርአዩ።"
+  },
+  {
+    "en": "Collect Payments",
+    "am": "ክፍያዎችን ይሰብስቡ",
+    "om": "Kaffaltiiwwan Funyaanuu",
+    "ti": "ክፍሊታት ምእካብ"
+  },
+  {
+    "en": "Receive payments from customers",
+    "am": "ከደንበኞች ክፍያ ይቀበሉ",
+    "om": "Kaffaltiiwwan maamila irraa fudhadhu",
+    "ti": "ካብ ደንበኛታት ክፍሊት ተቐበሉ"
+  },
+  {
+    "en": "Collect Payment",
+    "am": "ክፍያ ሰብስብ",
+    "om": "Kaffaltii Funyaanuu",
+    "ti": "ክፍሊት እከቡ"
+  },
+  {
+    "en": "Select Customer",
+    "am": "ደንበኛ ይምረጡ",
+    "om": "Maamila Filadhu",
+    "ti": "ደንበኛ ምረጹ"
+  },
+  {
+    "en": "Select Items to Pay",
+    "am": "ለመክፈል ዕቃዎች ይምረጡ",
+    "om": "Meelawwan Kaffaluuf Filadhu",
+    "ti": "ክትከፍልዎም እቃታት ምረጹ"
+  },
+  {
+    "en": "Payment Amount",
+    "am": "የክፍያ መጠን",
+    "om": "Hamma Kaffaltii",
+    "ti": "መጠን ክፍሊት"
+  },
+  {
+    "en": "Payment Method",
+    "am": "የክፍያ ዘዴ",
+    "om": "Mala Kaffaltii",
+    "ti": "ኣገባብ ክፍሊት"
+  },
+  {
+    "en": "Complete Payment",
+    "am": "ክፍያ አጠናቅቅ",
+    "om": "Kaffaltii Xumuri",
+    "ti": "ክፍሊት ኣጠናቅቑ"
+  },
+  {
+    "en": "Use this screen to receive payments from customers for credit sales or outstanding balances.",
+    "am": "ይህን ስክሪን ለደንበኞች ክፍያ ለመቀበል ይጠቀሙ።",
+    "om": "Iskiriinii kana fayyadami maamilota irraa kaffaltii fudhachuuf.",
+    "ti": "ነዛ ስክሪን ካብ ደንበኛታት ክፍሊት ንምቕባል ተጠቐሙላ።"
+  },
+  {
+    "en": "Search for the customer making the payment. Select them to see their outstanding balance.",
+    "am": "ክፍያ የሚፈጽመውን ደንበኛ ይፈልጉ። ያልተከፈለ ሂሳባቸውን ለማየት ይምረጡዋቸው።",
+    "om": "Maamila kaffaltii kana hojjechaa jiru barbaadi. Isaan filadhu haaraa isaanii ilaaluuf.",
+    "ti": "ነቲ ክፍሊት ዝከፍል ደንበኛ ድለዩ። እተረፈ ሂሳቦም ንምርኣይ ምረጹዎም።"
+  },
+  {
+    "en": "Choose which items or invoices the customer is paying for. You can select multiple items.",
+    "am": "ደንበኛው የሚከፍላቸውን ዕቃዎች ወይም ኢንቮይሶች ይምረጡ። በርካታ ዕቃዎችን መምረጥ ይችላሉ።",
+    "om": "Meelawwan ykn biilota maamilli kaffaluu filadhu. Meelawwan baayee filachuu dandeessa.",
+    "ti": "እቶም ደንበኛ ዝከፍልዎም እቃታት ወይ ኢንቮይሳት ምረጹ። ብዙሓት እቃታት ክትምርጹ ትኽእሉ ኢኹም።"
+  },
+  {
+    "en": "Enter the amount being paid. The system shows the remaining balance after payment.",
+    "am": "የሚከፈለውን መጠን ያስገቡ። ሲስተሙ ከክፍያ በኋላ የቀረውን ሂሳብ ያሳያል።",
+    "om": "Hamma kaffalamuu qabu galchi. Sirni erga kaffaltii booda haaraa agarsiisa.",
+    "ti": "እቲ ዝኽፈል መጠን ኣእትዉ። ሲስተም ድሕሪ ክፍሊት እተረፈ ሂሳብ የርእይ እዩ።"
+  },
+  {
+    "en": "Select how the customer is paying — cash or digital bank transfer.",
+    "am": "ደንበኛው እንዴት እንደሚከፍል ይምረጡ — በጥሬ ገንዘብ ወይም በዲጂታል የባንክ ዝውውር።",
+    "om": "Maamilli akka kaffalu filadhu — maallaqaan ykn naannoo baankii dijitaalaan.",
+    "ti": "ደንበኛ ከመይ ከም ዝከፍል ምረጹ — ብገንዘብ ወይ ብዲጂታል ምዝውዋር ባንክ።"
+  },
+  {
+    "en": "Review the payment details and tap to confirm. The payment will be recorded and the balance updated.",
+    "am": "የክፍያ ዝርዝሮችን ይከልሱ እና ለማረጋገጥ ይንኩ። ክፍያው ይመዘገባል እና ሂሳቡ ይዘምናል።",
+    "om": "Ibsa kaffaltii ilaali fi mirkaneessuuf tuqi. Kaffaltiin ni galmeeffama; haaraan ni haaromfama.",
+    "ti": "ዝርዝራት ክፍሊት ምርምሩ ከምኡውን ንምርግጋጽ ጠውቑ። ክፍሊት ክምዝገብ ከምኡውን ሂሳብ ክምዕረ እዩ።"
+  },
+  {
+    "en": "Contact Details",
+    "am": "የዕውቅት ዝርዝሮች",
+    "om": "Ibsa Qunnamtii",
+    "ti": "ዝርዝራት ርክብ"
+  },
+  {
+    "en": "View and manage a contact",
+    "am": "ዕውቅትን ይመልከቱ እና ያስተዳድሩ",
+    "om": "Qunnamtii ilaali fi bulchi",
+    "ti": "ርክብ ርአዩ ከምኡውን ኣመሓድሩ"
+  },
+  {
+    "en": "Contact Profile",
+    "am": "የዕውቅት መገለጫ",
+    "om": "Pirootayilii Qunnamtii",
+    "ti": "መግለጺ ርክብ"
+  },
+  {
+    "en": "Contact Information",
+    "am": "የዕውቅት መረጃ",
+    "om": "Odeeffannoo Qunnamtii",
+    "ti": "ሓበሬታ ርክብ"
+  },
+  {
+    "en": "Outstanding Balance",
+    "am": "ያልተከፈለ ሂሳብ",
+    "om": "Haaraa Kaffalamuu Hin Qabne",
+    "ti": "እተረፈ ሂሳብ"
+  },
+  {
+    "en": "Actions",
+    "am": "ድርጊቶች",
+    "om": "Gochiiwwan",
+    "ti": "ተግባራት"
+  },
+  {
+    "en": "This screen shows all information about a contact — personal details, transaction history, and balances.",
+    "am": "ይህ ስክሪን ስለ ዕውቅት ሁሉንም መረጃ ያሳያል — የግል ዝርዝሮች፣ የግብይት ታሪክ እና ሂሳቦች።",
+    "om": "Iskiriinii kun waaee qunnamtii odeeffannoo hunda agarsiisa — ibsa dhuunfaa, seenaa jijjiiramaa, fi haaraa.",
+    "ti": "እዛ ስክሪን ብዛዕባ ርክብ ኩሉ ሓበሬታ ተርኢ — ዝርዝራት ብሕቲ፣ ታሪኽ ልውውጥ ከምኡውን ሂሳባት።"
+  },
+  {
+    "en": "View name, phone numbers, account number, category, and notes.",
+    "am": "ስም፣ ስልክ ቁጥሮች፣ አካውንት ቁጥር፣ ምድብ እና ማስታወሻዎችን ይመልከቱ።",
+    "om": "Maqaa, lakkoofsa bilbilaa, lakkoofsa herregaa, ramaddii, fi yaadannoo ilaali.",
+    "ti": "ስም፣ ቁጽርታት ተሌፎን፣ ቁጽሪ ኣካውንት፣ መደብ ከምኡውን ምልክታት ርአዩ።"
+  },
+  {
+    "en": "Any outstanding credit balance for this contact. Track what they owe and when payments are due.",
+    "am": "ለዚህ ዕውቅት ማንኛውም ያልተከፈለ የብድር ሂሳብ። የሚከፍሉትን እና የክፍያ ቀናትን ይከታተሉ።",
+    "om": "Qunnamtii kanaaf haaraan liqii kaffalamuu hin qabne. Waan faayaa fi guyyaa kaffaltii hordofi.",
+    "ti": "ንዚ ርክብ እተረፈ ሂሳብ ብድሪ። እንዝከፍልዎን ዕለታት ክፍሊትን ክታበሉ።"
+  },
+  {
+    "en": "Edit contact details, record a sale, or collect payment directly from this screen.",
+    "am": "የዕውቅት ዝርዝሮችን ያስተካክሉ፣ ሽያጭ ይመዝግቡ፣ ወይም ከዚህ ስክሪን በቀጥታ ክፍያ ይሰብስቡ።",
+    "om": "Ibsa qunnamtii sirreeffadhu, gurgurtaa galmeessi, ykn iskiriinii kana irraa kaffaltii funyaanuu.",
+    "ti": "ዝርዝራት ርክብ ኣተኻኽሉ፣ ሽያጥ መዝግቡ፣ ወይ ካብዛ ስክሪን ብቐጥታ ክፍሊት እከቡ።"
+  },
+  {
+    "en": "Contacts",
+    "am": "ዕውቅቶች",
+    "om": "Qunnamtoota",
+    "ti": "ርክባት"
+  },
+  {
+    "en": "Business Contacts",
+    "am": "የንግድ ዕውቅቶች",
+    "om": "Qunnamtii Daldalaa",
+    "ti": "ርክባት ንግዲ"
+  },
+  {
+    "en": "Add a Contact",
+    "am": "ዕውቅት ያክሉ",
+    "om": "Qunnamtii Idaati",
+    "ti": "ርክብ ወስኹ"
+  },
+  {
+    "en": "Contact List",
+    "am": "የዕውቅት ዝርዝር",
+    "om": "Tarree Qunnamtii",
+    "ti": "ዝርዝር ርክባት"
+  },
+  {
+    "en": "Search Contacts",
+    "am": "ዕውቅቶችን ይፈልጉ",
+    "om": "Qunnamtii Barbaadi",
+    "ti": "ርክባት ድለዩ"
+  },
+  {
+    "en": "Manage your business network",
+    "am": "የንግድ አውታርዎን ያስተዳድሩ",
+    "om": "Sammuu daldalaa kee bulchi",
+    "ti": "ኔትወርክ ንግድኩም ኣመሓድሩ"
+  },
+  {
+    "en": "Store and manage all your business contacts — customers, suppliers, and partners.",
+    "am": "ሁሉንም የንግድ ዕውቅቶችዎን ያከማቹ እና ያስተዳድሩ — ደንበኞች፣ አቅራቢዎች እና አጋሮች።",
+    "om": "Qunnamttoota daldalaa kee hunda kuusi fi bulchi — maamila, dhiyeessota, fi hirmattota.",
+    "ti": "ኩሎም ርክባት ንግድኩም ኣከማችቱ ከምኡውን ኣመሓድሩ — ደንበኛታት፣ ኣቕራቢታት ከምኡውን መሳርሕቲ።"
+  },
+  {
+    "en": "Tap to add a new contact. Enter their name, phone, email, and category.",
+    "am": "አዲስ ዕውቅት ለመጨመር ይንኩ። ስም፣ ስልክ፣ ኢሜይል እና ምድብ ያስገቡ።",
+    "om": "Tuqi qunnamtii haaraa idaasuuf. Maqaa, lakkoofsa bilbilaa, iimeelii, fi ramaddii galchi.",
+    "ti": "ሓድሽ ርክብ ንምውስኽ ጠውቑ። ስም፣ ተሌፎን፣ ኢመይል ከምኡውን መደብ ኣእትዉ።"
+  },
+  {
+    "en": "All your contacts displayed here. Search by name or phone, tap for details.",
+    "am": "ሁሉም ዕውቅቶችዎ እዚህ ይታያሉ። በስም ወይም በስልክ ይፈልጉ፣ ለዝርዝር ይንኩ።",
+    "om": "Qunnamttoota kee hundinuu asitti mulatu. Maqaan ykn bilbilaan barbaadi, ibsaf tuqi.",
+    "ti": "ኩሎም ርክባትኩም ኣብዚ ይርአዩ። ብስም ወይ ብተሌፎን ድለዩ፣ ንዝርዝር ጠውቑ።"
+  },
+  {
+    "en": "Find any contact instantly by typing their name or phone number.",
+    "am": "ማንኛውንም ዕውቅት ስም ወይም ስልክ በመተየብ በፍጥነት ይፈልጉ።",
+    "om": "Qunnamtii kamayyuu maqaa ykn lakkoofsa bilbilaa barreessuun battaluma argadhu.",
+    "ti": "ስም ወይ ቁጽሪ ተሌፎን ብምጽሓፍ ዝኾነ ርክብ ብቐልጡፍ ድለዩ።"
+  },
+  {
+    "en": "Dashboard",
+    "am": "ዳሽቦርድ",
+    "om": "Daashboordii",
+    "ti": "ዳሽቦርድ"
+  },
+  {
+    "en": "Master your business at a glance",
+    "am": "ንግድዎን በአንድ እይታ ይቆጣጠሩ",
+    "om": "Daldala kee mala tokkootiin bulchi",
+    "ti": "ንግድኩም ብሓደ ኣረኣእያ ተቆጻጸሩ"
+  },
+  {
+    "en": "Welcome to Your Dashboard",
+    "am": "እንኳን ወደ ዳሽቦርድዎ በደህና መጡ",
+    "om": "Daashboordii kee barbaachisaa",
+    "ti": "እንቋዕ ናብ ዳሽቦርድኩም ብደሓን መጻእኩም"
+  },
+  {
+    "en": "Quick Status Cards",
+    "am": "ፈጣን የሁኔታ ካርዶች",
+    "om": "Kaardii Sadarkaa Daddafaa",
+    "ti": "ቅልጡፍ ካርዳት ኩነት"
+  },
+  {
+    "en": "Performance Metrics",
+    "am": "የአፈጻጸም መለኪያዎች",
+    "om": "Madaalii Hojiivetii",
+    "ti": "መለክዒታት ንጥፈት"
+  },
+  {
+    "en": "Universal Search",
+    "am": "ሁለንተናዊ ፍለጋ",
+    "om": "Barbaaduu Waliigalaa",
+    "ti": "ምድላይ ዓለምለኻዊ"
+  },
+  {
+    "en": "Action Alerts",
+    "am": "የድርጊት ማንቂያዎች",
+    "om": "Riccati Gochii",
+    "ti": "መጠንቀቕታ ተግባር"
+  },
+  {
+    "en": "Recent Activity Feed",
+    "am": "የቅርብ ጊዜ እንቅስቃሴ መግብ",
+    "om": "Sochii Yeroo Dhihoo Feedii",
+    "ti": "መጋብ ንጥፈታት ቀረባ ግዜ"
+  },
+  {
+    "en": "Business Health Score",
+    "am": "የንግድ ጤና ውጤት",
+    "om": "Qabxii Fayyaa Daldalaa",
+    "ti": "ነጥቢ ጥዕና ንግዲ"
+  },
+  {
+    "en": "Profile & Navigation",
+    "am": "መገለጫ እና አሰሳ",
+    "om": "Pirootayilii fi Qajeelfama",
+    "ti": "መግለጺን ምምራሕን"
+  },
+  {
+    "en": "At-a-glance status of low stock items, credit customers, and pending alerts.",
+    "am": "ዝቅተኛ ክምችት፣ የብድር ደንበኞች እና የተከማቹ ማንቂያዎች ሁኔታ በፍጥነት ይመልከቱ።",
+    "om": "Sadarkaa ariifachiisaa meelawwan kuusaa gadi buusan, maamila liqii, fi riccatiwwan eegan.",
+    "ti": "ኩነት ዝተረፈ ክምችት፣ ብድሪ ደንበኛታት ከምኡውን እተጠበቁ መጠንቀቕታት ብቕልጡፍ ርአዩ።"
+  },
+  {
+    "en": "Search across all your inventory, sales, expenses, and contacts from one place.",
+    "am": "ከአንድ ቦታ በሁሉም ክምችት፣ ሽያጭ፣ ወጪ እና ዕውቅቶች ውስጥ ይፈልጉ።",
+    "om": "Kuusaa, gurgurtaa, baasii, fi qunnamtii kee hunda keessaa bakka tokkootti barbaadi.",
+    "ti": "ካብ ሓደ ቦታ ኣብ ኩሉ ክምችት፣ ሽያጥ፣ ወጻኢ ከምኡውን ርክባት ድለዩ።"
+  },
+  {
+    "en": "Tap the bell to open your notifications — low stock items, overdue debts, and other urgent updates.",
+    "am": "ማንቂያ ደወሉን ይንኩ ማንቂያዎችዎን ለመክፈት — ዝቅተኛ ክምችት፣ ያልተከፈሉ ዕዳዎች እና ሌሎች አስቸኳይ ዝመኖች።",
+    "om": "Bilbila tuqi beekkonsa kee banuuf — meelawwan kuusaa gadi buusan, liqii yeroo isaa darbe, fi haaromsa beelawoo biroo.",
+    "ti": "መጠንቀቕታ ደወል ጠውቑ መጠንቀቕታታትኩም ንምኽፋት — ዝተረፈ ክምችት፣ ዘይተኸፈለ ዕዳታት ከምኡውን ካልኦት ህጹጽ ምምዕባላት።"
+  },
+  {
+    "en": "See a live feed of everything happening in your business — sales, expenses, adjustments.",
+    "am": "በንግድዎ ውስጥ የሚከሰቱትን ሁሉ የቀጥታ መግብ ይመልከቱ — ሽያጭ፣ ወጪ፣ ማስተካከያዎች።",
+    "om": "Sochii waaee daldalaa kee hundumaa feedii beelawoo ilaali — gurgurtaa, baasii, sirreeffamoota.",
+    "ti": "ኣብ ንግድኩም ዝኸሱ ኩሉ ቀጥታ መጋብ ርአዩ — ሽያጣት፣ ወጻኢታት፣ ምትእርራያት።"
+  },
+  {
+    "en": "Your overall business health rating based on multiple factors. A higher score means your business is performing well.",
+    "am": "በበርካታ ምክንያቶች ላይ የተመሰረተ አጠቃላይ የንግድ ጤና ደረጃ። ከፍተኛ ውጤት ማለት ንግድዎ በጥሩ ሁኔታ እየሰራ ነው።",
+    "om": "Qabxii fayyaa daldalaa guutuu wantoota baayee irratti hundaa. Qabxii ol guddaan daldala kee sirritti hojjechaa jira jechuudha.",
+    "ti": "ኣብ ብዙሓት ምኽንያታት እተመርኰሰ ምሉእ ደረጃ ጥዕና ንግዲ። ልዑል ነጥቢ ማለት ንግድኩም ብጥዕያዊ ምዝራብ ኣሎ።"
+  },
+  {
+    "en": "Date & Time Settings",
+    "am": "የቀን እና ሰዓት ቅንብሮች",
+    "om": "Sajaa Guyyaa fi Saatii",
+    "ti": "ምምሕዳር መዓልትን ሰዓትን"
+  },
+  {
+    "en": "Configure date and time formats",
+    "am": "የቀን እና ሰዓት ቅርጸቶችን ያዋቅሩ",
+    "om": "Foormaatiiwwan guyyaa fi saatii qindeessi",
+    "ti": "ቅርጸታት መዓልትን ሰዓትን ኣዋቅሩ"
+  },
+  {
+    "en": "Date & Time",
+    "am": "ቀን እና ሰዓት",
+    "om": "Guyyaa fi Saatii",
+    "ti": "መዓልትን ሰዓትን"
+  },
+  {
+    "en": "Calendar Type",
+    "am": "የቀን አቆጣጠር አይነት",
+    "om": "Gosa Kalendarii",
+    "ti": "ኣይነት ካላንደር"
+  },
+  {
+    "en": "Time Format",
+    "am": "የሰዓት ቅርጸት",
+    "om": "Foormaatii Saatii",
+    "ti": "ቅርጸት ሰዓት"
+  },
+  {
+    "en": "Save Settings",
+    "am": "ቅንብሮችን አስቀምጥ",
+    "om": "Sajaa Olkaati",
+    "ti": "ምምሕዳራት ኣቐምጡ"
+  },
+  {
+    "en": "Customize how dates and times are displayed throughout the app.",
+    "am": "ቀኖች እና ሰዓቶች በመላው መተግበሪያ ውስጥ እንዴት እንደሚታዩ ያብጁ።",
+    "om": "Appii keessatti guyyaa fi saatoon akka mulatan haala fedheetti jijjiiri.",
+    "ti": "መዓልታትን ሰዓታትን ኣብ መላእ ኣፕሊኬሽን ከመይ ከም ዝርአዩ ብጅዎ።"
+  },
+  {
+    "en": "Choose between Gregorian and Ethiopian calendar systems.",
+    "am": "በጎርጎርያን እና በኢትዮጵያ የቀን አቆጣጠር ስርዓቶች መካከል ይምረጡ።",
+    "om": "Sistimii kalendarii Giriigoriyaa fi Itiyoophiyaa gidduu filadhu.",
+    "ti": "ኣብ መንጎ ስርዓት ካላንደር ጎርጎርያዊን ኢትዮጵያዊን ምረጹ።"
+  },
+  {
+    "en": "Select 12-hour or 24-hour time format.",
+    "am": "የ12-ሰዓት ወይም የ24-ሰዓት ቅርጸት ይምረጡ።",
+    "om": "Foormaatii saatii 12 ykn 24 filadhu.",
+    "ti": "ቅርጸት ሰዓት 12-ሰዓት ወይ 24-ሰዓት ምረጹ።"
+  },
+  {
+    "en": "Save your date and time preferences. The entire app updates to match.",
+    "am": "የቀን እና ሰዓት ምርጫዎችዎን ያስቀምጡ። መላው መተግበሪያ ይዘምናል።",
+    "om": "Filannoowwan guyyaa fi saatii kee olkaati. Appiin guutuun walsimuuf ni haaromfama.",
+    "ti": "ምርጫታት መዓልትን ሰዓትን ኣቐምጡ። መላእ ኣፕሊኬሽን ንምስምማዕ ክምዕር እዩ።"
+  },
+  {
+    "en": "Inventory",
+    "am": "ክምችት",
+    "om": "Kuusaa",
+    "ti": "ክምችት"
+  },
+  {
+    "en": "Inventory Vault",
+    "am": "የክምችት ማከማቻ",
+    "om": "Kuusaa Kuusaa",
+    "ti": "ክምችት መከማቸታት"
+  },
+  {
+    "en": "Add New Item",
+    "am": "አዲስ ዕቃ ያክሉ",
+    "om": "Meelata Haaraa Idaati",
+    "ti": "ሓድሽ ዕቃ ወስኹ"
+  },
+  {
+    "en": "Portfolio Valuation",
+    "am": "የፖርትፎሊዮ ዋጋ",
+    "om": "Hamma Maallaqaa Kuusaa",
+    "ti": "ዋጋ ፖርትፎሊዮ"
+  },
+  {
+    "en": "Stock Ledger",
+    "am": "የክምችት መዝገብ",
+    "om": "Galmee Kuusaa",
+    "ti": "መዝገብ ክምችት"
+  },
+  {
+    "en": "Item Cards",
+    "am": "የዕቃ ካርዶች",
+    "om": "Kaardii Meelataa",
+    "ti": "ካርዳት ዕቃ"
+  },
+  {
+    "en": "Inventory Insights",
+    "am": "የክምችት ግንዛቤዎች",
+    "om": "Hubannoo Kuusaa",
+    "ti": "ምስትውዓል ክምችት"
+  },
+  {
+    "en": "Restock Items",
+    "am": "ዕቃዎችን መልሱ",
+    "om": "Meelawwan Irra deebii Guuti",
+    "ti": "እቃታት ዳግማይ ኣከማችቱ"
+  },
+  {
+    "en": "Manage your stock efficiently",
+    "am": "ክምችትዎን በብቃት ያስተዳድሩ",
+    "om": "Kuusaa kee qajeelfamaan bulchi",
+    "ti": "ክምችትኩም ብትኽክል ኣመሓድሩ"
+  },
+  {
+    "en": "Your complete inventory management system. Track stock levels and manage every item.",
+    "am": "የተሟላ የክምችት አስተዳደር ስርዓትዎ። የክምችት ደረጃዎችን ይከታተሉ እና እያንዳንዱን ዕቃ ያስተዳድሩ።",
+    "om": "Sirna bulchiinsa kuusaa kee guutuu. Sadarkaa kuusaa hordofi fi meelata hunda bulchi.",
+    "ti": "ምሉእ ስርዓት ምሕደራ ክምችትኩም። ደረጃታት ክምችት ክታበሉ ከምኡውን ነፍሲ ወከፍ ዕቃ ኣመሓድሩ።"
+  },
+  {
+    "en": "Tap here to add a new product. Fill in the name, category, quantity, and prices.",
+    "am": "አዲስ ምርት ለመጨመር እዚህ ይንኩ። ስም፣ ምድብ፣ ብዛት እና ዋጋዎች ይሙሉ።",
+    "om": "As tuqi oomishaa haaraa idaasuuf. Maqaa, ramaddii, hamma, fi gatii guuti.",
+    "ti": "ሓድሽ ምርት ንምውስኽ ኣብዚ ጠውቑ። ስም፣ መደብ፣ ብዝሒ ከምኡውን ዋጋታት መሊእኩም።"
+  },
+  {
+    "en": "See the total value of your inventory. This updates automatically as you add, sell, or adjust items.",
+    "am": "የክምችትዎን አጠቃላይ ዋጋ ይመልከቱ። ዕቃዎችን ሲጨምሩ፣ ሲሸጡ ወይም ሲያስተካክሉ በራስ-ሰር ይዘምናል።",
+    "om": "Hamma maallaqaa kuusaa kee ilaali. Yeroo meelawwan idaattu, gurgurtu, ykn sirreessu ofumaan ni haaromfama.",
+    "ti": "ምሉእ ዋጋ ክምችትኩም ርአዩ። እቃታት ክትወስኹ፣ ክትሸጡ ወይ ክተኻኽሉ ከለኹም ብርእሱ ይምዕር እዩ።"
+  },
+  {
+    "en": "All your inventory items listed here. Use the search bar to find items by category or sort.",
+    "am": "ሁሉም የክምችት ዕቃዎች እዚህ ተዘርዝረዋል። ዕቃዎችን በምድብ ለማግኘት የፍለጋ አሞሌ ይጠቀሙ።",
+    "om": "Meelawwan kuusaa kee hundinuu asitti tarreefaman. Meelawwan ramaddiidhaan barbaaduuf baara barbaaduu fayyadami.",
+    "ti": "ኩሎም እቃታት ክምችትኩም ኣብዚ ተዘርዚሮም ኣለዉ። እቃታት ብመደብ ንምርካብ መስመር ምድላይ ተጠቐሙ።"
+  },
+  {
+    "en": "Each card shows the item name, current stock, selling price, and unit.",
+    "am": "እያንዳንዱ ካርድ የዕቃውን ስም፣ የአሁን ክምችት፣ የሽያጭ ዋጋ እና አሃድ ያሳያል።",
+    "om": "Kaardii tokkoon tokkoon maqaa meelataa, kuusaa ammaa, gatii gurgurtaa, fi unitii agarsiisa.",
+    "ti": "ነፍሲ ወከፍ ካርድ ስም ዕቃ፡ ህሉው ክምችት፡ ዋጋ ሽያጥ ከምኡውን ኣሃዱ የርእይ እዩ።"
+  },
+  {
+    "en": "View stock distribution by category, see low-stock alerts, and monitor expiration dates.",
+    "am": "ስቶክ በምድብ ሲታይ፣ ዝቅተኛ የስቶክ ማንቂያዎችን ይመልከቱ እና የማለቂያ ቀኖችን ይቆጣጠሩ።",
+    "om": "Qoodinsa kuusaa ramaddiidhaan ilaali, balaa kuusaa gadi buusaa ilaali, fi guyyaa dhumaa toachadhu.",
+    "ti": "ምብራህ ክምችት ብመደብ ርአዩ፡ መጠንቀቕታታት ዝተረፈ ክምችት ርአዩ ከምኡውን ዕለታት ምውዳእ ተቆጻጸሩ።"
+  },
+  {
+    "en": "When stock runs low, tap to open the product order modal to replenish your inventory.",
+    "am": "ክምችት ሲያንስ ምርቶችን ለማዘዝ ሞዳሉን ለመክፈት ይንኩ።",
+    "om": "Yeroo kuusaan gadi buhe, oomishaa ajajuu modal banuuf tuqi kuusaa kee guutuuf.",
+    "ti": "ክምችት ምስ ተንከሰ ምርታት ንምእዳው ሞዳል ንምኽፋት ጠውቑ።"
+  },
+  {
+    "en": "Excel",
+    "am": "Excel",
+    "om": "Excel",
+    "ti": "Excel"
+  },
+  {
+    "en": "PDF",
+    "am": "PDF",
+    "om": "PDF",
+    "ti": "PDF"
+  },
+  {
+    "en": "50,000",
+    "am": "50,000",
+    "om": "50,000",
+    "ti": "50,000"
+  },
+  {
+    "en": "DD/MM/YYYY",
+    "am": "DD/MM/YYYY",
+    "om": "DD/MM/YYYY",
+    "ti": "DD/MM/YYYY"
+  },
+  {
+    "en": "YYYY-MM-DD",
+    "am": "YYYY-MM-DD",
+    "om": "YYYY-MM-DD",
+    "ti": "YYYY-MM-DD"
+  },
+  {
+    "en": "CSV / Excel (.csv)",
+    "am": "CSV / Excel (.csv)",
+    "om": "CSV / Excel (.csv)",
+    "ti": "CSV / Excel (.csv)"
+  },
+  {
+    "en": "Review all price and stock adjustments",
+    "am": "ሁሉንም የዋጋ እና የክምችት ማስተካከያዎች ይከልሱ",
+    "om": "Sirreeffama gatii fi kuusaa hunda ilaali",
+    "ti": "ኩሎም ምትእርራያት ዋጋን ክምችትን ምርምሩ"
+  },
+  {
+    "en": "Set up a spending plan",
+    "am": "የወጪ እቅድ ያዘጋጁ",
+    "om": "Karoora baasii qindeessi",
+    "ti": "መደብ ወጻኢ ኣዘጋጅሉ"
+  },
+  {
+    "en": "Place a customer order",
+    "am": "የደንበኛ ትእዛዝ ያስገቡ",
+    "om": "Ajaja maamila galchi",
+    "ti": "ትእዛዝ ደንበኛ ኣእትዉ"
+  },
+  {
+    "en": "Record inventory damage or loss",
+    "am": "የክምችት ጉዳት ወይም ኪሳራ ይመዝግቡ",
+    "om": "Miidhaa ykn hoongoo kuusaa galmeessi",
+    "ti": "ጉድኣት ወይ ምጥፋእ ክምችት መዝግቡ"
+  },
+  {
+    "en": "Find Item",
+    "am": "ዕቃ ይፈልጉ",
+    "om": "Meelata Barbaadi",
+    "ti": "ዕቃ ድለዩ"
+  },
+  {
+    "en": "Record Loss",
+    "am": "ኪሳራ ይመዝግቡ",
+    "om": "Hoongoo Galmeessi",
+    "ti": "ምጥፋእ መዝግቡ"
+  },
+  {
+    "en": "Track credit and payments",
+    "am": "ብድር እና ክፍያዎችን ይከታተሉ",
+    "om": "Liqii fi kaffaltiiwwan hordofi",
+    "ti": "ብድርን ክፍሊታትን ክታበሉ"
+  },
+  {
+    "en": "View all debt entries",
+    "am": "ሁሉንም የዕዳ ግቤቶች ይመልከቱ",
+    "om": "Galmee liqii hunda ilaali",
+    "ti": "ኩሎም መዝገባት ዕዳ ርአዩ"
+  },
+  {
+    "en": "Track credits and collections",
+    "am": "ብድሮችን እና ስብስቦችን ይከታተሉ",
+    "om": "Liqiiwwan fi funaansa hordofi",
+    "ti": "ብድራትን ኣከባብርን ክታበሉ"
+  },
+  {
+    "en": "Collect & Pay",
+    "am": "ሰብስብ እና ክፈል",
+    "om": "Funyaanuu fi Kaffali",
+    "ti": "እከብ እና ክፈል"
+  },
+  {
+    "en": "Review an expense record",
+    "am": "የወጪ መዝገብ ይከልሱ",
+    "om": "Galmee baasii ilaali",
+    "ti": "መዝገብ ወጻኢ ምርምሩ"
+  },
+  {
+    "en": "Log a business expense step by step",
+    "am": "የንግድ ወጪን ደረጃ በደረጃ ይመዝግቡ",
+    "om": "Baasii daldalaa tarkaanfataan tarkaanfataan galmeessi",
+    "ti": "ወጻኢ ንግዲ ደረጃ ብደረጃ መዝግቡ"
+  },
+  {
+    "en": "Track financial losses",
+    "am": "የገንዘብ ኪሳራዎችን ይከታተሉ",
+    "om": "Hoongoowwan maallaqaa hordofi",
+    "ti": "ምጥፋኣት ገንዘብ ክታበሉ"
+  },
+  {
+    "en": "Loss Tracking",
+    "am": "የኪሳራ ክትትል",
+    "om": "Hoongoo Hordofuu",
+    "ti": "ምክትታል ምጥፋእ"
+  },
+  {
+    "en": "Loss Entries",
+    "am": "የኪሳራ ግቤቶች",
+    "om": "Galmee Hoongoo",
+    "ti": "መዝገባት ምጥፋእ"
+  },
+  {
+    "en": "View stock movement history",
+    "am": "የክምችት እንቅስቃሴ ታሪክ ይመልከቱ",
+    "om": "Seenaa sochii kuusaa ilaali",
+    "ti": "ታሪኽ ምንቅስቓስ ክምችት ርአዩ"
+  },
+  {
+    "en": "Filter Records",
+    "am": "መዝገቦችን አጣራ",
+    "om": "Galmee Calleessii",
+    "ti": "መዝገባት ኣጣርሩ"
+  },
+  {
+    "en": "View complete inventory item information",
+    "am": "ሙሉ የክምችት ዕቃ መረጃ ይመልከቱ",
+    "om": "Odeeffannoo meelata kuusaa guutuu ilaali",
+    "ti": "ምሉእ ሓበሬታ ዕቃ ክምችት ርአዩ"
+  },
+  {
+    "en": "Quick Actions",
+    "am": "ፈጣን ድርጊቶች",
+    "om": "Gochii Daddafaa",
+    "ti": "ቅልጡፍ ተግባራት"
+  },
+  {
+    "en": "Configure your alerts",
+    "am": "ማንቂያዎችዎን ያዋቅሩ",
+    "om": "Riccatiwwan kee qindeessi",
+    "ti": "መጠንቀቕታታትኩም ኣዋቅሩ"
+  },
+  {
+    "en": "Stay informed about your business",
+    "am": "ስለ ንግድዎ እውቀት ይኑርዎ",
+    "om": "Waaee daldala kee beekkofuu",
+    "ti": "ብዛዕባ ንግድኩም ኣፍልጦ ሃብሉ"
+  },
+  {
+    "en": "Review a purchase order",
+    "am": "የግዢ ትእዛዝ ይከልሱ",
+    "om": "Ajaja bitaa ilaali",
+    "ti": "ትእዛዝ ግዢ ምርምሩ"
+  },
+  {
+    "en": "Manage customer orders",
+    "am": "የደንበኛ ትእዛዞችን ያስተዳድሩ",
+    "om": "Ajaja maamila bulchi",
+    "ti": "ትእዛዛት ደንበኛ ኣመሓድሩ"
+  },
+  {
+    "en": "Protect your account",
+    "am": "አካውንትዎን ይጠብቁ",
+    "om": "Herrega kee eegi",
+    "ti": "ኣካውንትኩም ጠብቁ"
+  },
+  {
+    "en": "Security",
+    "am": "ደህንነት",
+    "om": "Nageenya",
+    "ti": "ደህንነት"
+  },
+  {
+    "en": "Biometric Auth",
+    "am": "ባዮሜትሪክ ማረጋገጫ",
+    "om": "Biometric Mirkaneessa",
+    "ti": "ባዮሜትሪክ ምርግጋጽ"
+  },
+  {
+    "en": "Get help and app information",
+    "am": "እርዳታ እና የመተግበሪያ መረጃ ያግኙ",
+    "om": "Gargaarsa fi odeeffannoo appii argadhu",
+    "ti": "ሓገዝን ሓበሬታ ኣፕሊኬሽንን ርኸቡ"
+  },
+  {
+    "en": "FAQ & Guides",
+    "am": "FAQ እና መመሪያዎች",
+    "om": "FAQ fi Qajeelfama",
+    "ti": "FAQን መምርሕታትን"
+  },
+  {
+    "en": "Choose your preferred language",
+    "am": "የሚመርጡትን ቋንቋ ይምረጡ",
+    "om": "Afaan filattuu kee filadhu",
+    "ti": "እትመርጽዎ ቋንቋ ምረጹ"
+  },
+  {
+    "en": "Current Language",
+    "am": "አሁን ያለው ቋንቋ",
+    "om": "Afaan Ammaa",
+    "ti": "ህሉው ቋንቋ"
+  },
+  {
+    "en": "Warehouse Manager",
+    "am": "የመጋዘን አስተዳዳሪ",
+    "om": "Bulchaa Kuusaa",
+    "ti": "ሓላፊ መከማቸታት"
+  },
+  {
+    "en": "Manage your storage locations",
+    "am": "የማከማቻ ቦታዎችዎን ያስተዳድሩ",
+    "om": "Bakka kuusaa kee bulchi",
+    "ti": "ቦታታት መከማቸታትኩም ኣመሓድሩ"
+  },
+  {
+    "en": "Warehouse Management",
+    "am": "የመጋዘን አስተዳደር",
+    "om": "Bulchiinsa Kuusaa",
+    "ti": "ምሕደራ መከማቸታት"
+  },
+  {
+    "en": "Warehouse List",
+    "am": "የመጋዘን ዝርዝር",
+    "om": "Tarree Kuusaa",
+    "ti": "ዝርዝር መከማቸታት"
+  },
+  {
+    "en": "Configure storage locations",
+    "am": "የማከማቻ ቦታዎችን ያዋቅሩ",
+    "om": "Bakka kuusaa qindeessi",
+    "ti": "ቦታታት መከማቸታት ኣዋቅሩ"
+  },
+  {
+    "en": "Default Warehouse",
+    "am": "ነባሪ መጋዘን",
+    "om": "Kuusaa Durtii",
+    "ti": "ነባሪ መከማቸታት"
+  },
+  {
+    "en": "Transfer Preferences",
+    "am": "የዝውውር ምርጫዎች",
+    "om": "Filannoo Daddarbaa",
+    "ti": "ምርጫታት ምዝውዋር"
+  },
+  {
+    "en": "Your Profile",
+    "am": "መገለጫዎ",
+    "om": "Pirootayilii Kee",
+    "ti": "መግለጺኻ"
+  },
+  {
+    "en": "Profile Photo",
+    "am": "የመገለጫ ፎቶ",
+    "om": "Suuraa Pirootayilii",
+    "ti": "ስእሊ መግለጺ"
+  },
+  {
+    "en": "Track your reminders",
+    "am": "ማስታወሻዎችዎን ይከታተሉ",
+    "om": "Yaadannoo kee hordofi",
+    "ti": "ኣማዕሚንታትኩም ክታበሉ"
+  },
+  {
+    "en": "Record a Sale",
+    "am": "ሽያጭ ይመዝግቡ",
+    "om": "Gurgurtaa Galmeessi",
+    "ti": "ሽያጥ መዝግቡ"
+  },
+  {
+    "en": "Recording a Sale",
+    "am": "ሽያጭ በመመዝገብ ላይ",
+    "om": "Gurgurtaa Galmeessuu",
+    "ti": "ሽያጥ ይመዝገብ ኣሎ"
+  },
+  {
+    "en": "Review a completed transaction",
+    "am": "የተጠናቀቀ ግብይት ይከልሱ",
+    "om": "Jijjiirama xumurame ilaali",
+    "ti": "እተወድአ ልውውጥ ምርምሩ"
+  },
+  {
+    "en": "Transaction Details",
+    "am": "የግብይት ዝርዝሮች",
+    "om": "Ibsa Jijjiiramaa",
+    "ti": "ዝርዝራት ልውውጥ"
+  },
+  {
+    "en": "Pricing Breakdown",
+    "am": "የዋጋ ትንተና",
+    "om": "Qoodinsa Gatii",
+    "ti": "ምብራህ ዋጋ"
+  },
+  {
+    "en": "Transaction List",
+    "am": "የግብይት ዝርዝር",
+    "om": "Tarree Jijjiiramaa",
+    "ti": "ዝርዝር ልውውጣት"
+  },
+  {
+    "en": "Export Records",
+    "am": "መዝገቦችን ይላኩ",
+    "om": "Galmee Expoortii",
+    "ti": "መዝገባት ላኡ"
+  },
+  {
+    "en": "Manufacturer / Brand",
+    "am": "አምራች / ብራንድ",
+    "om": "Oomishaa / Moggaa",
+    "ti": "ኣምራሺ / ብራንድ"
+  },
+  {
+    "en": "Expiration & Quality",
+    "am": "ማለቂያ ጊዜ እና ጥራት",
+    "om": "Yeroo Xumuraa fi Qulqullina",
+    "ti": "እዋን ምውዳእን ትሕዝቶን"
+  },
+  {
+    "en": "Enter the supplier or company name for this item. This is useful for tracking which vendor supplies the product.",
+    "am": "ለዚህ ዕቃ የአቅራቢውን ወይም የኩባንያውን ስም ያስገቡ። ይህ የትኛው አቅራቢ ምርቱን እንደሚያቀርብ ለመከታተል ይጠቅማል።",
+    "om": "Maqaa dhiyeessaa ykn kaampaanii meelata kanaaf galchi. Kun dhiyeessaan kam oomishaa kennu hordofuuf fayya.",
+    "ti": "ስም ኣቕራቢ ወይ ኩባንያ ንዛ ዕቃ ኣእትዉ። እዚ ዝኾነ ኣቕራቢ እቲ ምርት ከም ዝምርህ ንምክትታል ይጠቅም እዩ።"
+  },
+  {
+    "en": "Each entry shows the item name, adjustment type, old and new values, reason, and the user who made the change.",
+    "am": "እያንዳንዱ ግቤት የዕቃውን ስም፣ የማስተካከያ አይነት፣ የቆዩ እና አዳዲስ እሴቶች፣ ምክንያት እና ለውጡን ያደረገውን ተጠቃሚ ያሳያል።",
+    "om": "Galmee tokkoon tokkoon maqaa meelataa, gosa sirreeffamaa, gatii dullaa fi haaraa, sababa, fi fayyadamaa jijjiirama hojjete agarsiisa.",
+    "ti": "ነፍሲ ወከፍ መዝገብ ስም ዕቃ፡ ኣይነት ምትእርራይ፡ ኣረንጓይን ሓድሽ ክብረታት፡ ምኽንያት ከምኡውን ነቲ ምቕያር ዝገበረ ተጠቃሚ የርእይ እዩ።"
+  },
+  {
+    "en": "Choose the budget type — business-wide, department-specific, or project-based. This determines how spending is tracked.",
+    "am": "የበጀት አይነት ይምረጡ — በንግድ-ሙሉ፣ በዲፓርትመንት-ተኮር፣ ወይም በፕሮጀክት-ተኮር። ይህ ወጪ እንዴት እንደሚከታተል ይወስናል።",
+    "om": "Gosa baajetaa filadhu — daldala-guuftuu, mmf-qilee, ykn pirojekti-qilee. Kun baasii akka hordofamu murteessa.",
+    "ti": "ኣይነት በጀት ምረጹ — ብምሉእ ንግዲ፡ ብክፍሊ-ተኽእሎ ወይ ብፕሮጀክት-ተኽእሎ። እዚ ወጻኢ ከመይ ከም ዝክታበል ይውስን እዩ።"
+  },
+  {
+    "en": "Review your budget settings and confirm. The budget will be active immediately and track expenses in real-time.",
+    "am": "የበጀት ቅንብሮችዎን ይከልሱ እና ያረጋግጡ። በጀቱ ወዲያውኑ ስራ ላይ ይውላል እና ወጪዎችን በቅጽበት ይከታተላል።",
+    "om": "Sajaa baajeta kee ilaali fi mirkaneessi. Baajettiin battaluma hojiirra ni oola; baasiiwwan dhugaa yeroo keessatti hordofa.",
+    "ti": "ምምሕዳራት በጀትኩም ምርምሩ ከምኡውን ኣረጋግጹ። በጀቱ ብቕጽበት ኣብ ስራሕ ይእቱ ከምኡውን ወጻኢታት ብናይ ሓቂ ግዜ ይክታበል እዩ።"
+  },
+  {
+    "en": "Review the order summary and tap the commit button to finalize. The order will appear in your orders list.",
+    "am": "የትእዛዝ ማጠቃለያ ይከልሱ እና ለማጠናቀቅ የማረጋገጫ ቁልፉን ይንኩ። ትእዛዙ በትእዛዞች ዝርዝርዎ ውስጥ ይታያል።",
+    "om": "Guduunfaa ajajaa ilaali fi battalummaan xumuruuf tuqi. Ajajaan tarree ajajaa kee keessatti ni mulata.",
+    "ti": "ጠቕላላ ትእዛዝ ምርምሩ ንምዝዛም ነጥቢ ምርግጋጽ ጠውቑ። እቲ ትእዛዝ ኣብ ዝርዝር ትእዛዛትኩም ክርአ እዩ።"
+  },
+  {
+    "en": "This screen shows the complete details of a debt or credit account — what was borrowed, payments made, and remaining balance.",
+    "am": "ይህ ስክሪን የዕዳ ወይም የብድር ሂሳብ ሙሉ ዝርዝሮችን ያሳያል — የተበደረውን፣ የተከፈለውን እና የቀረውን ሂሳብ።",
+    "om": "Iskiriiniin kun ibsa guutuu herrega liqii ykn liqii agarsiisa — wanti liqeefame, kaffaltiiwwan, fi haaraan hafe.",
+    "ti": "እዛ ስክሪን ምሉእ ዝርዝራት ሂሳብ ዕዳ ወይ ብድሪ ተርኢ — እተለቅሐ፡ እተኸፈለ ከምኡውን እተረፈ ሂሳብ።"
+  },
+  {
+    "en": "View total debt, amount paid, and outstanding balance. The progress bar shows how much has been repaid.",
+    "am": "ጠቅላላ ዕዳ፣ የተከፈለ መጠን እና ያልተከፈለ ሂሳብ ይመልከቱ። የሂደት አሞሌው ምን ያህል እንደተከፈለ ያሳያል።",
+    "om": "Liqii waliigalaa, hamma kaffalame, fi haaraa ilaali. Baara adeemsaa meeqa akka kaffalame agarsiisa.",
+    "ti": "ጠቕላላ ዕዳ፡ እተኸፈለ መጠን ከምኡውን እተረፈ ሂሳብ ርአዩ። እቲ ምልክት ሂደት ክንደይ ከም እተኸፈለ የርእይ እዩ።"
+  },
+  {
+    "en": "Details about the original transaction, interest rate (if any), due date, and the customer or vendor involved.",
+    "am": "ስለ ዋናው ግብይት፣ የወለድ መጠን (ካለ)፣ የክፍያ ቀን እና የተሳተፈው ደንበኛ ወይም አቅራቢ ዝርዝሮች።",
+    "om": "Ibsa waaee jijjiirama jalqabaa, rate liqii (yoo jiraate), guyyaa kaffaltii, fi maamila ykn dhiyeessa hirmaate.",
+    "ti": "ዝርዝራት ብዛዕባ መበቈል ልውውጥ፡ መጠን ወለድ (እንተሎ)፡ ዕለት ክፍሊት ከምኡውን እቲ ተሳታፊ ደንበኛ ወይ ኣቕራቢ።"
+  },
+  {
+    "en": "Chronological list of all payments made against this debt, including dates, amounts, and payment methods.",
+    "am": "በዚህ ዕዳ ላይ የተከፈሉ ሁሉም ክፍያዎች የጊዜ ቅደም ተከተል ዝርዝር፣ ቀኖችን፣ መጠኖችን እና የክፍያ ዘዴዎችን ጨምሮ።",
+    "om": "Tarree yeroo kaffaltiiwwan liqii kana irratti hojjetaman hunda, guyyaa, hamma, fi mala kaffaltii dabalatee.",
+    "ti": "ብቅደም ተኸተል ኣብዚ ዕዳ እተኸፈሉ ኩሎም ክፍሊታት ዝርዝር፡ ዕለታት፡ መጠናት ከምኡውን ኣገባብ ክፍሊት ዘጠቓልል።"
+  },
+  {
+    "en": "Record a new payment against this debt, or mark it as fully settled.",
+    "am": "በዚህ ዕዳ ላይ አዲስ ክፍያ ይመዝግቡ፣ ወይም ሙሉ በሙሉ እንደተከፈለ ምልክት ያድርጉ።",
+    "om": "Kaffaltii haaraa liqii kana irratti galmeessi, ykn guutummaatti kaffalameetti mullisi.",
+    "ti": "ኣብዚ ዕዳ ሓድሽ ክፍሊት መዝግቡ፡ ወይ ብምሉኡ እተኸፈለ ምልክት ግበሩ።"
+  },
+  {
+    "en": "View all debt and credit records. This includes both receivables (customers owe you) and payables (you owe suppliers).",
+    "am": "ሁሉንም የዕዳ እና የብድር መዝገቦች ይመልከቱ። ይህ ሁለቱንም የሚከፈልዎትን (ደንበኞች ዕዳ አለባቸው) እና የሚከፍሉትን (ለአቅራቢዎች ዕዳ አለብዎት) ያካትታል።",
+    "om": "Galmee liqii fi liqii hunda ilaali. Kun hoji-qoruu (maamilli siif haara) fi liqiiwwan (ati dhiyeessotaa liqeessa) lamaanuu dabalata.",
+    "ti": "ኩሎም መዝገባት ዕዳን ብድርን ርአዩ። እዚ ክልኤቲ ክትቅበልዎ (ደንበኛታት ዕዳ ኣለቦም) ከምኡውን ክትከፍልዎ (ንኣቕራቢታት ዕዳ ኣለኩም) ዘጠቓልል እዩ።"
+  },
+  {
+    "en": "See total receivables (customers owe you) and total payables (you owe suppliers) at a glance.",
+    "am": "በአንድ እይታ ጠቅላላ የሚከፈልዎትን (ደንበኞች ዕዳ አለባቸው) እና ጠቅላላ የሚከፍሉትን (ለአቅራቢዎች ዕዳ አለብዎት) ይመልከቱ።",
+    "om": "Hoji-qoruu waliigalaa (maamilli siif haara) fi liqii waliigalaa (ati dhiyeessotaa liqeessa) mila tokkootiin ilaali.",
+    "ti": "ብሓደ ኣረኣእያ ጠቕላላ እትቕበልዎ (ደንበኛታት ዕዳ ኣለቦም) ከምኡውን ጠቕላላ እትከፍልዎ (ንኣቕራቢታት ዕዳ ኣለኩም) ርአዩ።"
+  },
+  {
+    "en": "Record payments received from customers or make payments to suppliers directly from this screen.",
+    "am": "ከደንበኞች የተቀበሉትን ክፍያዎች ይመዝግቡ ወይም ለአቅራቢዎች ከዚህ ስክሪን በቀጥታ ይክፈሉ።",
+    "om": "Kaffaltii maamila irraa fudhatame galmeessi ykn kaffaltii dhiyeessotaa iskiriinii kana irraa kallattiin kaffali.",
+    "ti": "ካብ ደንበኛታት እተቐበልኩምዎ ክፍሊታት መዝግቡ ወይ ንኣቕራቢታት ካብዛ ስክሪን ብቐጥታ ክፈሉ።"
+  },
+  {
+    "en": "Review the full details of an expense transaction including amount, category, date, and payment information.",
+    "am": "የወጪ ግብይት ሙሉ ዝርዝሮችን ይከልሱ — መጠን፣ ምድብ፣ ቀን እና የክፍያ መረጃን ጨምሮ።",
+    "om": "Ibsa guutuu jijjiirama baasii hamma, ramaddii, guyyaa, fi odeeffannoo kaffaltii dabalate ilaali.",
+    "ti": "ምሉእ ዝርዝራት ልውውጥ ወጻኢ ምርምሩ — መጠን፡ መደብ፡ ዕለት ከምኡውን ሓበሬታ ክፍሊት ዘጠቓልል።"
+  },
+  {
+    "en": "The expense amount, category, and subcategory. This helps you understand where your money is going.",
+    "am": "የወጪ መጠን፣ ምድብ እና ንኡስ ምድብ። ይህ ገንዘብዎ ወዴት እንደሚሄድ ለመረዳት ይረዳዎታል።",
+    "om": "Hamma baasii, ramaddii, fi ramaddii xiqqaa. Kun maallaqni kee eessa akka deemaa hubachuuf si gargaara.",
+    "ti": "መጠን ወጻኢ፡ መደብ ከምኡውን ንኡስ መደብ። እዚ ገንዘብኩም ናበይ ከም ዝኸይድ ንምርዳእ ይሕግዘኩም እዩ።"
+  },
+  {
+    "en": "Follow these steps to log a new expense. Fill in the amount, category, date, and optionally set up recurring payments.",
+    "am": "አዲስ ወጪ ለመመዝገብ እነዚህን ደረጃዎች ይከተሉ። መጠን፣ ምድብ፣ ቀን ይሙሉ እና አማራጭ ተደጋጋሚ ክፍያዎችን ያዘጋጁ።",
+    "om": "Tarkaanfiiwwan kana hordofi baasii haaraa galmeessuuf. Hamma, ramaddii, guyyaa guuti, akkasumas filannoodhaan kaffaltiiwwan deddeebi'an qindeessi.",
+    "ti": "ነዞም ደረጃታት ተኸተሉ ሓድሽ ወጻኢ ንምምዝጋብ። መጠን፡ መደብ፡ ዕለት መሊእኩም ከምኡውን ብምርጫ ዝደጋገሙ ክፍሊታት ኣዘጋጅሉ።"
+  },
+  {
+    "en": "Review all details and tap to record the expense. It will appear in your expense ledger and reports immediately.",
+    "am": "ሁሉንም ዝርዝሮች ይከልሱ እና ወጪውን ለመመዝገብ ይንኩ። ወዲያውኑ በወጪ መዝገብዎ እና ሪፖርቶች ውስጥ ይታያል።",
+    "om": "Ibsa hunda ilaali fi baasii galmeessuuf tuqi. Baasiin galmee baasii kee fi gabaalee keessatti battaluma ni mulata.",
+    "ti": "ኩሎም ዝርዝራት ምርምሩ ነቲ ወጻኢ ንምምዝጋብ ጠውቑ። ብቕጽበት ኣብ መዝገብ ወጻኢን ሪፖርታትን ክርአ እዩ።"
+  },
+  {
+    "en": "Each entry shows the amount, category badge, date, and description. Tap any entry to view or edit details.",
+    "am": "እያንዳንዱ ግቤት መጠን፣ የምድብ ባጅ፣ ቀን እና መግለጫ ያሳያል። ዝርዝሮችን ለማየት ወይም ለማስተካከል ማንኛውንም ግቤት ይንኩ።",
+    "om": "Galmee tokkoon tokkoon hamma, baaja ramaddii, guyyaa, fi ibsa agarsiisa. Ibsa ilaaluu ykn sirreeffachuuf galmee kamiyyuu tuqi.",
+    "ti": "ነፍሲ ወከፍ መዝገብ መጠን፡ ባጅ መደብ፡ ዕለት ከምኡውን መግለጺ የርእይ እዩ። ዝርዝራት ንምርኣይ ወይ ንምትእርራይ ዝኾነ መዝገብ ጠውቑ።"
+  },
+  {
+    "en": "Each loss entry shows the amount, type, date, and description. Tap for more details about the incident.",
+    "am": "እያንዳንዱ የኪሳራ ግቤት መጠን፣ አይነት፣ ቀን እና መግለጫ ያሳያል። ስለ ክስተቱ ተጨማሪ ዝርዝሮች ለማግኘት ይንኩ።",
+    "om": "Galmee hoongoo tokkoon tokkoon hamma, gosa, guyyaa, fi ibsa agarsiisa. Waaee gochaatti ibsa dabalataaf tuqi.",
+    "ti": "ነፍሲ ወከፍ መዝገብ ምጥፋእ መጠን፡ ኣይነት፡ ዕለት ከምኡውን መግለጺ የርእይ እዩ። ብዛዕባ እቲ ኣጋጣሚ ተወሳኺ ዝርዝራት ንምርካብ ጠውቑ።"
+  },
+  {
+    "en": "Every stock movement is listed chronologically with item name, type, quantity change, and resulting balance.",
+    "am": "እያንዳንዱ የክምችት እንቅስቃሴ በጊዜ ቅደም ተከተል ከዕቃ ስም፣ አይነት፣ የብዛት ለውጥ እና የተገኘው ሂሳብ ጋር ተዘርዝሯል።",
+    "om": "Sochii kuusaa hunda yeroo tartiibaan maqaa meelataa, gosa, jijjiirama hamma, fi haaraa bu'aa waliin tarreefame.",
+    "ti": "ነፍሲ ወከፍ ምንቅስቓስ ክምችት ብቅደም ተኸተል ምስ ስም ዕቃ፡ ኣይነት፡ ምቕያር ብዝሒ ከምኡውን እተረፈ ሂሳብ ተዘርዚሩ ኣሎ።"
+  },
+  {
+    "en": "Your complete inventory management system. Track stock levels, monitor valuations, and manage every item in your store.",
+    "am": "የተሟላ የክምችት አስተዳደር ስርዓትዎ። የክምችት ደረጃዎችን ይከታተሉ፣ ዋጋዎችን ይቆጣጠሩ እና እያንዳንዱን ዕቃ በመደብርዎ ውስጥ ያስተዳድሩ።",
+    "om": "Sirna bulchiinsa kuusaa kee guutuu. Sadarkaa kuusaa hordofi, madaaliiwwan toachadhu, fi meelata hunda daldala kee keessatti bulchi.",
+    "ti": "ምሉእ ስርዓት ምሕደራ ክምችትኩም። ደረጃታት ክምችት ክታበሉ፡ ዋጋታት ተቆጻጸሩ ከምኡውን ነፍሲ ወከፍ ዕቃ ኣብ መደብርኩም ኣመሓድሩ።"
+  },
+  {
+    "en": "This screen shows everything about an inventory item — stock levels, pricing, supplier info, and movement history.",
+    "am": "ይህ ስክሪን ስለ ክምችት ዕቃ ሁሉንም ነገር ያሳያል — የክምችት ደረጃዎች፣ ዋጋ አሰጣጥ፣ የአቅራቢ መረጃ እና የእንቅስቃሴ ታሪክ።",
+    "om": "Iskiriiniin kun waaee meelata kuusaa wantoota hunda agarsiisa — sadarkaa kuusaa, gatii, odeeffannoo dhiyeessaa, fi seenaa sochii.",
+    "ti": "እዛ ስክሪን ብዛዕባ ዕቃ ክምችት ኩሉ ነገር ተርኢ — ደረጃታት ክምችት፡ ዋጋ ኣወጣጥር፡ ሓበሬታ ኣቕራቢ ከምኡውን ታሪኽ ምንቅስቓስ።"
+  },
+  {
+    "en": "Each item shows current stock level, minimum threshold, and supplier information for quick reordering.",
+    "am": "እያንዳንዱ ዕቃ የአሁን የክምችት ደረጃ፣ ዝቅተኛ ወሰን እና ለፈጣን ትእዛዝ የአቅራቢ መረጃ ያሳያል።",
+    "om": "Meelata tokkoon tokkoon sadarkaa kuusaa ammaa, daangaa gadi buusaa, fi odeeffannoo dhiyeessaa ajajuu ariifachiisuuf agarsiisa.",
+    "ti": "ነፍሲ ወከፍ ዕቃ ህሉው ደረጃ ክምችት፡ ዝተረፈ ወሰን ከምኡውን ንቅልጡፍ ትእዛዝ ሓበሬታ ኣቕራቢ የርእይ እዩ።"
+  },
+  {
+    "en": "Choose which business notifications you receive. Control alerts for stock, payments, expenses, and more.",
+    "am": "የሚቀበሏቸውን የንግድ ማሳወቂያዎች ይምረጡ። ለክምችት፣ ክፍያዎች፣ ወጪዎች እና ሌሎች ማንቂያዎችን ይቆጣጠሩ።",
+    "om": "Beekkonsa daldalaa fudhattu filadhu. Riccatiwwan kuusaa, kaffaltii, baasii, fi kan biroof bulchi.",
+    "ti": "እትቕበልዎም መፍለጢታት ንግዲ ምረጹ። መጠንቀቕታታት ንክምችት፡ ክፍሊታት፡ ወጻኢታት ከምኡውን ካልኦት ተቆጻጸሩ።"
+  },
+  {
+    "en": "Get alerted about large or unusual expenses. Track budget limits and receive warnings when approaching limits.",
+    "am": "ስለ ትልልቅ ወይም ያልተለመዱ ወጪዎች ማንቂያ ያግኙ። የበጀት ገደቦችን ይከታተሉ እና ወደ ገደብ ሲቃረቡ ማስጠንቀቂያ ይቀበሉ።",
+    "om": "Waaee baasiiwwan gurguddaa ykn hin baramne beellama argadhu. Daangaa baajetaa hordofi fi yeroo daangaa bira ga'u akeekkachiisa fudhadhu.",
+    "ti": "ብዛዕባ ዓበይቲ ወይ ዘይተለምደሱ ወጻኢታት መጠንቀቕታ ርኸቡ። ደረታት በጀት ክታበሉ ከምኡውን ናብ ደረት ከትቀርቡ ከለኩም መጠንቀቕታ ተቐበሉ።"
+  },
+  {
+    "en": "View all your business notifications — low stock alerts, payment reminders, expense warnings, and more.",
+    "am": "ሁሉንም የንግድ ማሳወቂያዎችዎን ይመልከቱ — ዝቅተኛ የክምችት ማንቂያዎች፣ የክፍያ ማስታወሻዎች፣ የወጪ ማስጠንቀቂያዎች እና ሌሎችም።",
+    "om": "Beekkonsa daldalaa kee hunda ilaali — riccata kuusaa gadi buusaa, yaadannoo kaffaltii, akeekkachiisa baasii, fi kan biroo.",
+    "ti": "ኩሎም መፍለጢታት ንግድኩም ርአዩ — መጠንቀቕታታት ዝተረፈ ክምችት፡ ኣማዕሚንታት ክፍሊት፡ መጠንቀቕታታት ወጻኢ ከምኡውን ካልኦት።"
+  },
+  {
+    "en": "Mark notifications as read, dismiss them, or tap to take action directly (e.g., restock a low inventory item).",
+    "am": "ማሳወቂያዎችን እንደተነበቡ ምልክት ያድርጉ፣ ያስወግዷቸው፣ ወይም በቀጥታ እርምጃ ለመውሰድ ይንኩ (ለምሳሌ ዝቅተኛ ክምችት ያለው ዕቃን መሙላት)።",
+    "om": "Beekkonsa dubbifameetti mullisi, ittiin deemi, ykn gochii kallattiidhaan fudhachuuf tuqi (fkn, meelata kuusaa gadi buusaa guuti).",
+    "ti": "ንመፍለጢታት ከም እተነበቡ ምልክት ግበሩ፡ ኣርሕቑዎም፡ ወይ ብቐጥታ ተግባር ንምውሳድ ጠውቑ (ንኣብነት ዝተረፈ ክምችት ዘለዎ ዕቃ መልኡ)።"
+  },
+  {
+    "en": "Track customer orders from creation to fulfillment. Manage order status, quantities, and delivery all in one place.",
+    "am": "የደንበኛ ትእዛዞችን ከፈጠራ እስከ አፈጻጸም ይከታተሉ። የትእዛዝ ሁኔታ፣ ብዛት እና አቅርቦት በሙሉ በአንድ ቦታ ያስተዳድሩ።",
+    "om": "Ajaja maamila uumamaa kaasee hojiiwwan hordofi. Haala ajajaa, hamma, fi geejjiba bakka tokkootti bulchi.",
+    "ti": "ትእዛዛት ደንበኛ ካብ ምፍጣር ክሳዕ ምፍጻም ክታበሉ። ኩነት ትእዛዝ፡ ብዝሒ ከምኡውን ኣብ ምድላው ኩሉ ኣብ ሓደ ቦታ ኣመሓድሩ።"
+  },
+  {
+    "en": "See the subtotal, discounts, and grand total for the pending transaction in real-time as you make changes.",
+    "am": "በለውጦች ላይ እያሉ ለታገደ ግብይት ንዑስ-ድምር፣ ቅናሾች እና አጠቃላይ ድምር በቅጽበት ይመልከቱ።",
+    "om": "Walxaxaa, hir'ina, fi waliigala jijjiirama eeguu yeroo dhugaa keessatti jijjiirama hojjettu ilaali.",
+    "ti": "ንእሽቶ-ድምር፡ ቅናሽታት ከምኡውን ጠቕላላ ድምር ንእተጻበየ ልውውጥ ምቕያራት ክትገብሩ ከለኩም ብቕጽበት ርአዩ።"
+  },
+  {
+    "en": "Follow these steps to decrease the selling price of an inventory item. Use this for promotions, clearance, or competitive pricing.",
+    "am": "የክምችት ዕቃን የሽያጭ ዋጋ ለመቀነስ እነዚህን ደረጃዎች ይከተሉ። ለማስተዋወቂያ፣ ማጽደያ ወይም ተወዳዳሪ ዋጋ አሰጣጥ ይጠቀሙ።",
+    "om": "Tarkaanfiiwwan kana hordofi gatii gurgurtaa meelata kuusaa hirisuuf. Kun beeksisa, qulqullina, ykn gatii dorgommii fayyadami.",
+    "ti": "ነዞም ደረጃታት ተኸተሉ ዋጋ ሽያጭ ዕቃ ክምችት ንምቕናስ። ንምስታዎቂያ፡ ማጽረያ ወይ ተወዳዳሪ ዋጋ ኣወጣጥር ተጠቐሙ።"
+  },
+  {
+    "en": "Enter the reduced selling price. The system shows the discount amount and updated profit margin.",
+    "am": "የተቀነሰውን የሽያጭ ዋጋ ያስገቡ። ሲስተሙ የቅናሽ መጠን እና የተዘመነ የትርፍ ህዳግ ያሳያል።",
+    "om": "Gatii gurgurtaa hir'ate galchi. Sirni hamma hir'inaa fi daangaa bu'aa haarome agarsiisa.",
+    "ti": "እተቐነሰ ዋጋ ሽያጭ ኣእትዉ። ሲስተም መጠን ቅናሽን እተመዓረለ ወሰን ትርፊት የርእይ እዩ።"
+  },
+  {
+    "en": "Enter a reason (e.g., promotion, clearance, competitive match). This is logged in the adjustment history.",
+    "am": "ምክንያት ያስገቡ (ለምሳሌ ማስተዋወቂያ፣ ማጽደያ፣ ተወዳዳሪ ዋጋ)። ይህ በማስተካከያ ታሪክ ውስጥ ይመዘገባል።",
+    "om": "Sababa galchi (fkn, beeksisa, qulqullina, dorgommii). Kun seenaa sirreeffama keessatti galmeeffama.",
+    "ti": "ምኽንያት ኣእትዉ (ንኣብነት ምስታዎቂያ፡ ማጽረያ፡ ተወዳዳሪ)። እዚ ኣብ ታሪኽ ምትእርራይ ይምዝገብ እዩ።"
+  },
+  {
+    "en": "Set the date for the new price. The adjustment is recorded in your price history.",
+    "am": "ለአዲሱ ዋጋ ቀን ያዘጋጁ። ማስተካከያው በዋጋ ታሪክዎ ውስጥ ይመዘገባል።",
+    "om": "Guyyaa gatii haaraa qindeessi. Sirreeffamni seenaa gatii kee keessatti galmeeffama.",
+    "ti": "ንሓድሽ ዋጋ መዓልቲ ኣዘጋጅሉ። እቲ ምትእርራይ ኣብ ታሪኽ ዋጋኩም ይምዝገብ እዩ።"
+  },
+  {
+    "en": "Review and confirm to apply the price decrease. The selling price updates immediately in your inventory.",
+    "am": "የዋጋ ቅነሻውን ለመተግበር ይከልሱ እና ያረጋግጡ። የሽያጭ ዋጋው ወዲያውኑ በክምችትዎ ውስጥ ይዘምናል።",
+    "om": "Ilaali fi mirkaneessi hir'ina gatii hojiirra ooluuf. Gatiin gurgurtaa battaluma kuusaa kee keessatti ni haaromfama.",
+    "ti": "ንምትግባር ዋጋ ምቕናስ ምርምሩ ከምኡውን ኣረጋግጡ። ዋጋ ሽያጭ ብቕጽበት ኣብ ክምችትኩም ክምዕር እዩ።"
+  },
+  {
+    "en": "Follow these steps to increase the selling price of an inventory item. This helps you adjust to market changes or cost increases.",
+    "am": "የክምችት ዕቃን የሽያጭ ዋጋ ለመጨመር እነዚህን ደረጃዎች ይከተሉ። ይህ ከገበያ ለውጦች ወይም የዋጋ ጭማሪዎች ጋር ለማስማማት ይረዳዎታል።",
+    "om": "Tarkaanfiiwwan kana hordofi gatii gurgurtaa meelata kuusaa dabaluuf. Kun jijjiirama gabaa ykn dabalaa baasii walsimsiisuuf si gargaara.",
+    "ti": "ነዞም ደረጃታት ተኸተሉ ዋጋ ሽያጭ ዕቃ ክምችት ንምውሳኽ። እዚ ምስ ምቕያር ገበያ ወይ ምውሳኽ ወጻኢ ንምስምማዕ ይሕግዘኩም እዩ።"
+  },
+  {
+    "en": "Enter the new selling price. The system will show the price difference and calculate the new profit margin.",
+    "am": "አዲሱን የሽያጭ ዋጋ ያስገቡ። ሲስተሙ የዋጋ ልዩነቱን ያሳያል እና አዲሱን የትርፍ ህዳግ ያሰላል።",
+    "om": "Gatii gurgurtaa haaraa galchi. Sirni garaagarummaa gatii agarsiisa; daangaa bu'aa haaraa ni shallaga.",
+    "ti": "ሓድሽ ዋጋ ሽያጭ ኣእትዉ። ሲስተም ፍልልይ ዋጋ የርእይ ከምኡውን ሓድሽ ወሰን ትርፊት የሕስብ እዩ።"
+  },
+  {
+    "en": "Provide a reason for the price increase (e.g., supplier price change, market adjustment, inflation). This is recorded in the adjustment history.",
+    "am": "ለዋጋ ጭማሪ ምክንያት ያስገቡ (ለምሳሌ የአቅራቢ ዋጋ ለውጥ፣ የገበያ ማስተካከያ፣ የዋጋ ንረት)። ይህ በማስተካከያ ታሪክ ውስጥ ይመዘገባል።",
+    "om": "Sababa dabalaa gatiif kenni (fkn, jijjiirama gatii dhiyeessaa, sirreeffama gabaa, inflation). Kun seenaa sirreeffamaa keessatti galmeeffama.",
+    "ti": "ንምውሳኽ ዋጋ ምኽንያት ኣብቅዑ (ንኣብነት ምቕያር ዋጋ ኣቕራቢ፡ ምትእርራይ ገበያ፡ ዋጋ ንረት)። እዚ ኣብ ታሪኽ ምትእርራይ ይምዝገብ እዩ።"
+  },
+  {
+    "en": "Set the date when the new price takes effect. The change is logged in the price adjustment history for future reference.",
+    "am": "አዲሱ ዋጋ ተግባራዊ የሚሆንበትን ቀን ያዘጋጁ። ለውጡ ለወደፊት ማጣቀሻ በዋጋ ማስተካከያ ታሪክ ውስጥ ይመዘገባል።",
+    "om": "Guyyaa gatii haaraan hojiirra oolu qindeessi. Jijjiiramni seenaa sirreeffama gatii keessatti wabii fuula duraatiif galmeeffama.",
+    "ti": "እቲ ሓድሽ ዋጋ ኣብ ስራሕ ዝኣቱሉ ዕለት ኣዘጋጅሉ። እቲ ምቕያር ንወደፊት ምቹእ መጥቀሲ ኣብ ታሪኽ ምትእርራይ ዋጋ ይምዝገብ እዩ።"
+  },
+  {
+    "en": "See your total budget, spending to date, and remaining balance. The health indicator shows if you\\'re on track.",
+    "am": "ጠቅላላ በጀትዎን፣ እስከ ዛሬ ያወጡትን እና የቀረውን ሂሳብ ይመልከቱ። የጤና አመልካች በትክክል እየተከተሉ እንደሆነ ያሳያል።",
+    "om": "Baajeta kee walii galaa, baasii har'aa, fi haaraa hafe ilaali. Mallattoo fayyaa karaa irra jirtu agarsiisa.",
+    "ti": "ጠቕላላ በጀትኩም፡ ክሳዕ ሎሚ እተወጻእኩምዎን እተረፈ ሂሳብን ርአዩ። መለልዒ ጥዕና ብቑዕ ኮይኑ ከም ዝኸዱ የርእይ እዩ።"
+  },
+  {
+    "en": "Enter the amount being paid. The system shows the remaining balance after this payment.",
+    "am": "የሚከፈለውን መጠን ያስገቡ። ሲስተሙ ከዚህ ክፍያ በኋላ የቀረውን ሂሳብ ያሳያል።",
+    "om": "Hamma kaffalamuu galchi. Sirni erga kaffaltii kana booda haaraa hafe agarsiisa.",
+    "ti": "እቲ ዝኽፈል መጠን ኣእትዉ። ሲስተም ድሕሪ እዚ ክፍሊት እተረፈ ሂሳብ የርእይ እዩ።"
+  },
+  {
+    "en": "Review the payment details and confirm. The customer\\'s balance is updated and the transaction is recorded.",
+    "am": "የክፍያ ዝርዝሮችን ይከልሱ እና ያረጋግጡ። የደንበኛው ሂሳብ ይዘምናል እና ግብይቱ ይመዘገባል።",
+    "om": "Ibsa kaffaltii ilaali fi mirkaneessi. Herregaan maamila ni haaromfama; jijjiiramni ni galmeeffama.",
+    "ti": "ዝርዝራት ክፍሊት ምርምሩ ከምኡውን ኣረጋግጡ። ሂሳብ ደንበኛ ይምዕር ከምኡውን እቲ ልውውጥ ይምዝገብ እዩ።"
+  },
+  {
+    "en": "Enter the customer\\'s name or phone to start. Search and select an existing contact or add a new one.",
+    "am": "ለመጀመር የደንበኛውን ስም ወይም ስልክ ያስገቡ። ያለውን ዕውቅት ይፈልጉ እና ይምረጡ ወይም አዲስ ያክሉ።",
+    "om": "Maqaa ykn lakkoofsa bilbilaa maamila galchi jalqabuuf. Qunnamtii jiraa barbaadi fi filadhu ykn haaraa idaati.",
+    "ti": "ንምጅማር ስም ወይ ቁጽሪ ተሌፎን ደንበኛ ኣእትዉ። ዘሎ ርክብ ድለዩ ከምኡውን ምረጹ ወይ ሓድሽ ወስኹ።"
+  },
+  {
+    "en": "This is your command center. View today\\'s summary, key metrics, and recent activity all in one place.",
+    "am": "ይህ የእርስዎ የትእዛዝ ማዕከል ነው። የዛሬን ማጠቃለያ፣ ቁልፍ መለኪያዎች እና የቅርብ ጊዜ እንቅስቃሴ በሙሉ በአንድ ቦታ ይመልከቱ።",
+    "om": "Kun waltajjii abboommii kee. Guduunfaa har'aa, madaaliiwwan ijoo, fi sochii dhihoo hunda bakka tokko ilaali.",
+    "ti": "እዚ ማእከል ትእዛዝኩም እዩ። ጠቕላላ ሎሚ፡ ቀንዲ መለክዒታት ከምኡውን ቀረባ ንጥፈታት ኩሉ ኣብ ሓደ ቦታ ርአዩ።"
+  },
+  {
+    "en": "View the expense date, description, and whether it\\'s recurring. This helps you track spending patterns.",
+    "am": "የወጪውን ቀን፣ መግለጫ እና ተደጋጋሚ መሆኑን ይመልከቱ። ይህ የወጪ ልማዶችን ለመከታተል ይረዳዎታል።",
+    "om": "Guyyaa baasii, ibsa, fi yoo deddeebi'aa ta'e ilaali. Kun akkaataa baasii hordofuuf si gargaara.",
+    "ti": "ዕለት ወጻኢ፡ መግለጺ ከምኡውን ዝደጋገም ምዃኑ ርአዩ። እዚ ንምክትታል ልማዳት ወጻኢ ይሕግዘኩም እዩ።"
+  },
+  {
+    "en": "See your total monthly expenses, compare against last month, and track spending categories at a glance.",
+    "am": "ጠቅላላ ወርሃዊ ወጪዎችዎን ይመልከቱ፣ ካለፈው ወር ጋር ያወዳድሩ እና የወጪ ምድቦችን በአንድ እይታ ይከታተሉ።",
+    "om": "Baasii jiisaa kee walii galaa ilaali, ji'a darbe waliin madaali, fi ramaddii baasii mila tokkootiin hordofi.",
+    "ti": "ጠቕላላ ወርሓዊ ወጻኢታትኩም ርአዩ፡ ምስ እተሓለፈ ወር ኣወዳድሩ ከምኡውን መደባት ወጻኢ ብሓደ ኣረኣእያ ክታበሉ።"
+  },
+  {
+    "en": "Every transaction is recorded chronologically. Tap any entry to view or edit details. Swipe to delete if needed.",
+    "am": "እያንዳንዱ ግብይት በጊዜ ቅደም ተከተል ይመዘገባል። ዝርዝሮችን ለማየት ወይም ለማስተካከል ማንኛውንም ግቤት ይንኩ። አስፈላጊ ከሆነ ወደ ጎን ያንሸራትቱ እና ይሰርዙ።",
+    "om": "Jijjiiramni hunda yeroo tartiibaan galmeeffama. Ibsa ilaaluu ykn sirreeffachuuf galmee kamiyyuu tuqi. Yoo barbaachise, siigi fi haqi.",
+    "ti": "ነፍሲ ወከፍ ልውውጥ ብቅደም ተኸተል ይምዝገብ እዩ። ዝርዝራት ንምርኣይ ወይ ንምትእርራይ ዝኾነ መዝገብ ጠውቑ። ኣድላዪ እንተኾይኑ ስብልሉ ከምኡውን ኣርሕቁ።"
+  },
+  {
+    "en": "Set a monthly spending limit to control costs. Track your spending against budget in real-time and get alerts when you\\'re close to the limit.",
+    "am": "ወጪዎችን ለመቆጣጠር ወርሃዊ የወጪ ገደብ ያዘጋጁ። ወጪዎን ከበጀት ጋር በቅጽበት ይከታተሉ እና ወደ ገደብ ሲቃረቡ ማንቂያ ያግኙ።",
+    "om": "Baasii toachuuf daangaa jiisaa qindeessi. Baasii kee baajeta waliin yeroo dhugaa hordofi fi yeroo daangaa bira ga'u beellama argadhu.",
+    "ti": "ወጻኢታት ንምቁጽጻር ወርሓዊ ደረት ወጻኢ ኣዘጋጅሉ። ወጻኢኩም ምስ በጀት ብቕጽበት ክታበሉ ከምኡውን ናብ ደረት ከትቀርቡ ከለኩም መጠንቀቕታ ርኸቡ።"
+  },
+  {
+    "en": "Follow these steps to add a new product to your inventory. You\\'ll enter the name, category, quantity, pricing, and more.",
+    "am": "አዲስ ምርት ወደ ክምችትዎ ለመጨመር እነዚህን ደረጃዎች ይከተሉ። ስም፣ ምድብ፣ ብዛት፣ ዋጋ እና ሌሎችን ያስገባሉ።",
+    "om": "Tarkaanfiiwwan kana hordofi oomishaa haaraa kuusaa keetti idaasuuf. Maqaa, ramaddii, hamma, gatii, fi kan biroo galchita.",
+    "ti": "ነዞም ደረጃታት ተኸተሉ ሓድሽ ምርት ናብ ክምችትኩም ንምውስኽ። ስም፡ መደብ፡ ብዝሒ፡ ዋጋ ከምኡውን ካልእ ከተእትዉ ኢኹም።"
+  },
+  {
+    "en": "Enter the manufacturer or brand name. This is useful for identifying products, especially when dealing with multiple suppliers.",
+    "am": "የአምራች ወይም የብራንድ ስም ያስገቡ። ይህ ምርቶችን ለመለየት በተለይ ከበርካታ አቅራቢዎች ጋር በሚገናኙበት ጊዜ ጠቃሚ ነው።",
+    "om": "Maqaa oomishaa ykn moggaa galchi. Kun oomishaalee adda baafachuuf, keessattuu dhiyeessota baayee waliin yeroo hojjettu, fayya.",
+    "ti": "ስም ኣምራሺ ወይ ብራንድ ኣእትዉ። እዚ ምርታት ንምልላይ በተወሳኺ ምስ ብዙሓት ኣቕራቢታት ከተናግሩ ከለኩም ይጠቅም እዩ።"
+  },
+  {
+    "en": "Enter the buying price (cost) and selling price. The system calculates your profit margin automatically and warns if you\\'re selling at a loss.",
+    "am": "የግዢ ዋጋ (ወጪ) እና የሽያጭ ዋጋ ያስገቡ። ሲስተሙ የትርፍ ህዳግዎን በራስ-ሰር ያሰላል እና በኪሳራ እየሸጡ ከሆነ ያስጠነቅቃል።",
+    "om": "Gatii bitaa (baasii) fi gatii gurgurtaa galchi. Sirni daangaa bu'aa kee ofumaan shallaga; yoo hoongoon gurgurtaa ta'e si akeekkachiisa.",
+    "ti": "ዋጋ ግዢ (ወጻኢ) ከምኡውን ዋጋ ሽያጭ ኣእትዉ። ሲስተም ወሰን ትርፊትኩም ብርእሱ የሕስብ ከምኡውን ብምጥፋእ እንተትሸጡ የጠንቅቐኩም እዩ።"
+  },
+  {
+    "en": "Review the details and confirm to apply the price increase. The item\\'s selling price updates immediately.",
+    "am": "ዋጋ ጭማሪውን ለመተግበር ዝርዝሮቹን ይከልሱ እና ያረጋግጡ። የዕቃው የሽያጭ ዋጋ ወዲያውኑ ይዘምናል።",
+    "om": "Ilaali fi mirkaneessi dabalaa gatii hojiirra ooluuf. Gatiin gurgurtaa meelataa battaluma ni haaromfama.",
+    "ti": "ንምትግባር ዋጋ ምውሳኽ ዝርዝራት ምርምሩ ከምኡውን ኣረጋግጡ። ዋጋ ሽያጭ እታ ዕቃ ብቕጽበት ክምዕር እዩ።"
+  },
+  {
+    "en": "View all scheduled and past reminders for payments, stock checks, and business tasks.",
+    "am": "ሁሉንም የታቀዱ እና ያለፉ ማሳሰቢያዎች ለክፍያ፣ የክምችት ቼክ እና የንግድ ተግባራት ይመልከቱ።",
+    "om": "Yaadannoo karoorfamee fi darbe hunda kaffaltii, sakatta'a kuusaa, fi hojii daldalaa ilaali.",
+    "ti": "ኩሎም እተዳለዉን ዝሓለፈን ኣማዕሚንታት ንክፍሊት፡ መርመራት ክምችት ከምኡውን ተግባራት ንግዲ ርአዩ።"
+  },
+  {
+    "en": "This list shows every item in the transaction, including quantity, unit price, and subtotal. Tap any item for more details.",
+    "am": "ይህ ዝርዝር በግብይቱ ውስጥ ያለውን እያንዳንዱን ዕቃ ያሳያል፣ ብዛት፣ የአሃድ ዋጋ እና ንዑስ ድምርን ጨምሮ። ለበለጠ ዝርዝር ማንኛውንም ዕቃ ይንኩ።",
+    "om": "Tarreewwan kun meelata hunda jijjiirama keessaatti, hamma, gatii unitii, fi walxaxaa dabalatee agarsiisa. Ibsa dabalataaf meelata kamiyyuu tuqi.",
+    "ti": "እዚ ዝርዝር ኣብቲ ልውውጥ ንብዝሒ፡ ዋጋ ኣሃዱ ከምኡውን ንእሽቶ ድምር ዘጠቓለለ ኩሉ ዕቃ የርእይ እዩ። ንተወሳኺ ዝርዝራት ዝኾነ ዕቃ ጠውቑ።"
+  },
+  {
+    "en": "Each entry shows the date, customer, item count, total amount, and payment status. Tap any entry for full details.",
+    "am": "እያንዳንዱ ግቤት ቀን፣ ደንበኛ፣ የዕቃ ብዛት፣ ጠቅላላ መጠን እና የክፍያ ሁኔታ ያሳያል። ለሙሉ ዝርዝር ማንኛውንም ግቤት ይንኩ።",
+    "om": "Galmee tokkoon tokkoon guyyaa, maamila, lakkoofsa meelataa, hamma waliigalaa, fi haala kaffaltii agarsiisa. Ibsa guutuu fudhachuuf galmee kamiyyuu tuqi.",
+    "ti": "ነፍሲ ወከፍ መዝገብ ዕለት፡ ደንበኛ፡ ብዝሒ ዕቃ፡ ጠቕላላ መጠን ከምኡውን ኩነት ክፍሊት የርእይ እዩ። ንምሉእ ዝርዝራት ዝኾነ መዝገብ ጠውቑ።"
+  },
+  {
+    "en": "Enable fingerprint or face ID for quicker, secure access to the app without entering your PIN each time.",
+    "am": "የጣት አሻራ ወይም የፊት መለያን ያንቁ በየጊዜው PIN ሳያስገቡ ፈጣን እና አስተማማኝ የመተግበሪያ መዳረሻ ለማግኘት።",
+    "om": "Mallattoo quba ykn fuula idatti galchi appii keessa yeroo hunda PIN hin galchin ariifachiisaa fi nageenyaan galuuf.",
+    "ti": "ነጥቢ ኣጻብዕ ወይ መለልዒ ገጽ ኣንቅሑ ንፍጥን ውሕስን መእተዊ ኣፕሊኬሽን ንምርካብ ነፍሲ ወከፍ ግዜ PIN ከይኣእትዉ።"
+  },
+  {
+    "en": "Control which alerts you receive — stock shortages, expiration reminders, daily summaries, credit alerts, and more.",
+    "am": "የሚቀበሏቸውን ማንቂያዎች ይቆጣጠሩ — የክምችት እጥረት፣ የማለቂያ ጊዜ ማሳሰቢያዎች፣ ዕለታዊ ማጠቃለያዎች፣ የብድር ማንቂያዎች እና ሌሎችም።",
+    "om": "Riccata fudhattu bulchi — gowwoomsa kuusaa, yaadannoo xumuraa, guduunfaa guyyaa, riccata liqii fi kan biroo.",
+    "ti": "እትቕበልዎም መጠንቀቕታታት ተቆጻጸሩ — ስኡን ክምችት፡ ኣማዕሚንታት እዋን ምውዳእ፡ መዓልታዊ ጠቕላላታት፡ መጠንቀቕታታት ብድሪ ከምኡውን ካልኦት።"
+  },
+  {
+    "en": "Switch between English, Amharic, Oromo, and Tigrinya. The calendar, date format, and time system adapt automatically.",
+    "am": "በእንግሊዝኛ፣ አማርኛ፣ ኦሮሚኛ እና ትግርኛ መካከል ይቀያይሩ። የቀን አቆጣጠር፣ የቀን ቅርጸት እና የሰዓት ስርዓት በራስ-ሰር ይስተካከላሉ።",
+    "om": "Ingliffaa, Amaaraa, Oromoo, fi Tigrinya gidduu jijjiiri. Kalendariin, foormaatii guyyaa, fi sirni yerootu ofumaan ni jijjiirama.",
+    "ti": "ኣብ መንጎ እንግሊዝኛ፡ ኣማርኛ፡ ኦሮሚኛ ከምኡውን ትግርኛ ለውጡ። ካላንደር፡ ቅርጸት መዓልቲ ከምኡውን ስርዓት ሰዓት ብርእሶም ይስተኻኸሉ እዮም።"
+  },
+  {
+    "en": "Export your database as a backup file for safekeeping. Regular backups protect your business data against accidental loss.",
+    "am": "ዳታቤዝዎን እንደ ምጠባበቂያ ፋይል ያስወጡ። መደበኛ ምጠባበቂያዎች የንግድ መረጃዎን ከድንገተኛ ኪሳራ ይጠብቃሉ።",
+    "om": "Daata-beeyzii kee faayilii olkaa'uuf ekspoortii godhi. Olkaawwan yeroo yeroon odeeffannoo daldalaa kee hoongoo tasa irraa eegu.",
+    "ti": "ዳታቤዝኩም ከም መጠበቒ ፋይል ኣውጽኡ። መደበኛ መጠበቒታት ሓበሬታ ንግድኩም ካብ ድንገታዊ ምጥፋእ ይጠብቅዎ እዩ።"
+  },
+  {
+    "en": "View the app version, build number, and system status. Check for updates here.",
+    "am": "የመተግበሪያ ስሪት፣ የግንባታ ቁጥር እና የስርዓት ሁኔታ ይመልከቱ። ለዝማኔዎች እዚህ ይፈትሹ።",
+    "om": "Version appii, lakkoofsa ijaarsaa, fi haala sirnaa ilaali. Haaromsa asitti sakatta'i.",
+    "ti": "ስሪት ኣፕሊኬሽን፡ ቁጽሪ ህንጻ ከምኡውን ኩነት ስርዓት ርአዩ። ንምዕራይ ኣብዚ መርምሩ።"
+  },
+  {
+    "en": "Reach out to our support team via email or phone. We\\'re here to help you with any questions or issues.",
+    "am": "በኢሜይል ወይም በስልክ የእኛን የድጋፍ ቡድን ያነጋግሩ። ለማንኛውም ጥያቄ ወይም ችግር እኛ እዚህ ነን ለመርዳት።",
+    "om": "Iimeeliin ykn bilbilaan garee deeggarsaa keenya quunnami. Gaaffii ykn rakkoo kamuu isin gargaaruuf as jirra.",
+    "ti": "ብኢመይል ወይ ብተሌፎን ናብ ጉጅለ ደገፍና ርኸቡና። ንምንእዋን ሕቶ ወይ ጸገም ክንሕግዘኩም ኣብዚ ኣለና።"
+  },
+  {
+    "en": "FAQ & Guides",
+    "am": "ተደጋጋሚ ጥያቄዎች እና መመሪያዎች",
+    "om": "Gaaffii Fi Deebii fi Qajeelfama",
+    "ti": "ተደጋጋሚ ሕቶታትን መምርሕታትን"
+  },
+  {
+    "en": "Choose your preferred language",
+    "am": "የሚመርጡትን ቋንቋ ይምረጡ",
+    "om": "Afaan filattuu kee filadhu",
+    "ti": "እትመርጽዎ ቋንቋ ምረጹ"
+  },
+  {
+    "en": "Current Language",
+    "am": "አሁን ያለው ቋንቋ",
+    "om": "Afaan Ammaa",
+    "ti": "ህሉው ቋንቋ"
+  },
+  {
+    "en": "Your current language is highlighted. Tap a different language to switch.",
+    "am": "የአሁን ቋንቋዎ ደምቆ ይታያል። ለመቀየር ሌላ ቋንቋ ይንኩ።",
+    "om": "Afaan kee ammaa ifatti mulata. Jijjiiruuf afaan addaa tuqi.",
+    "ti": "ህሉው ቋንቋኩም ጎልቲቱ ይርአ እዩ። ንምልውጥ ካልእ ቋንቋ ጠውቑ።"
+  },
+  {
+    "en": "Manage your storage locations and organize inventory across multiple warehouses or storage areas.",
+    "am": "የማከማቻ ቦታዎችዎን ያስተዳድሩ እና ክምችትን በበርካታ መጋዘኖች ወይም የማከማቻ ቦታዎች ያደራጁ።",
+    "om": "Bakka kuusaa kee bulchi fi kuusaa kuusaalee ykn bakka kuusaa baayee keessatti qindeessi.",
+    "ti": "ቦታታት መከማቸታትኩም ኣመሓድሩ ከምኡውን ክምችት ኣብ ብዙሓት መከማቸታት ወይ ክፍልታት ኣደራጅሉ።"
+  },
+  {
+    "en": "View all your warehouses and storage locations. Each entry shows item count and total stock value.",
+    "am": "ሁሉንም መጋዘኖችዎን እና የማከማቻ ቦታዎችዎን ይመልከቱ። እያንዳንዱ ግቤት የዕቃ ብዛት እና ጠቅላላ የክምችት ዋጋ ያሳያል።",
+    "om": "Kuusaalee fi bakka kuusaa kee hunda ilaali. Galmee tokkoon tokkoon lakkoofsa meelataa fi hamma maallaqaa kuusaa waliigalaa agarsiisa.",
+    "ti": "ኩሎም መከማቸታትን ቦታታት መከማቸታትን ርአዩ። ነፍሲ ወከፍ መዝገብ ብዝሒ ዕቃን ጠቕላላ ክብረት ክምችትን የርእይ እዩ።"
+  },
+  {
+    "en": "Manage your warehouse and storage location preferences. Set default warehouses for receiving stock.",
+    "am": "የመጋዘን እና የማከማቻ ቦታ ምርጫዎችዎን ያስተዳድሩ። ክምችት ለመቀበል ነባሪ መጋዘኖችን ያዘጋጁ።",
+    "om": "Filannoo kuusaa fi bakka kuusaa kee bulchi. Kuusaa fudhachuuf kuusaalee durtii qindeessi.",
+    "ti": "ምርጫታት መከማቸታትን ቦታ መከማቸታትን ኣመሓድሩ። ክምችት ንምቕባል ነባሪ መከማቸታት ኣዘጋጅሉ።"
+  },
+  {
+    "en": "View all your warehouses with item counts and stock values. Tap to manage each location.",
+    "am": "ሁሉንም መጋዘኖችዎን ከዕቃ ብዛት እና የክምችት ዋጋ ጋር ይመልከቱ። እያንዳንዱን ቦታ ለማስተዳደር ይንኩ።",
+    "om": "Kuusaalee kee hunda lakkoofsa meelataa fi hamma maallaqaa kuusaatiin ilaali. Bakka hunda bulchuuf tuqi.",
+    "ti": "ኩሎም መከማቸታትኩም ምስ ብዝሒ ዕቃን ክብረት ክምችትን ርአዩ። ነፍሲ ወከፍ ቦታ ንምሕደራ ጠውቑ።"
+  },
+  {
+    "en": "Configure stock transfer settings — approval requirements, notification preferences, and default transfer reasons.",
+    "am": "የክምችት ዝውውር ቅንብሮችን ያዋቅሩ — የማጽደቅ መስፈርቶች፣ የማሳወቂያ ምርጫዎች እና ነባሪ የዝውውር ምክንያቶች።",
+    "om": "Sajaa daddarba kuusaa qindeessi — fedhii mirkaneessaa, filannoo beekkonsaa, fi sababa daddarba durtii.",
+    "ti": "ምምሕዳራት ምዝውዋር ክምችት ኣዋቅሩ — መስፈርታት ምርግጋጽ፡ ምርጫታት መፍለጢ ከምኡውን ነባሪ ምኽንያታት ምዝውዋር።"
+  },
+  {
+    "en": "You\\'ve completed all the tutorials! Great job getting familiar with the app.",
+    "am": "ሁሉንም አጋዥ ስልጠናዎች አጠናቀዋል! ከመተግበሪያው ጋር በሚገባ ተላምደዋል።",
+    "om": "Leenjiiwwan hunda xumurte! Appii waliin barachuu kee milkaa'ina.",
+    "ti": "ንኩሎም መምርሕታት ፈጺምኩም! ምስ ኣፕሊኬሽን ብደና ለሚድኩም።"
+  },
+  {
+    "en": "See your total budget, spending to date, and remaining balance. The health indicator shows if you\\'re on track, near limit, or over budget.",
+    "am": "ጠቅላላ በጀትዎን፣ እስከ ዛሬ ያወጡትን እና የቀረውን ሂሳብ ይመልከቱ። የጤና አመልካች በትክክል እየተከተሉ፣ ወደ ገደብ እየተቃረቡ ወይም ከበጀት በላይ መሆኑን ያሳያል።",
+    "om": "Baajeta kee waliigalaa, baasii har'aa, fi haaraa hafe ilaali. Mallattoon fayyaa karaa irra jirtu, daangaa bira jirtu, ykn baajeta irraa dabarte agarsiisa.",
+    "ti": "ጠቕላላ በጀትኩም፡ ክሳዕ ሎሚ እተወጻእኩምዎን እተረፈ ሂሳብን ርአዩ። መለልዒ ጥዕና ብቑዕ ኮይኑ ከም ዝኸዱ፡ ናብ ደረት ከም ዝቐረቡ ወይ ካብ በጀት ከም ዘለፉ የርእይ እዩ።"
+  },
+  {
+    "en": "Enter the customer\\'s name. This is required for order tracking. Existing customers will auto-complete as you type.",
+    "am": "የደንበኛውን ስም ያስገቡ። ይህ ለትእዛዝ ክትትል አስፈላጊ ነው። ያሉ ደንበኞች ሲተየቡ በራስ-ሰር ይሞላሉ።",
+    "om": "Maqaa maamila galchi. Kun hordoffii ajajaaf fedhama. Maamilli jiran yeroo barreessitu ofumaan ni guutamu.",
+    "ti": "ስም ደንበኛ ኣእትዉ። እዚ ንምክትታል ትእዛዝ ኣድላዪ እዩ። ዘለዉ ደንበኛታት ከትጽሕፉ ከለኩም ብርእሶም ይመልኡ እዮም።"
+  },
+  {
+    "en": "This is your command center. View today\\'s revenue, profit, expenses, and sales count at a glance. The dashboard gives you a real-time snapshot of your business health.",
+    "am": "ይህ የእርስዎ የትእዛዝ ማዕከል ነው። የዛሬን ገቢ፣ ትርፍ፣ ወጪ እና የሽያጭ ብዛት በአንድ እይታ ይመልከቱ። ዳሽቦርዱ ስለ ንግድዎ ጤና ቅጽበታዊ ምስል ይሰጥዎታል።",
+    "om": "Kun waltajjii abboommii kee. Galii har'aa, bu'aa, baasii, fi lakkoofsa gurgurtaa mila tokkootiin ilaali. Daashboordichi suuraa yeroo dhugaa fayyaa daldala keetii siif kenna.",
+    "ti": "እዚ ማእከል ትእዛዝኩም እዩ። ናይ ሎሚ ገቢ፡ ትርፊ፡ ወጻኢ ከምኡውን ብዝሒ ሽያጥ ብሓደ ኣረኣእያ ርአዩ። ዳሽቦርድ ቅጽበታዊ ምስሊ ጥዕና ንግድኩም ይህበኩም እዩ።"
+  },
+  {
+    "en": "View the expense date, description, and whether it\\'s a recurring payment. Recurring expenses show frequency and next due date.",
+    "am": "የወጪውን ቀን፣ መግለጫ እና ተደጋጋሚ ክፍያ መሆኑን ይመልከቱ። ተደጋጋሚ ወጪዎች ድግግሞሽ እና የሚቀጥለውን የክፍያ ቀን ያሳያሉ።",
+    "om": "Guyyaa baasii, ibsa, fi yoo kaffaltii deddeebi'aa ta'e ilaali. Baasii deddeebi'aan yeroo fi guyyaa kaffaltii itti aanu agarsiisa.",
+    "ti": "ዕለት ወጻኢ፡ መግለጺ ከምኡውን ዝደጋገም ክፍሊት ምዃኑ ርአዩ። ዝደጋገሙ ወጻኢታት ድግግሞሽን ቕጽሊ ዕለት ክፍሊትን የርእዩ እዮም።"
+  },
+  {
+    "en": "Follow these steps to add a new product to your inventory. You\\'ll configure identification, pricing, and classification.",
+    "am": "አዲስ ምርት ወደ ክምችትዎ ለመጨመር እነዚህን ደረጃዎች ይከተሉ። መለያ፣ ዋጋ አሰጣጥ እና ምደባ ያዋቅራሉ።",
+    "om": "Tarkaanfiiwwan kana hordofi oomishaa haaraa kuusaa keetti idaasuuf. Addabaafuu, gatii, fi ramaddii qindeessita.",
+    "ti": "ነዞም ደረጃታት ተኸተሉ ሓድሽ ምርት ናብ ክምችትኩም ንምውስኽ። መለለዪ፡ ዋጋ ኣወጣጥር ከምኡውን ምድላብ ከኣዋቅሩ ኢኹም።"
+  },
+  {
+    "en": "Review the details and confirm to apply the price increase. The item\\'s selling price is updated immediately.",
+    "am": "ዝርዝሮቹን ይከልሱ እና የዋጋ ጭማሪውን ለመተግበር ያረጋግጡ። የዕቃው የሽያጭ ዋጋ ወዲያውኑ ይዘምናል።",
+    "om": "Ibsa ilaali fi dabalaa gatii hojiirra ooluuf mirkaneessi. Gatiin gurgurtaa meelataa battaluma ni haaromfama.",
+    "ti": "ዝርዝራት ምርምሩ ከምኡውን ንምትግባር ዋጋ ምውሳኽ ኣረጋግጡ። ዋጋ ሽያጭ እታ ዕቃ ብቕጽበት ክምዕር እዩ።"
+  },
+  {
+    "en": "Reach out to our support team via email or phone. We\\'re here to help with any issues or questions.",
+    "am": "በኢሜይል ወይም በስልክ የእኛን የድጋፍ ቡድን ያነጋግሩ። ለማንኛውም ችግር ወይም ጥያቄ እኛ እዚህ ነን ለመርዳት።",
+    "om": "Iimeeliin ykn bilbilaan garee deeggarsaa keenya quunnami. Rakkoo ykn gaaffii kamuu keessatti isin gargaaruuf as jirra.",
+    "ti": "ብኢመይል ወይ ብተሌፎን ናብ ጉጅለ ደገፍና ርኸቡና። ንዝኾነ ጸገም ወይ ሕቶ ክንሕግዘኩም ኣብዚ ኣለና።"
+  },
+  {
+    "en": "You\\'ve completed the {name} tutorial.",
+    "am": "የ{name} አጋዥ ስልጠና አጠናቀዋል።",
+    "om": "Leenjii {name} xumurteetta.",
+    "ti": "መምርሒ {name} ፈጺምኩም።"
+  }
+]

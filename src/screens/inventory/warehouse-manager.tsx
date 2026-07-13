@@ -124,7 +124,7 @@ const WarehouseManagerModal: React.FC<WarehouseManagerProps> = ({ visible, onClo
             <TouchableOpacity onPress={() => { resetForm(); setShowForm(true); }} style={[styles.addBtn, { backgroundColor: colors.primary + '15' }]}>
               <Plus size={18} color={colors.primary} />
             </TouchableOpacity>
-            <TutorialButton tutorialId="warehouse-manager" screenName="Warehouse Manager" />
+            <TutorialButton tutorialId="warehouse-manager" screenName={t('screen.warehouse_manager')} />
           </View>
           </TutorialTarget>
 

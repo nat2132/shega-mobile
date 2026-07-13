@@ -224,7 +224,7 @@ const PointerLabel = (items: any) => {
             </TouchableOpacity>
           </View>
           <View style={styles.headerActions}>
-            <TutorialButton tutorialId="expense" screenName="Expense" />
+            <TutorialButton tutorialId="expense" screenName={t('screen.expense')} />
             <TouchableOpacity style={[styles.iconBtn, { borderColor: G.border, backgroundColor: G.bgCard }]} onPress={() => router.push('/(tabs)/budget')}>
               <DollarSign size={22} color={G.fgSecondary} />
             </TouchableOpacity>

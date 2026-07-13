@@ -299,7 +299,8 @@ const ReportsHubScreenContent = () => {
         `);
         await exportProductCatalogCSV(items as any[]);
       }
-      showToast({ title: `${reportType.charAt(0).toUpperCase() + reportType.slice(1)} Report Exported`, message: 'Data saved to CSV file', type: 'success' });
+      const type = reportType.charAt(0).toUpperCase() + reportType.slice(1);
+      showToast({ title: t('toast.report_csv_exported', { type }), message: t('toast.report_csv_desc'), type: 'success' });
     } catch (e) {
       console.error('CSV export error:', e);
       showToast('CSV export failed', 'error');
@@ -320,7 +321,7 @@ const ReportsHubScreenContent = () => {
         const activeBusiness = getActiveBusiness();
         const ts = calendar === 'ethiopian' ? 'ethiopian' : 'device';
         await generateLowStockOrderPDF(allOrderItems, activeBusiness, langCode, action, ts);
-        showToast({ title: 'Order Report Exported', message: 'Low stock order PDF is ready', type: 'success' });
+        showToast({ title: t('toast.report_order_exported'), message: t('toast.report_order_desc'), type: 'success' });
       } catch (e) { console.error(e); showToast('Failed to generate order PDF', 'error'); }
       finally { setOrderExporting(false); setActiveReportType(null); }
       return;
@@ -377,8 +378,8 @@ const ReportsHubScreenContent = () => {
           label, `${start} ~ ${end}`, activeBusiness, langCode, action, ts
         );
       }
-      const reportLabel = activeReportType ? activeReportType.charAt(0).toUpperCase() + activeReportType.slice(1) : 'Report';
-      showToast({ title: `${reportLabel} Report Ready`, message: 'PDF document generated successfully', type: 'success' });
+      const label = activeReportType ? activeReportType.charAt(0).toUpperCase() + activeReportType.slice(1) : 'Report';
+      showToast({ title: t('toast.report_pdf_ready', { label }), message: t('toast.report_pdf_desc'), type: 'success' });
     } catch (e) {
       console.error('Failed to generate PDF:', e);
       showToast('PDF generation failed', 'error');

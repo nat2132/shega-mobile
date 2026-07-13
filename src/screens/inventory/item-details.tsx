@@ -151,7 +151,7 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => 
             <TouchableOpacity onPress={onClose} style={[styles.circleBtn, { backgroundColor: G.bg + '80' }]}>
                <ChevronLeft size={20} color={G.fg} />
             </TouchableOpacity>
-            <TutorialButton tutorialId="item-details" screenName="Item Details" />
+            <TutorialButton tutorialId="item-details" screenName={t('screen.item_details')} />
             <View style={styles.row}>
                {isEditing ? (
                  <View style={styles.editActions}>

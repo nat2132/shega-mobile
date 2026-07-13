@@ -128,7 +128,7 @@ const SparklineChart = React.memo(({ todayValue = 0, yesterdayValue = 0, color =
     return (
       <View style={{ height: heightSize, width: '100%', justifyContent: 'center', alignItems: 'center', marginVertical: 15 }}>
         <AppText variant="body-sm" weight="medium" style={{ color: colors.text, opacity: 0.5 }}>
-          No data
+          {t('common.no_data')}
         </AppText>
       </View>
     );
@@ -291,7 +291,7 @@ SparklineChart.displayName = 'SparklineChart';
     const elapsed = ((Date.now() - start) / 1000).toFixed(1);
     await dialog.alert({
       title: result.success ? t('dashboard.seed_success') : t('dashboard.seed_error'),
-      message: `${result.message}\n\nâ±ï¸ ${elapsed}s`,
+      message: `${result.message}\n\n⏱️ ${elapsed}${t('common.s')}`,
       iconType: result.success ? 'success' : 'danger',
     });
     loadDashboardData();
@@ -568,7 +568,7 @@ SparklineChart.displayName = 'SparklineChart';
                 </TouchableOpacity>
                 </TutorialTarget>
 
-                <TutorialButton tutorialId="dashboard" screenName="Dashboard" />
+                <TutorialButton tutorialId="dashboard" screenName={t('screen.dashboard')} />
 
                 <TutorialTarget id="dash-avatar">
                   <TouchableOpacity 
@@ -1001,7 +1001,7 @@ SparklineChart.displayName = 'SparklineChart';
                      const customerPhone = saleMetadata.customerPhone ? saleMetadata.customerPhone.trim() : '';
                      const discount = Math.max(0, Number(saleMetadata.discount) || 0);
                       const vat = Math.min(100, Math.max(0, Number(saleMetadata.vat) || 0));
-                      const taxType = saleMetadata.taxType || "VAT";
+                      const taxType = saleMetadata.taxType || t('tax.vat');
                       
                        await insertSale({
                          itemId: item.id,

@@ -26,6 +26,7 @@ import {
 } from '@/database/notifications';
 import { runAllNotificationChecks } from '@/services/notificationService';
 import { useToast } from './ToastContext';
+import { useSettings } from './SettingsContext';
 
 interface NotificationContextProps {
   notifications: AppNotification[];
@@ -51,6 +52,7 @@ const NotificationContext = createContext<NotificationContextProps | undefined>(
 
 export const NotificationProvider = ({ children }: { children: React.ReactNode }) => {
   const { showToast } = useToast();
+  const { t } = useSettings();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [unresolvedCount, setUnresolvedCount] = useState(0);
@@ -114,7 +116,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
 
   const markAllRead = useCallback(async () => {
     markAllAsRead();
-    showToast({ title: 'Done!', message: 'All notifications marked as read', type: 'success' });
+    showToast({ title: t('toast.notif_marked_read'), message: t('toast.notif_marked_read_desc'), type: 'success' });
     await refresh();
   }, [refresh, showToast]);
 
@@ -125,31 +127,31 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
 
   const resolve = useCallback(async (id: number) => {
     markAsResolved(id);
-    showToast({ title: 'Resolved!', message: 'Notification marked as resolved', type: 'success' });
+    showToast({ title: t('toast.notif_resolved'), message: t('toast.notif_resolved_desc'), type: 'success' });
     await refresh();
   }, [refresh, showToast]);
 
   const clearAll = useCallback(async () => {
     clearAllNotifications();
-    showToast({ title: 'Cleared', message: 'All notifications cleared', type: 'info' });
+    showToast({ title: t('toast.notif_cleared'), message: t('toast.notif_cleared_desc'), type: 'info' });
     await refresh();
   }, [refresh, showToast]);
 
   const snoozeReminderById = useCallback(async (id: number, minutes: number) => {
     snoozeReminder(id, minutes);
-    showToast({ title: 'Snoozed', message: `Reminder snoozed for ${minutes} minutes`, type: 'info' });
+    showToast({ title: t('toast.reminder_snoozed'), message: t('toast.reminder_snoozed_desc', { minutes: String(minutes) }), type: 'info' });
     await refresh();
   }, [refresh, showToast]);
 
   const completeReminder = useCallback(async (id: number) => {
     updateReminderStatus(id, 'completed');
-    showToast({ title: 'Completed!', message: 'Reminder marked as done', type: 'success' });
+    showToast({ title: t('toast.reminder_completed'), message: t('toast.reminder_completed_desc'), type: 'success' });
     await refresh();
   }, [refresh, showToast]);
 
   const removeReminder = useCallback(async (id: number) => {
     deleteReminder(id);
-    showToast({ title: 'Removed', message: 'Reminder deleted', type: 'info' });
+    showToast({ title: t('toast.reminder_removed'), message: t('toast.reminder_removed_desc'), type: 'info' });
     await refresh();
   }, [refresh, showToast]);
 

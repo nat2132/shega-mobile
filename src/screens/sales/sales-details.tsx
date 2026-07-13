@@ -512,7 +512,7 @@ const SaleDetailsScreen = ({
           >
             <ChevronLeft size={20} color={SALES_GLASS.fg} />
           </TouchableOpacity>
-          <TutorialButton tutorialId="sales-details" screenName="Sale Details" />
+          <TutorialButton tutorialId="sales-details" screenName={t('screen.sale_details')} />
           <View style={styles.row}>
             {isEditing ? (
               <View style={styles.editActions}>

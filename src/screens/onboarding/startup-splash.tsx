@@ -25,7 +25,7 @@ interface StartupSplashScreenProps {
 }
 
 export default function StartupSplashScreen({ onNext }: StartupSplashScreenProps) {
-  const { colors } = useSettings();
+  const { colors, t } = useSettings();
   const G = getGlass(colors);
 
   const logoScale = useSharedValue(0.4);
@@ -91,7 +91,7 @@ export default function StartupSplashScreen({ onNext }: StartupSplashScreenProps
         </View>
         <Animated.View entering={FadeInDown.delay(600).springify().damping(12)} style={styles.brandTextWrap}>
           <AppText variant="title" weight="bold" style={{ color: G.fg, letterSpacing: 3 }}>
-            SHEGA
+            {t('common.shega')}
           </AppText>
         </Animated.View>
       </Animated.View>

@@ -331,7 +331,7 @@ const OrdersScreen = () => {
             Order Management
           </AppText>
         </View>
-        <TutorialButton tutorialId="orders" screenName="Orders" />
+        <TutorialButton tutorialId="orders" screenName={t('screen.orders')} />
       </View>
       </TutorialTarget>
 

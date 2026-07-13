@@ -35,7 +35,7 @@ const PremiumTrialBanner: React.FC<{ compact?: boolean }> = ({ compact }) => {
           <View style={styles.compactDays}>
             <Clock size={12} color={gold} />
             <AppText variant="micro" weight="bold" style={{ color: gold }}>
-              {trialDaysRemaining}d
+              {trialDaysRemaining}{t('common.d')}
             </AppText>
           </View>
         </TouchableOpacity>

@@ -125,7 +125,7 @@ const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => vo
             <TouchableOpacity onPress={onClose} style={[styles.circleBtn, { backgroundColor: G.bgCard }]}>
                <ChevronLeft size={20} color={G.fg} />
             </TouchableOpacity>
-            <TutorialButton tutorialId="expense-details" screenName="Expense Details" />
+            <TutorialButton tutorialId="expense-details" screenName={t('screen.expense_details')} />
             <View style={styles.row}>
                {isEditing ? (
                  <View style={styles.editActions}>

@@ -145,7 +145,7 @@ const PremiumFeatureLockScreen: React.FC<PremiumFeatureLockProps> = ({
           >
             <Crown size={20} color="#FFF" strokeWidth={2.5} />
             <AppText variant="heading" weight="bold" style={{ color: '#FFF' }}>
-              Upgrade to Premium
+              {t('subscription.upgrade_to_premium')}
             </AppText>
             <ArrowRight size={22} color="#FFF" strokeWidth={2.5} />
           </LinearGradient>

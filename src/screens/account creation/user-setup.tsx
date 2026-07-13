@@ -48,20 +48,20 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
   const [touched, setTouched] = useState<{ fullName?: boolean; businessName?: boolean }>({});
 
   const THEMES: { id: any; color: string; name: string }[] = [
-    { id: 'light', color: '#FFFFFF', name: 'Light' },
-    { id: 'dark', color: '#1C1C1E', name: 'Dark' },
-    { id: 'midnight', color: '#0F172A', name: 'Midnight' },
-    { id: 'emerald', color: '#064E3B', name: 'Emerald' },
-    { id: 'charcoal', color: '#171717', name: 'Charcoal' },
-    { id: 'slate', color: '#1E293B', name: 'Slate' },
-    { id: 'cocoa', color: '#2D2424', name: 'Cocoa' },
+    { id: 'light', color: '#FFFFFF', name: t('theme.light') },
+    { id: 'dark', color: '#1C1C1E', name: t('theme.dark') },
+    { id: 'midnight', color: '#0F172A', name: t('theme.midnight') },
+    { id: 'emerald', color: '#064E3B', name: t('theme.emerald') },
+    { id: 'charcoal', color: '#171717', name: t('theme.charcoal') },
+    { id: 'slate', color: '#1E293B', name: t('theme.slate') },
+    { id: 'cocoa', color: '#2D2424', name: t('theme.cocoa') },
   ];
 
   const LANGUAGES = [
     { id: 'en', title: 'English', sub: 'System Default' },
-    { id: 'am', title: 'አማርኛ', sub: 'Amharic' },
-    { id: 'om', title: 'Afaan Oromo', sub: 'Oromo' },
-    { id: 'ti', title: 'ትግርኛ', sub: 'Tigrinya' },
+    { id: 'am', title: 'አማርኛ', sub: t('language.amharic') },
+    { id: 'om', title: 'Afaan Oromo', sub: t('language.oromo') },
+    { id: 'ti', title: 'ትግርኛ', sub: t('language.tigrinya') },
   ];
 
   const handlePickImage = async () => {

@@ -185,7 +185,7 @@ const OnCreditCustomersScreen = () => {
             <AppText variant="heading-lg" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>
               {t('dash.liability_ledger')}
             </AppText>
-            <TutorialButton tutorialId="debt-list" screenName="Debt Records" />
+            <TutorialButton tutorialId="debt-list" screenName={t('screen.debt_records')} />
           </View>
           </TutorialTarget>
         }

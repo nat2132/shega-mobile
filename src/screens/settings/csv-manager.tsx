@@ -50,21 +50,22 @@ interface ModuleOption {
   key: string;
   label: string;
   icon: any;
-  description: string;
+  description?: string;
+  descKey?: string;
   color: string;
 }
 
 const CSVManagerScreen = () => {
-  const { colors } = useSettings();
+  const { colors, t } = useSettings();
   const G = getSettingsGlass(colors);
 
   const MODULES: ModuleOption[] = [
-    { key: 'items', label: 'Inventory Items', icon: Package, descKey: 'dt.inventory_items', color: colors.primary },
-    { key: 'sales', label: 'Sales Records', icon: Wallet, descKey: 'dt.sales_records', color: colors.success },
-    { key: 'expenses', label: 'Expenses', icon: ClipboardList, descKey: 'dt.expenses', color: colors.warning },
-    { key: 'categories', label: 'Categories', icon: Tag, descKey: 'dt.categories', color: colors.tint },
-    { key: 'contacts', label: 'Contacts', icon: Users, descKey: 'dt.contacts', color: colors.error },
-    { key: 'adjustments', label: 'Adjustments', icon: ClipboardList, descKey: 'dt.adjustments', color: colors.tint },
+    { key: 'items', label: t('dt.inventory_items_label'), icon: Package, descKey: 'dt.inventory_items', color: colors.primary },
+    { key: 'sales', label: t('dt.sales_records_label'), icon: Wallet, descKey: 'dt.sales_records', color: colors.success },
+    { key: 'expenses', label: t('dt.expenses_label'), icon: ClipboardList, descKey: 'dt.expenses', color: colors.warning },
+    { key: 'categories', label: t('dt.categories_label'), icon: Tag, descKey: 'dt.categories', color: colors.tint },
+    { key: 'contacts', label: t('dt.contacts_label'), icon: Users, descKey: 'dt.contacts', color: colors.error },
+    { key: 'adjustments', label: t('dt.adjustments_label'), icon: ClipboardList, descKey: 'dt.adjustments', color: colors.tint },
   ];
   const { showToast } = useToast();
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
@@ -182,7 +183,7 @@ const CSVManagerScreen = () => {
           if (result.errors.length === 0) {
             showToast({ title: t('dt.import_complete'), message: `${result.imported} records imported`, type: 'success' });
           } else {
-            showToast({ title: 'Import Complete', message: `${result.imported} records imported with ${result.errors.length} issue(s)`, type: 'warning' });
+            showToast({ title: t('toast.import_complete'), message: `${result.imported} records imported with ${result.errors.length} issue(s)`, type: 'warning' });
             playBad();
           }
         } catch {
