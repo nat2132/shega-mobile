@@ -2856,6 +2856,14 @@ const translations: Record<Language, Record<string, string>> = {
     'tutorial.menu_continue_btn': 'Continue ({current}/{total})',
     'tutorial.menu_start': 'Start Tutorial',
 
+    'language.english': 'English',
+    'language.amharic': 'Amharic',
+    'language.oromo': 'Oromo',
+    'language.tigrinya': 'Tigrinya',
+    'language.preview_inv': 'Manage Inventory',
+    'language.preview_inv_om': 'Manage Inventory',
+    'common.s': 's',
+    'common.shega': 'Shega',
   },
   am: {
     // Tabs & Navigation
@@ -4766,6 +4774,14 @@ const translations: Record<Language, Record<string, string>> = {
     'subscription.feature_biometrics': 'ባዮሜትሪክስ',
     'subscription.feature_themes': 'ፕሪሚየም ገጽታዎች',
     'subscription.feature_suppliers': 'የአቅራቢ ብድር ማሳሰቢያ',
+    'language.english': 'እንግሊዝኛ',
+    'language.amharic': 'አማርኛ',
+    'language.oromo': 'ኦሮሚኛ',
+    'language.tigrinya': 'ትግርኛ',
+    'language.preview_inv': 'ክምችት አስተዳድር',
+    'language.preview_inv_om': 'ክምችት አስተዳድር',
+    'common.s': 'ሰ',
+    'common.shega': 'Shega',
   },
   om: {
     // Basic i18n for Afaan Oromo
@@ -6481,6 +6497,14 @@ const translations: Record<Language, Record<string, string>> = {
     'subscription.popular': 'Beekamaa',
     'subscription.go_premium': 'Premium Gali',
     'subscription.get_started': 'Jalqabi',
+    'language.english': 'Ingiliffaa',
+    'language.amharic': 'Amharic',
+    'language.oromo': 'Afaan Oromoo',
+    'language.tigrinya': 'Tigrinya',
+    'language.preview_inv': 'Kuusaa Bulchi',
+    'language.preview_inv_om': 'Kuusaa Bulchi',
+    'common.s': 's',
+    'common.shega': 'Shega',
   },
   ti: {
     // Basic i18n for Tigrinya
@@ -8245,6 +8269,14 @@ const translations: Record<Language, Record<string, string>> = {
     'subscription.feature_biometrics': 'ባዮሜትሪክስ',
     'subscription.feature_themes': 'ፕሪሚየም መልክዓት',
     'subscription.feature_suppliers': 'መዘኻኸሪ ብድሪ ኣቕራቢ',
+    'language.english': 'እንግሊዝኛ',
+    'language.amharic': 'አማርኛ',
+    'language.oromo': 'ኦሮሚኛ',
+    'language.tigrinya': 'ትግርኛ',
+    'language.preview_inv': 'ክምችት ኣመሓድር',
+    'language.preview_inv_om': 'ክምችት ኣመሓድር',
+    'common.s': 'ሰ',
+    'common.shega': 'Shega',
   },
 };
 
@@ -8493,6 +8525,7 @@ export const useDashboardVisibility = () => {
     toggleDashboardSection: context.toggleDashboardSection,
   };
 };
+
 
 
 
