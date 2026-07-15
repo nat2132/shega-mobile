@@ -31,6 +31,7 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -817,25 +818,27 @@ SparklineChart.displayName = 'SparklineChart';
         animationType="slide"
         onRequestClose={() => setActiveModal(null)}
       >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setActiveModal(null)} />
-          <View style={styles.bottomSheetContainer}>
-            <View style={styles.modalHeader}>
-              <View style={styles.modalHandle} />
-              <TouchableOpacity onPress={() => setActiveModal(null)} style={styles.closeBtn}>
-                <AppText variant="title" shrink={false} style={styles.closeBtnText}>âœ•</AppText>
-              </TouchableOpacity>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setActiveModal(null)}>
+          <View style={styles.modalBackdrop} />
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            <View style={styles.bottomSheetContainer}>
+              <View style={styles.modalHeader}>
+                <View style={styles.modalHandle} />
+                <TouchableOpacity onPress={() => setActiveModal(null)} style={styles.closeBtn}>
+                  <AppText variant="title" shrink={false} style={styles.closeBtnText}>âœ•</AppText>
+                </TouchableOpacity>
+              </View>
+              <AppText variant="heading" weight="bold" style={styles.sheetTitle} numberOfLines={2}>
+                {activeModal === 'lowStock' ? t('dashboard.low_stock') : activeModal === 'onCreditCustomers' ? t('dashboard.credit_customers') : t('dashboard.credit_items')}
+              </AppText>
+              <View style={{ height: 400 }}>
+                {activeModal === 'lowStock' && <LowStockItemsScreen />}
+                {activeModal === 'onCreditCustomers' && <OnCreditCustomersScreen />}
+                {activeModal === 'onCreditItems' && <OnCreditItemsScreen />}
+              </View>
             </View>
-            <AppText variant="heading" weight="bold" style={styles.sheetTitle} numberOfLines={2}>
-              {activeModal === 'lowStock' ? t('dashboard.low_stock') : activeModal === 'onCreditCustomers' ? t('dashboard.credit_customers') : t('dashboard.credit_items')}
-            </AppText>
-            <View style={{ height: 400 }}>
-              {activeModal === 'lowStock' && <LowStockItemsScreen />}
-              {activeModal === 'onCreditCustomers' && <OnCreditCustomersScreen />}
-              {activeModal === 'onCreditItems' && <OnCreditItemsScreen />}
-            </View>
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       <Modal
@@ -844,67 +847,76 @@ SparklineChart.displayName = 'SparklineChart';
         animationType="slide"
         onRequestClose={() => setShowActivityLedger(false)}
       >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowActivityLedger(false)} />
-          <View style={[styles.bottomSheetContainer, { height: Dimensions.get('window').height * 0.90 }]}>
-            <View style={styles.modalHeader}>
-              <View style={styles.modalHandle} />
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowActivityLedger(false)}>
+          <View style={styles.modalBackdrop} />
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            <View style={[styles.bottomSheetContainer, { height: Dimensions.get('window').height * 0.90 }]}>
+              <View style={styles.modalHeader}>
+                <View style={styles.modalHandle} />
+              </View>
+              <ActivityLedgerScreen onClose={() => {
+                setShowActivityLedger(false);
+                loadDashboardData();
+              }} />
             </View>
-            <ActivityLedgerScreen onClose={() => {
-              setShowActivityLedger(false);
-              loadDashboardData();
-            }} />
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
-      {/* Sales Record Sheet */}
       <Modal
         visible={showSalesRecord}
         transparent
         animationType="slide"
         onRequestClose={() => setShowSalesRecord(false)}
       >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowSalesRecord(false)} />
-          <View style={[styles.bottomSheetContainer, { height: Dimensions.get('window').height * 0.90 }]}>
-            <View style={styles.modalHeader}>
-              <View style={styles.modalHandle} />
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowSalesRecord(false)}>
+          <View style={styles.modalBackdrop} />
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            <View style={[styles.bottomSheetContainer, { height: Dimensions.get('window').height * 0.90 }]}>
+              <View style={styles.modalHeader}>
+                <View style={styles.modalHandle} />
+              </View>
+              <SalesRecordScreen onClose={() => setShowSalesRecord(false)} />
             </View>
-            <SalesRecordScreen onClose={() => setShowSalesRecord(false)} />
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       {/* Activity Details Modals */}
       <Modal visible={!!selectedSale} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setSelectedSale(null)} />
-          <Animated.View entering={FadeInUp} style={[styles.bottomSheetContainer, { backgroundColor: colors.background, height: Dimensions.get('window').height * 0.85 }]}>
-             <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
-             {selectedSale && <SaleDetailsScreen sale={selectedSale} onClose={() => { setSelectedSale(null); loadDashboardData(); }} />}
-          </Animated.View>
-        </View>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setSelectedSale(null)}>
+          <View style={styles.modalBackdrop} />
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            <Animated.View entering={FadeInUp} style={[styles.bottomSheetContainer, { backgroundColor: colors.background, height: Dimensions.get('window').height * 0.85 }]}>
+               <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
+               {selectedSale && <SaleDetailsScreen sale={selectedSale} onClose={() => { setSelectedSale(null); loadDashboardData(); }} />}
+            </Animated.View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       <Modal visible={!!selectedExpense} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setSelectedExpense(null)} />
-          <Animated.View entering={FadeInUp} style={[styles.bottomSheetContainer, { backgroundColor: colors.background, height: Dimensions.get('window').height * 0.85 }]}>
-             <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
-             {selectedExpense && <ExpenseDetailsScreen expense={selectedExpense} onClose={() => { setSelectedExpense(null); loadDashboardData(); }} />}
-          </Animated.View>
-        </View>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setSelectedExpense(null)}>
+          <View style={styles.modalBackdrop} />
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            <Animated.View entering={FadeInUp} style={[styles.bottomSheetContainer, { backgroundColor: colors.background, height: Dimensions.get('window').height * 0.85 }]}>
+               <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
+               {selectedExpense && <ExpenseDetailsScreen expense={selectedExpense} onClose={() => { setSelectedExpense(null); loadDashboardData(); }} />}
+            </Animated.View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       <Modal visible={!!selectedAdjustment} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setSelectedAdjustment(null)} />
-          <Animated.View entering={FadeInUp} style={[styles.bottomSheetContainer, { backgroundColor: colors.background, height: Dimensions.get('window').height * 0.85 }]}>
-             <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
-             {selectedAdjustment && <AdjustmentDetailsScreen adjustment={selectedAdjustment} onClose={() => setSelectedAdjustment(null)} onRefresh={() => { setSelectedAdjustment(null); loadDashboardData(); }} />}
-          </Animated.View>
-        </View>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setSelectedAdjustment(null)}>
+          <View style={styles.modalBackdrop} />
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            <Animated.View entering={FadeInUp} style={[styles.bottomSheetContainer, { backgroundColor: colors.background, height: Dimensions.get('window').height * 0.85 }]}>
+               <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
+               {selectedAdjustment && <AdjustmentDetailsScreen adjustment={selectedAdjustment} onClose={() => setSelectedAdjustment(null)} onRefresh={() => { setSelectedAdjustment(null); loadDashboardData(); }} />}
+            </Animated.View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       <Modal visible={showSearch} transparent animationType="slide" onRequestClose={() => setShowSearch(false)}>
@@ -912,56 +924,60 @@ SparklineChart.displayName = 'SparklineChart';
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={{ flex: 1 }}
         >
-          <View style={styles.modalOverlay}>
-            <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowSearch(false)} />
-            <View style={[styles.bottomSheetContainer, { maxHeight: Dimensions.get('window').height * 0.90, backgroundColor: colors.background, flex: 1 }]}>
-              <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
-              <SearchScreen 
-                 onSelectItem={(item: any) => {
-                   const existing = pendingSales.find(s => s.id === item.id);
-                   if (existing) {
-                     setPendingSales(pendingSales.map(s => s.id === item.id ? { ...s, quantity: s.quantity + 1 } : s));
-                   } else {
-                     setPendingSales([...pendingSales, {
-                       ...item,
-                       id: item.id,
-                       quantity: 1,
-                       unitType: 'base',
-                     }]);
-                   }
-                   setShowSearch(false);
-                   setTimeout(() => setShowPending(true), 300);
-                 }} 
-              />
-            </View>
-          </View>
+          <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowSearch(false)}>
+            <View style={styles.modalBackdrop} />
+            <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+              <View style={[styles.bottomSheetContainer, { maxHeight: Dimensions.get('window').height * 0.90, backgroundColor: colors.background, flex: 1 }]}>
+                <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
+                <SearchScreen 
+                   onSelectItem={(item: any) => {
+                     const existing = pendingSales.find(s => s.id === item.id);
+                     if (existing) {
+                       setPendingSales(pendingSales.map(s => s.id === item.id ? { ...s, quantity: s.quantity + 1 } : s));
+                     } else {
+                       setPendingSales([...pendingSales, {
+                         ...item,
+                         id: item.id,
+                         quantity: 1,
+                         unitType: 'base',
+                       }]);
+                     }
+                     setShowSearch(false);
+                     setTimeout(() => setShowPending(true), 300);
+                   }} 
+                />
+              </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
         </KeyboardAvoidingView>
       </Modal>
 
       <Modal visible={showPending} transparent animationType="slide" onRequestClose={() => setShowPending(false)}>
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowPending(false)} />
-          <View style={[styles.bottomSheetContainer, { height: Dimensions.get('window').height * 0.90, backgroundColor: colors.background }]}>
-            <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
-            <PendingSales 
-               items={pendingSales}
-               onUpdateItem={(id, updates) => {
-                 setPendingSales(pendingSales.map(s => s.id === id ? { ...s, ...updates } : s));
-               }}
-               onRemoveItem={(id) => {
-                 setPendingSales(pendingSales.filter(s => s.id !== id));
-               }}
-               onAddMore={() => {
-                 setShowPending(false);
-                 setTimeout(() => setShowSearch(true), 300);
-               }}
-               onFinish={() => {
-                 setShowPending(false);
-                 setTimeout(() => setShowSaleFormFlow(true), 300);
-               }}
-            />
-          </View>
-        </View>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowPending(false)}>
+          <View style={styles.modalBackdrop} />
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            <View style={[styles.bottomSheetContainer, { height: Dimensions.get('window').height * 0.90, backgroundColor: colors.background }]}>
+              <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
+              <PendingSales 
+                 items={pendingSales}
+                 onUpdateItem={(id, updates) => {
+                   setPendingSales(pendingSales.map(s => s.id === id ? { ...s, ...updates } : s));
+                 }}
+                 onRemoveItem={(id) => {
+                   setPendingSales(pendingSales.filter(s => s.id !== id));
+                 }}
+                 onAddMore={() => {
+                   setShowPending(false);
+                   setTimeout(() => setShowSearch(true), 300);
+                 }}
+                 onFinish={() => {
+                   setShowPending(false);
+                   setTimeout(() => setShowSaleFormFlow(true), 300);
+                 }}
+              />
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       <Modal visible={showSaleFormFlow} transparent animationType="slide" onRequestClose={() => setShowSaleFormFlow(false)}>
@@ -969,77 +985,79 @@ SparklineChart.displayName = 'SparklineChart';
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={{ flex: 1 }}
         >
-          <View style={styles.modalOverlay}>
-            <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowSaleFormFlow(false)} />
-            <View style={[styles.bottomSheetContainer, { maxHeight: Dimensions.get('window').height * 0.90, backgroundColor: colors.background, flex: 1 }]}>
-              <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
-            <GlobalCheckout 
-               cart={pendingSales}
-               onBack={() => {
-                 setShowSaleFormFlow(false);
-                 setTimeout(() => setShowPending(true), 300);
-               }}
-                onFinish={async (saleMetadata: any) => {
-                  try {
-                    const { insertSale } = await import('@/database/db');
-                    const batchId = Date.now().toString() + '_' + Math.random().toString(36).substring(2, 8);
-                    
-                    for (const item of pendingSales) {
-                     // Validate item data
-                     if (!item.id || typeof item.id !== 'number') {
-                       throw new Error(`Invalid item ID: ${item.id}`);
-                     }
-                     if (!item.quantity || item.quantity <= 0) {
-                       throw new Error(`Invalid quantity for item: ${item.id}`);
-                     }
-                     
-                     const finalUnitPrice = item.unitType === 'pack' ? item.packSellingPrice : item.baseSellingPrice;
-                     const finalUnitLabel = item.unitType === 'pack' ? item.purchaseUnit : item.baseUnit;
-                     
-                     // Validate and sanitize customer info
-                     const customerName = saleMetadata.customerName ? saleMetadata.customerName.trim() : '';
-                     const customerPhone = saleMetadata.customerPhone ? saleMetadata.customerPhone.trim() : '';
-                     const discount = Math.max(0, Number(saleMetadata.discount) || 0);
-                      const vat = Math.min(100, Math.max(0, Number(saleMetadata.vat) || 0));
-                      const taxType = saleMetadata.taxType || t('tax.vat');
-                      
-                       await insertSale({
-                         itemId: item.id,
-                         quantity: item.quantity,
-                         unit: finalUnitLabel,
-                         unitType: item.unitType,
-                         discount: discount / pendingSales.length,
-                         vat: vat,
-                         taxType: taxType,
-                         totalPrice: finalUnitPrice * item.quantity,
-                        paymentMethod: saleMetadata.paymentMethod,
-                        paymentStatus: saleMetadata.paymentStatus,
-                        customerName: customerName,
-                        customerPhone: customerPhone,
-                        batchId,
-                      });
-                   }
-                   setPendingSales([]);
+          <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowSaleFormFlow(false)}>
+            <View style={styles.modalBackdrop} />
+            <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+              <View style={[styles.bottomSheetContainer, { maxHeight: Dimensions.get('window').height * 0.90, backgroundColor: colors.background, flex: 1 }]}>
+                <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
+              <GlobalCheckout 
+                 cart={pendingSales}
+                 onBack={() => {
                    setShowSaleFormFlow(false);
-                   loadDashboardData();
-                   setLastSaleData({
-                     totalPrice: saleMetadata.totalPrice,
-                     paymentMethod: saleMetadata.paymentMethod,
-                     itemCount: pendingSales.length,
-                     paymentStatus: saleMetadata.paymentStatus,
-                     customerName: saleMetadata.customerName,
-                   });
-                  } catch {
-                    await dialog.alert({
-                      title: t('common.error'),
-                      message: t('sale.save_error'),
-                      iconType: 'danger',
-                    });
-                  }
-               }}
-            />
-          </View>
-        </View>
+                   setTimeout(() => setShowPending(true), 300);
+                 }}
+                  onFinish={async (saleMetadata: any) => {
+                    try {
+                      const { insertSale } = await import('@/database/db');
+                      const batchId = Date.now().toString() + '_' + Math.random().toString(36).substring(2, 8);
+                      
+                      for (const item of pendingSales) {
+                       // Validate item data
+                       if (!item.id || typeof item.id !== 'number') {
+                         throw new Error(`Invalid item ID: ${item.id}`);
+                       }
+                       if (!item.quantity || item.quantity <= 0) {
+                         throw new Error(`Invalid quantity for item: ${item.id}`);
+                       }
+                       
+                       const finalUnitPrice = item.unitType === 'pack' ? item.packSellingPrice : item.baseSellingPrice;
+                       const finalUnitLabel = item.unitType === 'pack' ? item.purchaseUnit : item.baseUnit;
+                       
+                       // Validate and sanitize customer info
+                       const customerName = saleMetadata.customerName ? saleMetadata.customerName.trim() : '';
+                       const customerPhone = saleMetadata.customerPhone ? saleMetadata.customerPhone.trim() : '';
+                       const discount = Math.max(0, Number(saleMetadata.discount) || 0);
+                        const vat = Math.min(100, Math.max(0, Number(saleMetadata.vat) || 0));
+                        const taxType = saleMetadata.taxType || t('tax.vat');
+                        
+                         await insertSale({
+                           itemId: item.id,
+                           quantity: item.quantity,
+                           unit: finalUnitLabel,
+                           unitType: item.unitType,
+                           discount: discount / pendingSales.length,
+                           vat: vat,
+                           taxType: taxType,
+                           totalPrice: finalUnitPrice * item.quantity,
+                          paymentMethod: saleMetadata.paymentMethod,
+                          paymentStatus: saleMetadata.paymentStatus,
+                          customerName: customerName,
+                          customerPhone: customerPhone,
+                          batchId,
+                        });
+                     }
+                     setPendingSales([]);
+                     setShowSaleFormFlow(false);
+                     loadDashboardData();
+                     setLastSaleData({
+                       totalPrice: saleMetadata.totalPrice,
+                       paymentMethod: saleMetadata.paymentMethod,
+                       itemCount: pendingSales.length,
+                       paymentStatus: saleMetadata.paymentStatus,
+                       customerName: saleMetadata.customerName,
+                     });
+                    } catch {
+                      await dialog.alert({
+                        title: t('common.error'),
+                        message: t('sale.save_error'),
+                        iconType: 'danger',
+                      });
+                    }
+                 }}
+              />
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </KeyboardAvoidingView>
     </Modal>
 
@@ -1048,19 +1066,21 @@ SparklineChart.displayName = 'SparklineChart';
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={{ flex: 1 }}
         >
-          <View style={styles.modalOverlay}>
-            <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowAddAsset(false)} />
-            <View style={[styles.bottomSheetContainer, { maxHeight: Dimensions.get('window').height * 0.90, backgroundColor: colors.background, flex: 1 }]}>
-              <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
-              <AddAssetFlow 
-                onSuccess={() => {
-                  setShowAddAsset(false);
-                  loadDashboardData();
-                }} 
-                onClose={() => setShowAddAsset(false)}
-              />
-            </View>
-          </View>
+          <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowAddAsset(false)}>
+            <View style={styles.modalBackdrop} />
+            <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+              <View style={[styles.bottomSheetContainer, { maxHeight: Dimensions.get('window').height * 0.90, backgroundColor: colors.background, flex: 1 }]}>
+                <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
+                <AddAssetFlow 
+                  onSuccess={() => {
+                    setShowAddAsset(false);
+                    loadDashboardData();
+                  }} 
+                  onClose={() => setShowAddAsset(false)}
+                />
+              </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
         </KeyboardAvoidingView>
       </Modal>
 

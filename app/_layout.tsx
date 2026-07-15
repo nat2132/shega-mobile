@@ -3,6 +3,7 @@ import { SettingsProvider , useSettings } from '@/context/SettingsContext';
 import { SidebarProvider } from '@/context/SidebarContext';
 import { NavigationIntentProvider } from '@/context/NavigationIntentContext';
 import { WarehouseProvider } from '@/context/WarehouseContext';
+import { UpdateProvider } from '@/context/UpdateContext';
 import { TutorialProvider, TutorialOverlay } from '@/tutorials';
 import { initDB } from '@/database/db';
 import { playStart } from '@/services/soundService';
@@ -115,7 +116,9 @@ export default function RootLayout() {
                       <NotificationProvider>
                         <NavigationIntentProvider>
                           <SidebarProvider>
-                            <AppShell />
+                            <UpdateProvider>
+                              <AppShell />
+                            </UpdateProvider>
                           </SidebarProvider>
                         </NavigationIntentProvider>
                       </NotificationProvider>

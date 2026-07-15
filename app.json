@@ -56,6 +56,11 @@
       "router": {},
       "eas": {
         "projectId": "3c2ed669-c717-450f-a697-692503f950de"
+      },
+      "update": {
+        "githubOwner": "Natoli-0x48",
+        "githubRepo": "shega-mobile",
+        "includePrereleases": false
       }
     }
   }

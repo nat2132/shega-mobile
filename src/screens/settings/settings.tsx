@@ -54,6 +54,7 @@ import TranslationSettingsScreen from './translation';
 import WarehouseSettingsScreen from './warehouse';
 import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
 import { settingsTutorial } from '@/tutorials/definitions';
+import { useUpdate } from '@/context/UpdateContext';
 
 // →→→ Shared Sub-Components →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
 
@@ -388,6 +389,7 @@ const SettingsScreen = () => {
   const [showWarehouse, setShowWarehouse] = useState(false);
 
   const { activeWarehouse, warehouses } = useWarehouse();
+  const { checkForUpdates, state: updateState } = useUpdate();
 
   const handleOpenSub = (setter: (v: boolean) => void) => {
     Haptics.selectionAsync();
@@ -637,11 +639,20 @@ const SettingsScreen = () => {
                   thumbColor={soundEnabled ? G.fg : G.muted}
                 />
               </View>
-             <SettingLedgerItem 
-                icon={HelpCircle} 
-                title={t('support.contact')} 
-                onPress={() => handleOpenSub(setShowSupport)}
+             <SettingLedgerItem
+                icon={CloudDownload}
+                title={t('settings.check_updates')}
+                subtitle={updateState.checking ? t('update.checking') : t('settings.check_updates_desc')}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  checkForUpdates();
+                }}
              />
+             <SettingLedgerItem 
+                 icon={HelpCircle} 
+                 title={t('support.contact')} 
+                 onPress={() => handleOpenSub(setShowSupport)}
+              />
              <SettingLedgerItem 
                 icon={Trash2} 
                 title={t('settings.reset_app')} 
