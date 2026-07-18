@@ -376,12 +376,33 @@ export const initDB = () => {
       unitType TEXT,
       totalRefund REAL NOT NULL,
       reason TEXT,
+      itemCondition TEXT DEFAULT 'Resellable',
+      refundType TEXT DEFAULT 'Full Refund',
+      notes TEXT,
+      returnDate TEXT,
       createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (saleId) REFERENCES sales(id),
       FOREIGN KEY (itemId) REFERENCES items(id)
     );
   `);
   console.log('Table "returns" checked/created.');
+
+  // Migration: add new columns to returns table for existing databases
+  const addColumnIfMissing = (table: string, column: string, def: string) => {
+    try {
+      database.execSync(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`);
+    } catch (e: any) {
+      if (e?.message?.includes('duplicate column') || e?.message?.includes('already exists')) {
+        // Column already exists, ignore
+      } else {
+        console.warn(`Migration (${table}.${column}): unexpected error -`, e?.message);
+      }
+    }
+  };
+  addColumnIfMissing('returns', 'itemCondition', 'TEXT DEFAULT \'Resellable\'');
+  addColumnIfMissing('returns', 'refundType', 'TEXT DEFAULT \'Full Refund\'');
+  addColumnIfMissing('returns', 'notes', 'TEXT');
+  addColumnIfMissing('returns', 'returnDate', 'TEXT');
 
   // Create notifications table (in-app notification center)
   database.execSync(`
@@ -1850,14 +1871,24 @@ export const getSalesSummary = () => {
     const database = getDB();
     const today = new Date().toISOString().split('T')[0];
     
-    // Average sale value today
-    const avgSale = database.getFirstSync<{ avg: number }>(`
-      SELECT AVG(totalPrice) as avg FROM sales WHERE date(createdAt) = ? AND paymentStatus != 'Order'
+    // Total sales revenue and count today
+    const salesToday = database.getFirstSync<{ total: number, count: number }>(`
+      SELECT SUM(totalPrice) as total, COUNT(*) as count FROM sales WHERE date(createdAt) = ? AND paymentStatus != 'Order'
+    `, [today]);
+
+    // Total returns refund today
+    const returnsToday = database.getFirstSync<{ total: number }>(`
+      SELECT SUM(totalRefund) as total FROM returns WHERE date(createdAt) = ?
     `, [today]);
 
     // Total volume (units) today
     const totalUnits = database.getFirstSync<{ volume: number }>(`
       SELECT SUM(quantity) as volume FROM sales WHERE date(createdAt) = ? AND paymentStatus != 'Order'
+    `, [today]);
+
+    // Total returned quantity today
+    const returnedQty = database.getFirstSync<{ qty: number }>(`
+      SELECT SUM(CASE WHEN itemCondition = 'Resellable' THEN quantity ELSE 0 END) as qty FROM returns WHERE date(createdAt) = ?
     `, [today]);
 
     // Best hour of the day
@@ -1878,9 +1909,13 @@ export const getSalesSummary = () => {
       GROUP BY method
     `);
 
+    const totalRev = salesToday?.total || 0;
+    const totalRef = returnsToday?.total || 0;
+    const salesCount = salesToday?.count || 0;
+
     return {
-      avgSaleValue: avgSale?.avg || 0,
-      totalVolume: totalUnits?.volume || 0,
+      avgSaleValue: salesCount > 0 ? (totalRev - totalRef) / salesCount : 0,
+      totalVolume: (totalUnits?.volume || 0) - (returnedQty?.qty || 0),
       peakHour: bestHour?.hour || '--',
       payments: paymentDist
     };
@@ -1895,15 +1930,24 @@ export const getTopSellingItems = (limit: number = 5) => {
     const database = getDB();
     const today = new Date().toISOString().split('T')[0];
     const results = database.getAllSync(`
-      SELECT items.*, SUM(sales.quantity) as totalQty, SUM(sales.totalPrice) as totalRevenue, categories.name as categoryName
-      FROM sales 
+      SELECT items.*,
+        SUM(sales.quantity) - COALESCE(r.returnedQty, 0) as totalQty,
+        SUM(sales.totalPrice) - COALESCE(r.returnedRefund, 0) as totalRevenue,
+        categories.name as categoryName
+      FROM sales
       JOIN items ON sales.itemId = items.id
+      LEFT JOIN (
+        SELECT itemId, SUM(quantity) as returnedQty, SUM(totalRefund) as returnedRefund
+        FROM returns
+        WHERE date(createdAt) = ?
+        GROUP BY itemId
+      ) r ON items.id = r.itemId
       LEFT JOIN categories ON items.categoryId = categories.id
       WHERE date(sales.createdAt) = ? AND paymentStatus != 'Order'
       GROUP BY items.id
       ORDER BY totalQty DESC
       LIMIT ?
-    `, [today, limit]);
+    `, [today, today, limit]);
     return results;
   } catch (error) {
     console.error('Get top selling items error:', error);
@@ -1959,7 +2003,7 @@ export const getDashboardStats = (targetDate?: string) => {
 
     // Today's Stats
     const todaySales = database.getFirstSync<{ revenue: number, count: number }>(`
-      SELECT SUM(totalPrice) as revenue, COUNT(*) as count FROM sales WHERE date(createdAt) = ? AND paymentStatus != 'Order'
+      SELECT SUM(totalPrice) as revenue, COUNT(*) as count FROM sales WHERE date(createdAt) = ? AND paymentStatus != 'Order' AND totalPrice >= 0
     `, [today]);
 
     const todayExpenses = database.getFirstSync<{ total: number }>(`
@@ -1970,9 +2014,13 @@ export const getDashboardStats = (targetDate?: string) => {
       SELECT SUM(totalPrice) as total FROM sales WHERE date(createdAt) = ? AND paymentStatus = 'Debt' AND paymentStatus != 'Order'
     `, [today]);
 
+    const todayReturns = database.getFirstSync<{ totalRefund: number }>(`
+      SELECT COALESCE(SUM(totalRefund), 0) as totalRefund FROM returns WHERE date(createdAt) = ?
+    `, [today]);
+
     // Yesterday's Stats for comparison
     const yesterdaySales = database.getFirstSync<{ revenue: number, count: number }>(`
-      SELECT SUM(totalPrice) as revenue, COUNT(*) as count FROM sales WHERE date(createdAt) = ? AND paymentStatus != 'Order'
+      SELECT SUM(totalPrice) as revenue, COUNT(*) as count FROM sales WHERE date(createdAt) = ? AND paymentStatus != 'Order' AND totalPrice >= 0
     `, [yesterday]);
 
     const yesterdayExpenses = database.getFirstSync<{ total: number }>(`
@@ -1983,7 +2031,11 @@ export const getDashboardStats = (targetDate?: string) => {
       SELECT SUM(s.totalPrice - (s.quantity * (CASE WHEN s.unitType = 'pack' THEN i.packPurchasePrice ELSE i.basePurchasePrice END))) as gross
       FROM sales s
       JOIN items i ON s.itemId = i.id
-      WHERE date(s.createdAt) = ? AND paymentStatus != 'Order'
+      WHERE date(s.createdAt) = ? AND paymentStatus != 'Order' AND s.totalPrice >= 0
+    `, [yesterday]);
+
+    const yesterdayReturns = database.getFirstSync<{ totalRefund: number }>(`
+      SELECT COALESCE(SUM(totalRefund), 0) as totalRefund FROM returns WHERE date(createdAt) = ?
     `, [yesterday]);
 
     // Profit Calculation (Today) - EXCLUDING debt (not realized until paid)
@@ -1991,22 +2043,27 @@ export const getDashboardStats = (targetDate?: string) => {
       SELECT SUM(s.totalPrice - (s.quantity * (CASE WHEN s.unitType = 'pack' THEN i.packPurchasePrice ELSE i.basePurchasePrice END))) as gross
       FROM sales s
       JOIN items i ON s.itemId = i.id
-      WHERE date(s.createdAt) = ? AND s.paymentStatus != 'Debt' AND s.paymentStatus != 'Order'
+      WHERE date(s.createdAt) = ? AND s.paymentStatus != 'Debt' AND s.paymentStatus != 'Order' AND s.totalPrice >= 0
     `, [today]);
+
+    const todayNetSales = (todaySales?.revenue || 0) - (todayReturns?.totalRefund || 0);
+    const yesterdayNetSales = (yesterdaySales?.revenue || 0) - (yesterdayReturns?.totalRefund || 0);
 
     return {
       today: {
-        revenue: todaySales?.revenue || 0,
+        revenue: todayNetSales,
         salesCount: todaySales?.count || 0,
         expenses: todayExpenses?.total || 0,
         debt: todayDebt?.total || 0,
-        grossProfit: profitData?.gross || 0,
+        grossProfit: (profitData?.gross || 0) - (todayReturns?.totalRefund || 0),
+        returns: todayReturns?.totalRefund || 0,
       },
       yesterday: {
-        revenue: yesterdaySales?.revenue || 0,
+        revenue: yesterdayNetSales,
         salesCount: yesterdaySales?.count || 0,
         expenses: yesterdayExpenses?.total || 0,
-        grossProfit: yesterdayProfitData?.gross || 0,
+        grossProfit: (yesterdayProfitData?.gross || 0) - (yesterdayReturns?.totalRefund || 0),
+        returns: yesterdayReturns?.totalRefund || 0,
       }
     };
   } catch (error) {
@@ -2477,12 +2534,23 @@ export const getSalesChartData = (period: 'W' | 'M' | 'Y', offset: number = 0, c
         ORDER BY label
       `, [startStr, endStr]);
 
-      // Fill in missing days with 0
+      const returnRefunds = database.getAllSync<{ label: string, value: number }>(`
+        SELECT 
+          strftime('%w', createdAt) as label,
+          SUM(totalRefund) as value
+        FROM returns 
+        WHERE date(createdAt) >= ? AND date(createdAt) <= ?
+        GROUP BY label
+        ORDER BY label
+      `, [startStr, endStr]);
+
+      // Fill in missing days with 0, subtracting returns
       const fullWeek: { label: string, value: number }[] = [];
       for (let i = 0; i < 7; i++) {
         const dayLabel = String(i);
-        const existing = results.find(r => r.label === dayLabel);
-        fullWeek.push({ label: dayLabel, value: existing ? existing.value : 0 });
+        const saleVal = results.find(r => r.label === dayLabel)?.value || 0;
+        const returnVal = returnRefunds.find(r => r.label === dayLabel)?.value || 0;
+        fullWeek.push({ label: dayLabel, value: Math.max(0, saleVal - returnVal) });
       }
       return fullWeek;
     } else if (period === 'M') {
@@ -2506,6 +2574,11 @@ export const getSalesChartData = (period: 'W' | 'M' | 'Y', offset: number = 0, c
           WHERE date(createdAt) >= ? AND date(createdAt) < ? AND paymentStatus != 'Order'
         `, [startStr, endStr]);
 
+        const allReturns = database.getAllSync<{ createdAt: string, totalRefund: number }>(`
+          SELECT createdAt, totalRefund FROM returns
+          WHERE date(createdAt) >= ? AND date(createdAt) < ?
+        `, [startStr, endStr]);
+
         const weekMap: Record<number, number> = {};
         allSales.forEach(sale => {
           const d = new Date(sale.createdAt);
@@ -2517,11 +2590,21 @@ export const getSalesChartData = (period: 'W' | 'M' | 'Y', offset: number = 0, c
             weekMap[weekNum] = (weekMap[weekNum] || 0) + sale.totalPrice;
           }
         });
+        allReturns.forEach(ret => {
+          const d = new Date(ret.createdAt);
+          if (!isNaN(d.getTime())) {
+            const ethDate = toEthiopianDate(d);
+            let weekNum = Math.floor((ethDate.day - 1) / 7) + 1;
+            if (ethMonth === 13) weekNum = 1;
+            else if (weekNum > 5) weekNum = 5;
+            weekMap[weekNum] = (weekMap[weekNum] || 0) - ret.totalRefund;
+          }
+        });
 
         const numWeeks = ethMonth === 13 ? 1 : 5;
         const fullMonth: { label: string, value: number }[] = [];
         for (let i = 1; i <= numWeeks; i++) {
-          fullMonth.push({ label: String(i), value: weekMap[i] || 0 });
+          fullMonth.push({ label: String(i), value: Math.max(0, weekMap[i] || 0) });
         }
         return fullMonth;
       }
@@ -2538,12 +2621,21 @@ export const getSalesChartData = (period: 'W' | 'M' | 'Y', offset: number = 0, c
         ORDER BY label
       `, [`${y}-${m}`]);
 
+      const returnRefunds = database.getAllSync<{ label: string, value: number }>(`
+        SELECT ((CAST(strftime('%d', createdAt) AS INTEGER) - 1) / 7 + 1) as label, SUM(totalRefund) as value
+        FROM returns
+        WHERE strftime('%Y-%m', createdAt) = ?
+        GROUP BY label
+        ORDER BY label
+      `, [`${y}-${m}`]);
+
       const fullMonth: { label: string, value: number }[] = [];
       const lastDay = new Date(y, monthDate.getMonth() + 1, 0).getDate();
       const numWeeks = Math.ceil(lastDay / 7);
       for (let i = 1; i <= numWeeks; i++) {
-        const existing = results.find(r => Number(r.label) === i);
-        fullMonth.push({ label: String(i), value: existing ? existing.value : 0 });
+        const saleVal = results.find(r => Number(r.label) === i)?.value || 0;
+        const returnVal = returnRefunds.find(r => Number(r.label) === i)?.value || 0;
+        fullMonth.push({ label: String(i), value: Math.max(0, saleVal - returnVal) });
       }
       return fullMonth;
     } else {
@@ -2551,36 +2643,47 @@ export const getSalesChartData = (period: 'W' | 'M' | 'Y', offset: number = 0, c
       const isEthiopian = calendarType === 'ethiopian';
 
       if (isEthiopian) {
-        // For Ethiopian calendar: fetch all sales, convert to Ethiopian month, aggregate
         const allSales = database.getAllSync<{ createdAt: string, totalPrice: number }>(`
           SELECT createdAt, totalPrice FROM sales
           WHERE strftime('%Y', createdAt) = ? AND paymentStatus != 'Order'
+        `, [String(yr)]);
+
+        const allReturns = database.getAllSync<{ createdAt: string, totalRefund: number }>(`
+          SELECT createdAt, totalRefund FROM returns
+          WHERE strftime('%Y', createdAt) = ?
         `, [String(yr)]);
 
         const ethMonthMap: Record<number, number> = {};
         allSales.forEach(sale => {
           const d = new Date(sale.createdAt);
           if (!isNaN(d.getTime())) {
-            const day = d.getDate();
-            const month = d.getMonth() + 1;
-            const year = d.getFullYear();
-            // Simple conversion: Ethiopian month roughly = ((Gregorian month + 8) % 12) + 1
-            // Refined: use actual Ethiopian calendar date
-            const a = Math.floor((14 - month) / 12);
-            const y = year + 4800 - a;
-            const m = month + 12 * a - 3;
-            const jdn = day + Math.floor((153 * m + 2) / 5) + 365 * y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) - 32045;
-            const ethiopicEpoch = 1723856;
-            const r = (jdn - ethiopicEpoch) % 1461;
+            const a = Math.floor((14 - (d.getMonth() + 1)) / 12);
+            const y = d.getFullYear() + 4800 - a;
+            const m = (d.getMonth() + 1) + 12 * a - 3;
+            const jdn = d.getDate() + Math.floor((153 * m + 2) / 5) + 365 * y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) - 32045;
+            const r = (jdn - 1723856) % 1461;
             const n = (r % 365) + 365 * Math.floor(r / 1460);
             const ethMonth = Math.floor(n / 30) + 1;
             ethMonthMap[ethMonth] = (ethMonthMap[ethMonth] || 0) + sale.totalPrice;
           }
         });
+        allReturns.forEach(ret => {
+          const d = new Date(ret.createdAt);
+          if (!isNaN(d.getTime())) {
+            const a = Math.floor((14 - (d.getMonth() + 1)) / 12);
+            const y = d.getFullYear() + 4800 - a;
+            const m = (d.getMonth() + 1) + 12 * a - 3;
+            const jdn = d.getDate() + Math.floor((153 * m + 2) / 5) + 365 * y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) - 32045;
+            const r = (jdn - 1723856) % 1461;
+            const n = (r % 365) + 365 * Math.floor(r / 1460);
+            const ethMonth = Math.floor(n / 30) + 1;
+            ethMonthMap[ethMonth] = (ethMonthMap[ethMonth] || 0) - ret.totalRefund;
+          }
+        });
 
         const fullYear: { label: string, value: number }[] = [];
         for (let i = 1; i <= 13; i++) {
-          fullYear.push({ label: String(i), value: ethMonthMap[i] || 0 });
+          fullYear.push({ label: String(i), value: Math.max(0, ethMonthMap[i] || 0) });
         }
         return fullYear;
       }
@@ -2593,12 +2696,21 @@ export const getSalesChartData = (period: 'W' | 'M' | 'Y', offset: number = 0, c
         ORDER BY label
       `, [String(yr)]);
 
+      const returnRefunds = database.getAllSync<{ label: string, value: number }>(`
+        SELECT CAST(strftime('%m', createdAt) AS INTEGER) as label, SUM(totalRefund) as value
+        FROM returns
+        WHERE strftime('%Y', createdAt) = ?
+        GROUP BY label
+        ORDER BY label
+      `, [String(yr)]);
+
       // Fill in missing months with 0
       const fullYear: { label: string, value: number }[] = [];
       for (let i = 1; i <= 12; i++) {
         const monthLabel = String(i);
-        const existing = results.find(r => Number(r.label) === i);
-        fullYear.push({ label: monthLabel, value: existing ? existing.value : 0 });
+        const saleVal = results.find(r => Number(r.label) === i)?.value || 0;
+        const returnVal = returnRefunds.find(r => Number(r.label) === i)?.value || 0;
+        fullYear.push({ label: monthLabel, value: Math.max(0, saleVal - returnVal) });
       }
       return fullYear;
     }
@@ -3577,6 +3689,12 @@ export const getSummaryMetricsByDateRange = (
       WHERE paymentStatus = 'Debt' AND date(createdAt) >= ? AND date(createdAt) <= ?
     `, [startDate, endDate]);
 
+    // Returns (total refunds in the period)
+    const returnData = database.getFirstSync<{ totalRefund: number, returnCount: number }>(`
+      SELECT COALESCE(SUM(totalRefund), 0) as totalRefund, COUNT(*) as returnCount FROM returns 
+      WHERE date(createdAt) >= ? AND date(createdAt) <= ?
+    `, [startDate, endDate]);
+
     // Damage Loss
     const damageLoss = database.getFirstSync<{ total: number }>(`
       SELECT COALESCE(SUM(a.quantity * i.basePurchasePrice), 0) as total
@@ -3609,17 +3727,22 @@ export const getSummaryMetricsByDateRange = (
     const profitVal = profitData?.total || 0;
     const expensesVal = expenses?.total || 0;
     const debtVal = debt?.total || 0;
+    const returnVal = returnData?.totalRefund || 0;
+    const returnCount = returnData?.returnCount || 0;
     const damageLossVal = damageLoss?.total || 0;
     const priceChangesVal = priceChanges?.total || 0;
     const otherLossesVal = otherLosses?.total || 0;
 
-    // Net Profit = Sales Profit + Price Change Gains - Expenses - Damage Losses - Other Losses
-    const netProfit = profitVal + (priceChangesVal > 0 ? priceChangesVal : 0) - expensesVal - damageLossVal - otherLossesVal;
+    // Net Sales = Sales Cash - Returns
+    const netSalesCash = salesCashVal - returnVal;
+
+    // Net Profit = Sales Profit + Price Change Gains - Expenses - Returns - Damage Losses - Other Losses
+    const netProfit = profitVal + (priceChangesVal > 0 ? priceChangesVal : 0) - expensesVal - returnVal - damageLossVal - otherLossesVal;
 
     // Performance Rating
     let performanceRating: 'Excellent' | 'Good' | 'Average' | 'Poor' = 'Poor';
-    if (salesCashVal > 0) {
-      const profitRatio = netProfit / salesCashVal;
+    if (netSalesCash > 0) {
+      const profitRatio = netProfit / netSalesCash;
       if (profitRatio > 0.7) performanceRating = 'Excellent';
       else if (profitRatio > 0.5) performanceRating = 'Good';
       else if (profitRatio > 0.2) performanceRating = 'Average';
@@ -3630,10 +3753,13 @@ export const getSummaryMetricsByDateRange = (
 
     return {
       salesCash: salesCashVal,
+      netSalesCash,
       salesItems: salesItemsVal,
       profit: profitVal,
       expenses: expensesVal,
       debt: debtVal,
+      returns: returnVal,
+      returnCount,
       damageLoss: damageLossVal,
       priceChanges: priceChangesVal,
       otherLosses: otherLossesVal,
@@ -3930,26 +4056,36 @@ export const getCustomerActivity = (customerName?: string) => {
 export const getPaymentMethodBreakdown = (startDate?: string, endDate?: string) => {
   try {
     const database = getDB();
-    let query = `SELECT paymentMethod, COUNT(*) as count, SUM(totalPrice) as total FROM sales`;
+    let query = `SELECT s.paymentMethod, COUNT(*) as count, SUM(s.totalPrice) - COALESCE(r.refunded, 0) as total FROM sales s`;
     const params: any[] = [];
     const conditions: string[] = [];
 
     if (startDate) {
-      conditions.push('date(createdAt) >= ?');
+      conditions.push('date(s.createdAt) >= ?');
       params.push(startDate);
     }
     if (endDate) {
-      conditions.push('date(createdAt) <= ?');
+      conditions.push('date(s.createdAt) <= ?');
       params.push(endDate);
     }
 
-    conditions.push("paymentStatus != 'Order'");
+    conditions.push("s.paymentStatus != 'Order'");
 
+    let where = '';
     if (conditions.length > 0) {
-      query += ' WHERE ' + conditions.join(' AND ');
+      where = ' WHERE ' + conditions.join(' AND ');
     }
 
-    query += ' GROUP BY paymentMethod';
+    // Subquery to get total refund per payment method via saleId
+    const refundSubquery = `LEFT JOIN (
+      SELECT sa.paymentMethod, SUM(r.totalRefund) as refunded
+      FROM returns r
+      JOIN sales sa ON r.saleId = sa.id
+      ${where.replace(/s\./g, 'sa.')}
+      GROUP BY sa.paymentMethod
+    ) r ON s.paymentMethod = r.paymentMethod`;
+
+    query += ' ' + refundSubquery + ' GROUP BY s.paymentMethod';
     return database.getAllSync(query, params);
   } catch (error) {
     console.error('Get payment method breakdown error:', error);
@@ -4479,15 +4615,199 @@ export const insertPack = (data: { itemId: number; packNumber: number; quantity:
 export const insertReturn = (data: { saleId: number; itemId: number; quantity: number; unit: string; unitType: string; totalRefund: number; reason: string; createdAt: string }) => {
   try {
     const database = getDB();
-    return database.prepareSync(`
+
+    const statement = database.prepareSync(`
       INSERT INTO returns (saleId, itemId, quantity, unit, unitType, totalRefund, reason, createdAt)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).executeSync([data.saleId, data.itemId, data.quantity, data.unit, data.unitType, data.totalRefund, data.reason, data.createdAt]) as any;
+    `);
+    const result = statement.executeSync([data.saleId, data.itemId, data.quantity, data.unit, data.unitType, data.totalRefund, data.reason, data.createdAt]);
+
+    const item = database.getFirstSync<{ unitsPerPack: number }>('SELECT unitsPerPack FROM items WHERE id = ?', [data.itemId]);
+    let baseQty = data.quantity;
+    let packQty = 0;
+
+    if (data.unitType === 'pack' && item?.unitsPerPack) {
+      baseQty = data.quantity * item.unitsPerPack;
+      packQty = data.quantity;
+    }
+
+    database.execSync(`
+      UPDATE items
+      SET totalBaseQuantity = totalBaseQuantity + ${baseQty},
+          totalPackQuantity = totalPackQuantity + ${packQty}
+      WHERE id = ${data.itemId}
+    `);
+
+    return true;
   } catch (error) {
     console.error('Insert return error:', error);
     return null;
   }
-};;
+};
+
+export const getReturnsBySaleId = (saleId: number) => {
+  try {
+    const database = getDB();
+    return database.getAllSync(`
+      SELECT r.*, i.name as itemName, i.baseUnit
+      FROM returns r
+      LEFT JOIN items i ON r.itemId = i.id
+      WHERE r.saleId = ?
+      ORDER BY r.createdAt DESC
+    `, [saleId]);
+  } catch (error) {
+    console.error('getReturnsBySaleId error:', error);
+    return [];
+  }
+};
+
+export const getReturnStats = (saleId: number) => {
+  try {
+    const database = getDB();
+    const stats = database.getFirstSync<{
+      totalReturnedQty: number;
+      totalRefundAmount: number;
+      returnCount: number;
+      originalQty: number;
+    }>(`
+      SELECT
+        COALESCE(SUM(r.quantity), 0) as totalReturnedQty,
+        COALESCE(SUM(r.totalRefund), 0) as totalRefundAmount,
+        COUNT(r.id) as returnCount,
+        COALESCE(s.quantity, 0) as originalQty
+      FROM sales s
+      LEFT JOIN returns r ON r.saleId = s.id
+      WHERE s.id = ?
+      GROUP BY s.id
+    `, [saleId]);
+
+    if (!stats) {
+      return { totalReturnedQty: 0, totalRefundAmount: 0, returnCount: 0, originalQty: 0, remainingQty: 0, status: 'no_return' as const };
+    }
+
+    const remainingQty = Math.max(0, stats.originalQty - stats.totalReturnedQty);
+    let status: 'no_return' | 'partial' | 'full';
+    if (stats.totalReturnedQty <= 0) {
+      status = 'no_return';
+    } else if (remainingQty <= 0) {
+      status = 'full';
+    } else {
+      status = 'partial';
+    }
+
+    return {
+      totalReturnedQty: stats.totalReturnedQty,
+      totalRefundAmount: stats.totalRefundAmount,
+      returnCount: stats.returnCount,
+      originalQty: stats.originalQty,
+      remainingQty,
+      status,
+    };
+  } catch (error) {
+    console.error('getReturnStats error:', error);
+    return { totalReturnedQty: 0, totalRefundAmount: 0, returnCount: 0, originalQty: 0, remainingQty: 0, status: 'no_return' as const };
+  }
+};
+
+export const processReturn = (data: {
+  saleId: number;
+  itemId: number;
+  quantity: number;
+  unit: string;
+  unitType: string;
+  totalRefund: number;
+  reason: string;
+  itemCondition: string;
+  refundType: string;
+  notes?: string;
+  returnDate?: string;
+  createdAt: string;
+}) => {
+  try {
+    const database = getDB();
+
+    // Validate: check cumulative returns against original sale quantity
+    const saleCheck = database.getFirstSync<{ quantity: number }>('SELECT quantity FROM sales WHERE id = ?', [data.saleId]);
+    if (!saleCheck) {
+      console.error('processReturn error: Sale not found');
+      return null;
+    }
+    const returnTotal = database.getFirstSync<{ totalQty: number }>(
+      'SELECT COALESCE(SUM(quantity), 0) as totalQty FROM returns WHERE saleId = ?',
+      [data.saleId]
+    );
+    const cumulativeQty = (returnTotal?.totalQty || 0) + data.quantity;
+    if (cumulativeQty > saleCheck.quantity) {
+      console.error('processReturn error: Cannot return more than original sale quantity');
+      return null;
+    }
+
+    const insertStmt = database.prepareSync(`
+      INSERT INTO returns (saleId, itemId, quantity, unit, unitType, totalRefund, reason, itemCondition, refundType, notes, returnDate, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    insertStmt.executeSync([
+      data.saleId, data.itemId, data.quantity, data.unit, data.unitType,
+      data.totalRefund, data.reason, data.itemCondition, data.refundType,
+      data.notes || null, data.returnDate || null, data.createdAt,
+    ]);
+
+    const item = database.getFirstSync<{
+      unitsPerPack: number;
+      basePurchasePrice: number;
+      baseSellingPrice: number;
+      packPurchasePrice: number;
+      packSellingPrice: number;
+      name: string;
+    }>('SELECT unitsPerPack, basePurchasePrice, baseSellingPrice, packPurchasePrice, packSellingPrice, name FROM items WHERE id = ?', [data.itemId]);
+
+    let baseQty = data.quantity;
+    let packQty = 0;
+
+    if (data.unitType === 'pack' && item?.unitsPerPack) {
+      baseQty = data.quantity * item.unitsPerPack;
+      packQty = data.quantity;
+    }
+
+    const purchasePrice = data.unitType === 'pack' ? (item?.packPurchasePrice || 0) : (item?.basePurchasePrice || 0);
+    const costOfReturnedGoods = purchasePrice * data.quantity;
+
+    // Handle inventory based on condition
+    if (data.itemCondition === 'Resellable') {
+      // Add back to sellable stock
+      database.execSync(`
+        UPDATE items
+        SET totalBaseQuantity = totalBaseQuantity + ${baseQty},
+            totalPackQuantity = totalPackQuantity + ${packQty}
+        WHERE id = ${data.itemId}
+      `);
+    } else {
+      // Non-resellable: record as damaged/movement adjustment
+      database.execSync(`
+        INSERT INTO adjustments (itemId, type, oldValue, newValue, quantity, unitType, reason, date, createdAt)
+        VALUES (${data.itemId}, 'damaged', 0, 0, ${data.quantity}, '${data.unitType}', 'Returned: ${data.itemCondition} - ${data.reason}', '${data.createdAt.split('T')[0]}', '${data.createdAt}')
+      `);
+    }
+
+    // Handle store credit
+    if (data.refundType === 'Store Credit' && data.totalRefund > 0) {
+      // Create a negative-value "sale" to track store credit in customer financials
+      const creditBatch = `SCR_${Date.now()}_${data.saleId}`;
+      const saleData = database.getFirstSync<{ customerName: string; customerPhone: string }>(
+        'SELECT customerName, customerPhone FROM sales WHERE id = ?', [data.saleId]
+      );
+      database.execSync(`
+        INSERT INTO sales (itemId, quantity, unit, unitType, totalPrice, discount, paymentMethod, paymentStatus, customerName, customerPhone, batchId, notes, createdAt)
+        VALUES (${data.itemId}, ${data.quantity}, '${data.unit}', '${data.unitType}', ${-data.totalRefund}, 0, 'Credit', 'Paid', '${saleData?.customerName?.replace(/'/g, "''") || ''}', '${saleData?.customerPhone?.replace(/'/g, "''") || ''}', '${creditBatch}', 'Store credit issued for return', '${data.createdAt}')
+      `);
+    }
+
+    return true;
+  } catch (error) {
+    console.error('processReturn error:', error);
+    return null;
+  }
+};
 
 export const getAdjustmentById = (id: number) => {
   try {

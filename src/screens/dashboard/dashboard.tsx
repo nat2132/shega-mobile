@@ -16,7 +16,6 @@ import {
   Handshake,
   Package,
   Plus,
-  RefreshCw,
   Search,
   ShoppingBag,
   TrendingDown,
@@ -63,7 +62,6 @@ import { useTutorial, TutorialScrollView, TutorialTarget, TutorialButton } from 
 import { dashboardTutorial } from '@/tutorials/definitions';
 import { useWarehouse } from '@/context/WarehouseContext';
 import { getActivityFeed, getAdjustmentById, getDashboardStats, getDebtCustomers, getExpenseById, getInventoryStats, getLowStockItems, getOnCreditItems, getRecentItems, getSaleWithItemsById, ItemData } from '@/database/db';
-import { generateBulkTestData } from '@/database/generateTestData';
 import { useBusinessAssistant } from '@/hooks/useBusinessAssistant';
 import { useBusinessHealthScore } from '@/hooks/useBusinessHealthScore';
 import { useNotifications } from '@/hooks/useNotifications';
@@ -271,32 +269,6 @@ SparklineChart.displayName = 'SparklineChart';
     await loadDashboardData();
     setTimeout(() => setRefreshing(false), 1000);
   }, [loadDashboardData]);
-
-  const handleSeedData = async () => {
-    await dialog.choose({
-      title: t('dashboard.seed_title'),
-      message: t('dashboard.seed_message'),
-      cancelText: t('common.cancel'),
-      choices: [
-        { label: '10', onPress: () => doSeed(10) },
-        { label: '100', onPress: () => doSeed(100) },
-        { label: '1,000', onPress: () => doSeed(1000) },
-        { label: '10,000', onPress: () => doSeed(10000) },
-      ],
-    });
-  };
-
-  const doSeed = async (count: number) => {
-    const start = Date.now();
-    const result = generateBulkTestData(count);
-    const elapsed = ((Date.now() - start) / 1000).toFixed(1);
-    await dialog.alert({
-      title: result.success ? t('dashboard.seed_success') : t('dashboard.seed_error'),
-      message: `${result.message}\n\n⏱️ ${elapsed}${t('common.s')}`,
-      iconType: result.success ? 'success' : 'danger',
-    });
-    loadDashboardData();
-  };
 
   // Helper to render activity items
   const renderActivityItem = (activity: any) => {
@@ -546,12 +518,6 @@ SparklineChart.displayName = 'SparklineChart';
               </View>
               
               <View style={styles.headerActions}>
-                <TouchableOpacity 
-                  onPress={handleSeedData} 
-                  style={styles.headerIconBtn}
-                >
-                  <RefreshCw size={18} color={G.muted} />
-                </TouchableOpacity>
                 <TutorialTarget id="dash-alerts">
                 <TouchableOpacity 
                   onPress={() => router.push('/notifications')} 

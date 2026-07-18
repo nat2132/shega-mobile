@@ -37,7 +37,7 @@ import {
 } from "@/utils/date-utils";
 import { generateInvoicePDF } from "@/utils/pdf-utils";
 import * as Haptics from "expo-haptics";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import {
   Banknote,
   BarChart3,
@@ -191,7 +191,7 @@ const SalesDashboard = () => {
     null,
   );
 
-  const loadData = () => {
+  const loadData = useCallback(() => {
     setChartLoaded(false);
     const today = new Date().toISOString().split("T")[0];
     const allSales = getRecentSalesGrouped(100);
@@ -225,7 +225,7 @@ const SalesDashboard = () => {
 
     const products = getTopSellingItems(5);
     setTopItems(products);
-  };
+  }, [activeTab, periodOffset, calendarType]);
 
   const onRefresh = React.useCallback(() => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -234,9 +234,11 @@ const SalesDashboard = () => {
     setTimeout(() => setRefreshing(false), 800);
   }, [activeTab]);
 
-  useEffect(() => {
-    loadData();
-  }, [activeTab, periodOffset]);
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData]),
+  );
 
   const expandedWidth = useSharedValue(56);
   useEffect(() => {
@@ -293,12 +295,6 @@ const SalesDashboard = () => {
 
   // Format data for GiftedCharts — memoized so the heavy date-math
   // only re-runs when chart data, period, language, or selection changes.
-  const todayBadgeText = useMemo(() => {
-    if (activeTab === "W") return t("sales.today");
-    if (activeTab === "M") return t("sales.this_week");
-    return t("sales.this_month");
-  }, [activeTab, t]);
-
   const chartData = useMemo(
     () =>
       sanitizedValues.map((val, i) => {
@@ -437,20 +433,13 @@ const SalesDashboard = () => {
         const BarLabel = () => {
           if (d.isCurrent) {
             return (
-              <View
-                style={[
-                  styles.currentPeriodBadge,
-                  { backgroundColor: colors.warning },
-                ]}
-              >
-                <AppText
-                  variant="micro"
-                  weight="bold"
-                  style={styles.currentPeriodBadgeText}
-                  numberOfLines={1}
-                >
-                  {todayBadgeText}
-                </AppText>
+              <View style={styles.currentPeriodPinContainer}>
+                <View
+                  style={[
+                    styles.currentPeriodPin,
+                    { backgroundColor: colors.warning },
+                  ]}
+                />
               </View>
             );
           }
@@ -459,7 +448,7 @@ const SalesDashboard = () => {
         BarLabel.displayName = 'BarLabel';
         return BarLabel;
       }),
-    [chartData, todayBadgeText],
+    [chartData],
   );
 
   const totalRevenue = useMemo(
@@ -3300,7 +3289,10 @@ const SalesDashboard = () => {
               />
             </View>
             <View style={{ flex: 1 }}>
-              <SalesRecordScreen onClose={() => setShowSalesRecord(false)} />
+              <SalesRecordScreen onClose={() => {
+                setShowSalesRecord(false);
+                loadData();
+              }} />
             </View>
           </View>
         </View>
@@ -3786,16 +3778,17 @@ const styles = StyleSheet.create({
   selectedBarValue: {
     fontFamily: Fonts.bold,
   },
-  currentPeriodBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 9,
+  currentPeriodPinContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    height: 22,
+    width: 16,
     marginBottom: 4,
   },
-  currentPeriodBadgeText: {
-    color: "#FFF",
-    fontFamily: Fonts.bold,
-    letterSpacing: 0.3,
+  currentPeriodPin: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   currentPeriodBadgePlaceholder: {
     height: 22,

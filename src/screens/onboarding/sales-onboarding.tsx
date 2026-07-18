@@ -39,12 +39,6 @@ interface OnboardingScreenProps {
   onSkip?: () => void;
 }
 
-const TRANSACTIONS = [
-  { type: 'Wholesale Order', amount: 'Br 48,200', status: 'completed' as const, icon: 'cart' as const },
-  { type: 'Retail Sale', amount: 'Br 12,500', status: 'completed' as const, icon: 'card' as const },
-  { type: 'Refund', amount: 'Br 2,300', status: 'pending' as const, icon: 'check' as const },
-];
-
 function TransactionRow({
   tx, index, G, t,
 }: {
@@ -208,7 +202,11 @@ function CardPreview({ G, t }: { G: ReturnType<typeof getGlass>; t: (key: string
         <View style={[styles.cardPreviewDivider, { backgroundColor: G.glassBorder }]} />
 
         <View style={styles.txList}>
-          {TRANSACTIONS.map((tx, i) => (
+          {([
+  { type: t('onboarding.wholesale_order'), amount: 'Br 48,200', status: 'completed' as const, icon: 'cart' as const },
+  { type: t('onboarding.retail_sale'), amount: 'Br 12,500', status: 'completed' as const, icon: 'card' as const },
+  { type: t('onboarding.refund'), amount: 'Br 2,300', status: 'pending' as const, icon: 'check' as const },
+] as const).map((tx, i) => (
             <TransactionRow key={i} tx={tx} index={i} G={G} t={t} />
           ))}
         </View>

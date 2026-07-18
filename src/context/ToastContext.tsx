@@ -3,7 +3,7 @@ import { playBad, playNice } from '@/services/soundService';
 import * as Haptics from 'expo-haptics';
 import { AlertCircle, AlertTriangle, CheckCircle2, Info } from 'lucide-react-native';
 import React, { createContext, ReactNode, useContext, useRef, useState } from 'react';
-import { Animated, StyleSheet, View } from 'react-native';
+import { Animated, Modal, StyleSheet, View } from 'react-native';
 import { AppText } from '@/components/ui';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
@@ -149,7 +149,11 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      <ToastDisplay toast={toast} translateY={translateY} />
+      <Modal transparent visible={toast !== null} animationType="none" onRequestClose={hideToast}>
+        <View style={styles.modalOverlay} pointerEvents="box-none">
+          <ToastDisplay toast={toast} translateY={translateY} />
+        </View>
+      </Modal>
     </ToastContext.Provider>
   );
 };
@@ -195,6 +199,9 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   message: {
+    flex: 1,
+  },
+  modalOverlay: {
     flex: 1,
   },
 });

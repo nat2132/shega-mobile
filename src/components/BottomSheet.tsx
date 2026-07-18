@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { Dimensions, Modal, Pressable, ScrollView, StyleSheet, TouchableOpacity, View, ViewStyle } from 'react-native';
+import React, { useEffect } from 'react';
+import { Dimensions, Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, TouchableOpacity, View, ViewStyle } from 'react-native';
 import Animated, {
   Easing,
   runOnJS,
@@ -11,7 +11,7 @@ import Animated, {
 import { AppText } from '@/components/ui';
 import { useSettings } from '@/context/SettingsContext';
 import { X } from 'lucide-react-native';
-import { Keyboard, Platform } from 'react-native';
+
 interface BottomSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -40,8 +40,10 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
 }) => {
   const { colors } = useSettings();
   const [mounted, setMounted] = React.useState(visible);
-  const progress = useRef(useSharedValue(0)).current;
+  const progress = useSharedValue(0);
   const [keyboardHeight, setKeyboardHeight] = React.useState(0);
+  const screenHeight = useSharedValue(Dimensions.get('window').height);
+  const keyboardAdjustment = useSharedValue(0);
 
   useEffect(() => {
     if (visible) {
@@ -55,6 +57,18 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
       });
     }
   }, [visible, mounted, progress]);
+
+  useEffect(() => {
+    keyboardAdjustment.value = keyboardHeight > 0 ? Math.min(keyboardHeight * 0.3, 100) : 0;
+  }, [keyboardHeight, keyboardAdjustment]);
+
+  useEffect(() => {
+    const updateHeight = () => {
+      screenHeight.value = Dimensions.get('window').height;
+    };
+    const subscription = Dimensions.addEventListener('change', updateHeight);
+    return () => subscription.remove();
+  }, [screenHeight]);
 
   useEffect(() => {
     const keyboardWillShow = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -74,28 +88,22 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
     };
   }, []);
 
-  const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{
-      translateY: (1 - progress.value) * (Dimensions.get('window').height + 200)
-    }],
-  }));
-  
   const adjustedSheetStyle = useAnimatedStyle(() => {
-    const adjustment = keyboardHeight > 0 ? Math.min(keyboardHeight * 0.3, 100) : 0;
+    const offset = (1 - progress.value) * (screenHeight.value + 200);
     return {
       transform: [{
-        translateY: (1 - progress.value) * (Dimensions.get('window').height + 200) - adjustment
+        translateY: offset - keyboardAdjustment.value,
       }],
     };
   });
 
-  const contentPaddingBottom = keyboardHeight > 0
-    ? (Platform.OS === 'ios' ? 34 : 16) + keyboardHeight * 0.1
-    : (Platform.OS === 'ios' ? 34 : 16);
-
   const overlayStyle = useAnimatedStyle(() => ({
     opacity: progress.value,
   }));
+
+  const contentPaddingBottom = keyboardHeight > 0
+    ? (Platform.OS === 'ios' ? 34 : 16) + keyboardHeight * 0.1
+    : (Platform.OS === 'ios' ? 34 : 16);
 
   if (!mounted) return null;
 

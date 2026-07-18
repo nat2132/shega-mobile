@@ -10,8 +10,10 @@ import {
   deleteSale,
   deleteSalesByBatchId,
   getItems,
-  insertReturn,
+  getReturnsBySaleId,
+  getReturnStats,
   insertSale,
+  processReturn,
   updateSale,
   updateSaleItem,
 } from "@/database/db";
@@ -90,6 +92,22 @@ const SaleDetailsScreen = ({
   const [returnReason, setReturnReason] = useState("");
   const [returnQty, setReturnQty] = useState(String(sale?.quantity || 1));
   const [showReturnSuccess, setShowReturnSuccess] = useState(false);
+  const [returnItemCondition, setReturnItemCondition] = useState("Resellable");
+  const [returnRefundType, setReturnRefundType] = useState("Full Refund");
+  const [returnNotes, setReturnNotes] = useState("");
+  const [returnDate, setReturnDate] = useState(new Date().toISOString().split('T')[0]);
+  const [returnRefundAmount, setReturnRefundAmount] = useState("0");
+  const [returnStats, setReturnStats] = useState<{
+    totalReturnedQty: number;
+    totalRefundAmount: number;
+    returnCount: number;
+    originalQty: number;
+    remainingQty: number;
+    status: 'no_return' | 'partial' | 'full';
+  } | null>(null);
+  const [returnHistory, setReturnHistory] = useState<any[]>([]);
+  const [showReturnHistory, setShowReturnHistory] = useState(false);
+  const [returnReasonPicker, setReturnReasonPicker] = useState<'Damaged' | 'Defective' | 'Wrong Item' | 'Customer Changed Mind' | 'Expired' | 'Other'>("Other");
   const [itemEdits, setItemEdits] = useState<Record<number, any>>({});
   const [newItems, setNewItems] = useState<any[]>([]);
   const [itemSearchVisible, setItemSearchVisible] = useState<number | null>(
@@ -144,6 +162,25 @@ const SaleDetailsScreen = ({
     const qty = Math.max(1, parseInt(editForm.quantity) || 1);
     return (price + discount) / qty;
   }, [isBatch, isEditing, editForm, editingBaseUnitPrice, originalUnitPrice, sale]);
+
+  // Load return stats and history
+  const loadReturnData = React.useCallback(() => {
+    if (sale?.id) {
+      const stats = getReturnStats(sale.id);
+      setReturnStats(stats as any);
+      setReturnHistory(getReturnsBySaleId(sale.id) as any[]);
+    }
+  }, [sale?.id]);
+  React.useEffect(() => { loadReturnData(); }, [loadReturnData]);
+
+  // Return status badge config
+  const returnBadge = returnStats?.status === 'full' ? {
+    label: t('sales.fully_returned'),
+    color: colors.warning,
+  } : returnStats?.status === 'partial' ? {
+    label: t('sales.partially_returned') + ` (${returnStats.remainingQty} ${t('common.remaining').toLowerCase()})`,
+    color: colors.primary,
+  } : null;
 
   if (!sale) return null;
 
@@ -217,7 +254,11 @@ const SaleDetailsScreen = ({
         if (onClose) onClose();
       } else {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        alert(t("common.error"));
+        showToast({
+          title: t('sale.error.save_failed_title'),
+          message: t('sale.error.save_failed_batch'),
+          type: "error",
+        });
       }
       return;
     }
@@ -239,7 +280,11 @@ const SaleDetailsScreen = ({
       if (onClose) onClose();
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      alert(t("common.error"));
+      showToast({
+        title: t('sale.error.save_failed_title'),
+        message: t('sale.error.save_failed_single'),
+        type: "error",
+      });
     }
   };
 
@@ -260,73 +305,87 @@ const SaleDetailsScreen = ({
       if (onClose) onClose();
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      alert(t("common.error"));
+      showToast({
+        title: t('sale.error.delete_failed_title'),
+        message: t('sale.error.delete_failed'),
+        type: "error",
+      });
     }
   };
 
   const handleReturn = () => {
     const qty = parseInt(returnQty) || 0;
-    const maxQty = isBatch ? batchItems[0]?.quantity || 1 : sale.quantity || 1;
-    if (qty <= 0 || qty > maxQty) {
-      alert(t("common.error"));
-      return;
-    }
-    if (!returnReason.trim()) {
-      alert(t("common.error"));
-      return;
-    }
+    const originalQty = isBatch ? batchItems[0]?.quantity || 1 : sale.quantity || 1;
+    const alreadyReturned = returnStats?.totalReturnedQty || 0;
+    const remainingQty = Math.max(0, originalQty - alreadyReturned);
 
-    if (isBatch) {
-      const firstItem = batchItems[0];
-      const unitPrice =
-        (firstItem.totalPrice || 0) / Math.max(1, firstItem.quantity || 1);
-      const totalRefund = unitPrice * qty;
-      const success = insertReturn({
-        saleId: firstItem.id,
-        itemId: firstItem.itemId,
-        quantity: qty,
-        unit: firstItem.baseUnit || "pcs",
-        unitType: "base",
-        totalRefund: totalRefund,
-        reason: returnReason.trim(),
-        createdAt: new Date().toISOString(),
+    if (remainingQty <= 0) {
+      showToast({
+        title: t('sale.error.invalid_qty_title'),
+        message: t('sales.fully_returned'),
+        type: "error",
       });
-      if (success) {
-        setShowReturnModal(false);
-        setReturnReason("");
-        setReturnQty(String(maxQty));
-        setShowReturnSuccess(true);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } else {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        alert(t("common.error"));
-      }
       return;
     }
 
-    const unitPrice = (sale.totalPrice || 0) / Math.max(1, sale.quantity || 1);
-    const totalRefund = unitPrice * qty;
+    if (qty <= 0 || qty > remainingQty) {
+      showToast({
+        title: t('sale.error.invalid_qty_title'),
+        message: t('sale.error.invalid_qty', { max: String(remainingQty) }),
+        type: "error",
+      });
+      return;
+    }
+    if (!returnReasonPicker) {
+      showToast({
+        title: t('sale.error.reason_required_title'),
+        message: t('sale.error.reason_required'),
+        type: "error",
+      });
+      return;
+    }
 
-    const success = insertReturn({
-      saleId: sale.id,
-      itemId: sale.itemId,
+    const saleTarget = isBatch ? batchItems[0] : sale;
+    const unitPrice = (saleTarget.totalPrice || 0) / Math.max(1, saleTarget.quantity || 1);
+    const refundAmount = parseFloat(returnRefundAmount) || (unitPrice * qty);
+
+    const success = processReturn({
+      saleId: saleTarget.id,
+      itemId: saleTarget.itemId,
       quantity: qty,
-      unit: sale.unit || "pcs",
-      unitType: sale.unitType || "base",
-      totalRefund: totalRefund,
-      reason: returnReason.trim(),
+      unit: saleTarget.unit || saleTarget.baseUnit || "pcs",
+      unitType: saleTarget.unitType || "base",
+      totalRefund: refundAmount,
+      reason: returnReasonPicker + (returnReason.trim() ? ` - ${returnReason.trim()}` : ""),
+      itemCondition: returnItemCondition,
+      refundType: returnRefundType,
+      notes: returnNotes.trim() || undefined,
+      returnDate: returnDate,
       createdAt: new Date().toISOString(),
     });
 
     if (success) {
       setShowReturnModal(false);
+      setReturnQty(String(remainingQty));
       setReturnReason("");
-      setReturnQty(String(sale.quantity || 1));
+      setReturnItemCondition("Resellable");
+      setReturnRefundType("Full Refund");
+      setReturnNotes("");
+      setReturnRefundAmount("0");
+      setReturnReasonPicker("Other");
       setShowReturnSuccess(true);
+      // Reload return stats
+      const stats = getReturnStats(sale.id);
+      setReturnStats(stats as any);
+      setReturnHistory(getReturnsBySaleId(sale.id) as any[]);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      alert(t("common.error"));
+      showToast({
+        title: t('sale.error.return_failed_title'),
+        message: t('sale.error.return_failed'),
+        type: "error",
+      });
     }
   };
 
@@ -667,6 +726,14 @@ const SaleDetailsScreen = ({
               <AppNumber value={batchItems.length} size="body-sm" weight="bold" color={SALES_GLASS.fgSecondary} />{" "}{t("common.items")}{" "}
               {sale.customerName ? `• ${sale.customerName}` : ""}
             </AppText>
+          )}
+          {returnBadge && (
+            <View style={[styles.returnBadge, { backgroundColor: returnBadge.color + "15" }]}>
+              <RotateCcw size={12} color={returnBadge.color} />
+              <AppText variant="micro" weight="bold" style={{ color: returnBadge.color }}>
+                {returnBadge.label}
+              </AppText>
+            </View>
           )}
         </Animated.View>
       </TutorialTarget>
@@ -1725,6 +1792,73 @@ const SaleDetailsScreen = ({
 
         {debtFieldsSection}
 
+        {/* Return History */}
+        {returnHistory.length > 0 && (
+          <Animated.View style={styles.section}>
+            <View style={styles.sectionHeaderRow}>
+              <AppText
+                variant="micro"
+                weight="bold"
+                transform="uppercase"
+                style={[styles.sectionTitle, { color: SALES_GLASS.fgSecondary }]}
+              >
+                {t('sales.return_history')}
+              </AppText>
+              <TouchableOpacity
+                onPress={() => setShowReturnHistory(!showReturnHistory)}
+                style={[styles.returnHistoryToggle, { borderColor: SALES_GLASS.border }]}
+              >
+                <AppText variant="caption" weight="bold" style={{ color: SALES_GLASS.fgSecondary }}>
+                  {showReturnHistory ? t('common.hide') : t('common.show')} ({returnHistory.length})
+                </AppText>
+              </TouchableOpacity>
+            </View>
+            {showReturnHistory && (
+              <View style={[styles.intelligenceBlock, { backgroundColor: SALES_GLASS.bgCard, borderColor: SALES_GLASS.border }]}>
+                {returnHistory.map((ret: any, idx: number) => (
+                  <View key={ret.id || idx} style={[styles.returnHistoryItem, idx < returnHistory.length - 1 && { borderBottomWidth: 1, borderBottomColor: SALES_GLASS.border, paddingBottom: 12, marginBottom: 12 }]}>
+                    <View style={styles.returnHistoryHeader}>
+                      <View style={[styles.returnHistoryIcon, { backgroundColor: ret.itemCondition === 'Resellable' ? colors.success + '15' : colors.warning + '15' }]}>
+                        <RotateCcw size={16} color={ret.itemCondition === 'Resellable' ? colors.success : colors.warning} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <AppText variant="body" weight="bold" style={{ color: SALES_GLASS.fg }}>
+                          {ret.quantity} {ret.unit || 'pcs'} {t('common.returned')}
+                        </AppText>
+                        <AppText variant="caption" weight="medium" style={{ color: SALES_GLASS.fgSecondary }}>
+                          {ret.reason}
+                        </AppText>
+                      </View>
+                    </View>
+                    <View style={styles.returnHistoryDetails}>
+                      <View style={styles.returnHistoryChip}>
+                        <AppText variant="micro" weight="bold" style={{ color: ret.itemCondition === 'Resellable' ? colors.success : colors.warning }}>
+                          {ret.itemCondition}
+                        </AppText>
+                      </View>
+                      <View style={styles.returnHistoryChip}>
+                        <AppText variant="micro" weight="bold" style={{ color: ret.refundType === 'Store Credit' ? colors.primary : SALES_GLASS.fgSecondary }}>
+                          {ret.refundType}
+                        </AppText>
+                      </View>
+                      <View style={styles.returnHistoryChip}>
+                        <AppText variant="micro" weight="bold" style={{ color: SALES_GLASS.fgSecondary }}>
+                          <AppNumber value={ret.totalRefund} size="micro" weight="bold" prefix={t('common.etb') + ' '} />
+                        </AppText>
+                      </View>
+                    </View>
+                    {ret.createdAt && (
+                      <AppText variant="micro" weight="medium" style={{ color: SALES_GLASS.fgSecondary, marginTop: 6 }}>
+                        {formatDate(new Date(ret.createdAt), calendarType, language)}
+                      </AppText>
+                    )}
+                  </View>
+                ))}
+              </View>
+            )}
+          </Animated.View>
+        )}
+
         <View style={{ height: 120 }} />
       </ScrollView>
 
@@ -1885,20 +2019,46 @@ const SaleDetailsScreen = ({
               >
                 {t("sales.return_item")}
               </AppText>
-              <AppText
-                variant="body"
-                weight="medium"
-                align="center"
-                style={[styles.returnSubtitle, { color: SALES_GLASS.fgSecondary }]}
-                numberOfLines={3}
-              >
-                {isBatch
-                  ? t("sales.return_for", {
-                      itemName: batchItems[0]?.itemName || t("common.items"),
-                    })
-                  : t("sales.return_for", { itemName: editForm.itemName })}
-              </AppText>
 
+              {/* Sale Info Summary */}
+              <View style={[styles.returnInfoBox, { backgroundColor: SALES_GLASS.bgCard, borderColor: SALES_GLASS.border }]}>
+                <View style={styles.returnInfoRow}>
+                  <AppText variant="caption" weight="medium" style={{ color: SALES_GLASS.fgSecondary }}>
+                    {t('sales.sale')} #{sale.id}
+                  </AppText>
+                  <AppText variant="caption" weight="bold" style={{ color: SALES_GLASS.fg }}>
+                    {formatDate(new Date(sale.createdAt || Date.now()), calendarType, language)}
+                  </AppText>
+                </View>
+                <View style={[styles.returnInfoRow, { marginTop: 4 }]}>
+                  <AppText variant="caption" weight="medium" style={{ color: SALES_GLASS.fgSecondary }}>
+                    {t('common.customer')}
+                  </AppText>
+                  <AppText variant="caption" weight="bold" style={{ color: SALES_GLASS.fg }}>
+                    {sale.customerName || t('common.walk_in')}
+                  </AppText>
+                </View>
+                <View style={[styles.returnInfoRow, { marginTop: 4 }]}>
+                  <AppText variant="caption" weight="medium" style={{ color: SALES_GLASS.fgSecondary }}>
+                    {t('common.item')}
+                  </AppText>
+                  <AppText variant="caption" weight="bold" style={{ color: SALES_GLASS.fg }} numberOfLines={1}>
+                    {isBatch ? batchItems[0]?.itemName || t('common.items') : editForm.itemName}
+                  </AppText>
+                </View>
+                {returnStats && returnStats.totalReturnedQty > 0 && (
+                  <View style={[styles.returnInfoRow, { marginTop: 4, backgroundColor: colors.warning + '10', borderRadius: 8, padding: 6 }]}>
+                    <AppText variant="caption" weight="medium" style={{ color: colors.warning }}>
+                      {t('sales.already_returned')}
+                    </AppText>
+                    <AppText variant="caption" weight="bold" style={{ color: colors.warning }}>
+                      {returnStats.totalReturnedQty} {isBatch ? batchItems[0]?.baseUnit || 'pcs' : sale.unit || 'pcs'} ({t('common.remaining')}: {returnStats.remainingQty})
+                    </AppText>
+                  </View>
+                )}
+              </View>
+
+              {/* Quantity Returned */}
               <View style={styles.returnField}>
                 <AppText
                   variant="caption"
@@ -1909,33 +2069,50 @@ const SaleDetailsScreen = ({
                 >
                   {t("sales.return_quantity")}
                 </AppText>
-                <TextInput
-                  style={[
-                    styles.returnInput,
-                    { color: SALES_GLASS.fg, borderColor: SALES_GLASS.border },
-                  ]}
-                  value={returnQty}
-                  keyboardType="numeric"
-                  onChangeText={setReturnQty}
-                />
+                <View style={styles.returnQtyRow}>
+                  <TextInput
+                    style={[
+                      styles.returnInput,
+                      { flex: 1, color: SALES_GLASS.fg, borderColor: SALES_GLASS.border },
+                    ]}
+                    value={returnQty}
+                    keyboardType="numeric"
+                    onChangeText={(v) => {
+                      setReturnQty(v);
+                      const q = parseInt(v) || 0;
+                      const unitPrice = ((isBatch ? batchItems[0] : sale).totalPrice || 0) / Math.max(1, (isBatch ? batchItems[0] : sale).quantity || 1);
+                      setReturnRefundAmount(String(unitPrice * q));
+                    }}
+                  />
+                  <TouchableOpacity
+                    style={[styles.returnQtyMaxBtn, { backgroundColor: colors.primary + '15' }]}
+                    onPress={() => {
+                      const maxQty = isBatch ? batchItems[0]?.quantity || 1 : sale.quantity || 1;
+                      const avail = Math.max(0, maxQty - (returnStats?.totalReturnedQty || 0));
+                      setReturnQty(String(avail));
+                      const unitPrice = ((isBatch ? batchItems[0] : sale).totalPrice || 0) / Math.max(1, (isBatch ? batchItems[0] : sale).quantity || 1);
+                      setReturnRefundAmount(String(unitPrice * avail));
+                    }}
+                  >
+                    <AppText variant="caption" weight="bold" style={{ color: colors.primary }}>
+                      {t('common.max')}
+                    </AppText>
+                  </TouchableOpacity>
+                </View>
                 <AppText
                   variant="caption"
                   weight="medium"
                   style={[styles.returnHint, { color: SALES_GLASS.fgSecondary }]}
                   numberOfLines={1}
                 >
-                  {isBatch
-                    ? t("sales.return_max", {
-                        qty: String(batchItems[0]?.quantity || 1),
-                        unit: batchItems[0]?.baseUnit || "pcs",
-                      })
-                    : t("sales.return_max", {
-                        qty: String(sale.quantity),
-                        unit: sale.unit || "pcs",
-                      })}
+                  {t("sales.return_available", {
+                    qty: String(Math.max(0, (isBatch ? batchItems[0]?.quantity || 1 : sale.quantity || 1) - (returnStats?.totalReturnedQty || 0))),
+                    unit: isBatch ? batchItems[0]?.baseUnit || "pcs" : sale.unit || "pcs",
+                  })}
                 </AppText>
               </View>
 
+              {/* Return Reason Picker */}
               <View style={styles.returnField}>
                 <AppText
                   variant="caption"
@@ -1946,18 +2123,192 @@ const SaleDetailsScreen = ({
                 >
                   {t("sales.return_reason_label")}
                 </AppText>
+                <View style={styles.pickerGrid}>
+                  {(['Damaged', 'Defective', 'Wrong Item', 'Customer Changed Mind', 'Expired', 'Other'] as const).map((opt) => (
+                    <TouchableOpacity
+                      key={opt}
+                      style={[
+                        styles.pickerOption,
+                        {
+                          backgroundColor: returnReasonPicker === opt ? colors.primary + '15' : SALES_GLASS.border,
+                          borderColor: returnReasonPicker === opt ? colors.primary : 'transparent',
+                        },
+                      ]}
+                      onPress={() => setReturnReasonPicker(opt)}
+                    >
+                      <AppText
+                        variant="caption"
+                        weight={returnReasonPicker === opt ? 'bold' : 'medium'}
+                        style={{ color: returnReasonPicker === opt ? colors.primary : SALES_GLASS.fgSecondary }}
+                        numberOfLines={1}
+                      >
+                        {t(`return_reason.${opt.toLowerCase().replace(/\s+/g, '_')}`)}
+                      </AppText>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                {returnReasonPicker === 'Other' && (
+                  <TextInput
+                    style={[
+                      styles.returnInput,
+                      styles.returnTextAreaShort,
+                      { color: SALES_GLASS.fg, borderColor: SALES_GLASS.border, marginTop: 8 },
+                    ]}
+                    value={returnReason}
+                    onChangeText={setReturnReason}
+                    placeholder={t("sales.refund_reason")}
+                    placeholderTextColor={SALES_GLASS.fgSecondary}
+                    multiline
+                    numberOfLines={2}
+                  />
+                )}
+              </View>
+
+              {/* Item Condition Picker */}
+              <View style={styles.returnField}>
+                <AppText
+                  variant="caption"
+                  weight="bold"
+                  transform="uppercase"
+                  style={[styles.returnLabel, { color: SALES_GLASS.fgSecondary }]}
+                  numberOfLines={1}
+                >
+                  {t("sales.item_condition")}
+                </AppText>
+                <View style={styles.pickerRow}>
+                  {(['Resellable', 'Damaged', 'Expired', 'Missing Parts'] as const).map((opt) => (
+                    <TouchableOpacity
+                      key={opt}
+                      style={[
+                        styles.pickerOptionCompact,
+                        {
+                          backgroundColor: returnItemCondition === opt ? (
+                            opt === 'Resellable' ? colors.success + '15' : colors.warning + '15'
+                          ) : SALES_GLASS.border,
+                          borderColor: returnItemCondition === opt ? (
+                            opt === 'Resellable' ? colors.success : colors.warning
+                          ) : 'transparent',
+                        },
+                      ]}
+                      onPress={() => {
+                        setReturnItemCondition(opt);
+                        if (opt !== 'Resellable' && returnRefundType === 'Full Refund') {
+                          showToast({
+                            title: t('sales.condition_note_title'),
+                            message: t('sales.condition_note_msg', { condition: t(`condition.${opt.toLowerCase().replace(/\s+/g, '_')}`) }),
+                            type: 'info',
+                          });
+                        }
+                      }}
+                    >
+                      <AppText
+                        variant="micro"
+                        weight={returnItemCondition === opt ? 'bold' : 'medium'}
+                        style={{ color: returnItemCondition === opt ? (opt === 'Resellable' ? colors.success : colors.warning) : SALES_GLASS.fgSecondary }}
+                        numberOfLines={1}
+                      >
+                        {t(`condition.${opt.toLowerCase().replace(/\s+/g, '_')}`)}
+                      </AppText>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Refund Type Picker */}
+              <View style={styles.returnField}>
+                <AppText
+                  variant="caption"
+                  weight="bold"
+                  transform="uppercase"
+                  style={[styles.returnLabel, { color: SALES_GLASS.fgSecondary }]}
+                  numberOfLines={1}
+                >
+                  {t("sales.refund_type")}
+                </AppText>
+                <View style={styles.pickerRow}>
+                  {(['Full Refund', 'Partial Refund', 'Store Credit', 'Exchange', 'No Refund'] as const).map((opt) => (
+                    <TouchableOpacity
+                      key={opt}
+                      style={[
+                        styles.pickerOptionCompact,
+                        {
+                          backgroundColor: returnRefundType === opt ? colors.warning + '15' : SALES_GLASS.border,
+                          borderColor: returnRefundType === opt ? colors.warning : 'transparent',
+                        },
+                      ]}
+                      onPress={() => setReturnRefundType(opt)}
+                    >
+                      <AppText
+                        variant="micro"
+                        weight={returnRefundType === opt ? 'bold' : 'medium'}
+                        style={{ color: returnRefundType === opt ? colors.warning : SALES_GLASS.fgSecondary }}
+                        numberOfLines={1}
+                      >
+                        {t(`refund_type.${opt.toLowerCase().replace(/\s+/g, '_')}`)}
+                      </AppText>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Refund Amount */}
+              {returnRefundType !== 'No Refund' && returnRefundType !== 'Exchange' && (
+                <View style={styles.returnField}>
+                  <AppText
+                    variant="caption"
+                    weight="bold"
+                    transform="uppercase"
+                    style={[styles.returnLabel, { color: SALES_GLASS.fgSecondary }]}
+                    numberOfLines={1}
+                  >
+                    {t("sales.refund_amount")}
+                  </AppText>
+                  <TextInput
+                    style={[
+                      styles.returnInput,
+                      { color: SALES_GLASS.fg, borderColor: SALES_GLASS.border },
+                    ]}
+                    value={returnRefundAmount}
+                    keyboardType="numeric"
+                    onChangeText={setReturnRefundAmount}
+                    editable={returnRefundType === 'Partial Refund'}
+                  />
+                  <AppText
+                    variant="caption"
+                    weight="medium"
+                    style={[styles.returnHint, { color: SALES_GLASS.fgSecondary }]}
+                    numberOfLines={1}
+                  >
+                    {returnRefundType === 'Partial Refund'
+                      ? t('sales.edit_amount_hint')
+                      : t('sales.auto_calculated')}
+                  </AppText>
+                </View>
+              )}
+
+              {/* Notes */}
+              <View style={styles.returnField}>
+                <AppText
+                  variant="caption"
+                  weight="bold"
+                  transform="uppercase"
+                  style={[styles.returnLabel, { color: SALES_GLASS.fgSecondary }]}
+                  numberOfLines={1}
+                >
+                  {t("common.notes")}
+                </AppText>
                 <TextInput
                   style={[
                     styles.returnInput,
-                    styles.returnTextArea,
+                    styles.returnTextAreaShort,
                     { color: SALES_GLASS.fg, borderColor: SALES_GLASS.border },
                   ]}
-                  value={returnReason}
-                  onChangeText={setReturnReason}
-                  placeholder={t("sales.refund_reason")}
+                  value={returnNotes}
+                  onChangeText={setReturnNotes}
+                  placeholder={t("common.optional")}
                   placeholderTextColor={SALES_GLASS.fgSecondary}
                   multiline
-                  numberOfLines={3}
+                  numberOfLines={2}
                 />
               </View>
 
@@ -2040,10 +2391,33 @@ const SaleDetailsScreen = ({
                   })
                 : t("sales.return_success", {
                     qty: returnQty,
-                    unit: sale.unit,
+                    unit: sale.unit || "pcs",
                     itemName: editForm.itemName,
                   })}
             </AppText>
+            <View style={styles.returnSuccessDetails}>
+              {returnItemCondition && (
+                <View style={[styles.returnSuccessChip, { backgroundColor: returnItemCondition === 'Resellable' ? colors.success + '15' : colors.warning + '15' }]}>
+                  <AppText variant="micro" weight="bold" style={{ color: returnItemCondition === 'Resellable' ? colors.success : colors.warning }}>
+                    {t(`condition.${returnItemCondition.toLowerCase().replace(/\s+/g, '_')}`)}
+                  </AppText>
+                </View>
+              )}
+              {returnRefundType && (
+                <View style={[styles.returnSuccessChip, { backgroundColor: colors.warning + '15' }]}>
+                  <AppText variant="micro" weight="bold" style={{ color: colors.warning }}>
+                    {t(`refund_type.${returnRefundType.toLowerCase().replace(/\s+/g, '_')}`)}
+                  </AppText>
+                </View>
+              )}
+              {parseFloat(returnRefundAmount) > 0 && (
+                <View style={[styles.returnSuccessChip, { backgroundColor: SALES_GLASS.bgCard }]}>
+                  <AppText variant="micro" weight="bold" style={{ color: SALES_GLASS.fg }}>
+                    <AppNumber value={parseFloat(returnRefundAmount)} size="micro" weight="bold" prefix={t('common.etb') + ' '} />
+                  </AppText>
+                </View>
+              )}
+            </View>
             <TouchableOpacity
               style={[styles.successBtn, { backgroundColor: SALES_GLASS.fg }]}
               onPress={() => {
@@ -2231,7 +2605,7 @@ const SaleDetailsScreen = ({
                         style={{ color: SALES_GLASS.fgSecondary }}
                         numberOfLines={1}
                       >
-                        <AppNumber value={item.baseSellingPrice || 0} size="micro" weight="medium" prefix={"ETB "} color={SALES_GLASS.fgSecondary} />
+                        <AppNumber value={item.baseSellingPrice || 0} size="micro" weight="medium" prefix={t('common.etb') + ' '} color={SALES_GLASS.fgSecondary} />
                         {" / "}{item.baseUnit || "pcs"}
                         {item.categoryName ? ` • ${item.categoryName}` : ""}
                       </AppText>
@@ -2673,6 +3047,132 @@ const styles = StyleSheet.create({
   },
   itemSearchInfo: { flex: 1, marginLeft: 10, gap: 2 },
   emptyState: { alignItems: "center", marginTop: 40, gap: 8 },
+
+  // Return badges
+  returnBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    marginTop: 12,
+  },
+
+  // Return info box
+  returnInfoBox: {
+    width: "100%",
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 20,
+  },
+  returnInfoRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+
+  // Quantity row
+  returnQtyRow: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
+  },
+  returnQtyMaxBtn: {
+    paddingHorizontal: 16,
+    height: 50,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  // Picker grid (2-column)
+  pickerGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  pickerOption: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  pickerRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  pickerOptionCompact: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+
+  // Return textarea short
+  returnTextAreaShort: {
+    height: 70,
+    textAlignVertical: "top",
+    paddingTop: 12,
+  },
+
+  // Success details
+  returnSuccessDetails: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    justifyContent: "center",
+    marginBottom: 25,
+  },
+  returnSuccessChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+
+  // Return history
+  sectionHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  returnHistoryToggle: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  returnHistoryItem: {
+    // base
+  },
+  returnHistoryHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  returnHistoryIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  returnHistoryDetails: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 8,
+    marginLeft: 46,
+  },
+  returnHistoryChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: "transparent",
+  },
 });
 
 export default SaleDetailsScreen;

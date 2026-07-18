@@ -316,7 +316,7 @@ const SummaryScreen = () => {
           <View style={styles.metricsRow}>
             <MetricCard 
               label={t('summary.sales_cash')}
-              value={<AppNumber value={metrics?.salesCash ?? 0} prefix="ETB " size="title" weight="bold" compact />}
+              value={              <AppNumber value={metrics?.netSalesCash ?? 0} prefix="ETB " size="title" weight="bold" compact />}
               icon={DollarSign}
             />
             <MetricCard 

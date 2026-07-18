@@ -440,6 +440,7 @@ export const TutorialOverlay: React.FC = () => {
   const svTooltipH = useSharedValue(160);
   const svPosition = useSharedValue<'top' | 'bottom' | 'left' | 'right' | 'center'>('center');
   const svShake = useSharedValue(0);
+  const svProgress = useSharedValue(ctx.progress);
 
   const fadeAnim = useSharedValue(0);
   const autoAdvanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -452,6 +453,10 @@ export const TutorialOverlay: React.FC = () => {
       svPosition.value = step.tooltipPosition;
     }
   }, [step?.tooltipPosition, svPosition]);
+
+  useEffect(() => {
+    svProgress.value = withSpring(ctx.progress, { damping: 20, stiffness: 120 });
+  }, [ctx.progress, svProgress]);
 
   useEffect(() => {
     if (!ctx.isActive || !step || ctx.isPaused) {
@@ -570,13 +575,9 @@ export const TutorialOverlay: React.FC = () => {
     };
   });
 
-  const animatedProgressWidth = useDerivedValue(() => {
-    return withSpring(ctx.progress, { damping: 20, stiffness: 120 });
-  });
-
   const progressStyle = useAnimatedStyle(() => {
     return {
-      width: `${animatedProgressWidth.value * 100}%` as any,
+      width: `${svProgress.value * 100}%` as any,
     };
   });
 

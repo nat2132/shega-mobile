@@ -478,9 +478,9 @@ const FirstOnboardingScreen: React.FC<FirstOnboardingScreenProps> = ({ onNext })
 
             {[
               { id: 'en', label: t('onboarding.lang_en'), sub: t('onboarding.lang_en_sub') },
-              { id: 'am', label: '\u1200\u1273\u1275\u122d\u129b', sub: t('onboarding.lang_am') },
-              { id: 'om', label: 'Afaan Oromo', sub: t('onboarding.lang_om') },
-              { id: 'ti', label: '\u1275\u130d\u1295\u1295\u1293', sub: t('onboarding.lang_ti') },
+              { id: 'am', label: t('onboarding.lang_am'), sub: t('onboarding.lang_am') },
+              { id: 'om', label: t('onboarding.lang_om'), sub: t('onboarding.lang_om') },
+              { id: 'ti', label: t('onboarding.lang_ti'), sub: t('onboarding.lang_ti') },
             ].map((lang) => (
               <TouchableOpacity
                 key={lang.id}
