@@ -445,7 +445,7 @@ const OrderDetailScreen = () => {
                     style={{ color: ORD_GLASS.fg }}
                   >
                     {entry.fromStatus
-                      ? `${entry.fromStatus} â†’ ${entry.toStatus}`
+                      ? `${entry.fromStatus} → ${entry.toStatus}`
                       : `${entry.toStatus} created`}
                   </AppText>
                   <AppText

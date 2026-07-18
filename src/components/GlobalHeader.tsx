@@ -72,7 +72,7 @@ const GlobalHeader = () => {
             >
               <Bell size={18} color={colors.text} />
               {notifCount > 0 && (
-                <View style={[styles.badge, { borderColor: colors.header }]}>
+                <View style={[styles.badge, { backgroundColor: colors.error || '#FF3B30', borderColor: colors.background }]}>
                   <AppText variant="micro" weight="bold" style={styles.badgeText}>{notifCount}</AppText>
                 </View>
               )}
@@ -152,13 +152,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -4,
     right: -4,
-    backgroundColor: '#FF3B30',
-    width: 18,
+    minWidth: 18,
     height: 18,
     borderRadius: 9,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
+    paddingHorizontal: 4,
   },
   badgeText: {
     color: '#FFF',

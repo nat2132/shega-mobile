@@ -169,8 +169,8 @@ const SearchResultRow = React.memo(({
   return (
     <Animated.View
       entering={FadeInDown.delay(Math.min(index, 6) * 45).duration(300).springify().damping(22)}
-      style={pressStyle}
     >
+      <Animated.View style={pressStyle}>
       <TouchableWithoutFeedback
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
@@ -228,6 +228,7 @@ const SearchResultRow = React.memo(({
           </View>
         </View>
       </TouchableWithoutFeedback>
+      </Animated.View>
     </Animated.View>
   );
 });

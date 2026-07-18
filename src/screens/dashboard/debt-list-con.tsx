@@ -56,7 +56,7 @@ const DebtManagementFlow = () => {
             {paymentType === 'partial' && <View style={[styles.radioInner, { backgroundColor: G.fg }]} />}
           </View>
           <AppText variant="body-lg" weight="medium" style={{ flex: 1, color: G.fg }} numberOfLines={2}>{t('dash.partial_payment')}</AppText>
-          <AppText variant="title" shrink={false} style={styles.editIcon}>âœï¸</AppText>
+          <AppText variant="title" shrink={false} style={styles.editIcon}>{'✎'}ï¸</AppText>
         </TouchableOpacity>
 
         {paymentType === 'partial' && (

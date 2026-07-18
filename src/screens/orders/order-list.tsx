@@ -36,9 +36,9 @@ const ORD_GLASS = getOrdersGlass(LightTheme);
 type OrderTab = "active" | "converted" | "cancelled" | "all";
 
 const TAB_OPTIONS: { key: OrderTab; labelKey: string }[] = [
-  { key: "active", labelKey: "Orders" },
-  { key: "converted", labelKey: "Completed" },
-  { key: "cancelled", labelKey: "Cancelled" },
+  { key: "active", labelKey: "order.active" },
+  { key: "converted", labelKey: "order.completed" },
+  { key: "cancelled", labelKey: "order.cancelled_tab" },
 ];
 
 const statusColors: Record<string, string> = {
@@ -213,7 +213,7 @@ const OrdersScreen = () => {
               ]}
               numberOfLines={1}
             >
-              {tab.labelKey}
+              {t(tab.labelKey)}
             </AppText>
           </TouchableOpacity>
         );

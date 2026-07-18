@@ -186,7 +186,7 @@ SparklineChart.displayName = 'SparklineChart';
     const tutorial = useTutorial({ tutorial: dashboardTutorial });
     const G = getDashGlass(colors);
     const styles = useMemo(() => createStyles(G), [G]);
-    useNotifications();
+    const { notifCount } = useNotifications();
     const dialog = useDialog();
     const [isPrivate, setIsPrivate] = useState(false);
     const [activeModal, setActiveModal] = useState<string | null>(null);
@@ -557,15 +557,7 @@ SparklineChart.displayName = 'SparklineChart';
                   onPress={() => router.push('/notifications')} 
                   style={styles.headerIconBtn}
                 >
-                  <NotificationBell size={20} />
-                </TouchableOpacity>
-                </TutorialTarget>
-                <TutorialTarget id="dash-search">
-                <TouchableOpacity
-                  onPress={() => setShowUniversalSearch(true)}
-                  style={styles.headerIconBtn}
-                >
-                  <Search size={20} color={G.muted} />
+                  <NotificationBell size={20} count={notifCount} />
                 </TouchableOpacity>
                 </TutorialTarget>
 
@@ -580,12 +572,26 @@ SparklineChart.displayName = 'SparklineChart';
                     <View style={styles.headerAvatarGlow}>
                       <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={styles.headerAvatar} />
                     </View>
-                    <View style={[styles.onlineIndicator, { backgroundColor: colors.success }]} />
+                    <View style={[styles.onlineIndicator, { backgroundColor: colors.text, borderColor: colors.background }]} />
                   </TouchableOpacity>
                 </TutorialTarget>
               </View>
             </View>
           </View>
+          </TutorialTarget>
+
+          {/* Search Bar */}
+          <TutorialTarget id="dash-search">
+            <TouchableOpacity
+              onPress={() => setShowUniversalSearch(true)}
+              activeOpacity={0.7}
+              style={[styles.searchBar, { backgroundColor: G.surfaceFill, borderColor: G.borderGlass }]}
+            >
+              <Search size={18} color={G.muted} />
+              <AppText variant="body" weight="regular" style={[styles.searchPlaceholder, { color: G.muted }]}>
+                {t('common.search') || 'Search...'}
+              </AppText>
+            </TouchableOpacity>
           </TutorialTarget>
 
           {/* Premium Trial Banner */}
@@ -825,7 +831,7 @@ SparklineChart.displayName = 'SparklineChart';
               <View style={styles.modalHeader}>
                 <View style={styles.modalHandle} />
                 <TouchableOpacity onPress={() => setActiveModal(null)} style={styles.closeBtn}>
-                  <AppText variant="title" shrink={false} style={styles.closeBtnText}>âœ•</AppText>
+                  <AppText variant="title" shrink={false} style={styles.closeBtnText}>{'✕'}</AppText>
                 </TouchableOpacity>
               </View>
               <AppText variant="heading" weight="bold" style={styles.sheetTitle} numberOfLines={2}>
@@ -1160,23 +1166,6 @@ const createStyles = (G: any) => StyleSheet.create({
     shadowRadius: 4,
     elevation: 1,
   },
-  notifBadge: {
-    position: 'absolute',
-    top: -3,
-    right: -3,
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 5,
-    borderWidth: 2,
-    borderColor: G.bg,
-  },
-  notifBadgeText: {
-    fontFamily: Fonts.bold,
-    fontSize: 10,
-  },
   glassHeader: {
     paddingHorizontal: DASH_SPACING.gutter,
     paddingTop: Platform.OS === 'ios' ? 60 : 50,
@@ -1186,6 +1175,21 @@ const createStyles = (G: any) => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: DASH_SPACING.gutter,
+    marginTop: 4,
+    marginBottom: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 10,
+  },
+  searchPlaceholder: {
+    flex: 1,
   },
   greetingLabel: {
     fontFamily: Fonts.medium,

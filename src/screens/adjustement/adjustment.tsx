@@ -1,4 +1,5 @@
 import { Fonts } from '@/constants/theme';
+import { NotificationBell } from '@/components/NotificationBell';
 import { PROFILE_IMAGES, useSettings } from '@/context/SettingsContext';
 import { useSidebar } from '@/context/SidebarContext';
 import { formatTime } from '@/utils/date-utils';
@@ -10,7 +11,6 @@ import { useRouter } from 'expo-router';
 import {
     AlertTriangle,
     BarChart3,
-    Bell,
     Box,
     DollarSign,
     Eye,
@@ -183,24 +183,14 @@ const AdjustmentScreen = () => {
           
           <View style={styles.headerActions}>
             <TutorialButton tutorialId="adjustment" screenName={t('screen.adjustment')} />
-            <TouchableOpacity 
-              onPress={() => router.push('/notifications')} 
-              style={[styles.headerIconBtn, { borderColor: G.border, backgroundColor: G.bgCard }]}
-            >
-               <Bell size={22} color={G.fg} />
-               {notifCount > 0 && (
-                 <View style={[styles.notifBadge, { backgroundColor: '#FFFFFF' }]}>
-                   <AppText variant="micro" weight="bold" shrink={false} style={[styles.notifBadgeText, { color: G.bg }]} numberOfLines={1}>{notifCount}</AppText>
-                 </View>
-               )}
-            </TouchableOpacity>
+            <NotificationBell size={22} count={notifCount} />
 
-            <TouchableOpacity 
-              style={[styles.headerAvatarBox, { borderColor: G.border, backgroundColor: G.bgCard, marginLeft: 10 }]}
-              onPress={openSidebar}
-            >
+            <View style={[styles.headerAvatarBox, { borderColor: G.border, backgroundColor: G.bgCard, marginLeft: 10 }]}>
+              <TouchableOpacity onPress={openSidebar}>
                 <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={styles.headerAvatar} />
-            </TouchableOpacity>
+              </TouchableOpacity>
+              <View style={[styles.onlineIndicator, { backgroundColor: G.fg, borderColor: G.bg }]} />
+            </View>
           </View>
         </View>
         </TutorialTarget>
@@ -474,22 +464,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     position: 'relative',
   },
-  notifBadge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-    borderWidth: 2,
-    borderColor: '#FFF',
-  },
-  notifBadgeText: {
-    fontFamily: Fonts.bold,
-  },
   headerLabel: { fontSize: 12, fontFamily: Fonts.bold, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 4 },
   headerTitle: { fontSize: 28, fontFamily: Fonts.bold },
   headerAvatarBox: {
@@ -500,6 +474,16 @@ const styles = StyleSheet.create({
     padding: 3,
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
+  },
+  onlineIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
   },
   headerAvatar: {
     width: '100%',

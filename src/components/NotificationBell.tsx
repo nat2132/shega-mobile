@@ -11,16 +11,20 @@ interface NotificationBellProps {
   size?: number;
   showBadge?: boolean;
   onPress?: () => void;
+  count?: number;
 }
 
 export const NotificationBell: React.FC<NotificationBellProps> = ({
   size = 24,
   showBadge = true,
   onPress,
+  count: countProp,
 }) => {
   const { colors } = useSettings();
   const { unreadCount } = useNotificationCenter();
   const router = useRouter();
+
+  const displayCount = countProp ?? unreadCount;
 
   const handlePress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -39,17 +43,18 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
       accessibilityRole="button"
     >
       <Bell size={size} color={colors.text} strokeWidth={2} />
-      {showBadge && unreadCount > 0 && (
+      {showBadge && displayCount > 0 && (
         <View
           style={[
             styles.badge,
             { backgroundColor: colors.error || '#FF3B30', borderColor: colors.background },
+            displayCount > 99 && styles.badgeWide,
           ]}
         >
-          {unreadCount > 99 ? (
+          {displayCount > 99 ? (
             <AppText variant="micro" weight="bold" shrink={false} style={[styles.badgeText, { color: '#FFF' }]} numberOfLines={1}>99+</AppText>
           ) : (
-            <AppNumber value={unreadCount} size="micro" style={[styles.badgeText, { color: '#FFF' }]} />
+            <AppNumber value={displayCount} size="micro" style={[styles.badgeText, { color: '#FFF' }]} />
           )}
         </View>
       )}
@@ -72,6 +77,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 4,
+  },
+  badgeWide: {
+    minWidth: 26,
+    paddingHorizontal: 5,
   },
   badgeText: {
 

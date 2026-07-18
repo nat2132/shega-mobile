@@ -1,4 +1,5 @@
 import { DraftSection } from '@/components/DraftSection';
+import { NotificationBell } from '@/components/NotificationBell';
 import { AppNumber, AppText } from "@/components/ui";
 import { Fonts } from "@/constants/theme";
 import { useDialog } from "@/context/DialogContext";
@@ -21,7 +22,7 @@ import { playNice } from '@/services/soundService';
 import { useFocusEffect } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import { AlertTriangle, Bell, DollarSign, Plus, X } from "lucide-react-native";
+import { AlertTriangle, DollarSign, Plus, X } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import {
   Dimensions,
@@ -81,10 +82,8 @@ const ProgressRing = ({ progress, size = 88 }: { progress: number; size?: number
           strokeLinecap="round" transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
       </Svg>
-      <View style={StyleSheet.absoluteFillObject}>
-        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-          <AppNumber value={pct} size="heading-lg" suffix="%" color={color} />
-        </View>
+      <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center" }]}>
+        <AppNumber value={pct} size="heading" suffix="%" color={color} />
       </View>
     </View>
   );
@@ -184,20 +183,16 @@ const BudgetOverview = () => {
       <TutorialScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
         <TutorialTarget id="bud-header">
         <View style={s.topBar}>
-          <TouchableOpacity style={[s.avatarBox, { borderColor: G.border }]} onPress={openSidebar}>
-            <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={s.avatar} />
-          </TouchableOpacity>
+          <View style={[s.avatarBox, { borderColor: G.border }]}>
+            <TouchableOpacity onPress={openSidebar}>
+              <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={s.avatar} />
+            </TouchableOpacity>
+            <View style={[s.onlineIndicator, { backgroundColor: G.fg, borderColor: G.bg }]} />
+          </View>
           <AppText variant="heading" weight="bold">{t("budget.title")}</AppText>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <TutorialButton tutorialId="budget" screenName={t('screen.budget')} />
-            <TouchableOpacity onPress={() => router.push("/notifications")} style={[s.iconBtn, { borderColor: G.border }]}>
-              <Bell size={22} color={G.fg} />
-              {notifCount > 0 && (
-                <View style={[s.notifBadge, { backgroundColor: colors.primary }]}>
-                  <AppText variant="micro" weight="bold" style={s.notifBadgeText}>{notifCount}</AppText>
-                </View>
-              )}
-            </TouchableOpacity>
+            <NotificationBell size={22} count={notifCount} />
           </View>
         </View>
         </TutorialTarget>
@@ -713,11 +708,9 @@ const s = StyleSheet.create({
   screen: { flex: 1 },
   scroll: { paddingBottom: 160, paddingTop: 10 },
   topBar: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  avatarBox: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, padding: 2, justifyContent: "center", alignItems: "center" },
+  avatarBox: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, padding: 2, justifyContent: "center", alignItems: "center", position: "relative" },
   avatar: { width: "100%", height: "100%", borderRadius: 18 },
-  iconBtn: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, justifyContent: "center", alignItems: "center", position: "relative" },
-  notifBadge: { position: "absolute", top: -2, right: -2, minWidth: 18, height: 18, borderRadius: 9, justifyContent: "center", alignItems: "center", paddingHorizontal: 4, borderWidth: 2, borderColor: "#FFF" },
-  notifBadgeText: { color: "#FFF" },
+  onlineIndicator: { position: "absolute", bottom: 0, right: 0, width: 12, height: 12, borderRadius: 6, borderWidth: 2 },
   summaryCard: { marginHorizontal: 24, marginTop: 15, borderRadius: 28, padding: 24, borderWidth: 1, overflow: "hidden" },
   summaryTop: { flexDirection: "row", alignItems: "center", marginBottom: 20 },
   summaryLabel: { fontSize: 11, letterSpacing: 1.5, marginBottom: 4 },
@@ -744,7 +737,7 @@ const s = StyleSheet.create({
   badgeDot: { width: 6, height: 6, borderRadius: 3 },
   emptyState: { alignItems: "center", paddingVertical: 60 },
   createBtn: { flexDirection: "row", alignItems: "center", paddingHorizontal: 24, paddingVertical: 14, borderRadius: 16 },
-  fabRow: { position: "absolute", bottom: 100, right: 24 },
+  fabRow: { position: "absolute", bottom: 100, alignSelf: "center" },
   fab: { width: 60, height: 60, borderRadius: 30, justifyContent: "center", alignItems: "center", elevation: 2, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4 },
   modalOverlay: { flex: 1, justifyContent: "flex-end" },
   modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)" },

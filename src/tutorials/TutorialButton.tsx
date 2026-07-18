@@ -65,6 +65,12 @@ export const TutorialButton: React.FC<TutorialButtonProps> = ({ tutorialId, scre
                   : t('tutorial.menu_learn')}
             </AppText>
 
+            <View style={[styles.warningBanner, { backgroundColor: '#FF9500' + '18', borderColor: '#FF9500' + '40' }]}>
+              <AppText variant="micro" weight="semibold" color="#FF9500" style={{ textAlign: 'center' }}>
+                {t('tutorial.english_only_warning')}
+              </AppText>
+            </View>
+
             <View style={styles.menuActions}>
               {progress && !isCompleted ? (
                 <TouchableOpacity
@@ -153,8 +159,16 @@ const styles = StyleSheet.create({
   },
   menuDesc: {
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 12,
     lineHeight: 18,
+  },
+  warningBanner: {
+    width: '100%',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 16,
   },
   menuActions: {
     width: '100%',

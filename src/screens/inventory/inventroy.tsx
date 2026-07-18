@@ -1,4 +1,5 @@
 import { CategoryBarSkeleton, SparklineSkeleton } from '@/components/ChartSkeleton';
+import { NotificationBell } from '@/components/NotificationBell';
 import { AppListItem, AppNumber, AppText } from '@/components/ui';
 import { BorderRadius, Fonts, Spacing } from '@/constants/theme';
 import { useDialog } from '@/context/DialogContext';
@@ -27,7 +28,6 @@ import { router, useFocusEffect } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import {
   BarChart3,
-  Bell,
   Download,
   Eye,
   EyeOff,
@@ -325,25 +325,17 @@ const loadRecentItems = () => {
           <TutorialTarget id="inv-header">
           <View style={styles.topBar}>
             <View style={{ flex: 1 }}>
-              <TouchableOpacity onPress={openSidebar} style={[styles.headerAvatarBox, { borderColor: G.borderLight }]}>
-                <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={styles.headerAvatar} />
-                <View style={[styles.headerAvatarGlow, { backgroundColor: G.reflection }]} />
-              </TouchableOpacity>
+              <View style={[styles.headerAvatarBox, { borderColor: G.borderLight }]}>
+                <TouchableOpacity onPress={openSidebar}>
+                  <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={styles.headerAvatar} />
+                </TouchableOpacity>
+                <View style={[styles.onlineIndicator, { backgroundColor: G.fg, borderColor: G.bg }]} />
+              </View>
             </View>
             
             <View style={styles.headerActions}>
               <TutorialButton tutorialId="inventory" screenName={t('screen.inventory')} />
-              <TouchableOpacity 
-                onPress={() => router.push('/notifications')} 
-                style={[styles.headerIconBtn, { backgroundColor: G.bgCard, borderColor: G.border }]}
-              >
-                 <Bell size={22} color={G.fg} />
-                 {notifCount > 0 && (
-                   <View style={[styles.notifBadge, { backgroundColor: colors.card }]}>
-                      <AppNumber value={notifCount} size="micro" color={colors.text} style={styles.notifBadgeText} />
-                   </View>
-                 )}
-              </TouchableOpacity>
+              <NotificationBell size={22} count={notifCount} />
             </View>
           </View>
           </TutorialTarget>
@@ -1400,22 +1392,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     position: 'relative',
   },
-  notifBadge: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  notifBadgeText: {
-    fontFamily: Fonts.bold,
-  },
   headerLabel: {
     fontFamily: Fonts.bold,
     textTransform: 'uppercase',
@@ -1436,6 +1412,16 @@ const styles = StyleSheet.create({
     padding: 2,
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
+  },
+  onlineIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
   },
   headerAvatar: {
     width: 40,

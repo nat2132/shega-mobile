@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { CheckCircle2, Clock } from 'lucide-react-native';
 import { Fonts } from '@/constants/theme';
@@ -84,7 +84,7 @@ const TimeSystemSettings = () => {
 
       <View style={[styles.infoBox, { backgroundColor: G.bgCard, borderColor: G.border }]}>
         <AppText variant="body-sm" weight="medium" style={[styles.infoText, { color: G.fgSecondary }]} numberOfLines={3}>
-          â° {t('settings.currently_active')}{' '}
+          ⏰ {t('settings.currently_active')}{' '}
           <AppText variant="body-sm" weight="bold" style={[styles.infoHighlight, { color: G.fg }]} numberOfLines={1}>
             {timeSystem === 'ethiopian' ? t('settings.time_ethiopian') : t('settings.time_device')}
           </AppText>

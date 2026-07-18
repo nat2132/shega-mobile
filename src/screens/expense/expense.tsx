@@ -1,4 +1,5 @@
 import { Fonts } from '@/constants/theme';
+import { NotificationBell } from '@/components/NotificationBell';
 import { PROFILE_IMAGES, useSettings } from '@/context/SettingsContext';
 import { useSidebar } from '@/context/SidebarContext';
 import {
@@ -19,7 +20,6 @@ import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import {
-  Bell,
   Plus,
   Search,
   Calendar,
@@ -219,9 +219,12 @@ const PointerLabel = (items: any) => {
         <TutorialTarget id="exp-header">
         <View style={styles.topBar}>
           <View style={{ flex: 1 }}>
-            <TouchableOpacity style={[styles.avatarBox, { borderColor: G.border, backgroundColor: G.bgCard }]} onPress={openSidebar}>
-              <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={styles.avatar} />
-            </TouchableOpacity>
+            <View style={[styles.avatarBox, { borderColor: G.border, backgroundColor: G.bgCard }]}>
+              <TouchableOpacity onPress={openSidebar}>
+                <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={styles.avatar} />
+              </TouchableOpacity>
+              <View style={[styles.onlineIndicator, { backgroundColor: G.fg, borderColor: G.bg }]} />
+            </View>
           </View>
           <View style={styles.headerActions}>
             <TutorialButton tutorialId="expense" screenName={t('screen.expense')} />
@@ -231,14 +234,7 @@ const PointerLabel = (items: any) => {
             <TouchableOpacity style={[styles.iconBtn, { borderColor: G.border, backgroundColor: G.bgCard }]} onPress={() => setShowSearch(!showSearch)}>
               <Search size={22} color={G.fgSecondary} />
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.iconBtn, { borderColor: G.border, backgroundColor: G.bgCard }]} onPress={() => router.push('/notifications')}>
-              <Bell size={22} color={G.fg} />
-              {notifCount > 0 && (
-                <View style={[styles.notifBadge, { backgroundColor: '#FFFFFF' }]}>
-                  <AppText variant="micro" weight="bold" style={[styles.notifBadgeText, { color: '#0B0B0B' }]}>{notifCount}</AppText>
-                </View>
-              )}
-            </TouchableOpacity>
+            <NotificationBell size={22} count={notifCount} />
           </View>
         </View>
         </TutorialTarget>
@@ -622,12 +618,11 @@ const styles = StyleSheet.create({
   scrollContent: { paddingBottom: 220, paddingTop: 10 },
   bgWash: { position: 'absolute', width: 300, height: 300, borderRadius: 150, transform: [{ scale: 1.5 }] },
   topBar: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 5, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  avatarBox: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, padding: 2, justifyContent: 'center', alignItems: 'center' },
+  avatarBox: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, padding: 2, justifyContent: 'center', alignItems: 'center', position: 'relative' },
   avatar: { width: '100%', height: '100%', borderRadius: 18 },
+  onlineIndicator: { position: 'absolute', bottom: 0, right: 0, width: 12, height: 12, borderRadius: 6, borderWidth: 2 },
   headerActions: { flexDirection: 'row', gap: 12 },
   iconBtn: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, justifyContent: 'center', alignItems: 'center', position: 'relative' },
-  notifBadge: { position: 'absolute', top: -2, right: -2, minWidth: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4, borderWidth: 2, borderColor: '#FFF' },
-  notifBadgeText: { fontFamily: Fonts.bold },
   screenHeader: { paddingHorizontal: 24, paddingTop: 15, paddingBottom: 20 },
   headerLabel: { fontSize: 12, letterSpacing: 1.5, marginBottom: 8 },
   headerTitle: { fontSize: 32, letterSpacing: -1 },

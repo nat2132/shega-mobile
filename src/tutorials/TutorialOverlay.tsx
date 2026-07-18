@@ -659,10 +659,10 @@ export const TutorialOverlay: React.FC = () => {
             </View>
 
             <AppText variant="body" weight="bold" color={colors.text} style={styles.title}>
-              {t(`tutorial.${ctx.activeTutorialId}.steps.${step.id}.title`) || step.title}
+              {(() => { const k = `tutorial.${ctx.activeTutorialId}.steps.${step.id}.title`; const v = t(k); return v !== k ? v : step.title; })()}
             </AppText>
             <AppText variant="caption" weight="regular" color={colors.textSecondary} style={styles.desc}>
-              {t(`tutorial.${ctx.activeTutorialId}.steps.${step.id}.desc`) || step.description}
+              {(() => { const k = `tutorial.${ctx.activeTutorialId}.steps.${step.id}.desc`; const v = t(k); return v !== k ? v : step.description; })()}
             </AppText>
 
             {actionHint ? (

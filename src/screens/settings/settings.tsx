@@ -43,6 +43,7 @@ import {
 } from 'lucide-react-native';
 
 import { DataTransferModal } from '@/components/DataTransferModal';
+import { BottomSheet } from '@/components/BottomSheet';
 import { AppListItem, AppText } from '@/components/ui';
 import { useWarehouse } from '@/context/WarehouseContext';
 import DateTimeSettings from './date-time';
@@ -78,10 +79,12 @@ const ConfigurationGridItem = ({ icon: Icon, title, onPress }: { icon: any, titl
       onPress={onPress}
       activeOpacity={0.7}
     >
-      <View style={[styles.gridIconBox, { backgroundColor: G.accentGlass }]}>
-        <Icon size={22} color={G.fg} strokeWidth={2.5} />
+      <View style={styles.gridItemContent}>
+        <View style={[styles.gridIconBox, { backgroundColor: G.accentGlass }]}>
+          <Icon size={22} color={G.fg} strokeWidth={2.5} />
+        </View>
+        <AppText variant="body" weight="bold" style={[styles.gridTitle, { color: G.fg }]} numberOfLines={2}>{title}</AppText>
       </View>
-      <AppText variant="body" weight="bold" style={[styles.gridTitle, { color: G.fg }]} numberOfLines={2}>{title}</AppText>
       <ChevronRight size={14} color={G.muted} style={styles.gridChevron} />
     </TouchableOpacity>
   );
@@ -343,26 +346,6 @@ const ResetModal = ({
           <TouchableOpacity style={resetStyles.cancelBtn} onPress={onClose}>
             <AppText variant="body" weight="bold" style={[resetStyles.cancelBtnText, { color: G.muted }]} numberOfLines={1}>{t('common.cancel')}</AppText>
           </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
-  );
-};
-
-// →→→ Bottom Sheet Wrapper →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
-
-const BottomSheet = ({ visible, onClose, children }: any) => {
-  const { colors } = useSettings();
-  const G = getSettingsGlass(colors);
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={onClose} />
-        <View style={[styles.bottomSheetContainer, { backgroundColor: G.bg, borderColor: G.border }]}>
-          <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: G.borderLight }]} /></View>
-          <ScrollView style={styles.modalBodyScroll} contentContainerStyle={styles.modalBodyContent} showsVerticalScrollIndicator={false}>
-            {children}
-          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -930,6 +913,11 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 1,
     position: 'relative',
+    minHeight: 110,
+    justifyContent: 'space-between',
+  },
+  gridItemContent: {
+    gap: 0,
   },
   gridIconBox: {
     width: 44,
@@ -1026,38 +1014,6 @@ const styles = StyleSheet.create({
   versionText: {
 
     fontFamily: Fonts.medium,
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-  },
-  bottomSheetContainer: {
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    paddingBottom: 40,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    maxHeight: '90%',
-  },
-  modalBodyScroll: {
-    flexGrow: 1,
-  },
-  modalBodyContent: {
-    paddingHorizontal: 20,
-  },
-  modalHeader: {
-    alignItems: 'center',
-    paddingTop: 15,
-    paddingBottom: 10,
-  },
-  modalHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
   },
 });
 

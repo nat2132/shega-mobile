@@ -1,5 +1,6 @@
 import { AddOrderItemModal } from '@/components/AddOrderItemModal';
 import { CustomDatePicker } from '@/components/CustomDatePicker';
+import { NotificationBell } from '@/components/NotificationBell';
 import { PDFLanguageModal } from '@/components/PDFLanguageModal';
 import { Fonts } from '@/constants/theme';
 import { PROFILE_IMAGES, useSettings } from '@/context/SettingsContext';
@@ -26,7 +27,6 @@ import { useToast } from '@/context/ToastContext';
 import PremiumFeatureGate from '@/components/PremiumFeatureGate';
 import { useRouter } from 'expo-router';
 import {
-    Bell,
     Calendar,
     ChevronLeft,
     ClipboardList,
@@ -303,7 +303,7 @@ const ReportsHubScreenContent = () => {
       showToast({ title: t('toast.report_csv_exported', { type }), message: t('toast.report_csv_desc'), type: 'success' });
     } catch (e) {
       console.error('CSV export error:', e);
-      showToast('CSV export failed', 'error');
+      showToast(t('reports.csv_export_failed'), 'error');
     }
   };
 
@@ -322,7 +322,7 @@ const ReportsHubScreenContent = () => {
         const ts = calendar === 'ethiopian' ? 'ethiopian' : 'device';
         await generateLowStockOrderPDF(allOrderItems, activeBusiness, langCode, action, ts);
         showToast({ title: t('toast.report_order_exported'), message: t('toast.report_order_desc'), type: 'success' });
-      } catch (e) { console.error(e); showToast('Failed to generate order PDF', 'error'); }
+      } catch (e) { console.error(e); showToast(t('reports.order_pdf_failed'), 'error'); }
       finally { setOrderExporting(false); setActiveReportType(null); }
       return;
     }
@@ -382,7 +382,7 @@ const ReportsHubScreenContent = () => {
       showToast({ title: t('toast.report_pdf_ready', { label }), message: t('toast.report_pdf_desc'), type: 'success' });
     } catch (e) {
       console.error('Failed to generate PDF:', e);
-      showToast('PDF generation failed', 'error');
+      showToast(t('reports.pdf_export_failed'), 'error');
     } finally {
       setLoading(false);
       setActiveReportType(null);
@@ -409,24 +409,14 @@ const ReportsHubScreenContent = () => {
             <Text style={[styles.headerTitle, { color: REP_GLASS.fg }]}>{t('reports.hub_title')}</Text>
           </View>
           <View style={styles.headerActions}>
-            <TouchableOpacity
-              onPress={() => router.push('/notifications')}
-              style={[styles.headerIconBtn, { borderColor: REP_GLASS.border, backgroundColor: REP_GLASS.bgCard }]}
-            >
-              <Bell size={24} color={REP_GLASS.fgSecondary} strokeWidth={2} />
-              {notifCount > 0 && (
-                <View style={[styles.notifBadge, { backgroundColor: '#FFFFFF', borderColor: REP_GLASS.bg }]}>
-                  <Text style={[styles.notifBadgeText, { color: REP_GLASS.bg }]}>{notifCount}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
+            <NotificationBell size={22} count={notifCount} />
             <TouchableOpacity
               onPress={openSidebar}
               activeOpacity={0.7}
               style={[styles.headerAvatarWrap, { borderColor: REP_GLASS.borderLight, backgroundColor: REP_GLASS.bgCard }]}
             >
               <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={styles.headerAvatar} />
-              <View style={[styles.onlineIndicator, { backgroundColor: '#30D158', borderColor: REP_GLASS.bg }]} />
+              <View style={[styles.onlineIndicator, { backgroundColor: REP_GLASS.fg, borderColor: REP_GLASS.bg }]} />
             </TouchableOpacity>
           </View>
         </View>
@@ -504,11 +494,11 @@ const ReportsHubScreenContent = () => {
 
         {/* Report Cards */}
         <View style={styles.reportList}>
-          <ReportCard title={t('reports.sales_perf_title')} description={t('reports.sales_perf_desc')} icon={TrendingUp} iconColor="#10B981" stats={`${stats.salesCount} Sales • ${formatNumber(stats.salesValue)} ETB`} onExport={() => handleExportTrigger('sales')} onExportCSV={() => handleCSVExport('sales')} colors={colors} t={t} repGlass={REP_GLASS} />
-          <ReportCard title={t('reports.stock_val_title')} description={t('reports.stock_val_desc')} icon={Package} iconColor="#3B82F6" stats={`${stats.itemsCount} Products • ${formatNumber(stats.itemsValue)} ETB Valuation`} onExport={() => handleExportTrigger('stock')} onExportCSV={() => handleCSVExport('stock')} colors={colors} t={t} repGlass={REP_GLASS} />
-          <ReportCard title={t('reports.expense_title')} description={t('reports.expense_desc')} icon={Wallet} iconColor="#EF4444" stats={`${stats.expensesCount} Expenses • ${formatNumber(stats.expensesValue)} ETB`} onExport={() => handleExportTrigger('expenses')} onExportCSV={() => handleCSVExport('expenses')} colors={colors} t={t} repGlass={REP_GLASS} />
-          <ReportCard title={t('reports.pl_title')} description={t('reports.pl_desc')} icon={Scale} iconColor="#8B5CF6" stats={`Net: ${formatNumber(stats.salesValue - stats.expensesValue)} ETB`} onExport={() => handleExportTrigger('pl')} onExportCSV={() => handleCSVExport('pl')} colors={colors} t={t} repGlass={REP_GLASS} />
-          <ReportCard title={t('reports.catalog_title')} description={t('reports.catalog_desc')} icon={ClipboardList} iconColor="#F59E0B" stats={`${stats.itemsCount} Total items`} onExport={() => handleExportTrigger('products')} onExportCSV={() => handleCSVExport('products')} colors={colors} t={t} repGlass={REP_GLASS} />
+          <ReportCard title={t('reports.sales_perf_title')} description={t('reports.sales_perf_desc')} icon={TrendingUp} iconColor="#10B981" stats={t('reports.sales_count_label', { count: String(stats.salesCount), value: formatNumber(stats.salesValue) })} onExport={() => handleExportTrigger('sales')} onExportCSV={() => handleCSVExport('sales')} colors={colors} t={t} repGlass={REP_GLASS} />
+          <ReportCard title={t('reports.stock_val_title')} description={t('reports.stock_val_desc')} icon={Package} iconColor="#3B82F6" stats={t('reports.stock_count_label', { count: String(stats.itemsCount), value: formatNumber(stats.itemsValue) })} onExport={() => handleExportTrigger('stock')} onExportCSV={() => handleCSVExport('stock')} colors={colors} t={t} repGlass={REP_GLASS} />
+          <ReportCard title={t('reports.expense_title')} description={t('reports.expense_desc')} icon={Wallet} iconColor="#EF4444" stats={t('reports.expense_count_label', { count: String(stats.expensesCount), value: formatNumber(stats.expensesValue) })} onExport={() => handleExportTrigger('expenses')} onExportCSV={() => handleCSVExport('expenses')} colors={colors} t={t} repGlass={REP_GLASS} />
+          <ReportCard title={t('reports.pl_title')} description={t('reports.pl_desc')} icon={Scale} iconColor="#8B5CF6" stats={t('reports.pl_net_label', { value: formatNumber(stats.salesValue - stats.expensesValue) })} onExport={() => handleExportTrigger('pl')} onExportCSV={() => handleCSVExport('pl')} colors={colors} t={t} repGlass={REP_GLASS} />
+          <ReportCard title={t('reports.catalog_title')} description={t('reports.catalog_desc')} icon={ClipboardList} iconColor="#F59E0B" stats={t('reports.catalog_count_label', { count: String(stats.itemsCount) })} onExport={() => handleExportTrigger('products')} onExportCSV={() => handleCSVExport('products')} colors={colors} t={t} repGlass={REP_GLASS} />
         </View>
       </ScrollView>
 
@@ -575,7 +565,7 @@ const ReportsHubScreenContent = () => {
                     <View style={{ flex: 1, marginLeft: 12 }}>
                       <Text style={[styles.orderItemName, { color: REP_GLASS.fg }]} numberOfLines={1}>{item.name}</Text>
                       <Text style={[styles.orderItemSub, { color: REP_GLASS.muted }]}>
-                        {item.isCustom ? item.companyName : (isOut ? t('common.out_of_stock') : `${item.totalBaseQuantity} ${item.baseUnit || 'pcs'} left`)}
+                        {item.isCustom ? item.companyName : (isOut ? t('common.out_of_stock') : t('reports.pcs_left', { qty: String(item.totalBaseQuantity), unit: t('form.' + (item.baseUnit || 'pieces').toLowerCase()) }))}
                       </Text>
                     </View>
                     <View style={styles.orderQtyStepper}>
@@ -687,13 +677,6 @@ const styles = StyleSheet.create({
     width: 48, height: 48, borderRadius: 24, borderWidth: 1,
     justifyContent: 'center', alignItems: 'center', position: 'relative',
   },
-  notifBadge: {
-    position: 'absolute', top: -2, right: -2,
-    minWidth: 18, height: 18, borderRadius: 9,
-    justifyContent: 'center', alignItems: 'center',
-    paddingHorizontal: 4, borderWidth: 2,
-  },
-  notifBadgeText: { fontSize: 9, fontFamily: Fonts.bold, marginTop: 1 },
   headerAvatarWrap: {
     width: 50, height: 50, borderRadius: 25, borderWidth: 1.5,
     justifyContent: 'center', alignItems: 'center', padding: 2, position: 'relative',

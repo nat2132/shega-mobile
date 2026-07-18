@@ -25,7 +25,8 @@ const InventoryLoss = () => {
       const totalLoss = quantity * unitPrice;
       
       const baseUnit = adj.baseUnit || 'pieces';
-      const unitLabel = t(`form.${String(baseUnit).toLowerCase()}`) || t('common.units');
+      const unitKey = `form.${String(baseUnit).toLowerCase()}`;
+      const unitLabel = (() => { const v = t(unitKey); return v !== unitKey ? v : t('common.units'); })();
       
       return {
         id: adj?.id ? String(adj.id) : Math.random().toString(),

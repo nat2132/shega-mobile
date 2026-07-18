@@ -1,5 +1,6 @@
 import { Fonts } from '@/constants/theme';
 import { getContactsGlass } from './glass-contacts';
+import { NotificationBell } from '@/components/NotificationBell';
 import { PROFILE_IMAGES, useSettings } from '@/context/SettingsContext';
 import { useSidebar } from '@/context/SidebarContext';
 import { Image ,
@@ -16,7 +17,6 @@ import { Image ,
 import { getContacts, getContactsByCategory } from '@/database/db';
 import * as Haptics from 'expo-haptics';
 import {
-  Bell,
   Edit2,
   MoreHorizontal,
   PhoneCall,
@@ -262,17 +262,7 @@ export default function ContactsList() {
         </View>
         <View style={styles.headerActions}>
           <TutorialButton tutorialId="contacts" screenName={t('screen.contacts')} />
-          <TouchableOpacity
-            onPress={() => router.push('/notifications')}
-            style={[styles.headerIconBtn, { backgroundColor: G.bgCard, borderColor: G.border }]}
-          >
-            <Bell size={24} color={G.fg} strokeWidth={2} />
-            {notifCount > 0 && (
-              <View style={[styles.notifBadge, { backgroundColor: G.fg, borderColor: G.bg }]}>
-                <AppText variant="micro" weight="bold" shrink={false} style={[styles.notifBadgeText, { color: G.bg }]} numberOfLines={1}>{notifCount}</AppText>
-              </View>
-            )}
-          </TouchableOpacity>
+          <NotificationBell size={22} count={notifCount} />
           <TouchableOpacity
             onPress={openSidebar}
             activeOpacity={0.7}
@@ -482,22 +472,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
-  },
-  notifBadge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-    borderWidth: 2,
-  },
-  notifBadgeText: {
-
-    fontFamily: Fonts.bold,
   },
   headerAvatarWrap: {
     width: 50,

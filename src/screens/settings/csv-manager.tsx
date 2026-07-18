@@ -412,7 +412,7 @@ const CSVManagerScreen = () => {
             {mapping?.mappings.map((m, idx) => (
               <View key={idx} style={[styles.mappingRow, { backgroundColor: G.bgCard, borderColor: G.border }]}>
                 <AppText variant="body-sm" weight="medium" style={{ color: G.fg }}>{m.csvColumn}</AppText>
-                <AppText variant="body-sm" weight="bold" style={{ color: colors.primary }}>â†’</AppText>
+                <AppText variant="body-sm" weight="bold" style={{ color: colors.primary }}>→</AppText>
                 <AppText variant="body-sm" weight="medium" style={{ color: G.fg }}>{m.dbField}</AppText>
               </View>
             ))}
