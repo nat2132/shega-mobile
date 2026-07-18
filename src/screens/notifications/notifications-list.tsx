@@ -64,7 +64,7 @@ import {
   resolveNotificationTitle,
   resolveNotificationMessage,
 } from '@/utils/notification-display';
-import { AppText, AppNumber} from '@/components/ui';
+import { AppText } from '@/components/ui';
 import { getNotifGlass } from './glass-notifications';
 import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
 import { notificationsTutorial } from '@/tutorials/definitions';
@@ -605,8 +605,8 @@ export const NotificationsListScreen: React.FC = () => {
             <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>
               {t('notif.sys_pulse')}
               {unreadCount > 0 && (
-                <AppText variant="display" weight="bold" shrink={false} style={[styles.headerCount, { color: colors.primary }]} numberOfLines={1}>
-                  {' '}(<AppNumber value={unreadCount} size="display" color={colors.primary} />)
+                <AppText variant="display" weight="bold" style={[styles.headerCount, { color: colors.primary }]}>
+                  {' '}({unreadCount > 99 ? '99+' : unreadCount})
                 </AppText>
               )}
             </AppText>

@@ -1160,6 +1160,7 @@ const createStyles = (G: any) => StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
+    overflow: 'visible',
     shadowColor: G.shadowColor,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: G.shadowOuter * 0.5,

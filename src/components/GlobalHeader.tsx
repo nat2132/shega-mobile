@@ -4,6 +4,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Image,
+  Text,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -16,7 +17,6 @@ import { useRouter } from 'expo-router';
 import { useSettings, PROFILE_IMAGES } from '@/context/SettingsContext';
 import { useSidebar } from '@/context/SidebarContext';
 import { useNotifications } from '@/hooks/useNotifications';
-import { AppText } from '@/components/ui';
 
 const GlobalHeader = () => {
   const insets = useSafeAreaInsets();
@@ -72,8 +72,16 @@ const GlobalHeader = () => {
             >
               <Bell size={18} color={colors.text} />
               {notifCount > 0 && (
-                <View style={[styles.badge, { backgroundColor: colors.error || '#FF3B30', borderColor: colors.background }]}>
-                  <AppText variant="micro" weight="bold" style={styles.badgeText}>{notifCount}</AppText>
+                <View
+                  style={[
+                    styles.badge,
+                    { backgroundColor: colors.error || '#FF3B30', borderColor: colors.background },
+                    notifCount > 9 && styles.badgeWide,
+                  ]}
+                >
+                  <Text style={styles.badgeText} numberOfLines={1}>
+                    {notifCount > 99 ? '99+' : notifCount}
+                  </Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -147,6 +155,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'visible',
   },
   badge: {
     position: 'absolute',
@@ -160,9 +169,17 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     paddingHorizontal: 4,
   },
+  badgeWide: {
+    minWidth: 26,
+    paddingHorizontal: 5,
+  },
   badgeText: {
     color: '#FFF',
-    lineHeight: 12,
+    fontSize: 10,
+    fontFamily: 'Inter-Bold',
+    fontWeight: '700',
+    lineHeight: 14,
+    textAlign: 'center',
   },
 });
 

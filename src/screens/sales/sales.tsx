@@ -41,7 +41,6 @@ import { useRouter } from "expo-router";
 import {
   Banknote,
   BarChart3,
-  Bell,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -91,6 +90,7 @@ import SalesRecordScreen from "./sales-record";
 import SearchScreen from "./search";
 import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
 import { salesHubTutorial, collectPaymentsTutorial } from '@/tutorials/definitions';
+import { NotificationBell } from '@/components/NotificationBell';
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const isDarkBg = (c: typeof LightTheme) => {
@@ -775,31 +775,7 @@ const SalesDashboard = () => {
 
             <View style={styles.headerActions}>
               <TutorialButton tutorialId="sales-hub" screenName={t('screen.sales_hub')} />
-              <View style={[styles.glassIconBtn, { backgroundColor: colors.card, borderColor: SALES_GLASS.border }]}>
-                <TouchableOpacity
-                  onPress={() => router.push("/notifications")}
-                  style={styles.glassIconBtnInner}
-                >
-                  <Bell size={22} color={SALES_GLASS.fg} />
-                </TouchableOpacity>
-                  {notifCount > 0 && (
-                  <View
-                    style={[
-                      styles.notifBadge,
-                      { backgroundColor: colors.card },
-                    ]}
-                  >
-                    <AppNumber
-                      value={notifCount}
-                      size="caption"
-                      weight="bold"
-                      color={colors.text}
-                      style={styles.notifBadgeText}
-                    />
-                  </View>
-                )}
-
-              </View>
+              <NotificationBell size={20} count={notifCount} />
 
               <View style={[styles.glassAvatarBox, { backgroundColor: colors.card, borderColor: SALES_GLASS.border }]}>
                 <TouchableOpacity onPress={openSidebar}>
@@ -3729,23 +3705,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     position: "relative",
   },
-  notifBadge: {
-    position: "absolute",
-    top: -6,
-    right: -6,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 4,
-    borderWidth: 2,
-    borderColor: "transparent",
-  },
-  notifBadgeText: {
-    fontFamily: Fonts.bold,
-    fontSize: 10,
-  },
   headerLabel: {
     fontFamily: Fonts.semibold,
     textTransform: "uppercase",
@@ -3754,24 +3713,6 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: Fonts.bold,
-  },
-  glassIconBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    position: "relative",
-    backgroundColor: SALES_GLASS.surfaceFill,
-    borderColor: SALES_GLASS.borderGlass,
-  },
-  glassIconBtnInner: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: "center",
-    alignItems: "center",
   },
   glassAvatarBox: {
     width: 48,

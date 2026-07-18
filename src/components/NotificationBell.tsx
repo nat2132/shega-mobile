@@ -1,11 +1,10 @@
 import React from 'react';
-import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, Text } from 'react-native';
 import { Bell } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useSettings } from '@/context/SettingsContext';
 import { useNotificationCenter } from '@/context/NotificationContext';
 import { Fonts } from '@/constants/theme';
-import { AppText, AppNumber } from '@/components/ui';
 import * as Haptics from 'expo-haptics';
 interface NotificationBellProps {
   size?: number;
@@ -48,14 +47,12 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
           style={[
             styles.badge,
             { backgroundColor: colors.error || '#FF3B30', borderColor: colors.background },
-            displayCount > 99 && styles.badgeWide,
+            displayCount > 9 && styles.badgeWide,
           ]}
         >
-          {displayCount > 99 ? (
-            <AppText variant="micro" weight="bold" shrink={false} style={[styles.badgeText, { color: '#FFF' }]} numberOfLines={1}>99+</AppText>
-          ) : (
-            <AppNumber value={displayCount} size="micro" style={[styles.badgeText, { color: '#FFF' }]} />
-          )}
+          <Text style={styles.badgeText} numberOfLines={1}>
+            {displayCount > 99 ? '99+' : displayCount}
+          </Text>
         </View>
       )}
     </TouchableOpacity>
@@ -65,6 +62,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
 const styles = StyleSheet.create({
   container: {
     padding: 8,
+    overflow: 'visible',
   },
   badge: {
     position: 'absolute',
@@ -83,8 +81,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
   },
   badgeText: {
-
+    color: '#FFF',
+    fontSize: 10,
     fontFamily: Fonts.bold,
-    lineHeight: 12,
+    fontWeight: '700',
+    lineHeight: 14,
+    textAlign: 'center',
   },
 });
