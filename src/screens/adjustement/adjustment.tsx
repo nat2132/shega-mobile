@@ -185,12 +185,10 @@ const AdjustmentScreen = () => {
             <TutorialButton tutorialId="adjustment" screenName={t('screen.adjustment')} />
             <NotificationBell size={22} count={notifCount} />
 
-            <View style={[styles.headerAvatarBox, { borderColor: G.border, backgroundColor: G.bgCard, marginLeft: 10 }]}>
-              <TouchableOpacity onPress={openSidebar}>
-                <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={styles.headerAvatar} />
-              </TouchableOpacity>
+            <TouchableOpacity onPress={openSidebar} activeOpacity={0.7} style={[styles.headerAvatarBox, { borderColor: G.border, backgroundColor: G.bgCard, marginLeft: 10 }]}>
+              <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={styles.headerAvatar} />
               <View style={[styles.onlineIndicator, { backgroundColor: G.fg, borderColor: G.bg }]} />
-            </View>
+            </TouchableOpacity>
           </View>
         </View>
         </TutorialTarget>

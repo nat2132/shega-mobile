@@ -1,4 +1,5 @@
 import { CustomDatePicker } from '@/components/CustomDatePicker';
+import { formatDate } from '@/utils/date-utils';
 import { DraftSection } from '@/components/DraftSection';
 import { AppNumber, AppText } from '@/components/ui';
 import { Fonts } from '@/constants/theme';
@@ -494,7 +495,7 @@ const RestockFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?:
                   style={[styles.catItem, { borderColor: G.border }]}
                   onPress={() => { setSelectedSupplier(sup); setShowSupplierModal(false); Haptics.selectionAsync(); }}
                 >
-                  <AppText variant="heading" shrink={false} style={styles.catIcon}>ðŸšš</AppText>
+                  <Truck size={20} color={colors.primary} />
                   <View style={{ marginLeft: 12, flex: 1 }}>
                     <AppText variant="body" weight="bold" style={[styles.catName, { color: G.fg }]} numberOfLines={1}>{sup.fullName}</AppText>
                     {sup.phone && <AppText variant="caption" weight="medium" style={{ color: G.fgSecondary }} numberOfLines={1}>{sup.phone}</AppText>}
@@ -532,7 +533,7 @@ const RestockFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?:
 };
 
 const AddItemFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?: () => void }) => {
-  const { colors, t } = useSettings();
+  const { colors, t, calendarType, language } = useSettings();
   const G = getInventoryGlass(colors);
   const styles = useMemo(() => createStyles(G), [G]);
   const tutorial = useTutorial({ tutorial: inventoryFormTutorial });
@@ -579,6 +580,8 @@ const AddItemFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?:
 
   const [recordDate, setRecordDate] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
+
+  const [showExpiryDatePicker, setShowExpiryDatePicker] = useState(false);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   
@@ -1068,27 +1071,27 @@ const loadCategories = async () => {
                 <View style={{ flex: 1 }}>
                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 2 }]} numberOfLines={1}>{t('common.record_date')}</AppText>
                   <AppText variant="body" weight="bold" style={{ color: recordDate ? G.fg : G.fgSecondary }} numberOfLines={1}>
-                    {recordDate || t('common.today')}
+                    {recordDate ? formatDate(new Date(recordDate), calendarType, language) : t('common.today')}
                   </AppText>
                 </View>
                 <ChevronDown size={18} color={G.fgSecondary} />
               </TouchableOpacity>
               
               <TutorialTarget id="if-expiry">
-              <View style={styles.inputNode}>
-                <View style={styles.nodeHeader}>
-                   <Calendar size={14} color={G.fgSecondary} />
-                   <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('form.expiration_archive')}</AppText>
+              <TouchableOpacity
+                style={[styles.inputNode, { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: errors.expiryDate ? colors.error : G.border, marginBottom: 15 }]}
+                onPress={() => setShowExpiryDatePicker(true)}
+              >
+                <Calendar size={18} color={colors.primary} style={{ marginRight: 10 }} />
+                <View style={{ flex: 1 }}>
+                  <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 2 }]} numberOfLines={1}>{t('form.expiration_archive')}</AppText>
+                  <AppText variant="body" weight="bold" style={{ color: expiryDate ? G.fg : G.fgSecondary }} numberOfLines={1}>
+                    {expiryDate ? formatDate(new Date(expiryDate), calendarType, language) : t('form.select_date')}
+                  </AppText>
                 </View>
-                <TextInput 
-                  style={[styles.input, { color: G.fg, borderColor: errors.expiryDate ? colors.error : G.border }]} 
-                  placeholder={t('inv.date_format')} 
-                  placeholderTextColor={G.fgSecondary}
-                  value={expiryDate}
-                  onChangeText={(val) => { setExpiryDate(val); if (errors.expiryDate) setErrors(prev => ({ ...prev, expiryDate: '' })); }}
-                />
-                 {errors.expiryDate && <AppText variant="caption" weight="medium" style={[styles.errorText, { color: colors.error }]} numberOfLines={2}>{errors.expiryDate}</AppText>}
-              </View>
+                <ChevronDown size={18} color={G.fgSecondary} />
+              </TouchableOpacity>
+              {errors.expiryDate && <AppText variant="caption" weight="medium" style={[styles.errorText, { color: colors.error }]} numberOfLines={2}>{errors.expiryDate}</AppText>}
               </TutorialTarget>
 
               <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 12 }]} numberOfLines={1}>{t('form.quality_classification')}</AppText>
@@ -1104,7 +1107,7 @@ const loadCategories = async () => {
                  ))}
               </View>
 
-              <TutorialTarget id="if-supplier">
+              <TutorialTarget id="if-supplier" style={{ gap: 12 }}>
               {/* Supplier Selection */}
               <TouchableOpacity
                 style={[styles.intelligenceBlock, { backgroundColor: G.bgCard, borderColor: G.border, flexDirection: 'row', alignItems: 'center' }]}
@@ -1193,28 +1196,16 @@ const loadCategories = async () => {
                 </View>
               </View>
 
-              {creditToggle === 'Yes' && (
-                <Animated.View entering={FadeInDown} style={styles.row}>
-                   <View style={{ flex: 1, marginRight: 15 }}>
-                      <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('common.phone')}</AppText>
-                      <TextInput 
-                        style={[styles.input, { color: G.fg, borderColor: errors.supplierPhone ? colors.error : G.border }]} 
-                        value={supplierPhone}
-                        onChangeText={(val) => { setSupplierPhone(val); if (errors.supplierPhone) setErrors(prev => ({ ...prev, supplierPhone: '' })); }}
-                        keyboardType="phone-pad"
-                      />
-                      {errors.supplierPhone && <AppText variant="caption" weight="medium" style={[styles.errorText, { color: colors.error }]} numberOfLines={2}>{errors.supplierPhone}</AppText>}
-                   </View>
-                   <View style={{ flex: 1 }}>
-                      <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('common.account')}</AppText>
-                      <TextInput 
-                        style={[styles.input, { color: G.fg, borderColor: errors.supplierAccount ? colors.error : G.border }]} 
-                        value={supplierAccount}
-                        onChangeText={(val) => { setSupplierAccount(val); if (errors.supplierAccount) setErrors(prev => ({ ...prev, supplierAccount: '' })); }}
-                        keyboardType="numeric"
-                      />
-                      {errors.supplierAccount && <AppText variant="caption" weight="medium" style={[styles.errorText, { color: colors.error }]} numberOfLines={2}>{errors.supplierAccount}</AppText>}
-                   </View>
+              {creditToggle === 'Yes' && selectedSupplier && (
+                <Animated.View entering={FadeInDown} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 5 }}>
+                  <Phone size={14} color={G.fgSecondary} />
+                  <AppText variant="body-sm" weight="medium" style={{ color: G.fgSecondary, flex: 1 }} numberOfLines={1}>
+                    {supplierPhone}
+                  </AppText>
+                  <CreditCard size={14} color={G.fgSecondary} />
+                  <AppText variant="body-sm" weight="medium" style={{ color: G.fgSecondary }} numberOfLines={1}>
+                    {supplierAccount}
+                  </AppText>
                 </Animated.View>
               )}
             </TutorialTarget>
@@ -1249,6 +1240,13 @@ const loadCategories = async () => {
         onClose={() => setShowDatePicker(false)}
         onSelectDate={(date) => { setRecordDate(date); setShowDatePicker(false); }}
         initialDate={recordDate}
+      />
+
+      <CustomDatePicker
+        visible={showExpiryDatePicker}
+        onClose={() => setShowExpiryDatePicker(false)}
+        onSelectDate={(date) => { setExpiryDate(date); setShowExpiryDatePicker(false); if (errors.expiryDate) setErrors(prev => ({ ...prev, expiryDate: '' })); }}
+        initialDate={expiryDate}
       />
 
       <Modal visible={showCategoryModal} transparent animationType="slide">
@@ -1371,6 +1369,8 @@ const loadCategories = async () => {
                       const newSup = { id: Number(id), fullName: newSupplierName.trim(), phone: newSupplierPhone.trim(), accountNumber: newSupplierAccount.trim(), category: 'supplier' };
                       setSuppliers([...suppliers, newSup]);
                       setSelectedSupplier(newSup);
+                      setSupplierPhone(newSupplierPhone.trim());
+                      setSupplierAccount(newSupplierAccount.trim());
                       setShowSupplierModal(false);
                       setShowNewSupplierForm(false);
                       setNewSupplierName('');
@@ -1396,9 +1396,9 @@ const loadCategories = async () => {
                 <TouchableOpacity
                   key={sup.id}
                   style={[styles.catItem, { borderColor: G.border }]}
-                  onPress={() => { setSelectedSupplier(sup); setShowSupplierModal(false); Haptics.selectionAsync(); }}
+                  onPress={() => { setSelectedSupplier(sup); setSupplierPhone(sup.phone || ''); setSupplierAccount(sup.accountNumber || ''); setShowSupplierModal(false); Haptics.selectionAsync(); }}
                 >
-                    <AppText variant="heading" shrink={false} style={styles.catIcon}>ðŸšš</AppText>
+                  <Truck size={20} color={colors.primary} />
                     <View style={{ marginLeft: 12, flex: 1 }}>
                       <AppText variant="body" weight="bold" style={[styles.catName, { color: G.fg }]} numberOfLines={1}>{sup.fullName}</AppText>
                       {sup.phone && <AppText variant="caption" weight="medium" style={{ color: G.fgSecondary }} numberOfLines={1}>{sup.phone}</AppText>}

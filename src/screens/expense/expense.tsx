@@ -219,12 +219,10 @@ const PointerLabel = (items: any) => {
         <TutorialTarget id="exp-header">
         <View style={styles.topBar}>
           <View style={{ flex: 1 }}>
-            <View style={[styles.avatarBox, { borderColor: G.border, backgroundColor: G.bgCard }]}>
-              <TouchableOpacity onPress={openSidebar}>
-                <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={styles.avatar} />
-              </TouchableOpacity>
+            <TouchableOpacity onPress={openSidebar} activeOpacity={0.7} style={[styles.avatarBox, { borderColor: G.border, backgroundColor: G.bgCard }]}>
+              <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={styles.avatar} />
               <View style={[styles.onlineIndicator, { backgroundColor: G.fg, borderColor: G.bg }]} />
-            </View>
+            </TouchableOpacity>
           </View>
           <View style={styles.headerActions}>
             <TutorialButton tutorialId="expense" screenName={t('screen.expense')} />

@@ -274,12 +274,10 @@ const SummaryScreen = () => {
         <TutorialTarget id="sum-header">
         <View style={styles.topBar}>
           <View style={{ flex: 1 }}>
-            <View style={[styles.headerAvatarBox, { borderColor: G.border, backgroundColor: G.bgCard }]}>
-              <TouchableOpacity onPress={openSidebar}>
-                <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={styles.headerAvatar} />
-              </TouchableOpacity>
+            <TouchableOpacity onPress={openSidebar} activeOpacity={0.7} style={[styles.headerAvatarBox, { borderColor: G.border, backgroundColor: G.bgCard }]}>
+              <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={styles.headerAvatar} />
               <View style={[styles.onlineIndicator, { backgroundColor: G.fg, borderColor: G.bg }]} />
-            </View>
+            </TouchableOpacity>
           </View>
           
           <View style={styles.headerActions}>

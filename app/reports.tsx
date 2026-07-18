@@ -299,8 +299,8 @@ const ReportsHubScreenContent = () => {
         `);
         await exportProductCatalogCSV(items as any[]);
       }
-      const type = reportType.charAt(0).toUpperCase() + reportType.slice(1);
-      showToast({ title: t('toast.report_csv_exported', { type }), message: t('toast.report_csv_desc'), type: 'success' });
+      const csvLabel = reportType === 'pl' ? 'P&L' : reportType.charAt(0).toUpperCase() + reportType.slice(1);
+      showToast({ title: t('toast.report_csv_exported', { type: csvLabel }), message: t('toast.report_csv_desc'), type: 'success' });
     } catch (e) {
       console.error('CSV export error:', e);
       showToast(t('reports.csv_export_failed'), 'error');
@@ -378,8 +378,8 @@ const ReportsHubScreenContent = () => {
           label, `${start} ~ ${end}`, activeBusiness, langCode, action, ts
         );
       }
-      const label = activeReportType ? activeReportType.charAt(0).toUpperCase() + activeReportType.slice(1) : 'Report';
-      showToast({ title: t('toast.report_pdf_ready', { label }), message: t('toast.report_pdf_desc'), type: 'success' });
+      const reportLabel = activeReportType ? (activeReportType === 'pl' ? 'P&L' : activeReportType.charAt(0).toUpperCase() + activeReportType.slice(1)) : 'Report';
+      showToast({ title: t('toast.report_pdf_ready', { label: reportLabel }), message: t('toast.report_pdf_desc'), type: 'success' });
     } catch (e) {
       console.error('Failed to generate PDF:', e);
       showToast(t('reports.pdf_export_failed'), 'error');
@@ -721,7 +721,7 @@ const styles = StyleSheet.create({
   orderTriggerSub: { fontSize: 12, fontFamily: Fonts.medium },
   // Sheet
   sheetOverlay: { flex: 1, justifyContent: 'flex-end' },
-  sheetBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.65)' },
+  sheetBackdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.65)' },
   sheetContainer: { borderTopLeftRadius: 30, borderTopRightRadius: 30, maxHeight: '85%', overflow: 'hidden' },
   sheetHandleRow: { alignItems: 'center', paddingTop: 14, paddingBottom: 4 },
   sheetHandle: { width: 40, height: 4, borderRadius: 2 },
@@ -753,7 +753,7 @@ const styles = StyleSheet.create({
   exportBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 11, paddingVertical: 8, borderRadius: 12 },
   exportBtnText: { fontSize: 11, fontFamily: Fonts.bold },
 
-  loadingOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', zIndex: 9999 },
+  loadingOverlay: { ...StyleSheet.absoluteFill, justifyContent: 'center', alignItems: 'center', zIndex: 9999 },
   loadingBox: { padding: 30, borderRadius: 24, alignItems: 'center', gap: 15, elevation: 5 },
   loadingText: { fontSize: 14, fontFamily: Fonts.bold },
 });

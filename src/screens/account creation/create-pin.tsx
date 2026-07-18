@@ -354,7 +354,7 @@ const CreatePinScreen: React.FC<CreatePinScreenProps> = ({ onConfirm, onSkip }) 
                 } else {
                   // Confirming - check match
                   if (pin !== confirmPin) {
-                    setPinError('PINs do not match. Please try again.');
+                    setPinError(t('account.pin_mismatch'));
                     shake('confirm');
                     setConfirmPin('');
                     setPinPhase('create');
@@ -367,7 +367,7 @@ const CreatePinScreen: React.FC<CreatePinScreenProps> = ({ onConfirm, onSkip }) 
                 }
               } catch {
                 shake('create');
-                setPinError('Encryption failure. Please try again.');
+                setPinError(t('account.pin_encryption_failure'));
                 setPinLocal('');
                 setConfirmPin('');
                 setPinPhase('create');
@@ -375,7 +375,7 @@ const CreatePinScreen: React.FC<CreatePinScreenProps> = ({ onConfirm, onSkip }) 
             }}
           >
             <AppText style={[styles.confirmBtnText, { color: (pinPhase === 'create' ? pin.length : confirmPin.length) === pinLength ? G.bg : G.muted }]} variant="body" weight="bold" numberOfLines={1}>
-              {pinPhase === 'create' ? 'CONFIRM PROTOCOL' : 'VERIFY PIN'}
+              {pinPhase === 'create' ? t('account.confirm_protocol') : t('account.verify_pin')}
             </AppText>
             {(pinPhase === 'create' ? pin.length : confirmPin.length) === pinLength && (
                <ChevronRight size={18} color={G.bg} />

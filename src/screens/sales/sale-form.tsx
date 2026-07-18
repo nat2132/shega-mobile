@@ -35,6 +35,7 @@ import { useDialog } from "@/context/DialogContext";
 import { playNice, playBad } from "@/services/soundService";
 import { Fonts, LightTheme } from "@/constants/theme";
 import { CustomDatePicker } from "@/components/CustomDatePicker";
+import { formatDate } from '@/utils/date-utils';
 import { AppText, AppNumber } from "@/components/ui";
 import { DraftSection } from '@/components/DraftSection';
 import { Draft } from '@/services/draftService';
@@ -54,7 +55,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
   onFinish,
   onBack,
 }) => {
-  const { colors, t, theme } = useSettings();
+  const { colors, t, theme, calendarType, language } = useSettings();
   const SALES_GLASS = useMemo(() => getSalesGlass(colors), [colors]);
   const tutorial = useTutorial({ tutorial: saleFormTutorial });
   const dialog = useDialog();
@@ -422,7 +423,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                   }}
                   numberOfLines={1}
                 >
-                  {recordDate || t("common.today") || "Today (Default)"}
+                  {recordDate ? formatDate(new Date(recordDate), calendarType, language) : t("common.today") || "Today (Default)"}
                 </AppText>
               </View>
             </TouchableOpacity>

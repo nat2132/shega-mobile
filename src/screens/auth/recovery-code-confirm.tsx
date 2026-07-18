@@ -20,7 +20,7 @@ interface RecoveryCodeConfirmScreenProps {
 }
 
 const RecoveryCodeConfirmScreen: React.FC<RecoveryCodeConfirmScreenProps> = ({ onConfirm }) => {
-  const { setRecoveryCodeExists, colors } = useSettings();
+  const { setRecoveryCodeExists, colors, t } = useSettings();
   const G = getAuthGlass(colors);
   const [recoveryCode, setRecoveryCode] = useState('');
   const [copied, setCopied] = useState(false);
@@ -77,7 +77,7 @@ const RecoveryCodeConfirmScreen: React.FC<RecoveryCodeConfirmScreenProps> = ({ o
           </View>
           {copied && (
             <AppText variant="caption" weight="bold" style={[styles.copiedText, { color: G.fgSecondary }]} numberOfLines={1}>
-              Copied to clipboard!
+              {t('auth.copied_to_clipboard')}
             </AppText>
           )}
         </Animated.View>
@@ -85,7 +85,7 @@ const RecoveryCodeConfirmScreen: React.FC<RecoveryCodeConfirmScreenProps> = ({ o
         <Animated.View entering={FadeInDown.delay(600).duration(800)} style={[styles.warningNode, { backgroundColor: G.bgCard }]}>
           <ShieldCheck size={16} color={G.fgSecondary} />
           <AppText variant="body-sm" weight="semibold" style={[styles.warningText, { color: G.fgSecondary }]} numberOfLines={3}>
-            This code will only be shown once. Write it down or save it securely before proceeding.
+            {t('auth.recovery_warning')}
           </AppText>
         </Animated.View>
 
@@ -105,7 +105,7 @@ const RecoveryCodeConfirmScreen: React.FC<RecoveryCodeConfirmScreenProps> = ({ o
               weight="bold"
               numberOfLines={1}
             >
-              PROCEED TO TERMINAL
+              {t('auth.proceed_to_terminal')}
             </AppText>
             {confirmed && <ChevronRight size={20} color={G.bg} />}
           </TouchableOpacity>
@@ -119,7 +119,7 @@ const RecoveryCodeConfirmScreen: React.FC<RecoveryCodeConfirmScreenProps> = ({ o
               {confirmed && <View style={[styles.checkInner, { backgroundColor: G.bg }]} />}
             </View>
             <AppText variant="body-sm" weight="semibold" style={[styles.checkLabel, { color: G.fgSecondary }]} numberOfLines={2}>
-              I have saved my recovery code securely
+              {t('auth.saved_recovery')}
             </AppText>
           </TouchableOpacity>
         </Animated.View>

@@ -648,7 +648,7 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => 
                       style={[styles.nodeInput, { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }]}
                     >
                       <AppText variant="body-sm" weight="bold" style={{ color: editForm.expiryDate ? G.fg : G.fgSecondary }} numberOfLines={1}>
-                        {editForm.expiryDate ? editForm.expiryDate : t('inv.date_format_iso')}
+                        {editForm.expiryDate ? formatDate(new Date(editForm.expiryDate), calendarType, language) : t('inv.date_format_iso')}
                       </AppText>
                       <Calendar size={16} color={G.fgSecondary} />
                     </TouchableOpacity>

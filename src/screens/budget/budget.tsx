@@ -183,12 +183,10 @@ const BudgetOverview = () => {
       <TutorialScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
         <TutorialTarget id="bud-header">
         <View style={s.topBar}>
-          <View style={[s.avatarBox, { borderColor: G.border }]}>
-            <TouchableOpacity onPress={openSidebar}>
-              <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={s.avatar} />
-            </TouchableOpacity>
+          <TouchableOpacity onPress={openSidebar} activeOpacity={0.7} style={[s.avatarBox, { borderColor: G.border }]}>
+            <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={s.avatar} />
             <View style={[s.onlineIndicator, { backgroundColor: G.fg, borderColor: G.bg }]} />
-          </View>
+          </TouchableOpacity>
           <AppText variant="heading" weight="bold">{t("budget.title")}</AppText>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <TutorialButton tutorialId="budget" screenName={t('screen.budget')} />
