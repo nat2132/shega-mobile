@@ -893,13 +893,12 @@ SparklineChart.displayName = 'SparklineChart';
 
       <Modal visible={showSearch} transparent animationType="slide" onRequestClose={() => setShowSearch(false)}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={{ flex: 1 }}
         >
-          <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowSearch(false)}>
-            <View style={styles.modalBackdrop} />
-            <TouchableOpacity activeOpacity={1} onPress={() => {}}>
-              <View style={[styles.bottomSheetContainer, { height: Dimensions.get('window').height * 0.90, backgroundColor: colors.background }]}>
+          <View style={styles.modalOverlay}>
+            <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowSearch(false)} />
+            <View style={[styles.bottomSheetContainer, { flex: 1, maxHeight: Dimensions.get('window').height * 0.90, backgroundColor: colors.background }]}>
                 <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
                 <SearchScreen 
                    onSelectItem={(item: any) => {
@@ -919,16 +918,18 @@ SparklineChart.displayName = 'SparklineChart';
                    }} 
                 />
               </View>
-            </TouchableOpacity>
-          </TouchableOpacity>
+            </View>
         </KeyboardAvoidingView>
       </Modal>
 
       <Modal visible={showPending} transparent animationType="slide" onRequestClose={() => setShowPending(false)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowPending(false)}>
-          <View style={styles.modalBackdrop} />
-          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
-            <View style={[styles.bottomSheetContainer, { height: Dimensions.get('window').height * 0.90, backgroundColor: colors.background }]}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.modalOverlay}>
+            <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowPending(false)} />
+            <View style={[styles.bottomSheetContainer, { flex: 1, maxHeight: Dimensions.get('window').height * 0.90, backgroundColor: colors.background }]}>
               <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
               <PendingSales 
                  items={pendingSales}
@@ -948,19 +949,18 @@ SparklineChart.displayName = 'SparklineChart';
                  }}
               />
             </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal visible={showSaleFormFlow} transparent animationType="slide" onRequestClose={() => setShowSaleFormFlow(false)}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={{ flex: 1 }}
         >
-          <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowSaleFormFlow(false)}>
-            <View style={styles.modalBackdrop} />
-            <TouchableOpacity activeOpacity={1} onPress={() => {}}>
-              <View style={[styles.bottomSheetContainer, { height: Dimensions.get('window').height * 0.90, backgroundColor: colors.background }]}>
+          <View style={styles.modalOverlay}>
+            <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowSaleFormFlow(false)} />
+            <View style={[styles.bottomSheetContainer, { flex: 1, maxHeight: Dimensions.get('window').height * 0.90, backgroundColor: colors.background }]}>
                 <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
               <GlobalCheckout 
                  cart={pendingSales}
@@ -1028,20 +1028,18 @@ SparklineChart.displayName = 'SparklineChart';
                  }}
               />
             </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </KeyboardAvoidingView>
-    </Modal>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       <Modal visible={showAddAsset} transparent animationType="slide" onRequestClose={() => setShowAddAsset(false)}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={{ flex: 1 }}
         >
-          <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowAddAsset(false)}>
-            <View style={styles.modalBackdrop} />
-            <TouchableOpacity activeOpacity={1} onPress={() => {}}>
-              <View style={[styles.bottomSheetContainer, { height: Dimensions.get('window').height * 0.90, backgroundColor: colors.background }]}>
+          <View style={styles.modalOverlay}>
+            <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowAddAsset(false)} />
+            <View style={[styles.bottomSheetContainer, { flex: 1, maxHeight: Dimensions.get('window').height * 0.90, backgroundColor: colors.background }]}>
                 <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
                 <AddAssetFlow 
                   onSuccess={() => {
@@ -1051,10 +1049,9 @@ SparklineChart.displayName = 'SparklineChart';
                   onClose={() => setShowAddAsset(false)}
                 />
               </View>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </KeyboardAvoidingView>
-      </Modal>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
 
       <Modal visible={!!lastSaleData} transparent animationType="fade">
         <SaleSuccessModal 
