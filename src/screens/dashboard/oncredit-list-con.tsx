@@ -516,7 +516,7 @@ const createDetailStyles = (G: any) => StyleSheet.create({
 
 const createModalStyles = (G: any) => StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
+  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.5)' },
   sheet: { borderTopLeftRadius: 30, borderTopRightRadius: 30, paddingHorizontal: 25, paddingBottom: 40, maxHeight: '80%' },
   handleRow: { alignItems: 'center', paddingTop: 14, paddingBottom: 8 },
   handle: { width: 40, height: 4, borderRadius: 2 },

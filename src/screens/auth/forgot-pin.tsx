@@ -24,7 +24,7 @@ interface ForgotPinScreenProps {
 }
 
 const ForgotPinScreen: React.FC<ForgotPinScreenProps> = ({ onVerified, onBack }) => {
-  const { colors } = useSettings();
+  const { colors, t } = useSettings();
   const G = getAuthGlass(colors);
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);

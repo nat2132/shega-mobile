@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
     marginVertical: 6, // Managed spacing to prevent background bleed
   },
   deleteBackground: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: '#FF3B30',
     borderRadius: 16,
     justifyContent: 'center',

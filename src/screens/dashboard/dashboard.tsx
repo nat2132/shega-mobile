@@ -1601,7 +1601,7 @@ const createStyles = (G: any) => StyleSheet.create({
     margin: 0,
   },
   modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.6)',
   },
   bottomSheetContainer: {

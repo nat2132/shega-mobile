@@ -534,7 +534,7 @@ const detailStyles = StyleSheet.create({
   saveBtnText: { fontSize: 16, fontFamily: Fonts.bold },
   // drill-in modal
   modalOverlay: { flex: 1, justifyContent: 'flex-end' },
-  modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
+  modalBackdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.5)' },
   sheet: { maxHeight: '90%', borderTopLeftRadius: 32, borderTopRightRadius: 32 },
   handleRow: { alignItems: 'center', paddingTop: 14, paddingBottom: 6 },
   handle: { width: 40, height: 4, borderRadius: 2 },

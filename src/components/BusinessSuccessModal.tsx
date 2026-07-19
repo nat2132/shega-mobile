@@ -207,7 +207,7 @@ const BusinessSuccessModal: React.FC<BusinessSuccessModalProps> = ({ details, on
 
 const styles = StyleSheet.create({
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.4)',

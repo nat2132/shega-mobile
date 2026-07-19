@@ -635,7 +635,7 @@ const styles = StyleSheet.create({
   optionBtn: { width: '100%', paddingVertical: 18, flexDirection: 'row', alignItems: 'center' },
   optionText: { fontSize: 16, fontFamily: Fonts.bold },
   modalOverlay: { flex: 1, justifyContent: 'flex-end' },
-  modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.65)' },
+  modalBackdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.65)' },
   bottomSheetContainer: { borderTopLeftRadius: 30, borderTopRightRadius: 30, paddingBottom: 40 },
   modalHeader: {
     alignItems: 'center',

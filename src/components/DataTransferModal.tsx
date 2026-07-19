@@ -277,7 +277,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
       const dest = `${FileSystem.cacheDirectory}${filename}`;
       await FileSystem.writeAsStringAsync(dest, csv, { encoding: FileSystem.EncodingType.UTF8 });
       await Sharing.shareAsync(dest, { mimeType: 'text/csv', dialogTitle: `Export ${spec.name}` });
-      showToast({ title: t('dt.export_complete'), message: t('dt.records_exported', { count: data.length }), type: 'success' });
+      showToast({ title: t('dt.export_complete'), message: t('dt.records_exported', { count: String(data.length) }), type: 'success' });
       handleClose();
       onSuccess('export');
     } catch (e) {
@@ -388,7 +388,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
       const result = await executeImport(transformed, dataType!);
       setImportResult(result);
       setStep(5);
-      showToast({ title: t('data.import_complete'), message: t('dt.records_imported', { count: result.imported }), type: 'success' });
+      showToast({ title: t('data.import_complete'), message: t('dt.records_imported', { count: String(result.imported) }), type: 'success' });
     } catch (e: any) {
       showToast(e.message || t('data.import_failed'), 'error');
     } finally {
@@ -807,7 +807,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
                         <AppText key={idx} variant="caption" weight="medium" style={{ color: colors.error, marginBottom: 4 }}>{t('dt.row_label')} {err.row}: {err.message}</AppText>
                       ))}
                       {validationErrors.length > 20 && (
-                        <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary, marginTop: 4 }}>{t('dt.and_more_errors', { count: validationErrors.length - 20 })}</AppText>
+                        <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary, marginTop: 4 }}>{t('dt.and_more_errors', { count: String(validationErrors.length - 20) })}</AppText>
                       )}
                     </ScrollView>
                   </View>
@@ -819,7 +819,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
                   disabled={loading || validationErrors.length > 0 || mapping.missingRequired.length > 0}
                 >
                   {loading ? <ActivityIndicator color="#FFF" /> : (
-                    <AppText variant="body" weight="bold" style={{ color: '#FFF' }}>{t('dt.import_rows', { count: csvData.length })}</AppText>
+                    <AppText variant="body" weight="bold" style={{ color: '#FFF' }}>{t('dt.import_rows', { count: String(csvData.length) })}</AppText>
                   )}
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => setStep(3)} style={s.backBtn}>
@@ -881,7 +881,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
 
 const s = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
+  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.5)' },
   sheet: { borderTopLeftRadius: 32, borderTopRightRadius: 32, maxHeight: '92%', overflow: 'hidden' },
   handleRow: { alignItems: 'center', paddingTop: 16, paddingBottom: 8 },
   handle: { width: 44, height: 5, borderRadius: 3 },

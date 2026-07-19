@@ -141,6 +141,18 @@ const migrateItemsTable = (database: SQLite.SQLiteDatabase) => {
     database.execSync(`ALTER TABLE sales ADD COLUMN batchId TEXT;`);
     console.log('Successfully migrated sales table: Added batchId');
   } catch {}
+
+  // Migration for item_packs table: initialQuantity and currentQuantity
+  try {
+    database.execSync(`ALTER TABLE item_packs ADD COLUMN initialQuantity REAL;`);
+    database.execSync(`ALTER TABLE item_packs ADD COLUMN currentQuantity REAL;`);
+    database.execSync(`ALTER TABLE item_packs ADD COLUMN status TEXT DEFAULT 'Not Opened';`);
+    console.log('Successfully migrated item_packs table: Added initialQuantity, currentQuantity, and status');
+  } catch {}
+  try {
+    database.execSync(`UPDATE item_packs SET initialQuantity = quantity, currentQuantity = quantity WHERE initialQuantity IS NULL;`);
+    console.log('Successfully migrated item_packs values from quantity to initialQuantity/currentQuantity');
+  } catch {}
 };
 
 export const initDB = () => {

@@ -524,7 +524,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   particleLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   particle: {
     position: 'absolute',
@@ -538,7 +538,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   ringLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -546,7 +546,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
   },
   contentLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 40,
@@ -633,7 +633,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   langOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',

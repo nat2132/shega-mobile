@@ -738,7 +738,7 @@ const s = StyleSheet.create({
   fabRow: { position: "absolute", bottom: 100, alignSelf: "center" },
   fab: { width: 60, height: 60, borderRadius: 30, justifyContent: "center", alignItems: "center", elevation: 2, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4 },
   modalOverlay: { flex: 1, justifyContent: "flex-end" },
-  modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)" },
+  modalBackdrop: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.4)" },
   detailSheet: { borderTopLeftRadius: 30, borderTopRightRadius: 30, height: Dimensions.get("window").height * 0.90, paddingBottom: 40 },
   createSheet: { borderTopLeftRadius: 30, borderTopRightRadius: 30, height: Dimensions.get("window").height * 0.92, paddingBottom: 40 },
   modalHeader: { alignItems: "center", paddingTop: 15, paddingBottom: 10 },

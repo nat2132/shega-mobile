@@ -265,7 +265,7 @@ const WarehouseManagerModal: React.FC<WarehouseManagerProps> = ({ visible, onClo
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end', paddingTop: 20 },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
+  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.5)' },
   sheet: { borderTopLeftRadius: 30, borderTopRightRadius: 30, paddingBottom: 40, height: Dimensions.get('window').height * 0.85, overflow: 'hidden', marginTop: 20 },
   headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginBottom: 15 },
   title: { flex: 1, fontSize: 20, fontFamily: Fonts.bold },
