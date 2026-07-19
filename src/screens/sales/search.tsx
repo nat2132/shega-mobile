@@ -18,6 +18,7 @@ import {
   View
 } from 'react-native';
 import Animated, {
+  Easing,
   FadeIn,
   FadeInDown,
   Layout,
@@ -431,19 +432,22 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onSelectItem }) => {
   const headerOpacity = useSharedValue(1);
   const headerTranslateY = useSharedValue(0);
   const cancelOpacity = useSharedValue(0);
+  const cancelWidth = useSharedValue(0);
 
   const animateFocus = (focused: boolean) => {
     setIsFocused(focused);
     if (focused) {
-      headerHeight.value = withSpring(0, SALES_SPRING.gentle);
+      headerHeight.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.quad) });
       headerOpacity.value = withTiming(0, { duration: 150 });
-      headerTranslateY.value = withSpring(-15, SALES_SPRING.gentle);
+      headerTranslateY.value = withTiming(-15, { duration: 200, easing: Easing.out(Easing.quad) });
       cancelOpacity.value = withTiming(1, { duration: 180 });
+      cancelWidth.value = withTiming(72, { duration: 200, easing: Easing.out(Easing.quad) });
     } else {
-      headerHeight.value = withSpring(76, SALES_SPRING.gentle);
+      headerHeight.value = withTiming(76, { duration: 200, easing: Easing.out(Easing.quad) });
       headerOpacity.value = withTiming(1, { duration: 200 });
-      headerTranslateY.value = withSpring(0, SALES_SPRING.gentle);
+      headerTranslateY.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.quad) });
       cancelOpacity.value = withTiming(0, { duration: 120 });
+      cancelWidth.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.quad) });
     }
   };
 
@@ -481,6 +485,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onSelectItem }) => {
 
   const cancelAnimStyle = useAnimatedStyle(() => ({
     opacity: cancelOpacity.value,
+    width: cancelWidth.value,
   }));
 
   const isDebouncing = query.trim() !== debouncedQuery.trim() && query.trim().length > 0;
@@ -537,7 +542,6 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onSelectItem }) => {
           keyExtractor={keyExtractor}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
-          itemLayoutAnimation={Layout.springify()}
           renderItem={renderItem}
           initialNumToRender={10}
           maxToRenderPerBatch={10}
