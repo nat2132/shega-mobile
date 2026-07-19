@@ -81,8 +81,8 @@ const BillsAndTransactions = ({ filterCategory }: { filterCategory?: string }) =
         sortBy: selectedSort === t('expense.sort_highest') ? 'Highest Amount'
           : selectedSort === t('expense.sort_lowest') ? 'Lowest Amount' : undefined,
         limit: 100,
-      });
-      const allUpcoming = getUpcomingExpenses();
+      }) ?? [];
+      const allUpcoming = getUpcomingExpenses() ?? [];
       setTransactions(allTrans);
       setUpcoming(allUpcoming);
     } catch (error) {
@@ -115,7 +115,7 @@ const BillsAndTransactions = ({ filterCategory }: { filterCategory?: string }) =
   };
 
   const filteredData = useMemo(() => {
-    return activeTab === 'Transactions' ? transactions : upcoming;
+    return activeTab === t('expense.tab_transactions') ? transactions : upcoming;
   }, [activeTab, transactions, upcoming]);
 
   const handleMarkPaid = (id: number) => {

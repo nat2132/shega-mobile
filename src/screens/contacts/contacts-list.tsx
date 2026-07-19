@@ -416,15 +416,17 @@ export default function ContactsList() {
       </Modal>
 
       {/* Floating Add Button */}
-      <TutorialTarget id="con-add-btn">
-      <TouchableOpacity
-        style={[styles.fab, { backgroundColor: G.bgCardStrong, borderColor: G.borderLight, borderWidth: 1 }]}
-        onPress={() => { setEditingContact(null); setShowForm(true); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-        activeOpacity={0.85}
-      >
-        <Plus size={24} color={G.fg} />
-      </TouchableOpacity>
-      </TutorialTarget>
+      <View style={styles.dockedBarWrapper}>
+        <TutorialTarget id="con-add-btn">
+        <TouchableOpacity
+          style={[styles.fab, { backgroundColor: G.bgCardStrong, borderColor: G.borderLight }]}
+          onPress={() => { setEditingContact(null); setShowForm(true); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+          activeOpacity={0.85}
+        >
+          <Plus size={24} color={G.fg} />
+        </TouchableOpacity>
+        </TutorialTarget>
+      </View>
     </View>
   );
 }
@@ -689,20 +691,26 @@ const styles = StyleSheet.create({
 
     fontFamily: Fonts.bold,
   },
-  fab: {
+  dockedBarWrapper: {
     position: 'absolute',
-    bottom: 100,
+    bottom: 120,
     alignSelf: 'center',
+    zIndex: 1000,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fab: {
     width: 56,
     height: 56,
     borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
+    borderWidth: 1,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
 });

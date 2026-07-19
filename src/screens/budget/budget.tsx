@@ -523,8 +523,8 @@ const CreateBudgetModal = ({ colors, t, onClose, onSaved }: { colors: any; t: an
       period,
       categories,
     }), [name, type, period, categories]),
-    getTitle: useCallback(() => (name ? `Budget - ${name}` : 'Budget Draft'), [name]),
-    getSubtitle: useCallback(() => `${categories.filter(c => c.amount).length} categories`, [categories]),
+    getTitle: useCallback(() => (name ? `${t('budget.draft_prefix')} - ${name}` : t('budget.draft_title')), [name, t]),
+    getSubtitle: useCallback(() => `${categories.filter(c => c.amount).length} ${t('common.categories')}`, [categories, t]),
     enabled: true,
   });
 
@@ -621,12 +621,12 @@ const CreateBudgetModal = ({ colors, t, onClose, onSaved }: { colors: any; t: an
         <TutorialTarget id="cb-type">
           <AppText variant="caption" weight="bold" transform="uppercase" style={[s.sectionTitle, { color: G.fgSecondary, marginTop: 8, marginBottom: 10 }]}>{t('budget.type_label')}</AppText>
           <View style={s.chipRow}>
-            {["business", "department", "project", "branch"].map(t => (
-              <TouchableOpacity key={t}
-                style={[s.chip, { backgroundColor: G.bgCard, borderColor: G.border }, type === t && { backgroundColor: G.fg }]}
-                onPress={() => { setType(t); Haptics.selectionAsync(); }}
+            {["business", "department", "project", "branch"].map(v => (
+              <TouchableOpacity key={v}
+                style={[s.chip, { backgroundColor: G.bgCard, borderColor: G.border }, type === v && { backgroundColor: G.fg }]}
+                onPress={() => { setType(v); Haptics.selectionAsync(); }}
               >
-                <AppText variant="body-sm" weight="bold" style={{ color: type === t ? G.bg : G.fg, textTransform: "capitalize" }}>{t}</AppText>
+                <AppText variant="body-sm" weight="bold" style={{ color: type === v ? G.bg : G.fg, textTransform: "capitalize" }}>{t(`budget.${v}`)}</AppText>
               </TouchableOpacity>
             ))}
           </View>
@@ -640,7 +640,7 @@ const CreateBudgetModal = ({ colors, t, onClose, onSaved }: { colors: any; t: an
                 style={[s.chip, { backgroundColor: G.bgCard, borderColor: G.border }, period === p && { backgroundColor: G.fg }]}
                 onPress={() => { setPeriod(p); Haptics.selectionAsync(); }}
               >
-                <AppText variant="body-sm" weight="bold" style={{ color: period === p ? G.bg : G.fg, textTransform: "capitalize" }}>{p}</AppText>
+                <AppText variant="body-sm" weight="bold" style={{ color: period === p ? G.bg : G.fg, textTransform: "capitalize" }}>{t(`budget.${p}`)}</AppText>
               </TouchableOpacity>
             ))}
           </View>

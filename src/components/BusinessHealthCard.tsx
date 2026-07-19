@@ -97,8 +97,9 @@ export function BusinessHealthCard({ health, loading, onRefresh }: BusinessHealt
       </TouchableOpacity>
 
       <Modal visible={showDetail} animationType="slide" transparent>
-        <Pressable style={styles.overlay} onPress={() => setShowDetail(false)}>
-          <Pressable style={[styles.detailSheet, { backgroundColor: colors.background }]}>
+        <View style={styles.overlay}>
+          <Pressable style={styles.dismissArea} onPress={() => setShowDetail(false)} />
+          <View style={[styles.detailSheet, { backgroundColor: colors.background }]}>
             <View style={styles.handleRow}>
               <View style={[styles.handle, { backgroundColor: colors.border }]} />
               <TouchableOpacity onPress={() => setShowDetail(false)} style={styles.closeBtn}>
@@ -167,8 +168,8 @@ export function BusinessHealthCard({ health, loading, onRefresh }: BusinessHealt
                 </View>
               )}
             </ScrollView>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
     </>
   );
@@ -231,6 +232,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
+  },
+  dismissArea: {
+    flex: 1,
   },
   detailSheet: {
     flex: 1,

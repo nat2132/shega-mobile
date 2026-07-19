@@ -221,7 +221,7 @@ const PointerLabel = (items: any) => {
   const budgetSummary = monthSummary;
 
   const displayTransactions = useMemo(() => {
-    if (searchResults !== null) return searchResults;
+    if (searchResults !== null) return searchResults ?? [];
     if (!searchQuery) return transactions;
     return transactions.filter((txn: any) =>
       (txn.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
