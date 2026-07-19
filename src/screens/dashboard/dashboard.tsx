@@ -899,7 +899,7 @@ SparklineChart.displayName = 'SparklineChart';
           <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowSearch(false)}>
             <View style={styles.modalBackdrop} />
             <TouchableOpacity activeOpacity={1} onPress={() => {}}>
-              <View style={[styles.bottomSheetContainer, { maxHeight: Dimensions.get('window').height * 0.90, backgroundColor: colors.background, flex: 1 }]}>
+              <View style={[styles.bottomSheetContainer, { height: Dimensions.get('window').height * 0.90, backgroundColor: colors.background }]}>
                 <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
                 <SearchScreen 
                    onSelectItem={(item: any) => {
@@ -960,7 +960,7 @@ SparklineChart.displayName = 'SparklineChart';
           <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowSaleFormFlow(false)}>
             <View style={styles.modalBackdrop} />
             <TouchableOpacity activeOpacity={1} onPress={() => {}}>
-              <View style={[styles.bottomSheetContainer, { maxHeight: Dimensions.get('window').height * 0.90, backgroundColor: colors.background, flex: 1 }]}>
+              <View style={[styles.bottomSheetContainer, { height: Dimensions.get('window').height * 0.90, backgroundColor: colors.background }]}>
                 <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
               <GlobalCheckout 
                  cart={pendingSales}
@@ -1041,7 +1041,7 @@ SparklineChart.displayName = 'SparklineChart';
           <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowAddAsset(false)}>
             <View style={styles.modalBackdrop} />
             <TouchableOpacity activeOpacity={1} onPress={() => {}}>
-              <View style={[styles.bottomSheetContainer, { maxHeight: Dimensions.get('window').height * 0.90, backgroundColor: colors.background, flex: 1 }]}>
+              <View style={[styles.bottomSheetContainer, { height: Dimensions.get('window').height * 0.90, backgroundColor: colors.background }]}>
                 <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
                 <AddAssetFlow 
                   onSuccess={() => {

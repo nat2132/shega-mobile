@@ -21,7 +21,7 @@ export const TutorialTarget: React.FC<TutorialTargetProps> = ({ id, children, st
   const ref = useRef<View>(null);
   const ctx = useTutorialContext();
   const scrollViewCtx = useScrollViewRef();
-  const isHighlighted = ctx.currentStep?.targetId === id;
+  const isHighlighted = ctx.isActive && ctx.currentStep?.targetId === id;
   const pulse = useSharedValue(0);
   const innerPulse = useSharedValue(0);
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
@@ -124,7 +124,19 @@ export const TutorialTarget: React.FC<TutorialTargetProps> = ({ id, children, st
   }, [isHighlighted, ctx, id]);
 
   const animStyle = useAnimatedStyle(() => {
-    if (!isHighlighted) return {};
+    if (!isHighlighted) {
+      return {
+        borderColor: undefined,
+        borderWidth: 0,
+        borderRadius: 0,
+        shadowColor: undefined,
+        shadowOffset: undefined,
+        shadowOpacity: 0,
+        shadowRadius: 0,
+        elevation: 0,
+        zIndex: 0,
+      };
+    }
 
     const glowOpacity = 0.35 + pulse.value * 0.4;
     const innerGlow = 0.15 + innerPulse.value * 0.25;
