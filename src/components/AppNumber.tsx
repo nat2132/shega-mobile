@@ -32,6 +32,7 @@ export interface AppNumberProps
   positive?: boolean;
   negative?: boolean;
   tabular?: boolean;
+  showCurrency?: boolean;
 }
 
 const SIZE_TO_VARIANT: Record<NumberSize, AppTextProps['variant']> = {
@@ -70,7 +71,7 @@ export const AppNumber: React.FC<AppNumberProps> = React.memo(
     size = 'body',
     weight: weightProp,
     decimals,
-    prefix = '',
+    prefix: rawPrefix = '',
     suffix = '',
     showSign = false,
     compact = false,
@@ -81,9 +82,11 @@ export const AppNumber: React.FC<AppNumberProps> = React.memo(
     tabular = true,
     style,
     numberOfLines = 1,
+    showCurrency,
     ...rest
   }) => {
-    const { colors } = useSettings();
+    const { colors, t } = useSettings();
+    const prefix = showCurrency ? (t('common.etb') + ' ') : rawPrefix;
 
     const formatted = useMemo(
       () => formatNumber(value, { decimals, prefix, suffix, showSign, compact, fallback }),

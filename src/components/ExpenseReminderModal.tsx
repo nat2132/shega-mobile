@@ -62,7 +62,7 @@ const ExpenseReminderModal: React.FC<ExpenseReminderModalProps> = ({
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
             <View style={styles.detailRow}>
               <AppText variant="caption" weight="bold" numberOfLines={1} style={[styles.detailLabel, { color: colors.textSecondary }]}>{t('expense.magnitude')}</AppText>
-              <AppNumber value={typeof expense.amount === 'number' ? expense.amount : Number(expense.amount) || 0} size="body" prefix="ETB " />
+              <AppNumber value={typeof expense.amount === 'number' ? expense.amount : Number(expense.amount) || 0} size="body" showCurrency />
             </View>
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
             <View style={styles.detailRow}>

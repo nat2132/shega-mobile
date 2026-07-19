@@ -98,7 +98,7 @@ const DebtDetailView = ({ customer, onBack }: { customer: any, onBack: () => voi
                     {new Date(sale.createdAt).toLocaleDateString()}
                   </AppText>
                 </View>
-                <AppNumber value={sale.totalPrice} size="body" prefix="ETB " numberOfLines={1} />
+                <AppNumber value={sale.totalPrice} size="body" showCurrency numberOfLines={1} />
               </View>
             ))}
 
@@ -109,7 +109,7 @@ const DebtDetailView = ({ customer, onBack }: { customer: any, onBack: () => voi
                 <AppText variant="caption" weight="medium" style={[styles.totalLabel, { color: G.fgSecondary }]} numberOfLines={1}>
                   {t('dash.outstanding_balance')}
                 </AppText>
-                <AppNumber value={customer.oweAmount} size="heading-lg" prefix="ETB " color={colors.primary} numberOfLines={1} />
+                <AppNumber value={customer.oweAmount} size="heading-lg" showCurrency color={colors.primary} numberOfLines={1} />
               </View>
             </View>
           </View>
@@ -238,7 +238,7 @@ const DebtCustomerRow = React.memo(({
         subtitleMaxLines={1}
         right={
           <View style={styles.statArea}>
-            <AppNumber value={item.oweAmount} size="title-sm" prefix="ETB " color={colors.primary} numberOfLines={1} />
+            <AppNumber value={item.oweAmount} size="title-sm" showCurrency color={colors.primary} numberOfLines={1} />
             {isOverdue ? (
               <View style={[styles.overdueBadge, { backgroundColor: colors.error + '15' }]}>
                 <AlertTriangle size={10} color={colors.error} />

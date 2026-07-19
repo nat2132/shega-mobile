@@ -812,7 +812,7 @@ const SalesDashboard = () => {
                   value={totalRevenue}
                   size="display"
                   weight="extrabold"
-                  prefix={"ETB "}
+                  showCurrency
                   color={SALES_GLASS.fg}
                   adjustsFontSizeToFit
                   minimumFontScale={0.7}
@@ -875,7 +875,7 @@ const SalesDashboard = () => {
                   <AppNumber
                     value={sanitizedValues[selectedIdx]}
                     size="body-lg"
-                    prefix={"ETB "}
+                    showCurrency
                     color={SALES_GLASS.fg}
                     style={styles.selectedBarValue}
                   />
@@ -1139,7 +1139,7 @@ const SalesDashboard = () => {
                       <AppNumber
                         value={item.totalRevenue}
                         size="body"
-                        prefix={"ETB "}
+                        showCurrency
                         color={SALES_GLASS.fgSecondary}
                         style={styles.topItemRevenue}
                       />
@@ -1680,7 +1680,7 @@ const SalesDashboard = () => {
                                 value={amount}
                                 size="caption"
                                 weight="medium"
-                                prefix={"ETB "}
+                                showCurrency
                                 color={SALES_GLASS.muted}
                                 style={styles.paymentAmountText}
                               />
@@ -1925,7 +1925,7 @@ const SalesDashboard = () => {
                       value={item.oweAmount}
                       size="body"
                       weight="bold"
-                      prefix={"ETB "}
+                      showCurrency
                       color={isOverdue ? colors.error : colors.warning}
                       style={styles.cpAmount}
                     />
@@ -2423,7 +2423,7 @@ const SalesDashboard = () => {
                                   value={payAmt}
                                   size="body"
                                   weight="bold"
-                                  prefix={"ETB "}
+                                  showCurrency
                                   color={colors.primary}
                                   style={styles.cpPayAmt}
                                 />
@@ -2469,7 +2469,7 @@ const SalesDashboard = () => {
                         <AppNumber
                           value={selectedCustomer.oweAmount}
                           size="body-lg"
-                          prefix={"ETB "}
+                          showCurrency
                           color={colors.warning}
                           style={styles.cpTotalValue}
                         />
@@ -2853,7 +2853,7 @@ const SalesDashboard = () => {
                                 value={Number(item.totalPrice)}
                                 size="caption"
                                 weight="bold"
-                                prefix={"ETB "}
+                                showCurrency
                                 color={colors.text}
                                 style={{ fontSize: 12 }}
                               />
@@ -2886,7 +2886,7 @@ const SalesDashboard = () => {
                                     value={isFP ? Number(item.totalPrice) : paid}
                                     size="caption"
                                     weight="bold"
-                                    prefix={"ETB "}
+                                    showCurrency
                                     color={colors.success}
                                     style={{ fontSize: 12 }}
                                   />
@@ -2920,7 +2920,7 @@ const SalesDashboard = () => {
                                     value={remaining}
                                     size="caption"
                                     weight="bold"
-                                    prefix={"ETB "}
+                                    showCurrency
                                     color={colors.warning}
                                     style={{ fontSize: 12 }}
                                   />
@@ -2954,7 +2954,7 @@ const SalesDashboard = () => {
                                     value={remaining}
                                     size="caption"
                                     weight="bold"
-                                    prefix={"ETB "}
+                                    showCurrency
                                     color={colors.error}
                                     style={{ fontSize: 12 }}
                                   />
@@ -3627,7 +3627,7 @@ const SalesActivityCard = React.memo(
               value={displayPrice}
               size="body"
               weight="bold"
-              prefix={"ETB "}
+              showCurrency
               color={SALES_GLASS.fg}
               style={styles.activityPriceText}
             />

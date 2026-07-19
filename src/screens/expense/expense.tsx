@@ -64,7 +64,7 @@ const PointerLabel = (items: any) => {
   const value = Number(itemsArr?.[0]?.value) || 0;
   return (
     <View style={[styles.tooltipBox, { backgroundColor: G?.bgCard, borderColor: G?.border, borderWidth: 1, elevation: 10 }]}>
-      <AppNumber value={value} size="body-sm" weight="bold" prefix={(t?.('common.etb') || 'ETB') + ' '} />
+      <AppNumber value={value} size="body-sm" weight="bold" showCurrency />
     </View>
   );
 };

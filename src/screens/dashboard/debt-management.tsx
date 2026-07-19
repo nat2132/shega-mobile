@@ -402,7 +402,7 @@ const DebtSummaryHeader: React.FC<{ summary: DebtSummary }> = ({ summary }) => {
           >
             {t('debt.summary.total_owed')}
           </AppText>
-          <AppNumber value={summary.totalOwed} size="heading-lg" prefix="ETB " numberOfLines={1} />
+          <AppNumber value={summary.totalOwed} size="heading-lg" showCurrency numberOfLines={1} />
         </View>
         <View style={[styles.summaryIconBox, { backgroundColor: colors.primary + '18' }]}>
           <FontAwesome5 name="hand-holding-usd" size={22} color={colors.primary} />
@@ -499,7 +499,7 @@ const DebtCustomerRow: React.FC<{
         titleMaxLines={2}
         subtitleMaxLines={1}
         right={
-          <AppNumber value={item.oweAmount} size="body" prefix="ETB " color={isOverdue ? colors.error : G.fg} numberOfLines={1} />
+          <AppNumber value={item.oweAmount} size="body" showCurrency color={isOverdue ? colors.error : G.fg} numberOfLines={1} />
         }
         onPress={() => onPress(item)}
         background={G.bgCard}
@@ -741,14 +741,14 @@ const DebtDetailScreen: React.FC<{
               <AppText variant="caption" weight="medium" style={{ color: G.fgSecondary }} numberOfLines={1}>
                 {t('debt.detail.outstanding')}
               </AppText>
-              <AppNumber value={customer.oweAmount} size="heading-lg" prefix="ETB " color={colors.error} numberOfLines={1} />
+              <AppNumber value={customer.oweAmount} size="heading-lg" showCurrency color={colors.error} numberOfLines={1} />
             </View>
             <View style={styles.detailStatDivider} />
             <View style={styles.detailStat}>
               <AppText variant="caption" weight="medium" style={{ color: G.fgSecondary }} numberOfLines={1}>
                 {t('debt.detail.lifetime_paid')}
               </AppText>
-              <AppNumber value={totalPaid} size="title-sm" prefix="ETB " color={colors.success} numberOfLines={1} />
+              <AppNumber value={totalPaid} size="title-sm" showCurrency color={colors.success} numberOfLines={1} />
             </View>
             <View style={styles.detailStatDivider} />
             <View style={styles.detailStat}>
@@ -957,7 +957,7 @@ const DebtDetailScreen: React.FC<{
                           >
                             {t('debt.detail.total')}
                           </AppText>
-                          <AppNumber value={it.totalPrice} size="body-sm" prefix="ETB " numberOfLines={1} />
+                          <AppNumber value={it.totalPrice} size="body-sm" showCurrency numberOfLines={1} />
                         </View>
                         <View style={styles.saleStat}>
                           <AppText
@@ -966,7 +966,7 @@ const DebtDetailScreen: React.FC<{
                           >
                             {t('debt.detail.paid')}
                           </AppText>
-                          <AppNumber value={paid} size="body-sm" prefix="ETB " color={colors.success} numberOfLines={1} />
+                          <AppNumber value={paid} size="body-sm" showCurrency color={colors.success} numberOfLines={1} />
                         </View>
                         <View style={styles.saleStat}>
                           <AppText
@@ -975,7 +975,7 @@ const DebtDetailScreen: React.FC<{
                           >
                             {t('debt.detail.left')}
                           </AppText>
-                          <AppNumber value={remaining} size="body-sm" prefix="ETB " color={isItemPaid ? G.fgSecondary : colors.warning} numberOfLines={1} />
+                          <AppNumber value={remaining} size="body-sm" showCurrency color={isItemPaid ? G.fgSecondary : colors.warning} numberOfLines={1} />
                         </View>
                         <View style={styles.saleStat}>
                           <AppText

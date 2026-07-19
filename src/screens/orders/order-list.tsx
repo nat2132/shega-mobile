@@ -128,7 +128,7 @@ const OrderCard = React.memo(
             <View style={styles.amountRow}>
             <AppNumber
               value={Number(order.totalPrice)}
-              prefix="ETB "
+              showCurrency
               size="body"
               weight="bold"
               style={[styles.amount, { color: ORD_GLASS.fg }]}

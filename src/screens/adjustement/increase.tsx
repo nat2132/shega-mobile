@@ -256,14 +256,14 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
             <View style={styles.impactMain}>
                <View style={styles.impactSide}>
                    <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.impactLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('adj.original')}</AppText>
-                   <AppNumber value={selectedItem.baseSellingPrice} prefix="ETB " size="title" weight="bold" style={[{ color: G.fgSecondary }]} />
+                   <AppNumber value={selectedItem.baseSellingPrice} showCurrency size="title" weight="bold" style={[{ color: G.fgSecondary }]} />
                </View>
                <View style={[styles.impactCenter, { backgroundColor: themeColor }]}>
                   <TrendingUp size={24} color={G.bg} style={{ transform: [{ rotate: mode === 'increase' ? '0deg' : '180deg' }] }} />
                </View>
                <View style={styles.impactSide}>
                    <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.impactLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('adj.new_price')}</AppText>
-                   <AppNumber value={parseFloat(newPrice) || 0} prefix="ETB " size="title" weight="bold" style={[{ color: themeColor }]} />
+                   <AppNumber value={parseFloat(newPrice) || 0} showCurrency size="title" weight="bold" style={[{ color: themeColor }]} />
                </View>
             </View>
             
@@ -271,7 +271,7 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
                <View style={styles.footerItem}>
                   <Activity size={16} color={themeColor} />
                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                     <AppNumber value={val} prefix="ETB " size="body" weight="bold" showSign style={{ color: themeColor }} />
+                     <AppNumber value={val} showCurrency size="body" weight="bold" showSign style={{ color: themeColor }} />
                      <AppText variant="body" weight="bold" style={[styles.footerText, { color: themeColor }]}>(</AppText>
                       <AppNumber value={pct} size="body" weight="bold" suffix="%" showSign={true} decimals={1} style={{ color: themeColor }} />
                       <AppText variant="body" weight="bold" style={[styles.footerText, { color: themeColor }]}>{'\u0029'}</AppText>
@@ -330,7 +330,7 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
                          <AppText variant="body-lg" weight="bold" style={[styles.resultText, { color: G.fg }]} numberOfLines={1}>{item.name || 'Unknown'}</AppText>
                          <AppText variant="caption" weight="medium" style={[styles.resultSubtext, { color: G.fgSecondary }]} numberOfLines={1}>{item.categoryName || 'General'}</AppText>
                       </View>
-                      <AppNumber value={item.baseSellingPrice ?? 0} prefix="ETB " size="body" weight="bold" style={[styles.resultPrice, { color: colors.primary }]} />
+                      <AppNumber value={item.baseSellingPrice ?? 0} showCurrency size="body" weight="bold" style={[styles.resultPrice, { color: colors.primary }]} />
                     </TouchableOpacity>
                   ))}
                 </ScrollView>

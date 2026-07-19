@@ -56,6 +56,7 @@ import { SparklineSkeleton } from '@/components/ChartSkeleton';
 import { AppNumber, AppText } from '@/components/ui';
 import { UniversalSearch } from '@/components/UniversalSearch';
 import { useDialog } from '@/context/DialogContext';
+import { useToast } from '@/context/ToastContext';
 import { PROFILE_IMAGES, useDashboardVisibility, useSettings } from '@/context/SettingsContext';
 import { useSidebar } from '@/context/SidebarContext';
 import { useTutorial, TutorialScrollView, TutorialTarget, TutorialButton } from '@/tutorials';
@@ -185,6 +186,7 @@ SparklineChart.displayName = 'SparklineChart';
     const G = getDashGlass(colors);
     const styles = useMemo(() => createStyles(G), [G]);
     const { notifCount } = useNotifications();
+    const { showToast } = useToast();
     const dialog = useDialog();
     const [isPrivate, setIsPrivate] = useState(false);
     const [activeModal, setActiveModal] = useState<string | null>(null);
@@ -1008,16 +1010,17 @@ SparklineChart.displayName = 'SparklineChart';
                           batchId,
                         });
                      }
-                     setPendingSales([]);
-                     setShowSaleFormFlow(false);
-                     loadDashboardData();
-                     setLastSaleData({
-                       totalPrice: saleMetadata.totalPrice,
-                       paymentMethod: saleMetadata.paymentMethod,
-                       itemCount: pendingSales.length,
-                       paymentStatus: saleMetadata.paymentStatus,
-                       customerName: saleMetadata.customerName,
-                     });
+                      setPendingSales([]);
+                      setShowSaleFormFlow(false);
+                      loadDashboardData();
+                      setLastSaleData({
+                        totalPrice: saleMetadata.totalPrice || 0,
+                        paymentMethod: saleMetadata.paymentMethod || 'Cash',
+                        itemCount: pendingSales.length,
+                        paymentStatus: saleMetadata.paymentStatus || 'Paid',
+                        customerName: saleMetadata.customerName || t('sales.walk_in_customer'),
+                        transactionId: batchId,
+                      });
                     } catch {
                       await dialog.alert({
                         title: t('common.error'),
@@ -1045,6 +1048,7 @@ SparklineChart.displayName = 'SparklineChart';
                   onSuccess={() => {
                     setShowAddAsset(false);
                     loadDashboardData();
+                    showToast({ title: t('common.success'), message: t('toast.item_added'), type: 'success' });
                   }} 
                   onClose={() => setShowAddAsset(false)}
                 />

@@ -101,7 +101,7 @@ const AdjustmentListItem = ({ item, onPress }: { item: any; onPress: () => void 
         {type === 'damaged' ? (
           <AppNumber value={-(item.quantity ?? 0)} size="body" color={cfg.amountColor} />
         ) : (
-          <AppNumber value={item.newValue ?? 0} size="body" prefix="ETB " color={cfg.amountColor} />
+          <AppNumber value={item.newValue ?? 0} size="body" showCurrency color={cfg.amountColor} />
         )}
         <AppText variant="micro" weight="medium" style={[listStyles.reason, { color: G.fgSecondary }]} numberOfLines={1}>
           {item.reason || t('adj.manual_correction')}
@@ -406,7 +406,7 @@ const AdjustmentDetailsScreen: React.FC<AdjustmentDetailsProps> = ({ adjustment,
                 <View style={[detailStyles.inputIcon, { backgroundColor: G.bgCard }]}><DollarSign size={18} color={G.fgSecondary} /></View>
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <AppText variant="micro" weight="bold" transform="uppercase" style={[detailStyles.inputLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('adj.previous_price') || 'Previous Price'}</AppText>
-                  <AppNumber value={adjustment.oldValue} size="display" prefix="ETB " color={G.fgSecondary} />
+                  <AppNumber value={adjustment.oldValue} size="display" showCurrency color={G.fgSecondary} />
                 </View>
               </View>
               <View style={[detailStyles.inputRow, { backgroundColor: G.bgCard, borderColor: isEditing ? colors.primary : G.border }]}>
@@ -416,7 +416,7 @@ const AdjustmentDetailsScreen: React.FC<AdjustmentDetailsProps> = ({ adjustment,
                   {isEditing ? (
                     <TextInput style={[detailStyles.inputField, { color: G.fg }]} value={newValue} onChangeText={setNewValue} keyboardType="numeric" />
                   ) : (
-                    <AppNumber value={Number(newValue)} size="display" prefix="ETB " />
+                    <AppNumber value={Number(newValue)} size="display" showCurrency />
                   )}
                 </View>
               </View>

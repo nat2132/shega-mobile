@@ -4603,14 +4603,14 @@ export const insertPack = (data: { itemId: number; packNumber: number; quantity:
   try {
     const database = getDB();
     return database.prepareSync(`
-      INSERT INTO item_packs (itemId, packNumber, quantity, unit)
-      VALUES (?, ?, ?, ?)
-    `).executeSync([data.itemId, data.packNumber, data.quantity, data.unit]) as any;
+      INSERT INTO item_packs (itemId, packNumber, initialQuantity, currentQuantity, unit)
+      VALUES (?, ?, ?, ?, ?)
+    `).executeSync([data.itemId, data.packNumber, data.quantity, data.quantity, data.unit]) as any;
   } catch (error) {
     console.error('Insert pack error:', error);
     return null;
   }
-};;
+};
 
 export const insertReturn = (data: { saleId: number; itemId: number; quantity: number; unit: string; unitType: string; totalRefund: number; reason: string; createdAt: string }) => {
   try {

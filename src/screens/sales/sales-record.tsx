@@ -275,7 +275,7 @@ const SalesRecordScreen: React.FC<SalesRecordProps> = ({ onClose }) => {
               value={group.total}
               size="caption"
               weight="bold"
-              prefix={"ETB "}
+              showCurrency
               color={colors.primary}
               style={styles.groupTotalText}
             />
@@ -441,7 +441,7 @@ const SalesRecordScreen: React.FC<SalesRecordProps> = ({ onClose }) => {
               value={paidOutstanding?.paid?.total ?? 0}
               size="body-sm"
               weight="bold"
-              prefix={"ETB "}
+              showCurrency
               color={colors.success}
               style={styles.summaryValue}
             />
@@ -486,7 +486,7 @@ const SalesRecordScreen: React.FC<SalesRecordProps> = ({ onClose }) => {
               value={paidOutstanding?.outstanding?.total ?? 0}
               size="body-sm"
               weight="bold"
-              prefix={"ETB "}
+              showCurrency
               color={colors.warning}
               style={styles.summaryValue}
             />
@@ -911,7 +911,7 @@ const SaleItemCard = React.memo(
             value={displayPrice}
             size="body-sm"
             weight="bold"
-            prefix={"ETB "}
+            showCurrency
             color={SALES_GLASS.fg}
             style={styles.salePrice}
           />

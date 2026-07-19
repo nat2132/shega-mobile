@@ -314,7 +314,7 @@ const SummaryScreen = () => {
           <View style={styles.metricsRow}>
             <MetricCard 
               label={t('summary.sales_cash')}
-              value={              <AppNumber value={metrics?.netSalesCash ?? 0} prefix="ETB " size="title" weight="bold" compact />}
+              value={              <AppNumber value={metrics?.netSalesCash ?? 0} showCurrency size="title" weight="bold" compact />}
               icon={DollarSign}
             />
             <MetricCard 
@@ -328,12 +328,12 @@ const SummaryScreen = () => {
           <View style={styles.metricsRow}>
             <MetricCard 
               label={t('summary.profit_cash')}
-              value={<AppNumber value={metrics?.profit ?? 0} prefix="ETB " size="title" weight="bold" compact />}
+              value={<AppNumber value={metrics?.profit ?? 0} showCurrency size="title" weight="bold" compact />}
               icon={TrendingUp}
             />
             <MetricCard 
               label={t('summary.expenses')}
-              value={<AppNumber value={metrics?.expenses ?? 0} prefix="ETB " size="title" weight="bold" compact />}
+              value={<AppNumber value={metrics?.expenses ?? 0} showCurrency size="title" weight="bold" compact />}
               icon={CreditCard}
             />
           </View>
@@ -342,12 +342,12 @@ const SummaryScreen = () => {
           <View style={styles.metricsRow}>
             <MetricCard 
               label={t('summary.debt')}
-              value={<AppNumber value={metrics?.debt ?? 0} prefix="ETB " size="title" weight="bold" compact />}
+              value={<AppNumber value={metrics?.debt ?? 0} showCurrency size="title" weight="bold" compact />}
               icon={BarChart3}
             />
             <MetricCard 
               label={t('summary.damage_loss')}
-              value={<AppNumber value={metrics?.damageLoss ?? 0} prefix="ETB " size="title" weight="bold" compact />}
+              value={<AppNumber value={metrics?.damageLoss ?? 0} showCurrency size="title" weight="bold" compact />}
               icon={AlertTriangle}
             />
           </View>
@@ -357,14 +357,14 @@ const SummaryScreen = () => {
           <View style={styles.metricsRow}>
             <MetricCard 
               label={t('summary.price_changes')}
-              value={<AppNumber value={metrics?.priceChanges ?? 0} prefix="ETB " size="title" weight="bold" compact showSign />}
+              value={<AppNumber value={metrics?.priceChanges ?? 0} showCurrency size="title" weight="bold" compact showSign />}
               icon={TrendingDown}
             />
             <View style={[styles.netMetricCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
               <View style={[styles.metricIconBox, { backgroundColor: G.accentGlass }]}>
                 <Star size={18} color={G.muted} />
               </View>
-              <AppNumber value={metrics?.netProfit ?? 0} prefix="ETB " size="title" weight="bold" showSign />
+              <AppNumber value={metrics?.netProfit ?? 0} showCurrency size="title" weight="bold" showSign />
               <AppText variant="caption" weight="medium" style={[styles.metricLabel, { color: G.muted }]} numberOfLines={2}>{t('summary.net_profit')}</AppText>
             </View>
           </View>
@@ -389,19 +389,19 @@ const SummaryScreen = () => {
               <AppText variant="caption" weight="medium" align="center" style={[styles.perfFormulaLabel, { color: G.muted, marginBottom: 4 }]} numberOfLines={2}>              {t('summary.formula_label')}</AppText>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: 2, marginVertical: 2 }}>
                 <AppText variant="micro" weight="medium" style={{ color: G.fgSecondary }}>=</AppText>
-                <AppNumber value={metrics?.profit ?? 0} size="micro" prefix="ETB " compact />
+                <AppNumber value={metrics?.profit ?? 0} size="micro" showCurrency compact />
                 <AppText variant="micro" weight="medium" style={{ color: G.fgSecondary }}>+</AppText>
-                <AppNumber value={metrics?.priceChangeGains ?? 0} size="micro" prefix="ETB " compact />
+                <AppNumber value={metrics?.priceChangeGains ?? 0} size="micro" showCurrency compact />
                 <AppText variant="micro" weight="medium" style={{ color: G.fgSecondary }}>−</AppText>
-                <AppNumber value={metrics?.expenses ?? 0} size="micro" prefix="ETB " compact />
+                <AppNumber value={metrics?.expenses ?? 0} size="micro" showCurrency compact />
                 <AppText variant="micro" weight="medium" style={{ color: G.fgSecondary }}>−</AppText>
-                <AppNumber value={metrics?.damageLoss ?? 0} size="micro" prefix="ETB " compact />
+                <AppNumber value={metrics?.damageLoss ?? 0} size="micro" showCurrency compact />
                 <AppText variant="micro" weight="medium" style={{ color: G.fgSecondary }}>−</AppText>
-                <AppNumber value={metrics?.otherLosses ?? 0} size="micro" prefix="ETB " compact />
+                <AppNumber value={metrics?.otherLosses ?? 0} size="micro" showCurrency compact />
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 2 }}>
                 <AppText variant="caption" weight="bold" style={{ color: G.fgSecondary }}>=</AppText>
-                <AppNumber value={metrics?.netProfit ?? 0} prefix="ETB " size="caption" showSign />
+                <AppNumber value={metrics?.netProfit ?? 0} showCurrency size="caption" showSign />
               </View>
             </View>
           </View>

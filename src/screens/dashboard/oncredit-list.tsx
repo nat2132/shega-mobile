@@ -84,7 +84,7 @@ const OnCreditRow = React.memo(({
           <View style={styles.creditRow}>
             <CreditCard size={14} color={G.fgSecondary} />
             <AppText variant="caption" weight="medium" style={[styles.creditLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('dash.total_credit')}</AppText>
-            <AppNumber value={creditAmount} size="body" prefix="ETB " color={colors.error} numberOfLines={1} />
+            <AppNumber value={creditAmount} size="body" showCurrency color={colors.error} numberOfLines={1} />
           </View>
         </View>
       </AppCard>

@@ -122,7 +122,7 @@ const SettlementModal: React.FC<SettlementModalProps> = ({ visible, item, onClos
                 <AppText variant="body" weight="bold" style={[modalStyles.optionLabel, { color: G.fg }]} numberOfLines={1}>{t('dash.paid_full')}</AppText>
                 <AppText variant="caption" weight="medium" style={[modalStyles.optionSub, { color: G.fgSecondary }]} numberOfLines={2}>{t('dash.settle_entire')}</AppText>
               </View>
-              <AppNumber value={totalCredit} size="body" prefix="ETB " color={G.fg} numberOfLines={1} />
+              <AppNumber value={totalCredit} size="body" showCurrency color={G.fg} numberOfLines={1} />
             </TouchableOpacity>
 
             {/* Partial Payment Option */}
@@ -249,7 +249,7 @@ const CreditItemDetail = ({
                 <BarChart3 size={14} color={G.fgSecondary} />
                 <AppText variant="body" numberOfLines={2} style={{ color: G.fgSecondary }}>{t('dash.pack_purchase_price')}</AppText>
               </View>
-              <AppNumber value={item.packPurchasePrice || 0} size="body" prefix="ETB " numberOfLines={1} />
+              <AppNumber value={item.packPurchasePrice || 0} size="body" showCurrency numberOfLines={1} />
             </View>
 
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm }}>
@@ -257,7 +257,7 @@ const CreditItemDetail = ({
                 <Clock size={14} color={G.fgSecondary} />
                 <AppText variant="body" numberOfLines={2} style={{ color: G.fgSecondary }}>{t('dash.base_purchase_price')}</AppText>
               </View>
-              <AppNumber value={item.basePurchasePrice || 0} size="body" prefix="ETB " numberOfLines={1} />
+              <AppNumber value={item.basePurchasePrice || 0} size="body" showCurrency numberOfLines={1} />
             </View>
 
             <View style={[detailStyles.divider, { backgroundColor: G.border }]} />
@@ -427,7 +427,7 @@ const NefasSilkScreen = ({ initialItemId }: { initialItemId?: number } = {}) => 
                     <AppText variant="caption" weight="medium" style={[listStyles.creditFooterLabel, { color: G.fgSecondary }]} numberOfLines={1}>
                       {t('dash.total_credit')}
                     </AppText>
-                    <AppNumber value={(item.packPurchasePrice || 0) * (item.totalPackQuantity || 1) || (item.basePurchasePrice || 0) * (item.totalBaseQuantity || 1) || 0} size="body-sm" prefix="ETB " color={colors.error} numberOfLines={1} />
+                    <AppNumber value={(item.packPurchasePrice || 0) * (item.totalPackQuantity || 1) || (item.basePurchasePrice || 0) * (item.totalBaseQuantity || 1) || 0} size="body-sm" showCurrency color={colors.error} numberOfLines={1} />
                   </View>
                   <ChevronRight size={15} color={G.border} />
                 </View>

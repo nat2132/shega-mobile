@@ -217,7 +217,7 @@ const AdjustmentScreen = () => {
             <TutorialTarget id="adj-stats">
             <MetricCard 
               label={t('adj.metric_value_lost')}
-              value={<AppNumber value={metrics?.estimatedValueLost ?? 0} prefix="ETB " size="heading" weight="bold" />}
+              value={<AppNumber value={metrics?.estimatedValueLost ?? 0} showCurrency size="heading" weight="bold" />}
               icon={DollarSign}
             />
             </TutorialTarget>
@@ -228,7 +228,7 @@ const AdjustmentScreen = () => {
                 <BarChart3 size={22} color={G.muted} />
                 <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.netMetricLabel, { color: G.muted }]} numberOfLines={1}>{t('adj.metric_net_change')}</AppText>
               </View>
-              <AppNumber value={metrics?.netValueChange ?? 0} prefix="ETB " size="heading" weight="bold" showSign />
+              <AppNumber value={metrics?.netValueChange ?? 0} showCurrency size="heading" weight="bold" showSign />
             </View>
           </View>
         </Animated.View>

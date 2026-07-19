@@ -251,7 +251,7 @@ const DamagedItemForm = ({ onComplete }: { onComplete?: () => void }) => {
 
              <View style={styles.impactRow}>
                 <AppText variant="body-sm" weight="bold" transform="uppercase" style={[styles.impactKey, { color: G.fgSecondary }]} numberOfLines={1}>{t('adj.loss_magnitude')}</AppText>
-                <AppNumber value={-lossValue} prefix="ETB " size="heading-lg" weight="bold" showSign style={{ color: warningColor }} />
+                <AppNumber value={-lossValue} showCurrency size="heading-lg" weight="bold" showSign style={{ color: warningColor }} />
              </View>
 
              <View style={styles.logRow}>

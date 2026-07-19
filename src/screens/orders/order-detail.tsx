@@ -359,7 +359,7 @@ const OrderDetailScreen = () => {
                   {item.itemName}
                 </AppText>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                  <AppNumber value={Number(item.price)} prefix="ETB " size="caption" weight="medium" style={{ color: ORD_GLASS.fgSecondary }} />
+                  <AppNumber value={Number(item.price)} showCurrency size="caption" weight="medium" style={{ color: ORD_GLASS.fgSecondary }} />
                   <AppText variant="caption" weight="medium" style={{ color: ORD_GLASS.fgSecondary }}>x</AppText>
                   <AppNumber value={item.quantity} size="caption" weight="medium" style={{ color: ORD_GLASS.fgSecondary }} />
                   <AppText variant="caption" weight="medium" style={{ color: ORD_GLASS.fgSecondary }}>{item.unit}</AppText>
@@ -367,7 +367,7 @@ const OrderDetailScreen = () => {
               </View>
               <AppNumber
                 value={Number(item.totalPrice)}
-                prefix="ETB "
+                showCurrency
                 size="body"
                 weight="bold"
                 style={{ color: ORD_GLASS.fg }}
@@ -395,7 +395,7 @@ const OrderDetailScreen = () => {
           </AppText>
           <AppNumber
             value={Number(order.totalPrice)}
-            prefix="ETB "
+            showCurrency
             size="display"
             weight="extrabold"
             style={{ color: ORD_GLASS.fg }}

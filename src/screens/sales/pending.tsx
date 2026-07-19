@@ -130,7 +130,7 @@ const PendingRow = React.memo(
                 value={lineTotal}
                 size="body"
                 weight="bold"
-                prefix={"ETB "}
+                showCurrency
                 color={SALES_GLASS.fg}
                 style={styles.linePrice}
               />
@@ -378,7 +378,7 @@ const PendingSales: React.FC<PendingSalesProps> = ({
                   value={totalAmount}
                   size="title"
                   weight="bold"
-                  prefix={"ETB "}
+                  showCurrency
                   color={SALES_GLASS.fg}
                   adjustsFontSizeToFit
                   style={styles.totalAmount}

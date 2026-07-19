@@ -107,11 +107,11 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
       recordDate,
       dueDays,
     }), [paymentMethod, paymentStatus, customerName, customerPhone, globalDiscount, taxType, taxRate, recordDate, dueDays]),
-    getTitle: useCallback(() => `Sale Draft (${cart.length} items)`, [cart.length]),
+    getTitle: useCallback(() => t('sale.draft_title', { count: String(cart.length) }), [cart.length, t]),
     getSubtitle: useCallback(() => {
       if (paymentStatus === 'Paid') return `${paymentMethod} • ${t('sale.settled_full')}`;
-      if (paymentStatus === 'Debt') return `${customerName || 'No name'} • Debt`;
-      return 'Order';
+      if (paymentStatus === 'Debt') return `${customerName || t('sale.no_name')} • ${t('sale.debt_credit')}`;
+      return t('sale.order');
     }, [paymentStatus, paymentMethod, customerName, t]),
     enabled: cart.length > 0,
   });
@@ -147,7 +147,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       await dialog.alert({
         title: t("common.error"),
-        message: "No items in cart to checkout.",
+        message: t('sale.empty_cart_error'),
         iconType: "danger",
       });
       return;
@@ -159,7 +159,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       await dialog.alert({
         title: t("common.error"),
-        message: "Discount cannot be negative.",
+        message: t('sale.discount_negative_error'),
         iconType: "danger",
       });
       return;
@@ -171,7 +171,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       await dialog.alert({
         title: t("common.error"),
-        message: `${t("sale.tax_rate")} cannot be negative.`,
+        message: t('sale.tax_rate_negative_error'),
         iconType: "danger",
       });
       return;
@@ -538,7 +538,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                     ]}
                     numberOfLines={1}
                   >
-                    Order
+                    {t('sale.order')}
                   </AppText>
                 </TouchableOpacity>
               </View>
@@ -926,8 +926,8 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                               }}
                               numberOfLines={2}
                             >
-                              {customer.customerPhone || "No phone"} •{" "}
-                              <AppNumber value={customer.oweAmount || 0} size="caption" weight="medium" prefix={"ETB "} color={SALES_GLASS.fgSecondary} />{" "}owed
+                              {customer.customerPhone || t('sale.no_phone')} •{" "}
+                              <AppNumber value={customer.oweAmount || 0} size="caption" weight="medium" showCurrency color={SALES_GLASS.fgSecondary} />{" "}{t('sale.owed')}
                             </AppText>
                           </View>
                         </TouchableOpacity>
@@ -1128,7 +1128,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                   value={subtotal}
                   size="body"
                   weight="bold"
-                  prefix={"ETB "}
+                  showCurrency
                   color={SALES_GLASS.fg}
                   style={styles.vValue}
                 />
@@ -1146,7 +1146,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                   value={-(Number(globalDiscount) || 0)}
                   size="body"
                   weight="bold"
-                  prefix={"ETB "}
+                  showCurrency
                   color={SALES_GLASS.fg}
                   style={styles.vValue}
                 />
@@ -1164,7 +1164,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                   value={taxAmount}
                   size="body"
                   weight="bold"
-                  prefix={"ETB "}
+                  showCurrency
                   color={SALES_GLASS.fg}
                   style={styles.vValue}
                 />
@@ -1185,7 +1185,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                   value={total}
                   size="title"
                   weight="bold"
-                  prefix={"ETB "}
+                  showCurrency
                   color={SALES_GLASS.fg}
                   style={styles.vTotalValue}
                 />

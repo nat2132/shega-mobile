@@ -67,13 +67,13 @@ const RecentItemCard: React.FC<RecentItemCardProps> = React.memo(({ item, onPres
         <View style={{ flex: 1 }}>
           <AppText variant="caption" weight="medium" style={[styles.footerLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('inventory.base_cost')}</AppText>
           <AppText variant="body-sm" weight="bold" style={[styles.footerValue, { color: colors.text }]} numberOfLines={1}>
-            <AppNumber value={item.basePurchasePrice} size="body-sm" prefix="ETB " decimals={2} />
+            <AppNumber value={item.basePurchasePrice} size="body-sm" showCurrency decimals={2} />
           </AppText>
         </View>
         <View style={{ flex: 1, alignItems: 'flex-end' }}>
           <AppText variant="caption" weight="medium" style={[styles.footerLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('inventory.base_price')}</AppText>
           <AppText variant="body-sm" weight="bold" style={[styles.footerValue, { color: colors.text }]} numberOfLines={1}>
-            <AppNumber value={item.baseSellingPrice} size="body-sm" prefix="ETB " decimals={2} />
+            <AppNumber value={item.baseSellingPrice} size="body-sm" showCurrency decimals={2} />
           </AppText>
         </View>
       </View>

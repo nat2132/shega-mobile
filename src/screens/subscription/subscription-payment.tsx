@@ -76,7 +76,7 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
         transactionId: transactionId.trim(),
         businessName: businessName.trim(),
         phoneNumber: phoneNumber.trim(),
-        planName: `${plan.toUpperCase()} - ${durationMonths} ${durationMonths > 1 ? t('subscription.duration_months') : t('subscription.duration_month')}`,
+        planName: `${plan === 'premium' ? t('subscription.plan_premium') : t('subscription.plan_basic')} - ${durationMonths} ${durationMonths > 1 ? t('subscription.duration_months') : t('subscription.duration_month')}`,
         amount: price,
         paymentDate,
         notes: notes.trim() || undefined,

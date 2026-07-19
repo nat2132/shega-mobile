@@ -189,7 +189,7 @@ const SaleSuccessModal: React.FC<SaleSuccessModalProps> = ({ saleData, onClose, 
                  <View style={styles.receiptTop}>
                     <View>
                        <AppText variant="caption" weight="medium" style={[styles.receiptLabel, { color: colors.textSecondary }]} numberOfLines={2}>{t('sale.total_settlement')}</AppText>
-                       <AppNumber value={saleData.totalPrice} size="display" prefix="ETB " decimals={2} />
+                       <AppNumber value={saleData.totalPrice} size="display" showCurrency decimals={2} />
                     </View>
                      <View style={[styles.methodBadge, { backgroundColor: colors.text + '08' }]}>
                         {saleData.paymentMethod === 'Cash' ? (

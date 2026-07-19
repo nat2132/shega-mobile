@@ -298,7 +298,7 @@ const CreateOrderScreen = () => {
                         style={{ color: ORD_GLASS.fgSecondary }}
                         numberOfLines={1}
                       >
-                        {item.companyName || ""} | <AppNumber value={Number(item.baseSellingPrice)} prefix="ETB " size="caption" />/{item.baseUnit}
+                        {item.companyName || ""} | <AppNumber value={Number(item.baseSellingPrice)} showCurrency size="caption" />/{item.baseUnit}
                       </AppText>
                     </View>
                     <View
@@ -355,7 +355,7 @@ const CreateOrderScreen = () => {
                       style={{ color: ORD_GLASS.fgSecondary }}
                       numberOfLines={1}
                     >
-                      <AppNumber value={Number(item.price)} prefix="ETB " size="caption" /> / {item.unit}
+                      <AppNumber value={Number(item.price)} showCurrency size="caption" /> / {item.unit}
                     </AppText>
                   </View>
 
@@ -490,7 +490,7 @@ const CreateOrderScreen = () => {
             </AppText>
             <AppNumber
               value={totalPrice}
-              prefix="ETB "
+              showCurrency
               size="title"
               weight="extrabold"
               style={{ color: ORD_GLASS.fg }}

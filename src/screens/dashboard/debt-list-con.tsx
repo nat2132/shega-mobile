@@ -110,15 +110,15 @@ const DebtManagementFlow = () => {
         <View style={styles.itemsContainer}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm }}>
             <AppText variant="body" numberOfLines={2} style={{ color: G.fgSecondary }}>Nails x 2kg</AppText>
-            <AppNumber value={500} size="body" prefix="ETB " numberOfLines={1} />
+            <AppNumber value={500} size="body" showCurrency numberOfLines={1} />
           </View>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm }}>
             <AppText variant="body" numberOfLines={2} style={{ color: G.fgSecondary }}>Paint x 2 cans</AppText>
-            <AppNumber value={1249} size="body" prefix="ETB " numberOfLines={1} />
+            <AppNumber value={1249} size="body" showCurrency numberOfLines={1} />
           </View>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm }}>
             <AppText variant="body" numberOfLines={2} style={{ color: G.fgSecondary }}>Screw x 2 pieces</AppText>
-            <AppNumber value={20} size="body" prefix="ETB " numberOfLines={1} />
+            <AppNumber value={20} size="body" showCurrency numberOfLines={1} />
           </View>
         </View>
 
@@ -126,7 +126,7 @@ const DebtManagementFlow = () => {
 
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.lg }}>
           <AppText variant="body" numberOfLines={2} style={{ color: G.fgSecondary }}>{t('dash.total_debt')}</AppText>
-          <AppNumber value={1769} size="title-sm" prefix="ETB " numberOfLines={1} />
+          <AppNumber value={1769} size="title-sm" showCurrency numberOfLines={1} />
         </View>
 
         <View style={styles.actionRow}>
