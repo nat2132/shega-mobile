@@ -46,7 +46,8 @@
       "expo-secure-store",
       "expo-video",
       "expo-audio",
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,

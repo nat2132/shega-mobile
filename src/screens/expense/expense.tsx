@@ -5,6 +5,7 @@ import { useSidebar } from '@/context/SidebarContext';
 import {
   getCapitalSummary,
   getExpenseChartData,
+  getFilteredExpenses,
   getTodaysExpenses,
   markRecurringAsPaid,
   getRecurringExpensesDueToday,
@@ -16,6 +17,7 @@ import {
 } from '@/database/db';
 import { notifyRecurringMarkedPaid } from '@/services/notificationService';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useDebounce } from '@/hooks/useDebounce';
 import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
@@ -97,6 +99,18 @@ const PointerLabel = (items: any) => {
     const [activeFilterCategory, setActiveFilterCategory] = useState<string | undefined>(filterCategory);
     const [allBudgets, setAllBudgets] = useState<any[]>([]);
     const [expenseBudgetId, setExpenseBudgetId] = useState<number | null>(null);
+
+    const debouncedSearch = useDebounce(searchQuery, 250);
+    const [searchResults, setSearchResults] = useState<any[] | null>(null);
+
+    useEffect(() => {
+      if (debouncedSearch.trim()) {
+        const results = getFilteredExpenses({ search: debouncedSearch, limit: 100 });
+        setSearchResults(results);
+      } else {
+        setSearchResults(null);
+      }
+    }, [debouncedSearch]);
 
   useEffect(() => {
     if (filterCategory) {
@@ -205,6 +219,18 @@ const PointerLabel = (items: any) => {
   };
 
   const budgetSummary = monthSummary;
+
+  const displayTransactions = useMemo(() => {
+    if (searchResults !== null) return searchResults;
+    if (!searchQuery) return transactions;
+    return transactions.filter((txn: any) =>
+      (txn.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (txn.category || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      String(txn.amount || '').includes(searchQuery)
+    );
+  }, [searchResults, searchQuery, transactions]);
+
+  const topItems = displayTransactions.slice(0, 5);
 
   return (
     <View style={[styles.screenWrapper, { backgroundColor: G.bg }]}>
@@ -489,14 +515,8 @@ const PointerLabel = (items: any) => {
             </TouchableOpacity>
           </View>
 
-          {(searchQuery
-            ? transactions.filter((t: any) =>
-                (t.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                (t.category || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                String(t.amount || '').includes(searchQuery)
-              )
-            : transactions
-          ).slice(0, 5).map((item, index) => (
+          {topItems.length > 0 ? (
+            topItems.map((item, index) => (
             <Animated.View key={item.id} entering={FadeInDown.delay(400 + index * 80)}>
               <TouchableOpacity
                 style={[styles.ledgerItem, { borderBottomColor: G.border }]}
@@ -518,9 +538,14 @@ const PointerLabel = (items: any) => {
                 </View>
               </TouchableOpacity>
             </Animated.View>
-          ))}
+            ))
+          ) : searchQuery || searchResults !== null ? (
+            <AppText variant="body" weight="bold" style={{ color: G.muted, textAlign: 'center', paddingVertical: 40 }}>
+              {t('common.no_results')}
+            </AppText>
+          ) : null}
 
-          {transactions.length === 0 && (
+          {!searchQuery && transactions.length === 0 && (
             <View style={styles.emptyState}>
               <View style={[styles.ledgerIcon, { backgroundColor: G.accentGlass, width: 56, height: 56, borderRadius: 20, marginBottom: 16 }]}>
                 <Wallet size={28} color={G.muted} />
@@ -666,7 +691,7 @@ const styles = StyleSheet.create({
   tooltipText: { fontFamily: Fonts.bold },
 
   modalOverlay: { flex: 1, justifyContent: 'flex-end' },
-  modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.65)' },
+  modalBackdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.65)' },
   bottomSheet: { borderTopLeftRadius: 30, borderTopRightRadius: 30, paddingBottom: 40 },
   detailSheet: { borderTopLeftRadius: 30, borderTopRightRadius: 30, height: Dimensions.get('window').height * 0.90 },
   modalHeader: { alignItems: 'center', paddingTop: 15, paddingBottom: 10 },
