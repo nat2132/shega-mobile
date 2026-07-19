@@ -153,6 +153,21 @@ const migrateItemsTable = (database: SQLite.SQLiteDatabase) => {
     database.execSync(`UPDATE item_packs SET initialQuantity = quantity, currentQuantity = quantity WHERE initialQuantity IS NULL;`);
     console.log('Successfully migrated item_packs values from quantity to initialQuantity/currentQuantity');
   } catch {}
+
+  // Migration for expenses table: recurring fields (isRecurring, frequency, nextBillingDate)
+  // These were added to the schema but lacked migrations — causing crashes on older installs
+  try {
+    database.execSync(`ALTER TABLE expenses ADD COLUMN isRecurring INTEGER DEFAULT 0;`);
+    console.log('Successfully migrated expenses table: Added isRecurring');
+  } catch {}
+  try {
+    database.execSync(`ALTER TABLE expenses ADD COLUMN frequency TEXT;`);
+    console.log('Successfully migrated expenses table: Added frequency');
+  } catch {}
+  try {
+    database.execSync(`ALTER TABLE expenses ADD COLUMN nextBillingDate TEXT;`);
+    console.log('Successfully migrated expenses table: Added nextBillingDate');
+  } catch {}
 };
 
 export const initDB = () => {
