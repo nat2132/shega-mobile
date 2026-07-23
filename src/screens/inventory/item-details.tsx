@@ -134,7 +134,7 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => 
   };
 
   const profit = (editForm.baseSellingPrice - editForm.basePurchasePrice);
-  const margin = editForm.basePurchasePrice > 0 ? (profit / editForm.basePurchasePrice) * 100 : 0;
+  const margin = editForm.basePurchasePrice > 0 ? (profit / editForm.basePurchasePrice) * 100 : (editForm.baseSellingPrice > 0 ? 100 : 0);
   const expiryDateObj = editForm.expiryDate ? new Date(editForm.expiryDate) : null;
   const daysUntilExpiry = expiryDateObj ? Math.ceil((expiryDateObj.getTime() - Date.now()) / 86400000) : null;
 

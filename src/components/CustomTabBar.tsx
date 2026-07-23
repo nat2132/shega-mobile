@@ -42,7 +42,7 @@ const TabBarItem: React.FC<TabBarItemProps> = ({
   const { colors, t } = useSettings();
   const { options } = descriptors[route.key];
   const displayName = route.name.replace('(tabs)/', '').replace('-hub', '');
-  const label = isFocused || true
+  const label = isFocused
     ? t(`tabs.${displayName}`)
     : (options.tabBarLabel ?? options.title ?? route.name);
 

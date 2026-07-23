@@ -13,6 +13,7 @@ import {
   insertContact,
   insertItem,
   insertPack,
+  insertPacksBatch,
   updateItem
 } from '@/database/db';
 import { useFormDrafts } from '@/hooks/useFormDrafts';
@@ -751,9 +752,14 @@ const loadCategories = async () => {
 
       const insertedId = await insertItem(itemData);
       if (insertedId && hasPacks && allowSellByPack) {
-        for (let i = 1; i <= Number(totalPackQuantity); i++) {
-          await insertPack({ itemId: Number(insertedId), packNumber: i, quantity: Number(unitsPerPack), unit: baseUnit });
-        }
+        const packCount = Number(totalPackQuantity);
+        const packs = Array.from({ length: packCount }, (_, i) => ({
+          itemId: Number(insertedId),
+          packNumber: i + 1,
+          quantity: Number(unitsPerPack),
+          unit: baseUnit,
+        }));
+        insertPacksBatch(packs);
       }
       // Call onSuccess/onClose directly instead of showing success modal
       await draftFormData.clearCurrent();

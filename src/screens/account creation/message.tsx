@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { Fonts } from '@/constants/theme';
 import {
   StyleSheet,
@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CheckCircle2, Sparkles, LayoutDashboard} from 'lucide-react-native';
+import * as SecureStore from 'expo-secure-store';
 import { AppText } from '@/components/ui';
 import { getAccountGlass } from './glass-account';
 import { useSettings } from '@/context/SettingsContext';
@@ -17,6 +18,10 @@ interface SuccessScreenProps {
 }
 
 const SuccessScreen: React.FC<SuccessScreenProps> = ({ onGoToDashboard }) => {
+  const handleGoToDashboard = useCallback(async () => {
+    await SecureStore.setItemAsync('user_setupComplete', 'true');
+    onGoToDashboard?.();
+  }, [onGoToDashboard]);
   const { colors, t } = useSettings();
   const G = getAccountGlass(colors);
   const styles = useMemo(() => StyleSheet.create({
@@ -178,7 +183,7 @@ const SuccessScreen: React.FC<SuccessScreenProps> = ({ onGoToDashboard }) => {
           <TouchableOpacity 
             style={styles.primaryActionBtn} 
             activeOpacity={0.8} 
-            onPress={onGoToDashboard}
+            onPress={handleGoToDashboard}
           >
             <AppText style={styles.btnText} variant="body" weight="bold" numberOfLines={1}>{t('account.enter_terminal')}</AppText>
             <LayoutDashboard size={20} color={G.bg} />

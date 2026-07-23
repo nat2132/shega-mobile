@@ -175,8 +175,9 @@ const ReportsHubScreenContent = () => {
       const locale = localeMap[language] || 'en-US';
       switch (selectedPeriod) {
         case 'D':
-          start = new Date(today.setHours(0, 0, 0, 0));
-          label = today.toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' });
+          start = new Date(today);
+          start.setHours(0, 0, 0, 0);
+          label = new Date(today).toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' });
           break;
         case 'W': {
           const day = today.getDay();

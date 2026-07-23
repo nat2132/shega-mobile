@@ -14,6 +14,12 @@ import {
   getMonthlyBudgetSummary,
   getBudgets,
   getBudgetWithCategoryProgress,
+  getActiveBudgetForExpenses,
+  checkBudgetPeriodEnd,
+  getBudgetSpendingAlerts,
+  insertBudget,
+  insertBudgetCategory,
+  duplicateBudget,
 } from '@/database/db';
 import { notifyRecurringMarkedPaid } from '@/services/notificationService';
 import { useNotifications } from '@/hooks/useNotifications';
@@ -33,6 +39,8 @@ import {
   Wallet,
   Eye,
   EyeOff,
+  AlertTriangle,
+  Copy,
 } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -44,6 +52,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
 import Animated, { FadeIn, FadeInDown, FadeOut, useSharedValue, withSpring, useAnimatedStyle } from 'react-native-reanimated';
@@ -99,6 +108,13 @@ const PointerLabel = (items: any) => {
     const [activeFilterCategory, setActiveFilterCategory] = useState<string | undefined>(filterCategory);
     const [allBudgets, setAllBudgets] = useState<any[]>([]);
     const [expenseBudgetId, setExpenseBudgetId] = useState<number | null>(null);
+    const [activeBudget, setActiveBudget] = useState<any>(null);
+    const [budgetAlerts, setBudgetAlerts] = useState<any[]>([]);
+    const [showBudgetSetup, setShowBudgetSetup] = useState(false);
+    const [budgetNameInput, setBudgetNameInput] = useState('');
+    const [budgetAmountInput, setBudgetAmountInput] = useState('');
+    const [budgetSetupLoading, setBudgetSetupLoading] = useState(false);
+    const [showRenewal, setShowRenewal] = useState(false);
 
     const debouncedSearch = useDebounce(searchQuery, 250);
     const [searchResults, setSearchResults] = useState<any[] | null>(null);
@@ -132,6 +148,17 @@ const PointerLabel = (items: any) => {
 
     setAllBudgets(getBudgets({ status: 'active' }));
     const now = new Date();
+    const currentBudget = getActiveBudgetForExpenses();
+    setActiveBudget(currentBudget);
+    if (currentBudget) {
+      const periodCheck = checkBudgetPeriodEnd(currentBudget.id);
+      if (periodCheck?.needsRenewal) {
+        setShowRenewal(true);
+      }
+      setBudgetAlerts(getBudgetSpendingAlerts(currentBudget.id));
+    } else {
+      setShowRenewal(false);
+    }
     const baseSummary = getMonthlyBudgetSummary(now.getFullYear(), now.getMonth() + 1);
     if (expenseBudgetId) {
       const budgetDetail = getBudgetWithCategoryProgress(expenseBudgetId);
@@ -218,6 +245,54 @@ const PointerLabel = (items: any) => {
     setHideMetrics(!hideMetrics);
   };
 
+  const handleCreateBudget = async () => {
+    if (!budgetNameInput.trim()) {
+      await dialog.alert({ title: t('common.error'), message: t('budget.enter_name'), iconType: 'warning' });
+      return;
+    }
+    const amount = parseFloat(budgetAmountInput.replace(/,/g, ''));
+    if (!amount || amount <= 0) {
+      await dialog.alert({ title: t('common.error'), message: t('form.error_amount_positive'), iconType: 'warning' });
+      return;
+    }
+    setBudgetSetupLoading(true);
+    const now = new Date();
+    const budgetId = insertBudget({
+      name: budgetNameInput.trim(),
+      type: 'business',
+      period: 'monthly',
+      year: now.getFullYear(),
+      month: now.getMonth() + 1,
+    });
+    if (budgetId) {
+      insertBudgetCategory(budgetId, { category: 'General', plannedAmount: amount });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    setBudgetSetupLoading(false);
+    setShowBudgetSetup(false);
+    setBudgetNameInput('');
+    setBudgetAmountInput('');
+    loadAllData();
+  };
+
+  const handleCopyPrevBudget = () => {
+    if (activeBudget?.id) {
+      const now = new Date();
+      duplicateBudget(activeBudget.id, now.getMonth() + 1, now.getFullYear());
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    setShowRenewal(false);
+    loadAllData();
+  };
+
+  const handleSkipRenewal = () => {
+    setShowRenewal(false);
+  };
+
+  const handleOpenBudgetSetup = () => {
+    setShowBudgetSetup(true);
+  };
+
   const budgetSummary = monthSummary;
 
   const displayTransactions = useMemo(() => {
@@ -231,6 +306,115 @@ const PointerLabel = (items: any) => {
   }, [searchResults, searchQuery, transactions]);
 
   const topItems = displayTransactions.slice(0, 5);
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'over_budget': return colors.error;
+      case 'warning': return colors.warning;
+      default: return colors.success;
+    }
+  };
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'over_budget': return t('budget.over_budget') || 'Over Budget';
+      case 'warning': return 'Warning';
+      default: return t('budget.on_track') || 'On Track';
+    }
+  };
+
+  if (!activeBudget && !showBudgetSetup) {
+    return (
+      <View style={[styles.screenWrapper, { backgroundColor: G.bg }]}>
+        <View style={[styles.topBar, { paddingHorizontal: 24, paddingTop: 60 }]}>
+          <TouchableOpacity onPress={openSidebar} activeOpacity={0.7} style={[styles.avatarBox, { borderColor: G.border, backgroundColor: G.bgCard }]}>
+            <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={styles.avatar} />
+          </TouchableOpacity>
+          <NotificationBell size={22} count={notifCount} />
+        </View>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
+          <View style={[styles.budgetGateCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+            <View style={[styles.budgetGateIcon, { backgroundColor: colors.warning + '20' }]}>
+              <DollarSign size={40} color={colors.warning} />
+            </View>
+            <AppText variant="title" weight="bold" style={{ color: G.fg, textAlign: 'center', marginTop: 20 }}>
+              {t('budget.no_budget_title') || 'No Active Budget'}
+            </AppText>
+            <AppText variant="body" weight="medium" style={{ color: G.fgSecondary, textAlign: 'center', marginTop: 8, lineHeight: 22 }}>
+              {t('budget.create_before_expense') || 'Create your monthly budget before recording expenses.'}
+            </AppText>
+            <AppText variant="body-sm" weight="medium" style={{ color: G.muted, textAlign: 'center', marginTop: 4, lineHeight: 20 }}>
+              {t('budget.budget_helps_control') || 'Budgets help you control spending and track your business performance.'}
+            </AppText>
+            <TouchableOpacity
+              style={[styles.budgetGateBtn, { backgroundColor: G.fg }]}
+              onPress={() => setShowBudgetSetup(true)}
+              activeOpacity={0.8}
+            >
+              <Plus size={20} color={G.bg} />
+              <AppText variant="body" weight="bold" style={{ color: G.bg, marginLeft: 8 }}>
+                {t('budget.create_budget') || 'Create Budget'}
+              </AppText>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  if (showBudgetSetup) {
+    return (
+      <View style={[styles.screenWrapper, { backgroundColor: G.bg }]}>
+        <View style={[styles.topBar, { paddingHorizontal: 24, paddingTop: 60 }]}>
+          <TouchableOpacity onPress={() => setShowBudgetSetup(false)} activeOpacity={0.7}>
+            <X size={24} color={G.fg} />
+          </TouchableOpacity>
+          <AppText variant="body" weight="bold" style={{ color: G.fg }}>{t('budget.create_budget') || 'Create Budget'}</AppText>
+          <View style={{ width: 24 }} />
+        </View>
+        <ScrollView contentContainerStyle={{ padding: 24, flexGrow: 1 }}>
+          <View style={[styles.budgetGateCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+            <AppText variant="title" weight="bold" style={{ color: G.fg, marginBottom: 4 }}>{t('budget.setup_budget') || 'Set Up Your Budget'}</AppText>
+            <AppText variant="body-sm" style={{ color: G.fgSecondary, marginBottom: 24 }}>{t('budget.set_spending_plan') || 'Define your monthly spending plan'}</AppText>
+
+            <AppText variant="caption" weight="bold" transform="uppercase" style={{ color: G.fgSecondary, marginBottom: 6 }}>{t('common.name') || 'Name'}</AppText>
+            <TextInput
+              style={[styles.budgetGateInput, { color: G.fg, borderColor: G.border, backgroundColor: G.bg }]}
+              placeholder="e.g. Monthly Operations"
+              placeholderTextColor={G.fgSecondary}
+              value={budgetNameInput}
+              onChangeText={setBudgetNameInput}
+            />
+
+            <AppText variant="caption" weight="bold" transform="uppercase" style={{ color: G.fgSecondary, marginTop: 16, marginBottom: 6 }}>{t('budget.total_amount') || 'Total Budget Amount'} (ETB)</AppText>
+            <TextInput
+              style={[styles.budgetGateInput, { color: G.fg, borderColor: G.border, backgroundColor: G.bg }]}
+              placeholder="e.g. 50000"
+              placeholderTextColor={G.fgSecondary}
+              value={budgetAmountInput}
+              onChangeText={setBudgetAmountInput}
+              keyboardType="numeric"
+            />
+
+            <TouchableOpacity
+              style={[styles.budgetGateBtn, { backgroundColor: G.fg, marginTop: 24, opacity: budgetSetupLoading ? 0.6 : 1 }]}
+              onPress={handleCreateBudget}
+              disabled={budgetSetupLoading}
+              activeOpacity={0.8}
+            >
+              {budgetSetupLoading ? (
+                <ActivityIndicator color={G.bg} />
+              ) : (
+                <Check size={20} color={G.bg} />
+              )}
+              <AppText variant="body" weight="bold" style={{ color: G.bg, marginLeft: 8 }}>
+                {budgetSetupLoading ? (t('common.creating') || 'Creating...') : (t('common.create') || 'Create')}
+              </AppText>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.screenWrapper, { backgroundColor: G.bg }]}>
@@ -353,8 +537,8 @@ const PointerLabel = (items: any) => {
             </View>
           </View>
 
-          {/* Budget Summary Row */}
-          {budgetSummary && budgetSummary.hasBudget && (
+          {/* Budget Summary Card */}
+          {budgetSummary && budgetSummary.hasBudget && activeBudget && (
             <TutorialTarget id="exp-budget">
             <TouchableOpacity
               style={[styles.budgetSummaryRow, { borderTopColor: G.border }]}
@@ -366,24 +550,63 @@ const PointerLabel = (items: any) => {
                   <AppText variant="caption" weight="bold" style={{ color: G.fgSecondary, marginLeft: 6 }}>
                     {budgetSummary.budgetName || 'Budget'}
                   </AppText>
+                  <View style={[styles.budgetStatusBadge, { backgroundColor: getStatusColor(activeBudget.budgetStatus) + '20' }]}>
+                    <View style={[styles.budgetStatusDot, { backgroundColor: getStatusColor(activeBudget.budgetStatus) }]} />
+                    <AppText variant="micro" weight="bold" style={{ color: getStatusColor(activeBudget.budgetStatus), marginLeft: 4 }}>
+                      {getStatusLabel(activeBudget.budgetStatus)}
+                    </AppText>
+                  </View>
+                </View>
+                <View style={styles.budgetStatsGrid}>
+                  <View style={styles.budgetStatItem}>
+                    <AppText variant="micro" weight="medium" style={{ color: G.muted }}>{t('budget.total_budget') || 'Budget'}</AppText>
+                    <AppNumber value={budgetSummary.totalPlanned} size="body-sm" weight="bold" prefix={t('common.etb') + ' '} />
+                  </View>
+                  <View style={styles.budgetStatItem}>
+                    <AppText variant="micro" weight="medium" style={{ color: G.muted }}>{t('expense.spent') || 'Spent'}</AppText>
+                    <AppNumber value={budgetSummary.totalSpent} size="body-sm" weight="bold" prefix={t('common.etb') + ' '} style={{ color: activeBudget.budgetStatus === 'over_budget' ? colors.error : G.fg }} />
+                  </View>
+                  <View style={styles.budgetStatItem}>
+                    <AppText variant="micro" weight="medium" style={{ color: G.muted }}>{t('budget.remaining') || 'Remaining'}</AppText>
+                    <AppNumber value={budgetSummary.remaining} size="body-sm" weight="bold" prefix={t('common.etb') + ' '} style={{ color: budgetSummary.remaining < 0 ? colors.error : colors.success }} />
+                  </View>
                 </View>
                 <View style={styles.budgetBar}>
                   <View style={[styles.budgetBarBg, { backgroundColor: G.border }]}>
                     <View style={[styles.budgetBarFill, {
                       width: `${Math.min(budgetSummary.percentUsed, 100)}%`,
-                      backgroundColor: budgetSummary.percentUsed >= 100 ? colors.error : budgetSummary.percentUsed >= 80 ? colors.warning : colors.success
+                      backgroundColor: activeBudget.budgetStatus === 'over_budget' ? colors.error : activeBudget.budgetStatus === 'warning' ? colors.warning : colors.success
                     }]} />
                   </View>
                 </View>
                 <View style={styles.budgetStatsRow}>
                   <AppNumber value={budgetSummary.totalSpent} size="caption" prefix={t('common.etb') + ' '} />
-                  <AppNumber value={budgetSummary.percentUsed} size="caption" suffix="%" />
+                  <AppText variant="caption" weight="bold" style={{ color: activeBudget.budgetStatus === 'over_budget' ? colors.error : activeBudget.budgetStatus === 'warning' ? colors.warning : colors.success }}>
+                    {budgetSummary.percentUsed}%
+                  </AppText>
                   <AppNumber value={budgetSummary.remaining} size="caption" prefix={t('common.etb') + ' '} suffix=" left" />
                 </View>
               </View>
               <ChevronRight size={20} color={G.muted} />
             </TouchableOpacity>
             </TutorialTarget>
+          )}
+
+          {/* Budget Alerts */}
+          {budgetAlerts.length > 0 && (
+            <Animated.View entering={FadeInDown.delay(150)} style={{ paddingHorizontal: 24, marginBottom: 12 }}>
+              {budgetAlerts.map((alert, idx) => (
+                <View key={idx} style={[styles.budgetAlertItem, {
+                  backgroundColor: alert.severity === 'danger' ? colors.error + '15' : alert.severity === 'warning' ? colors.warning + '15' : colors.success + '15',
+                  borderColor: alert.severity === 'danger' ? colors.error + '40' : alert.severity === 'warning' ? colors.warning + '40' : colors.success + '40',
+                }]}>
+                  <AlertTriangle size={16} color={alert.severity === 'danger' ? colors.error : alert.severity === 'warning' ? colors.warning : colors.success} />
+                  <AppText variant="caption" weight="bold" style={{ color: G.fg, flex: 1, marginLeft: 8 }} numberOfLines={2}>
+                    {alert.message}
+                  </AppText>
+                </View>
+              ))}
+            </Animated.View>
           )}
         </Animated.View>
         </TutorialTarget>
@@ -632,6 +855,51 @@ const PointerLabel = (items: any) => {
         </View>
       </Modal>
 
+      {/* Budget Renewal Modal */}
+      <Modal visible={showRenewal} transparent animationType="fade" onRequestClose={() => setShowRenewal(false)}>
+        <View style={styles.renewalOverlay}>
+          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={handleSkipRenewal} />
+          <View style={[styles.renewalSheet, { backgroundColor: G.bgCard, borderTopWidth: 1, borderTopColor: G.border }]}>
+            <View style={{ padding: 32, alignItems: 'center' }}>
+              <View style={[styles.budgetGateIcon, { backgroundColor: colors.warning + '20', width: 64, height: 64, borderRadius: 32 }]}>
+                <Calendar size={32} color={colors.warning} />
+              </View>
+              <AppText variant="title" weight="bold" style={{ color: G.fg, textAlign: 'center', marginTop: 20 }}>
+                {t('budget.period_ended') || 'Budget Period Ended'}
+              </AppText>
+              <AppText variant="body" weight="medium" style={{ color: G.fgSecondary, textAlign: 'center', marginTop: 8, lineHeight: 22 }}>
+                {t('budget.create_new_period') || 'Your current budget period has ended. Create a new budget for this month.'}
+              </AppText>
+              {activeBudget && (
+                <TouchableOpacity
+                  style={[styles.renewalBtn, { backgroundColor: G.fg, marginTop: 24 }]}
+                  onPress={handleCopyPrevBudget}
+                  activeOpacity={0.8}
+                >
+                  <Copy size={20} color={G.bg} />
+                  <AppText variant="body" weight="bold" style={{ color: G.bg, marginLeft: 8 }}>
+                    {t('budget.copy_previous') || 'Copy Previous Budget'}
+                  </AppText>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={[styles.renewalBtn, { backgroundColor: G.bg, borderColor: G.border, borderWidth: 1, marginTop: 8 }]}
+                onPress={() => { setShowRenewal(false); setShowBudgetSetup(true); }}
+                activeOpacity={0.8}
+              >
+                <Plus size={20} color={G.fg} />
+                <AppText variant="body" weight="bold" style={{ color: G.fg, marginLeft: 8 }}>
+                  {t('budget.create_new') || 'Create New Budget'}
+                </AppText>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleSkipRenewal} style={{ marginTop: 16 }}>
+                <AppText variant="body-sm" weight="medium" style={{ color: G.muted }}>{t('common.later') || 'Later'}</AppText>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 };
@@ -696,6 +964,18 @@ const styles = StyleSheet.create({
   detailSheet: { borderTopLeftRadius: 30, borderTopRightRadius: 30, height: Dimensions.get('window').height * 0.90 },
   modalHeader: { alignItems: 'center', paddingTop: 15, paddingBottom: 10 },
   modalHandle: { width: 40, height: 4, borderRadius: 2 },
+  budgetGateCard: { borderRadius: 28, padding: 32, borderWidth: 1, alignItems: 'center', width: '100%' },
+  budgetGateIcon: { width: 72, height: 72, borderRadius: 36, justifyContent: 'center', alignItems: 'center' },
+  budgetGateBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28, paddingVertical: 14, borderRadius: 16, marginTop: 20, width: '100%' },
+  budgetGateInput: { height: 48, borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, fontFamily: Fonts.medium, fontSize: 15, width: '100%' },
+  budgetStatusBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, marginLeft: 8 },
+  budgetStatusDot: { width: 6, height: 6, borderRadius: 3 },
+  budgetStatsGrid: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, marginBottom: 12 },
+  budgetStatItem: { alignItems: 'center', flex: 1 },
+  budgetAlertItem: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, borderWidth: 1, marginBottom: 6 },
+  renewalOverlay: { flex: 1, justifyContent: 'flex-end' },
+  renewalSheet: { borderTopLeftRadius: 30, borderTopRightRadius: 30 },
+  renewalBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 14, borderRadius: 16, width: '100%' },
 });
 
 export default CapitalHub;

@@ -28,6 +28,7 @@ import {
   getBudgetStatusForCategory,
   getBudgets,
   getBudgetCategorySpending,
+  getActiveBudgetForExpenses,
 } from '@/database/db';
 import { notifyExpenseRecorded, notifyExpensePushedBudgetOverLimit, notifyLargeExpense } from '@/services/notificationService';
 import { useSettings } from '@/context/SettingsContext';
@@ -208,6 +209,14 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
       return;
     }
 
+    const activeBudget = getActiveBudgetForExpenses();
+    if (!activeBudget && !isRecurring) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      playBad();
+      await dialog.alert({ title: t('common.error'), message: t('budget.no_active_budget') || 'No active budget. Create a budget before recording expenses.', iconType: 'warning' });
+      return;
+    }
+
     saveFrequentCategory(category.trim());
 
     if (isRecurring) {
@@ -241,6 +250,7 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
       category: category.trim(),
       date,
       budgetCategoryId: budgetCategoryId || undefined,
+      budgetId: selectedBudgetId || activeBudget?.id || undefined,
     };
 
     const id = insertExpense(expenseData);

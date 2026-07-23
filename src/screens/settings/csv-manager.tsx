@@ -238,6 +238,9 @@ const CSVManagerScreen = () => {
         case 'contacts':
           data = getContacts() as any[];
           break;
+        case 'adjustments':
+          data = getRecentAdjustments() as any[];
+          break;
       }
 
       await exportToCSV(data, selectedModule);

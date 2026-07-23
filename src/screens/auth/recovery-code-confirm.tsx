@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Fonts } from '@/constants/theme';
 import {
   StyleSheet,
@@ -25,8 +25,11 @@ const RecoveryCodeConfirmScreen: React.FC<RecoveryCodeConfirmScreenProps> = ({ o
   const [recoveryCode, setRecoveryCode] = useState('');
   const [copied, setCopied] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const codeGeneratedRef = useRef(false);
 
   useEffect(() => {
+    if (codeGeneratedRef.current) return;
+    codeGeneratedRef.current = true;
     generateRecoveryCode().then(async (code) => {
       setRecoveryCode(code);
       await storeRecoveryCodeHash(code);

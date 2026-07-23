@@ -1,7 +1,7 @@
 import { Fonts, Spacing } from '@/constants/theme';
 import { useDialog } from '@/context/DialogContext';
 import { PROFILE_IMAGES, useDashboardVisibility, useSettings } from '@/context/SettingsContext';
-import { clearDatabase } from '@/database/db';
+import { clearDatabase, resetSubscriptionToBasic } from '@/database/db';
 import * as Haptics from 'expo-haptics';
 import * as SecureStore from 'expo-secure-store';
 import { useState } from 'react';
@@ -14,6 +14,7 @@ import {
   Switch,
   TextInput,
   TouchableOpacity,
+  Alert,
   View
 } from 'react-native';
 import Animated, {
@@ -287,7 +288,7 @@ const ResetModal = ({
     const storeKeys = [
       'settings_theme', 'settings_language', 'settings_calendar',
       'settings_time_system', 'settings_profile', 'settings_notifications',
-      'settings_sound_enabled', 'settings_pin',
+      'settings_sound_enabled', 'settings_pin', 'user_pin',
       'pin_salt', 'pin_hash', 'pin_flag',
       'recovery_salt', 'recovery_hash',
       'biometrics_enabled',
@@ -632,17 +633,27 @@ const SettingsScreen = () => {
                 }}
              />
              <SettingLedgerItem 
-                 icon={HelpCircle} 
-                 title={t('support.contact')} 
-                 onPress={() => handleOpenSub(setShowSupport)}
+                  icon={HelpCircle} 
+                  title={t('support.contact')} 
+                  onPress={() => handleOpenSub(setShowSupport)}
+               />
+              <SettingLedgerItem
+                 icon={Zap}
+                 title={'Reset Subscription (Testing)'}
+                 subtitle={'Set plan to basic/expired'}
+                 onPress={() => {
+                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                   const ok = resetSubscriptionToBasic();
+                   Alert.alert(ok ? 'Subscription Reset' : 'Failed', ok ? 'Plan set to basic, status expired.' : 'Could not reset subscription.');
+                 }}
               />
-             <SettingLedgerItem 
-                icon={Trash2} 
-                title={t('settings.reset_app')} 
-                subtitle={t('settings.reset_desc_advanced')}
-                danger
-                onPress={() => handleOpenSub(setShowReset)}
-             />
+              <SettingLedgerItem 
+                 icon={Trash2} 
+                 title={t('settings.reset_app')} 
+                 subtitle={t('settings.reset_desc_advanced')}
+                 danger
+                 onPress={() => handleOpenSub(setShowReset)}
+              />
           </View>
         </View>
 

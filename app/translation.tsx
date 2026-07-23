@@ -15,6 +15,7 @@ export default function TranslationRoute() {
       <Stack.Screen 
         options={{
           headerShown: true,
+          headerBackVisible: false,
           headerTitle: 'Translation & Language',
           headerTitleStyle: { fontFamily: Fonts.bold, color: colors.text },
           headerStyle: { backgroundColor: colors.background },

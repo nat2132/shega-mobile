@@ -34,51 +34,9 @@ import { Fonts } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import ConfettiParticle from '@/components/ConfettiParticle';
 
 const { width, height } = Dimensions.get('window');
-
-// Premium Confetti Particle
-const ConfettiParticle = ({ index, colors: themeColors }: { index: number; colors: any }) => {
-  const size = Math.random() * 8 + 4;
-  const palette = [themeColors.success, themeColors.primary, '#FFD700', themeColors.error, '#AF52DE'];
-  const color = palette[index % palette.length];
-  
-  const progress = useSharedValue(0);
-  const xOffset = useSharedValue((Math.random() - 0.5) * width * 0.8);
-  const rotate = useSharedValue(Math.random() * 360);
-
-  useEffect(() => {
-    progress.value = withDelay(
-      Math.random() * 1000,
-      withTiming(1, { duration: 2500 + Math.random() * 1000 })
-    );
-  }, [progress]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: progress.value * (height * 0.8) - 100 },
-      { translateX: xOffset.value + Math.sin(progress.value * 10) * 20 },
-      { rotate: `${rotate.value + progress.value * 500}deg` }
-    ],
-    opacity: 1 - progress.value,
-  }));
-
-  return (
-    <Animated.View 
-      style={[
-        { 
-          position: 'absolute', 
-          width: size, 
-          height: size, 
-          backgroundColor: color,
-          borderRadius: size / 2,
-          top: -20,
-        }, 
-        animatedStyle
-      ]} 
-    />
-  );
-};
 
 interface SaleSuccessModalProps {
   saleData: {

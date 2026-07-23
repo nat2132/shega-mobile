@@ -325,7 +325,7 @@ export const generateReceiptPDF = async (sale: any, business: any, language: Lan
     `;
   }).join('');
 
-  const grandTotal = subtotal - discount + (subtotal * vat) / 100;
+  const grandTotal = subtotal - discount + ((subtotal - discount) * vat) / 100;
 
   const html = `
     <html>

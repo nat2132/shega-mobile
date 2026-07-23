@@ -181,6 +181,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const selectPlan = useCallback(async (plan: string, durationMonths: number, price: number) => {
     const result = updateSubscriptionPlan(plan, durationMonths, price);
     if (result) await refresh();
+    else console.error('selectPlan failed: invalid plan/price combination');
     return result;
   }, [refresh]);
 

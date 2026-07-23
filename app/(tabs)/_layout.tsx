@@ -1,14 +1,25 @@
 import { useEffect, useState } from 'react';
-import { Tabs } from 'expo-router';
+import { Tabs, useRootNavigationState, router } from 'expo-router';
 import { CustomTabBar } from '@/components/CustomTabBar';
 import { useSettings } from '@/context/SettingsContext';
+import { useAuth } from '@/context/AuthContext';
 import { useWarehouse } from '@/context/WarehouseContext';
 import WarehouseSelectorModal from '../../src/screens/settings/warehouse-selector';
 
 export default function TabsLayout() {
   const { t } = useSettings();
+  const { isAuthenticated } = useAuth();
   const { warehouses, activeWarehouseId } = useWarehouse();
+  const navigationState = useRootNavigationState();
   const [showWarehouseSelector, setShowWarehouseSelector] = useState(false);
+
+  useEffect(() => {
+    if (!navigationState?.key) return;
+    if (!isAuthenticated) {
+      router.replace('/verify-pin');
+      return;
+    }
+  }, [isAuthenticated, navigationState?.key]);
 
   useEffect(() => {
     if (warehouses.length > 0 && !activeWarehouseId) {

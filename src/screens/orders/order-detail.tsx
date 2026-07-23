@@ -7,6 +7,7 @@ import {
 } from "react-native";
 import { useFocusEffect, useRouter, useLocalSearchParams } from "expo-router";
 import { useSettings } from "@/context/SettingsContext";
+import { formatDate } from '@/utils/date-utils';
 import { useDialog } from "@/context/DialogContext";
 import { useToast } from "@/context/ToastContext";
 import {
@@ -46,7 +47,7 @@ const statusColors: Record<string, string> = {
 };
 
 const OrderDetailScreen = () => {
-  const { colors, t } = useSettings();
+  const { colors, t, calendarType, language } = useSettings();
   const ORD_GLASS = useMemo(() => getOrdersGlass(colors), [colors]);
   const router = useRouter();
   const dialog = useDialog();
@@ -266,7 +267,7 @@ const OrderDetailScreen = () => {
                 weight="medium"
                 style={{ color: ORD_GLASS.fgSecondary, flex: 1 }}
               >
-                Created: {new Date(order.createdAt).toLocaleString()}
+                Created: {formatDate(new Date(order.createdAt), calendarType, language)}
               </AppText>
             </View>
             {order.convertedAt && (
@@ -277,7 +278,7 @@ const OrderDetailScreen = () => {
                   weight="medium"
                   style={{ color: ORD_GLASS.fgSecondary, flex: 1 }}
                 >
-                  Converted: {new Date(order.convertedAt).toLocaleString()}
+                  Converted: {formatDate(new Date(order.convertedAt), calendarType, language)}
                 </AppText>
               </View>
             )}
@@ -289,7 +290,7 @@ const OrderDetailScreen = () => {
                   weight="medium"
                   style={{ color: ORD_GLASS.fgSecondary, flex: 1 }}
                 >
-                  Cancelled: {new Date(order.cancelledAt).toLocaleString()}
+                  Cancelled: {formatDate(new Date(order.cancelledAt), calendarType, language)}
                 </AppText>
               </View>
             )}

@@ -67,7 +67,7 @@ const CalendarSettings = () => {
 
       <View style={[styles.infoBox, { backgroundColor: G.bgCard, borderColor: G.border }]}>
         <AppText variant="body-sm" weight="medium" style={[styles.infoText, { color: G.fgSecondary }]} numberOfLines={3}>
-          ðŸ“… {t('settings.currently_active')} <AppText variant="body-sm" weight="bold" style={[styles.infoHighlight, { color: G.fg }]} numberOfLines={1}>{calendarType === 'ethiopian' ? t('settings.ethiopian') : t('settings.gregorian')}</AppText>
+          📅 {t('settings.currently_active')} <AppText variant="body-sm" weight="bold" style={[styles.infoHighlight, { color: G.fg }]} numberOfLines={1}>{calendarType === 'ethiopian' ? t('settings.ethiopian') : t('settings.gregorian')}</AppText>
         </AppText>
       </View>
 

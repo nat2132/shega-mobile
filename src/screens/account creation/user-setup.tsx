@@ -113,7 +113,6 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
       // All other settings (theme, language, calendar) are already persisted 
       // via live calls in the UI buttons.
       
-      await SecureStore.setItemAsync('user_setupComplete', 'true');
       onComplete?.();
     } catch (error) {
       console.error('[UserSetup] Failed to finalize setup:', error);

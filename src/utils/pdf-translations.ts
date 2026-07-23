@@ -451,7 +451,7 @@ export const pdfTranslations: Record<'en' | 'am' | 'om' | 'ti', PDFTranslations>
       walkInCustomer: "Maamila Seeraa",
       cash: "Maallaqa Caafaa",
       general: "Waliigalaa",
-      pcs: "kubbaa",
+      pcs: "citaa",
       shegaStore: "Dukaan Shega",
       mainBranch: "Cita Haadhaa",
       multipleSuppliers: "Dhiyeessoota hedduu",

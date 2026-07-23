@@ -10,6 +10,7 @@ import * as Haptics from 'expo-haptics';
 import { Delete, Lock, Fingerprint, Timer, ShieldAlert, HelpCircle } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useSettings } from '@/context/SettingsContext';
+import { useAuth } from '@/context/AuthContext';
 import { verifyPinHash } from '@/services/crypto';
 import { authenticateWithBiometrics, isBiometricsAvailable, isBiometricsEnabled } from '@/services/biometrics';
 import { AppText } from '@/components/ui';
@@ -30,11 +31,10 @@ interface VerifyPinScreenProps {
 
 const VerifyPinScreen: React.FC<VerifyPinScreenProps> = ({ onSuccess }) => {
   const { t, colors } = useSettings();
+  const { authenticate, recordFailedAttempt, resetAttempts, isLocked, lockoutRemaining, attemptsRemaining } = useAuth();
   const G = getAuthGlass(colors);
   const router = useRouter();
   const [pin, setPin] = useState('');
-  const [attempts, setAttempts] = useState(0);
-  const [lockoutTimer, setLockoutTimer] = useState(0);
   const [bioEnabled, setBioEnabled] = useState(false);
   const pinLength = 4;
   const maxAttempts = 5;
@@ -48,7 +48,7 @@ const VerifyPinScreen: React.FC<VerifyPinScreenProps> = ({ onSuccess }) => {
   }, []);
 
   const handleBiometricUnlock = async () => {
-    if (lockoutTimer > 0) return;
+    if (isLocked) return;
     const success = await authenticateWithBiometrics('Authenticate to unlock');
     if (success) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -57,19 +57,13 @@ const VerifyPinScreen: React.FC<VerifyPinScreenProps> = ({ onSuccess }) => {
   };
 
   useEffect(() => {
-    let interval: any;
-    if (lockoutTimer > 0) {
-      interval = setInterval(() => {
-        setLockoutTimer(prev => prev - 1);
-      }, 1000);
-    } else if (lockoutTimer === 0 && attempts >= maxAttempts) {
-      setAttempts(0);
+    if (isLocked && lockoutRemaining <= 0) {
+      resetAttempts();
     }
-    return () => clearInterval(interval);
-  }, [lockoutTimer, attempts]);
+  }, [isLocked, lockoutRemaining, resetAttempts]);
 
   const handlePress = async (num: string) => {
-    if (lockoutTimer > 0) return;
+    if (isLocked) return;
     if (pin.length < pinLength) {
       const newPin = pin + num;
       setPin(newPin);
@@ -81,7 +75,7 @@ const VerifyPinScreen: React.FC<VerifyPinScreenProps> = ({ onSuccess }) => {
   };
 
   const handleDelete = () => {
-    if (lockoutTimer > 0) return;
+    if (isLocked) return;
     setPin(pin.slice(0, -1));
   };
 
@@ -103,17 +97,17 @@ const VerifyPinScreen: React.FC<VerifyPinScreenProps> = ({ onSuccess }) => {
       const matched = await verifyPinHash(inputPin);
       if (matched) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        await resetAttempts();
+        authenticate();
         onSuccess();
         return;
       }
 
-      const newAttempts = attempts + 1;
-      setAttempts(newAttempts);
+      const newAttempts = await recordFailedAttempt();
       shake();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
 
       if (newAttempts >= maxAttempts) {
-        setLockoutTimer(60);
         setPin('');
       } else {
         setTimeout(() => setPin(''), 300);
@@ -126,10 +120,10 @@ const VerifyPinScreen: React.FC<VerifyPinScreenProps> = ({ onSuccess }) => {
   const renderKey = (num: number | string, icon?: any) => (
     <TouchableOpacity 
       key={num} 
-      style={[styles.keyNode, lockoutTimer > 0 && { opacity: 0.2 }]} 
+      style={[styles.keyNode, isLocked && { opacity: 0.2 }]} 
       onPress={() => (icon ? handleDelete() : handlePress(num.toString()))}
       activeOpacity={0.6}
-      disabled={lockoutTimer > 0}
+      disabled={isLocked}
     >
       {icon ? (
          icon
@@ -260,32 +254,32 @@ const VerifyPinScreen: React.FC<VerifyPinScreenProps> = ({ onSuccess }) => {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: G.bg }]}>
       <View style={StyleSheet.absoluteFill}>
-        <View style={[styles.glowNode, { top: -100, right: -100, backgroundColor: lockoutTimer > 0 ? G.error : G.fg, opacity: lockoutTimer > 0 ? 0.1 : 0.05 }]} />
+        <View style={[styles.glowNode, { top: -100, right: -100, backgroundColor: isLocked ? G.error : G.fg, opacity: isLocked ? 0.1 : 0.05 }]} />
         <View style={[styles.glowNode, { bottom: -60, left: -80, backgroundColor: G.fg, opacity: 0.03 }]} />
         <View style={[styles.glowNode, { top: '40%', left: '30%', backgroundColor: G.fg, opacity: 0.02 }]} />
       </View>
 
       <Animated.View entering={FadeIn.duration(800)} style={styles.content}>
         <View style={styles.securityNode}>
-          <View style={[styles.shieldRing, { backgroundColor: G.border, borderColor: G.border }, lockoutTimer > 0 && { borderColor: G.error, backgroundColor: G.error + '20' }]}>
-             {lockoutTimer > 0 ? (
+          <View style={[styles.shieldRing, { backgroundColor: G.border, borderColor: G.border }, isLocked && { borderColor: G.error, backgroundColor: G.error + '20' }]}>
+             {isLocked ? (
                <ShieldAlert size={32} color={G.error} strokeWidth={1.5} />
              ) : (
                <Lock size={32} color={G.fg} strokeWidth={1.5} />
              )}
           </View>
-          <AppText style={[styles.title, { color: lockoutTimer > 0 ? G.error : G.fg }]} variant="display" weight="bold" numberOfLines={2}>
-            {lockoutTimer > 0 ? 'SYSTEM LOCKDOWN' : t('pin.system_key')}
+          <AppText style={[styles.title, { color: isLocked ? G.error : G.fg }]} variant="display" weight="bold" numberOfLines={2}>
+            {isLocked ? 'SYSTEM LOCKDOWN' : t('pin.system_key')}
           </AppText>
           <AppText style={[styles.subtitle, { color: G.fgSecondary }]} variant="body" weight="medium" numberOfLines={3}>
-            {lockoutTimer > 0
-              ? `Security Protocol Active. Cooling down in ${lockoutTimer}s`
+            {isLocked
+              ? `Security Protocol Active. Cooling down in ${lockoutRemaining}s`
               : t('pin.enter_security')}
           </AppText>
         </View>
 
         <Animated.View style={[styles.dotsNode, animatedShakeStyle]}>
-          {lockoutTimer > 0 ? (
+          {isLocked ? (
             <View style={styles.lockoutBadge}>
                <Timer size={14} color={G.error} />
                <AppText style={[styles.lockoutText, { color: G.error }]} variant="caption" weight="bold" transform="uppercase" numberOfLines={1}>{t('pin.cool_down_active')}</AppText>
@@ -316,25 +310,25 @@ const VerifyPinScreen: React.FC<VerifyPinScreenProps> = ({ onSuccess }) => {
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => renderKey(n))}
           {bioEnabled ? (
             <TouchableOpacity
-              style={[styles.keyNode, lockoutTimer > 0 && { opacity: 0.2 }]}
+              style={[styles.keyNode, isLocked && { opacity: 0.2 }]}
               onPress={handleBiometricUnlock}
               activeOpacity={0.6}
-              disabled={lockoutTimer > 0}
+              disabled={isLocked}
             >
-              <Fingerprint size={28} color={lockoutTimer > 0 ? G.fgSecondary : G.fg} strokeWidth={1.5} />
+              <Fingerprint size={28} color={isLocked ? G.fgSecondary : G.fg} strokeWidth={1.5} />
             </TouchableOpacity>
           ) : (
             <View style={styles.keyNode} />
           )}
           {renderKey(0)}
-          {renderKey('del', <Delete size={24} color={lockoutTimer > 0 ? G.fgSecondary : G.fg} strokeWidth={1.5} />)}
+          {renderKey('del', <Delete size={24} color={isLocked ? G.fgSecondary : G.fg} strokeWidth={1.5} />)}
         </View>
 
         <View style={styles.footerNode}>
-            <AppText style={[styles.footerTag, { color: attempts > 0 && lockoutTimer === 0 ? G.error : G.fgSecondary }]} variant="caption" weight="bold" transform="uppercase" numberOfLines={2}>
-             {lockoutTimer > 0
+            <AppText style={[styles.footerTag, { color: attemptsRemaining < maxAttempts && !isLocked ? G.error : G.fgSecondary }]} variant="caption" weight="bold" transform="uppercase" numberOfLines={2}>
+             {isLocked
                ? 'DEVICE TEMPORARILY BRICKED'
-               : (attempts > 0 ? `INVALID PROTOCOL: ${maxAttempts - attempts} ATTEMPTS REMAINING` : 'AES-256 SECURE ENCRYPTION ACTIVE')}
+               : (attemptsRemaining < maxAttempts ? `INVALID PROTOCOL: ${attemptsRemaining} ATTEMPTS REMAINING` : 'AES-256 SECURE ENCRYPTION ACTIVE')}
            </AppText>
 
            <TouchableOpacity

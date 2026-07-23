@@ -31,6 +31,14 @@ export const SwipeableItem: React.FC<SwipeableItemProps> = ({
   const dialog = useDialog();
   const pan = useRef(new Animated.Value(0)).current;
   const isSwipingRef = useRef(false);
+  const onDeleteRef = useRef(onDelete);
+  const dialogRef = useRef(dialog);
+  const tRef = useRef(t);
+  const itemTitleRef = useRef(itemTitle);
+  onDeleteRef.current = onDelete;
+  dialogRef.current = dialog;
+  tRef.current = t;
+  itemTitleRef.current = itemTitle;
 
   const resetPosition = () => {
     Animated.spring(pan, {
@@ -42,11 +50,11 @@ export const SwipeableItem: React.FC<SwipeableItemProps> = ({
 
   const confirmDelete = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    const ok = await dialog.confirm({
-      title: t('common.delete_item'),
-      message: t('common.delete_confirm', { item: itemTitle }),
-      confirmText: t('common.delete'),
-      cancelText: t('common.cancel'),
+    const ok = await dialogRef.current.confirm({
+      title: tRef.current('common.delete_item'),
+      message: tRef.current('common.delete_confirm', { item: itemTitleRef.current }),
+      confirmText: tRef.current('common.delete'),
+      cancelText: tRef.current('common.cancel'),
       iconType: 'danger',
       destructive: true,
     });
@@ -56,7 +64,7 @@ export const SwipeableItem: React.FC<SwipeableItemProps> = ({
         duration: 200,
         useNativeDriver: true,
       }).start(() => {
-        onDelete();
+        onDeleteRef.current();
       });
     } else {
       resetPosition();

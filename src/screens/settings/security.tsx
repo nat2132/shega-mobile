@@ -41,20 +41,23 @@ const SecuritySettings = () => {
   const hasPin = !!resolvedPin;
 
   const handleUpdatePin = async () => {
-    if (hasPin && currentPin !== resolvedPin) {
+    const trimmedCurrent = currentPin.trim();
+    const trimmedNew = newPin.trim();
+    const trimmedConfirm = confirmPin.trim();
+    if (hasPin && trimmedCurrent !== resolvedPin) {
       await dialog.alert({ title: t('common.error'), message: t('security.enter_current_pin'), iconType: 'danger' });
       return;
     }
-    if (newPin.length !== 4 || isNaN(Number(newPin))) {
+    if (trimmedNew.length !== 4 || isNaN(Number(trimmedNew))) {
       await dialog.alert({ title: t('common.error'), message: t('settings.pin_invalid'), iconType: 'danger' });
       return;
     }
-    if (newPin !== confirmPin) {
+    if (trimmedNew !== trimmedConfirm) {
       await dialog.alert({ title: t('common.error'), message: t('settings.pin_mismatch'), iconType: 'danger' });
       return;
     }
-    setPin(newPin);
-    setResolvedPin(newPin);
+    setPin(trimmedNew);
+    setResolvedPin(trimmedNew);
     setCurrentPin('');
     setNewPin('');
     setConfirmPin('');

@@ -43,7 +43,7 @@ const WarehouseSettingsScreen: React.FC<WarehouseSettingsScreenProps> = ({ onClo
       return;
     }
     if (editingId) {
-      updateWarehouse(editingId, {
+      await updateWarehouse(editingId, {
         name: formName.trim(),
         location: formLocation,
         contactPerson: formContact,
@@ -64,7 +64,7 @@ const WarehouseSettingsScreen: React.FC<WarehouseSettingsScreenProps> = ({ onClo
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     resetForm();
-    refreshWarehouses();
+    await refreshWarehouses();
   };
 
   const handleEdit = (wh: any) => {
@@ -87,10 +87,10 @@ const WarehouseSettingsScreen: React.FC<WarehouseSettingsScreenProps> = ({ onClo
       destructive: true,
     });
     if (ok) {
-      deleteWarehouse(wh.id);
+      await deleteWarehouse(wh.id);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       if (activeWarehouseId === wh.id) await setActiveWarehouseId(null);
-      refreshWarehouses();
+      await refreshWarehouses();
     }
   };
 

@@ -32,7 +32,7 @@ export const getEthiopianMonthNames = (language: string = 'en') => {
 export const getEthiopianDaysInMonth = (year: number, month: number) => {
   if (month <= 12) return 30;
   // Pagumen (month 13)
-  const isLeapYear = (year + 1) % 4 === 0;
+  const isLeapYear = year % 4 === 0;
   return isLeapYear ? 6 : 5;
 };
 
@@ -104,7 +104,7 @@ export const toEthiopianDate = (date: Date) => {
  */
 export const fromEthiopianToDate = (year: number, month: number, day: number) => {
   const ethiopicEpoch = 1723856;
-  const jdn = ethiopicEpoch + 365 * (year - 1) + Math.floor(year / 4) + 30 * (month - 1) + day - 1;
+  const jdn = ethiopicEpoch + 365 * (year - 1) + Math.floor((year - 1) / 4) + 30 * (month - 1) + day - 1;
   
   // Convert JDN back to Gregorian
   let l = jdn + 68569;

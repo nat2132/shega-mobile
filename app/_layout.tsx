@@ -1,4 +1,5 @@
 import SidebarOverlay from '@/components/SidebarOverlay';
+import { AuthProvider } from '@/context/AuthContext';
 import { SettingsProvider , useSettings } from '@/context/SettingsContext';
 import { SidebarProvider } from '@/context/SidebarContext';
 import { NavigationIntentProvider } from '@/context/NavigationIntentContext';
@@ -107,6 +108,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       {dbReady && (
+          <AuthProvider>
           <SettingsProvider>
             <SubscriptionProvider>
               <WarehouseProvider>
@@ -128,6 +130,7 @@ export default function RootLayout() {
               </WarehouseProvider>
             </SubscriptionProvider>
           </SettingsProvider>
+          </AuthProvider>
       )}
     </GestureHandlerRootView>
   );
