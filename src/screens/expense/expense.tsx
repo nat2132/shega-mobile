@@ -114,6 +114,8 @@ const PointerLabel = (items: any) => {
     const [budgetNameInput, setBudgetNameInput] = useState('');
     const [budgetAmountInput, setBudgetAmountInput] = useState('');
     const [budgetSetupLoading, setBudgetSetupLoading] = useState(false);
+    const [budgetPeriod, setBudgetPeriod] = useState('monthly');
+    const [showAdvancedPeriod, setShowAdvancedPeriod] = useState(false);
     const [showRenewal, setShowRenewal] = useState(false);
 
     const debouncedSearch = useDebounce(searchQuery, 250);
@@ -260,9 +262,9 @@ const PointerLabel = (items: any) => {
     const budgetId = insertBudget({
       name: budgetNameInput.trim(),
       type: 'business',
-      period: 'monthly',
+      period: budgetPeriod as any,
       year: now.getFullYear(),
-      month: now.getMonth() + 1,
+      month: budgetPeriod === "monthly" || budgetPeriod === "quarterly" ? now.getMonth() + 1 : undefined,
     });
     if (budgetId) {
       insertBudgetCategory(budgetId, { category: 'General', plannedAmount: amount });
@@ -394,6 +396,38 @@ const PointerLabel = (items: any) => {
               onChangeText={setBudgetAmountInput}
               keyboardType="numeric"
             />
+
+            <AppText variant="caption" weight="bold" transform="uppercase" style={{ color: G.fgSecondary, marginTop: 16, marginBottom: 6 }}>{t('budget.period_label') || 'Period'}</AppText>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {['monthly'].map(p => (
+                <TouchableOpacity key={p}
+                  style={[budgetPeriodStyles.chip, { backgroundColor: G.bg, borderColor: G.border }, budgetPeriod === p && { backgroundColor: G.fg }]}
+                  onPress={() => { setBudgetPeriod(p); Haptics.selectionAsync(); }}
+                >
+                  <AppText variant="body-sm" weight="bold" style={{ color: budgetPeriod === p ? G.bg : G.fg, textTransform: 'capitalize' }}>{t(`budget.${p}`)}</AppText>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity
+              style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}
+              onPress={() => { setShowAdvancedPeriod(!showAdvancedPeriod); Haptics.selectionAsync(); }}
+            >
+              <AppText variant="caption" weight="bold" style={{ color: G.fgSecondary }}>
+                {showAdvancedPeriod ? (t('common.hide') || 'Hide') : (t('common.advanced') || 'Advanced')}
+              </AppText>
+            </TouchableOpacity>
+            {showAdvancedPeriod && (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                {['weekly', 'quarterly', 'yearly', 'custom'].map(p => (
+                  <TouchableOpacity key={p}
+                    style={[budgetPeriodStyles.chip, { backgroundColor: G.bg, borderColor: G.border }, budgetPeriod === p && { backgroundColor: G.fg }]}
+                    onPress={() => { setBudgetPeriod(p); Haptics.selectionAsync(); }}
+                  >
+                    <AppText variant="body-sm" weight="bold" style={{ color: budgetPeriod === p ? G.bg : G.fg, textTransform: 'capitalize' }}>{t(`budget.${p}`)}</AppText>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
 
             <TouchableOpacity
               style={[styles.budgetGateBtn, { backgroundColor: G.fg, marginTop: 24, opacity: budgetSetupLoading ? 0.6 : 1 }]}
@@ -903,6 +937,10 @@ const PointerLabel = (items: any) => {
     </View>
   );
 };
+
+const budgetPeriodStyles = StyleSheet.create({
+  chip: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 12, borderWidth: 1 },
+});
 
 const styles = StyleSheet.create({
   screenWrapper: { flex: 1 },

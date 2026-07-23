@@ -5949,12 +5949,13 @@ export const getActiveBudgetForExpenses = () => {
         COALESCE(SUM(bc.plannedAmount), 0) as totalPlanned
        FROM budgets b
        LEFT JOIN budget_categories bc ON bc.budgetId = b.id
-       WHERE b.year = ? AND (b.month = ? OR b.month IS NULL)
-         AND b.period = 'monthly' AND b.status = 'active'
+       WHERE b.status = 'active'
+         AND (b.period = 'monthly' AND b.year = ? AND (b.month = ? OR b.month IS NULL)
+              OR b.period != 'monthly' AND b.year = ?)
        GROUP BY b.id
        ORDER BY b.month DESC
        LIMIT 1`,
-      [year, month]
+      [year, month, year]
     );
     if (!budget) return null;
     const spent = database.getFirstSync<{ total: number }>(

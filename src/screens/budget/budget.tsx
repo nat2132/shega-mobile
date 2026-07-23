@@ -13,7 +13,6 @@ import {
   getBudgetWithCategoryProgress,
   getMonthlyBudgetSummary,
   insertBudget,
-  insertBudgetCategory,
 } from "@/database/db";
 import { useFormDrafts } from '@/hooks/useFormDrafts';
 import { useNotifications } from "@/hooks/useNotifications";
@@ -500,18 +499,19 @@ const BudgetOverview = () => {
   );
 };
 
-const PERIOD_OPTIONS = ["daily", "weekly", "monthly", "quarterly", "yearly"] as const;
+const PERIOD_OPTIONS = ["daily", "weekly", "monthly", "quarterly", "yearly", "custom"] as const;
 
 const CreateBudgetModal = ({ colors, t, onClose, onSaved }: { colors: any; t: any; onClose: () => void; onSaved: () => void }) => {
   const G = getBudgetGlass(colors);
   const [name, setName] = useState("");
-  const [type, setType] = useState("business");
   const [period, setPeriod] = useState<typeof PERIOD_OPTIONS[number]>("monthly");
-  const [categories, setCategories] = useState<{ name: string; amount: string }[]>([]);
-  const [customCategoryName, setCustomCategoryName] = useState("");
+  const [showAdvancedPeriod, setShowAdvancedPeriod] = useState(false);
   const dialog = useDialog();
   const cbTutorial = useTutorial({ tutorial: createBudgetTutorial });
   useTutorialExample('cb-name', setName);
+
+  const defaultPeriods = ["monthly"] as const;
+  const advancedPeriods = ["weekly", "quarterly", "yearly", "custom"] as const;
 
   const draftFormKey = 'budget';
   const draftFormData = useFormDrafts({
@@ -519,30 +519,12 @@ const CreateBudgetModal = ({ colors, t, onClose, onSaved }: { colors: any; t: an
     formKey: draftFormKey,
     getPayload: useCallback(() => ({
       name,
-      type,
       period,
-      categories,
-    }), [name, type, period, categories]),
+    }), [name, period]),
     getTitle: useCallback(() => (name ? `${t('budget.draft_prefix')} - ${name}` : t('budget.draft_title')), [name, t]),
-    getSubtitle: useCallback(() => `${categories.filter(c => c.amount).length} ${t('common.categories')}`, [categories, t]),
+    getSubtitle: useCallback(() => t('budget.period') || 'Period', [t]),
     enabled: true,
   });
-
-  useEffect(() => {
-    setCategories([]);
-  }, []);
-
-  const addCustomCategory = () => {
-    const name = customCategoryName.trim();
-    if (!name) return;
-    if (categories.some(c => c.name === name)) return;
-    setCategories([...categories, { name, amount: "" }]);
-    setCustomCategoryName("");
-  };
-
-  const removeCategory = (index: number) => {
-    setCategories(categories.filter((_, i) => i !== index));
-  };
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -552,19 +534,13 @@ const CreateBudgetModal = ({ colors, t, onClose, onSaved }: { colors: any; t: an
     const now = new Date();
     const budgetId = insertBudget({
       name: name.trim(),
-      type: type as any,
+      type: 'business',
       period,
       year: now.getFullYear(),
       month: period === "monthly" || period === "quarterly" ? now.getMonth() + 1 : undefined,
     });
     if (!budgetId) { await dialog.alert({ title: t('common.error'), message: t('budget.create_failed'), iconType: "danger" }); return; }
 
-    for (const cat of categories) {
-      const amount = parseFloat(cat.amount.replace(/,/g, ""));
-      if (amount > 0 || cat.amount.trim()) {
-        insertBudgetCategory(budgetId, { category: cat.name, plannedAmount: amount || 0 });
-      }
-    }
     notifyBudgetCreated({
       id: budgetId as number,
       name: name.trim(),
@@ -593,9 +569,7 @@ const CreateBudgetModal = ({ colors, t, onClose, onSaved }: { colors: any; t: an
             onRestore={async (draft) => {
               const d = draft.data;
               setName(d.name || '');
-              setType(d.type || 'business');
               setPeriod(d.period || 'monthly');
-              setCategories(d.categories || []);
               await draftFormData.remove(draft.id);
             }}
             onDelete={async (id) => {
@@ -618,24 +592,10 @@ const CreateBudgetModal = ({ colors, t, onClose, onSaved }: { colors: any; t: an
           />
         </TutorialTarget>
 
-        <TutorialTarget id="cb-type">
-          <AppText variant="caption" weight="bold" transform="uppercase" style={[s.sectionTitle, { color: G.fgSecondary, marginTop: 8, marginBottom: 10 }]}>{t('budget.type_label')}</AppText>
-          <View style={s.chipRow}>
-            {["business", "department", "project", "branch"].map(v => (
-              <TouchableOpacity key={v}
-                style={[s.chip, { backgroundColor: G.bgCard, borderColor: G.border }, type === v && { backgroundColor: G.fg }]}
-                onPress={() => { setType(v); Haptics.selectionAsync(); }}
-              >
-                <AppText variant="body-sm" weight="bold" style={{ color: type === v ? G.bg : G.fg, textTransform: "capitalize" }}>{t(`budget.${v}`)}</AppText>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </TutorialTarget>
-
         <TutorialTarget id="cb-period">
           <AppText variant="caption" weight="bold" transform="uppercase" style={[s.sectionTitle, { color: G.fgSecondary, marginTop: 20, marginBottom: 10 }]}>{t('budget.period_label')}</AppText>
           <View style={s.chipRow}>
-            {PERIOD_OPTIONS.map(p => (
+            {defaultPeriods.map(p => (
               <TouchableOpacity key={p}
                 style={[s.chip, { backgroundColor: G.bgCard, borderColor: G.border }, period === p && { backgroundColor: G.fg }]}
                 onPress={() => { setPeriod(p); Haptics.selectionAsync(); }}
@@ -644,51 +604,26 @@ const CreateBudgetModal = ({ colors, t, onClose, onSaved }: { colors: any; t: an
               </TouchableOpacity>
             ))}
           </View>
-        </TutorialTarget>
-
-        <TutorialTarget id="cb-categories">
-          <AppText variant="caption" weight="bold" transform="uppercase" style={[s.sectionTitle, { color: G.fgSecondary, marginTop: 20, marginBottom: 12 }]}>
-            {t('budget.categories')}
-          </AppText>
-
-          {categories.map((cat, i) => (
-            <View key={cat.name + i} style={s.catInputRow}>
-              <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <AppText variant="body-sm" weight="bold" style={{ color: G.fg }} numberOfLines={1}>
-                  {cat.name.replace(/_/g, " ")}
-                </AppText>
-                <TouchableOpacity onPress={() => removeCategory(i)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <X size={14} color={colors.error} />
+          <TouchableOpacity
+            style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}
+            onPress={() => { setShowAdvancedPeriod(!showAdvancedPeriod); Haptics.selectionAsync(); }}
+          >
+            <AppText variant="caption" weight="bold" style={{ color: G.fgSecondary }}>
+              {showAdvancedPeriod ? t('common.hide') || 'Hide' : t('common.advanced') || 'Advanced'}
+            </AppText>
+          </TouchableOpacity>
+          {showAdvancedPeriod && (
+            <View style={[s.chipRow, { marginTop: 8 }]}>
+              {advancedPeriods.map(p => (
+                <TouchableOpacity key={p}
+                  style={[s.chip, { backgroundColor: G.bgCard, borderColor: G.border }, period === p && { backgroundColor: G.fg }]}
+                  onPress={() => { setPeriod(p); Haptics.selectionAsync(); }}
+                >
+                  <AppText variant="body-sm" weight="bold" style={{ color: period === p ? G.bg : G.fg, textTransform: "capitalize" }}>{t(`budget.${p}`)}</AppText>
                 </TouchableOpacity>
-              </View>
-              <TextInput
-                style={[s.amountInput, { color: G.fg, borderColor: G.border, backgroundColor: G.bgCard }]}
-                placeholder="0"
-                placeholderTextColor={G.fgSecondary}
-                keyboardType="numeric"
-                value={cat.amount}
-                onChangeText={(v) => {
-                  const updated = [...categories];
-                  updated[i] = { ...updated[i], amount: v };
-                  setCategories(updated);
-                }}
-              />
+              ))}
             </View>
-          ))}
-
-          <View style={s.addCatRow}>
-            <TextInput
-              style={[s.addCatInput, { color: G.fg, borderColor: G.border, backgroundColor: G.bgCard }]}
-              placeholder={t('budget.custom_category')}
-              placeholderTextColor={G.fgSecondary}
-              value={customCategoryName}
-              onChangeText={setCustomCategoryName}
-              onSubmitEditing={addCustomCategory}
-            />
-            <TouchableOpacity style={[s.addCatBtn, { backgroundColor: G.fg }]} onPress={addCustomCategory}>
-              <Plus size={18} color={G.bg} />
-            </TouchableOpacity>
-          </View>
+          )}
         </TutorialTarget>
 
         <TutorialTarget id="cb-commit-btn">
@@ -750,11 +685,6 @@ const s = StyleSheet.create({
   input: { height: 52, borderRadius: 14, borderWidth: 1, paddingHorizontal: 16, fontFamily: Fonts.bold, fontSize: 16, marginBottom: 16 },
   chipRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
   chip: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 12, borderWidth: 1 },
-  catInputRow: { flexDirection: "row", alignItems: "center", marginBottom: 10, gap: 8 },
-  amountInput: { width: 90, height: 44, borderRadius: 10, borderWidth: 1, paddingHorizontal: 12, fontFamily: Fonts.bold, fontSize: 14, textAlign: "right" },
-  addCatRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 },
-  addCatInput: { flex: 1, height: 44, borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, fontFamily: Fonts.medium, fontSize: 14 },
-  addCatBtn: { width: 44, height: 44, borderRadius: 12, justifyContent: "center", alignItems: "center" },
   saveBtn: { height: 56, borderRadius: 16, justifyContent: "center", alignItems: "center" },
 });
 

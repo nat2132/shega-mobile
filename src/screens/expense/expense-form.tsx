@@ -18,6 +18,7 @@ import {
   AlertTriangle,
   Wallet,
   Repeat,
+  Plus,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { playNice, playBad } from '@/services/soundService';
@@ -75,6 +76,7 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [successDetails, setSuccessDetails] = useState<BusinessSuccessDetails | null>(null);
+  const [customCategoryInput, setCustomCategoryInput] = useState('');
 
   const draftFormKey = 'expense';
   const draftFormData = useFormDrafts({
@@ -422,6 +424,28 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
                       </TouchableOpacity>
                     ))}
                   </View>
+                  <View style={[styles.chipRow, { marginTop: 8, alignItems: 'center' }]}>
+                    <TextInput
+                      style={[styles.customCatInput, { backgroundColor: G.bgCard, borderColor: G.border, color: G.fg }]}
+                      placeholder={t('expense.custom_category') || 'Custom category...'}
+                      placeholderTextColor={G.fgSecondary}
+                      value={customCategoryInput}
+                      onChangeText={setCustomCategoryInput}
+                    />
+                    <TouchableOpacity
+                      style={[styles.addCatBtn, { backgroundColor: G.fg }]}
+                      onPress={() => {
+                        const trimmed = customCategoryInput.trim();
+                        if (trimmed) {
+                          handleCategoryChange(trimmed);
+                          saveFrequentCategory(trimmed);
+                          setCustomCategoryInput('');
+                        }
+                      }}
+                    >
+                      <Plus size={18} color={G.bg} strokeWidth={2.5} />
+                    </TouchableOpacity>
+                  </View>
                 </Animated.View>
               )}
             </Animated.View>
@@ -714,6 +738,8 @@ const styles = StyleSheet.create({
   sectionLabel: { fontSize: 12, fontFamily: Fonts.bold, textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.6 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14, borderWidth: 1 },
+  customCatInput: { flex: 1, height: 42, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, fontSize: 14, fontFamily: Fonts.medium },
+  addCatBtn: { width: 42, height: 42, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginLeft: 8 },
   miniChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1 },
   warningCard: { borderRadius: 16, padding: 16, borderWidth: 1, marginBottom: 12 },
   ambiguousRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' },
