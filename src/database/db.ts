@@ -6597,19 +6597,19 @@ export const verifySubscriptionPayment = (): boolean => {
   }
 };
 
-export const resetSubscriptionToBasic = (): boolean => {
+export const enablePremiumForTesting = (): boolean => {
   try {
     const database = getDB();
     const result = database.runSync(
-      `UPDATE subscriptions SET plan = 'basic', status = 'expired', updatedAt = datetime('now') WHERE id = (SELECT id FROM subscriptions LIMIT 1)`
+      `UPDATE subscriptions SET plan = 'premium', status = 'active', expiresAt = NULL, trialEndsAt = NULL, updatedAt = datetime('now') WHERE id = (SELECT id FROM subscriptions LIMIT 1)`
     );
     if (result.changes === 0) {
-      database.runSync(`INSERT INTO subscriptions (plan, status) VALUES ('basic', 'expired')`);
+      database.runSync(`INSERT INTO subscriptions (plan, status) VALUES ('premium', 'active')`);
     }
-    console.log('Subscription reset to basic/expired');
+    console.log('Subscription set to premium/active for testing');
     return true;
   } catch (error) {
-    console.error('Reset subscription error:', error);
+    console.error('Enable premium error:', error);
     return false;
   }
 };

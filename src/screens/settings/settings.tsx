@@ -1,7 +1,8 @@
 import { Fonts, Spacing } from '@/constants/theme';
 import { useDialog } from '@/context/DialogContext';
 import { PROFILE_IMAGES, useDashboardVisibility, useSettings } from '@/context/SettingsContext';
-import { clearDatabase, resetSubscriptionToBasic } from '@/database/db';
+import { clearDatabase, enablePremiumForTesting } from '@/database/db';
+import { useSubscription } from '@/context/SubscriptionContext';
 import * as Haptics from 'expo-haptics';
 import * as SecureStore from 'expo-secure-store';
 import { useState } from 'react';
@@ -374,6 +375,7 @@ const SettingsScreen = () => {
 
   const { activeWarehouse, warehouses } = useWarehouse();
   const { checkForUpdates, state: updateState } = useUpdate();
+  const { refresh: refreshSubscription } = useSubscription();
 
   const handleOpenSub = (setter: (v: boolean) => void) => {
     Haptics.selectionAsync();
@@ -637,16 +639,17 @@ const SettingsScreen = () => {
                   title={t('support.contact')} 
                   onPress={() => handleOpenSub(setShowSupport)}
                />
-              <SettingLedgerItem
-                 icon={Zap}
-                 title={'Reset Subscription (Testing)'}
-                 subtitle={'Set plan to basic/expired'}
-                 onPress={() => {
-                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                   const ok = resetSubscriptionToBasic();
-                   Alert.alert(ok ? 'Subscription Reset' : 'Failed', ok ? 'Plan set to basic, status expired.' : 'Could not reset subscription.');
-                 }}
-              />
+               <SettingLedgerItem
+                  icon={Zap}
+                  title={'Enable Premium (Testing)'}
+                  subtitle={'Set plan to premium/active'}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    const ok = enablePremiumForTesting();
+                    refreshSubscription();
+                    Alert.alert(ok ? 'Premium Enabled' : 'Failed', ok ? 'All premium features unlocked for testing.' : 'Could not enable premium.');
+                  }}
+               />
               <SettingLedgerItem 
                  icon={Trash2} 
                  title={t('settings.reset_app')} 
