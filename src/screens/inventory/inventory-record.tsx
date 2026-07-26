@@ -10,7 +10,6 @@ import {
     ItemData
 } from '@/database/db';
 import { getEthiopianMonthNames, toEthiopianDate } from '@/utils/date-utils';
-import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import {
@@ -27,7 +26,7 @@ import {
     Warehouse,
     X
 } from 'lucide-react-native';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDebounce } from '@/hooks/useDebounce';
 import { SkeletonList } from '@/components/Skeleton';
 import {
@@ -85,21 +84,15 @@ const InventoryRecordScreen = () => {
     if (stats) setSummary(stats);
   }, [debouncedSearch, selectedCategory, selectedSort, activeWarehouseId]);
 
-  useFocusEffect(
-    useCallback(() => {
+  useEffect(() => {
       loadData();
       const cats = getCategories();
       setCategories([{ name: t('common.all') || 'All' }, ...cats]);
-    }, [loadData, t])
-  );
+  }, [loadData, t]);
 
   const filteredItems = useMemo(() => {
-    let items = inventoryData;
-    if (activeWarehouseId) {
-      items = items.filter((it: any) => it.warehouseId === activeWarehouseId);
-    }
-    return items;
-  }, [inventoryData, activeWarehouseId]);
+    return inventoryData;
+  }, [inventoryData]);
 
   const selectedWarehouse = warehouses.find((w: any) => w.id === activeWarehouseId);
 
@@ -405,7 +398,7 @@ const InventoryCard = React.memo(({ item, onPress, warehouses }: { item: ItemDat
           <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.gridLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('inv.grid_quantity')}</AppText>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
             <AppNumber value={item.totalBaseQuantity} fallback="0" size="body-sm" style={styles.gridValue} />
-            <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.gridValue, { color: G.fg }]} numberOfLines={1}> {t('form.' + (item.baseUnit || 'pieces').toLowerCase())}</AppText>
+            <AppText variant="body-sm" weight="bold" shrink={false} style={[styles.gridValue, { color: G.fg }]} numberOfLines={1}> {item.baseUnit || 'pcs'}</AppText>
           </View>
         </View>
         <View style={styles.gridCol}>

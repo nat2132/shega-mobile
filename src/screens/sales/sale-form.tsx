@@ -532,7 +532,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                       {
                         color:
                           paymentStatus === "Order"
-                            ? SALES_GLASS.fg
+                            ? SALES_GLASS.bg
                             : SALES_GLASS.fgSecondary,
                       },
                     ]}
@@ -790,21 +790,16 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                     </AppText>
                   </View>
                   <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 8,
-                    }}
+                    style={[
+                      styles.adjInputBox,
+                      {
+                        backgroundColor: SALES_GLASS.bgCard,
+                        borderColor: SALES_GLASS.border,
+                      },
+                    ]}
                   >
                     <TextInput
-                      style={[
-                        styles.input,
-                        {
-                          color: SALES_GLASS.fg,
-                          borderColor: SALES_GLASS.border,
-                          flex: 1,
-                        },
-                      ]}
+                      style={[styles.adjInput, { color: SALES_GLASS.fg }]}
                       placeholder="5"
                       placeholderTextColor={SALES_GLASS.fgSecondary}
                       keyboardType="numeric"
@@ -816,13 +811,13 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                       maxLength={3}
                     />
                     <AppText
-                      variant="body-sm"
+                      variant="body"
                       weight="bold"
                       shrink={false}
-                      style={{ color: SALES_GLASS.fgSecondary }}
+                      style={[styles.adjCurr, { color: SALES_GLASS.fgSecondary }]}
                       numberOfLines={1}
                     >
-                      {t("common.units")}
+                      {t("common.days")}
                     </AppText>
                   </View>
                 </View>

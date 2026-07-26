@@ -596,20 +596,31 @@ const SalesDashboard = () => {
     setDebtCustomers(customers);
     setSearchCustomer(preSelectName || "");
     setShowCollectPayment(true);
-    if (preSelectName) {
+    if (preSelectName && preSelectName.trim()) {
+      const cleanName = preSelectName.trim().toLowerCase();
       const match = customers.find(
-        (c: any) => c.customerName === preSelectName,
+        (c: any) => c.customerName && c.customerName.trim().toLowerCase() === cleanName,
       );
       if (match) {
         setSelectedCustomer(match);
         const debts = getDebtSales(match.customerName);
         setCustomerDebts(debts);
-        setSelectedDebtItems([]);
-        setPartialQtyMap({});
-        setShowCustomerActivity(false);
       } else {
-        setSelectedCustomer(null);
+        const debts = getDebtSales(preSelectName);
+        if (debts.length > 0) {
+          const totalOwe = debts.reduce(
+            (sum: number, d: any) => sum + (d.totalPrice - (d.paidAmount || 0)),
+            0,
+          );
+          setSelectedCustomer({ customerName: preSelectName.trim(), oweAmount: totalOwe });
+          setCustomerDebts(debts);
+        } else {
+          setSelectedCustomer(null);
+        }
       }
+      setSelectedDebtItems([]);
+      setPartialQtyMap({});
+      setShowCustomerActivity(false);
     } else {
       setSelectedCustomer(null);
     }
@@ -1816,8 +1827,47 @@ const SalesDashboard = () => {
             </TutorialTarget>
 
             {!selectedCustomer ? (
-              /* →→ Customer List: name Â· amount Â· due date only →→ */
+              /* →→ Customer List View →→ */
               <View style={{ flex: 1, paddingHorizontal: 20 }}>
+                {/* Summary Header Card */}
+                {debtCustomers.length > 0 && (
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      backgroundColor: SALES_GLASS.bgCard,
+                      borderColor: SALES_GLASS.border,
+                      borderWidth: 1,
+                      borderRadius: 16,
+                      paddingHorizontal: 16,
+                      paddingVertical: 12,
+                      marginBottom: 12,
+                    }}
+                  >
+                    <View>
+                      <AppText variant="caption" weight="bold" transform="uppercase" style={{ color: SALES_GLASS.muted }}>
+                        {t("sales.collect_payments")}
+                      </AppText>
+                      <AppText variant="body" weight="extrabold" style={{ color: SALES_GLASS.fg }}>
+                        {debtCustomers.length} {debtCustomers.length === 1 ? t("sales.customer") : t("sales.customers_plural")}
+                      </AppText>
+                    </View>
+                    <View style={{ alignItems: "flex-end" }}>
+                      <AppText variant="caption" weight="bold" transform="uppercase" style={{ color: SALES_GLASS.muted }}>
+                        {t("sales.total_outstanding")}
+                      </AppText>
+                      <AppNumber
+                        value={debtCustomers.reduce((acc, c) => acc + (c.oweAmount || 0), 0)}
+                        size="body"
+                        weight="extrabold"
+                        showCurrency
+                        color={colors.warning}
+                      />
+                    </View>
+                  </View>
+                )}
+
                 <TutorialTarget id="cp-customer-search">
                 <View
                   style={[
@@ -1826,6 +1876,7 @@ const SalesDashboard = () => {
                       backgroundColor: SALES_GLASS.bgCard,
                       borderColor: SALES_GLASS.border,
                       marginBottom: 12,
+                      borderRadius: 14,
                     },
                   ]}
                 >
@@ -1846,8 +1897,9 @@ const SalesDashboard = () => {
                 </TutorialTarget>
                 <FlatList
                   data={filteredDebtCustomers}
-                  keyExtractor={(item, idx) => item.customerName + idx}
+                  keyExtractor={(item, idx) => (item.customerName || "") + idx}
                   showsVerticalScrollIndicator={false}
+                  contentContainerStyle={{ paddingBottom: 20 }}
                   renderItem={({ item }) => {
                     const isOverdue =
                       item.earliestDue &&
@@ -1859,12 +1911,15 @@ const SalesDashboard = () => {
                           {
                             backgroundColor: colors.card,
                             borderColor: isOverdue
-                              ? colors.error + "40"
+                              ? colors.error + "50"
                               : colors.border,
                             borderLeftColor: isOverdue
                               ? colors.error
-                              : colors.border,
-                            borderLeftWidth: isOverdue ? 3 : 1,
+                              : colors.primary,
+                            borderLeftWidth: 4,
+                            borderRadius: 14,
+                            marginBottom: 8,
+                            padding: 12,
                           },
                         ]}
                         onPress={() => handleSelectCustomer(item)}
@@ -1877,11 +1932,16 @@ const SalesDashboard = () => {
                               backgroundColor: isOverdue
                                 ? colors.error + "15"
                                 : colors.primary + "15",
+                              borderRadius: 20,
+                              width: 40,
+                              height: 40,
+                              justifyContent: "center",
+                              alignItems: "center",
                             },
                           ]}
                         >
                           <User
-                            size={17}
+                            size={18}
                             color={isOverdue ? colors.error : colors.primary}
                           />
                         </View>
@@ -1891,83 +1951,91 @@ const SalesDashboard = () => {
                             weight="bold"
                             style={[
                               styles.cpCustomerName,
-                              { color: SALES_GLASS.fg },
+                              { color: SALES_GLASS.fg, fontSize: 15 },
                             ]}
                             numberOfLines={1}
                           >
                             {item.customerName}
                           </AppText>
-                      <AppText
-                        variant="caption"
-                        weight="medium"
-                        style={[
-                          styles.cpDueText,
-                          {
-                            color: isOverdue
-                              ? colors.error
-                              : SALES_GLASS.muted,
-                          },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {item.earliestDue
-                          ? isOverdue
-                            ? t("sales.overdue_label", {
-                                date: formatDueDate(item.earliestDue),
-                              })
-                            : t("sales.due_label", {
-                                date: formatDueDate(item.earliestDue),
-                              })
-                          : t("sales.no_due_date")}
-                      </AppText>
-                    </View>
-                    <AppNumber
-                      value={item.oweAmount}
-                      size="body"
-                      weight="bold"
-                      showCurrency
-                      color={isOverdue ? colors.error : colors.warning}
-                      style={styles.cpAmount}
-                    />
-                  </TouchableOpacity>
+                          <AppText
+                            variant="caption"
+                            weight="medium"
+                            style={[
+                              styles.cpDueText,
+                              {
+                                color: isOverdue
+                                  ? colors.error
+                                  : SALES_GLASS.muted,
+                                marginTop: 2,
+                              },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {item.earliestDue
+                              ? isOverdue
+                                ? t("sales.overdue_label", {
+                                    date: formatDueDate(item.earliestDue),
+                                  })
+                                : t("sales.due_label", {
+                                    date: formatDueDate(item.earliestDue),
+                                  })
+                              : t("sales.no_due_date")}
+                          </AppText>
+                        </View>
+                        <View style={{ alignItems: "flex-end" }}>
+                          <AppNumber
+                            value={item.oweAmount}
+                            size="body"
+                            weight="extrabold"
+                            showCurrency
+                            color={isOverdue ? colors.error : colors.warning}
+                            style={styles.cpAmount}
+                          />
+                          <ChevronRight size={14} color={SALES_GLASS.muted} style={{ marginTop: 4 }} />
+                        </View>
+                      </TouchableOpacity>
                     );
                   }}
                   ListEmptyComponent={
-                    <AppText
-                      variant="body"
-                      weight="medium"
-                      style={[
-                        styles.emptyText,
-                        {
-                          color: colors.textSecondary,
-                          textAlign: "center",
-                          marginTop: 50,
-                        },
-                      ]}
-                      numberOfLines={3}
-                    >
-                      {t("sales.no_outstanding")}
-                    </AppText>
+                    <View style={{ alignItems: "center", justifyContent: "center", paddingTop: 60, gap: 12 }}>
+                      <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: SALES_GLASS.bgCard, borderWidth: 1, borderColor: SALES_GLASS.border, justifyContent: "center", alignItems: "center" }}>
+                        <User size={24} color={SALES_GLASS.muted} />
+                      </View>
+                      <AppText
+                        variant="body"
+                        weight="medium"
+                        style={[
+                          styles.emptyText,
+                          {
+                            color: colors.textSecondary,
+                            textAlign: "center",
+                          },
+                        ]}
+                        numberOfLines={3}
+                      >
+                        {t("sales.no_outstanding")}
+                      </AppText>
+                    </View>
                   }
                 />
               </View>
             ) : (
-              /* →→ Customer Detail →→ */
+              /* →→ Customer Detail View →→ */
               <View style={{ flex: 1 }}>
-                {/* Header: back + name + due + call */}
+                {/* Header: back + name + phone + invoice */}
                 <View
                   style={[
                     styles.cpDetailHeader,
-                    { borderBottomColor: colors.border },
+                    { borderBottomColor: colors.border, paddingHorizontal: 16, paddingVertical: 12 },
                   ]}
                 >
                   <TouchableOpacity
                     onPress={() => setSelectedCustomer(null)}
                     style={styles.cpBackBtn}
                   >
-                    <ChevronLeft size={20} color={colors.primary} />
+                    <ChevronLeft size={22} color={colors.primary} />
                   </TouchableOpacity>
-                  <View style={{ flex: 1 }}>
+                  <View style={{ flex: 1, marginLeft: 8 }}>
                     <AppText
                       variant="title-sm"
                       weight="bold"
@@ -2007,7 +2075,7 @@ const SalesDashboard = () => {
                     <TouchableOpacity
                       style={[
                         styles.cpCallBtn,
-                        { backgroundColor: colors.success + "18" },
+                        { backgroundColor: colors.success + "18", borderRadius: 10, padding: 8, marginRight: 6 },
                       ]}
                       onPress={() =>
                         Linking.openURL(`tel:${selectedCustomer.customerPhone}`)
@@ -2019,7 +2087,7 @@ const SalesDashboard = () => {
                   <TouchableOpacity
                     style={[
                       styles.cpCallBtn,
-                      { backgroundColor: colors.primary + "15" },
+                      { backgroundColor: colors.primary + "15", borderRadius: 10, padding: 8 },
                     ]}
                     onPress={() => {
                       setInvoiceTarget("single");
@@ -2030,76 +2098,91 @@ const SalesDashboard = () => {
                   </TouchableOpacity>
                 </View>
 
-                {/* Tabs */}
+                {/* Tabs Row */}
                 <View
                   style={[
                     styles.cpTabRow,
-                    { borderBottomColor: colors.border },
+                    { borderBottomColor: colors.border, paddingHorizontal: 16 },
                   ]}
                 >
-                  {[t("sales.items_tab"), t("sales.activity_tab")].map(
-                    (tab) => {
-                      const active =
-                        tab === t("sales.items_tab")
-                          ? !showCustomerActivity
-                          : showCustomerActivity;
-                      return (
-                        <TouchableOpacity
-                          key={tab}
+                  {[
+                    { label: t("sales.items_tab") + ` (${customerDebts.length})`, key: "items" },
+                    { label: t("sales.activity_tab"), key: "activity" },
+                  ].map((tab) => {
+                    const active =
+                      tab.key === "items"
+                        ? !showCustomerActivity
+                        : showCustomerActivity;
+                    return (
+                      <TouchableOpacity
+                        key={tab.key}
+                        style={[
+                          styles.cpTab,
+                          active && {
+                            borderBottomColor: colors.primary,
+                            borderBottomWidth: 2.5,
+                          },
+                        ]}
+                        onPress={() => {
+                          if (tab.key === "activity") {
+                            setShowCustomerActivity(true);
+                            const act = getCustomerActivity(
+                              selectedCustomer.customerName,
+                            );
+                            setCustomerActivity(act);
+                          } else {
+                            setShowCustomerActivity(false);
+                          }
+                        }}
+                      >
+                        <AppText
+                          variant="caption"
+                          weight="bold"
+                          shrink={false}
                           style={[
-                            styles.cpTab,
-                            active && {
-                              borderBottomColor: colors.text,
-                              borderBottomWidth: 2,
+                            styles.cpTabText,
+                            {
+                              color: active
+                                ? colors.primary
+                                : colors.textSecondary,
                             },
                           ]}
-                          onPress={() => {
-                            if (tab === "Activity") {
-                              setShowCustomerActivity(true);
-                              const act = getCustomerActivity(
-                                selectedCustomer.customerName,
-                              );
-                              setCustomerActivity(act);
-                            } else {
-                              setShowCustomerActivity(false);
-                            }
-                          }}
+                          numberOfLines={1}
                         >
-                          <AppText
-                            variant="caption"
-                            weight="bold"
-                            shrink={false}
-                            style={[
-                              styles.cpTabText,
-                              {
-                                color: active
-                                  ? colors.text
-                                  : colors.textSecondary,
-                              },
-                            ]}
-                            numberOfLines={1}
-                          >
-                            {tab}
-                          </AppText>
-                        </TouchableOpacity>
-                      );
-                    },
-                  )}
+                          {tab.label}
+                        </AppText>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
 
                 {!showCustomerActivity ? (
                   /* →→ Items Tab →→ */
-                  <TutorialTarget id="cp-items">
+                  <TutorialTarget id="cp-items" style={{ flex: 1 }}>
                   <View style={{ flex: 1 }}>
                     <FlatList
                       data={customerDebts}
-                      keyExtractor={(item) => item.id.toString()}
+                      keyExtractor={(item, idx) => (item.id || idx).toString()}
                       showsVerticalScrollIndicator={false}
+                      style={{ flex: 1 }}
                       contentContainerStyle={{
                         paddingHorizontal: 16,
                         paddingTop: 10,
-                        paddingBottom: 6,
+                        paddingBottom: 20,
                       }}
+                      ListEmptyComponent={
+                        <View style={{ alignItems: "center", justifyContent: "center", paddingTop: 50, gap: 12 }}>
+                          <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: colors.primary + "15", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: colors.primary + "30" }}>
+                            <ShoppingBag size={28} color={colors.primary} />
+                          </View>
+                          <AppText variant="body" weight="bold" style={{ color: SALES_GLASS.fg, textAlign: "center", fontSize: 16 }}>
+                            {t("sales.no_outstanding")}
+                          </AppText>
+                          <AppText variant="caption" weight="medium" style={{ color: SALES_GLASS.muted, textAlign: "center", paddingHorizontal: 30, lineHeight: 18 }}>
+                            All credit sales for this customer have been fully settled or cleared.
+                          </AppText>
+                        </View>
+                      }
                       renderItem={({ item }) => {
                         const paid = item.paidAmount || 0;
                         const remaining = item.totalPrice - paid;
@@ -2130,7 +2213,10 @@ const SalesDashboard = () => {
                                   : isItemOverdue
                                     ? colors.error + "30"
                                     : colors.border,
-                                borderWidth: isSelected ? 1.5 : 1,
+                                borderWidth: isSelected ? 2 : 1,
+                                borderRadius: 16,
+                                marginBottom: 10,
+                                padding: 14,
                               },
                             ]}
                           >
@@ -2155,12 +2241,17 @@ const SalesDashboard = () => {
                                     borderColor: isSelected
                                       ? colors.primary
                                       : colors.border,
+                                    borderRadius: 6,
+                                    width: 20,
+                                    height: 20,
+                                    justifyContent: "center",
+                                    alignItems: "center",
                                   },
                                 ]}
                               >
                                 {isSelected && (
                                   <Check
-                                    size={10}
+                                    size={12}
                                     color="#FFF"
                                     strokeWidth={3}
                                   />
@@ -2171,11 +2262,11 @@ const SalesDashboard = () => {
                                 weight="bold"
                                 style={[
                                   styles.cpItemName,
-                                  { color: colors.text },
+                                  { color: colors.text, flex: 1, marginLeft: 10 },
                                 ]}
                                 numberOfLines={1}
                               >
-                                {item.itemName}
+                                {item.itemName || "Item"}
                               </AppText>
                               <View
                                 style={[
@@ -2183,10 +2274,13 @@ const SalesDashboard = () => {
                                   {
                                     backgroundColor:
                                       item.paymentStatus === "Paid"
-                                        ? colors.success + "15"
+                                        ? colors.success + "18"
                                         : paid > 0
-                                          ? colors.warning + "15"
-                                          : colors.error + "15",
+                                          ? colors.warning + "18"
+                                          : colors.error + "18",
+                                    borderRadius: 8,
+                                    paddingHorizontal: 8,
+                                    paddingVertical: 3,
                                   },
                                 ]}
                               >
@@ -2218,7 +2312,7 @@ const SalesDashboard = () => {
                             <View
                               style={[
                                 styles.cpItemStats,
-                                { borderTopColor: colors.border },
+                                { borderTopColor: colors.border, marginTop: 10, paddingTop: 10 },
                               ]}
                             >
                               <View style={styles.cpStat}>
@@ -2242,9 +2336,9 @@ const SalesDashboard = () => {
                                     style={styles.cpStatValue}
                                   />
                                   <AppText
-                                    variant="body"
+                                    variant="caption"
                                     weight="bold"
-                                    style={[{ color: colors.text, marginLeft: 4 }]}
+                                    style={[{ color: colors.textSecondary, marginLeft: 3 }]}
                                     numberOfLines={1}
                                   >
                                     {item.unit}
@@ -2312,16 +2406,17 @@ const SalesDashboard = () => {
                                 />
                               </View>
                             </View>
+
                             {isSelected && (
                               <View
                                 style={[
                                   styles.cpQtyRow,
-                                  { borderTopColor: colors.border },
+                                  { borderTopColor: colors.border, backgroundColor: colors.surface + '80', marginTop: 10, paddingTop: 10 },
                                 ]}
                               >
                                 <AppText
                                   variant="caption"
-                                  weight="medium"
+                                  weight="bold"
                                   style={[
                                     styles.cpQtyLabel,
                                     { color: colors.textSecondary },
@@ -2334,7 +2429,7 @@ const SalesDashboard = () => {
                                   <TouchableOpacity
                                     style={[
                                       styles.cpStepBtn,
-                                      { backgroundColor: colors.border },
+                                      { backgroundColor: colors.border, borderRadius: 8, width: 28, height: 28, justifyContent: "center", alignItems: "center" },
                                     ]}
                                     onPress={() =>
                                       setPartialQtyMap((prev) => ({
@@ -2346,8 +2441,8 @@ const SalesDashboard = () => {
                                     }
                                   >
                                     <AppText
-                                      variant="title"
-                                      weight="bold"
+                                      variant="body"
+                                      weight="extrabold"
                                       shrink={false}
                                       style={[
                                         styles.cpStepBtnText,
@@ -2355,7 +2450,7 @@ const SalesDashboard = () => {
                                       ]}
                                       numberOfLines={1}
                                     >
-                                      ←
+                                      −
                                     </AppText>
                                   </TouchableOpacity>
                                   <TextInput
@@ -2363,7 +2458,12 @@ const SalesDashboard = () => {
                                       styles.cpQtyInput,
                                       {
                                         color: colors.text,
+                                        backgroundColor: colors.card,
                                         borderColor: colors.border,
+                                        borderRadius: 8,
+                                        paddingHorizontal: 8,
+                                        textAlign: "center",
+                                        minWidth: 36,
                                       },
                                     ]}
                                     value={currentQtyStr}
@@ -2384,7 +2484,7 @@ const SalesDashboard = () => {
                                   <TouchableOpacity
                                     style={[
                                       styles.cpStepBtn,
-                                      { backgroundColor: colors.border },
+                                      { backgroundColor: colors.border, borderRadius: 8, width: 28, height: 28, justifyContent: "center", alignItems: "center" },
                                     ]}
                                     onPress={() =>
                                       setPartialQtyMap((prev) => ({
@@ -2396,8 +2496,8 @@ const SalesDashboard = () => {
                                     }
                                   >
                                     <AppText
-                                      variant="title"
-                                      weight="bold"
+                                      variant="body"
+                                      weight="extrabold"
                                       style={[
                                         styles.cpStepBtnText,
                                         { color: colors.text },
@@ -2412,7 +2512,7 @@ const SalesDashboard = () => {
                                     weight="medium"
                                     style={[
                                       styles.cpQtyOf,
-                                      { color: colors.textSecondary },
+                                      { color: colors.textSecondary, marginLeft: 4 },
                                     ]}
                                     numberOfLines={1}
                                   >
@@ -2422,7 +2522,7 @@ const SalesDashboard = () => {
                                 <AppNumber
                                   value={payAmt}
                                   size="body"
-                                  weight="bold"
+                                  weight="extrabold"
                                   showCurrency
                                   color={colors.primary}
                                   style={styles.cpPayAmt}
@@ -2432,153 +2532,166 @@ const SalesDashboard = () => {
                           </View>
                         );
                       }}
-                    />
-
-                    {/* Sticky footer */}
-                    <TutorialTarget id="cp-commit-btn">
-                    <View
-                      style={[
-                        styles.cpFooter,
-                        {
-                          backgroundColor: colors.background,
-                          borderTopColor: colors.border,
-                        },
-                      ]}
-                    >
-                      <TutorialTarget id="cp-amount">
-                      <View
-                        style={[
-                          styles.cpTotalRow,
-                          {
-                            backgroundColor: colors.card,
-                            borderColor: colors.border,
-                          },
-                        ]}
-                      >
-                        <AppText
-                          variant="caption"
-                          weight="medium"
+                      ListFooterComponent={() => (
+                        <View>
+                        <TutorialTarget id="cp-commit-btn">
+                        <View
                           style={[
-                            styles.cpTotalLabel,
-                            { color: colors.textSecondary },
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {t("sales.total_outstanding")}
-                        </AppText>
-                        <AppNumber
-                          value={selectedCustomer.oweAmount}
-                          size="body-lg"
-                          showCurrency
-                          color={colors.warning}
-                          style={styles.cpTotalValue}
-                        />
-                      </View>
-                      </TutorialTarget>
-                      <View style={styles.cpBtnRow}>
-                        <TouchableOpacity
-                          style={[
-                            styles.cpBtn,
-                            { backgroundColor: colors.text, flex: 1 },
-                          ]}
-                          onPress={() => handleFullPayment(selectedCustomer)}
-                        >
-                          <Check size={15} color={colors.background} />
-                          <AppText
-                            variant="body"
-                            weight="bold"
-                            style={[
-                              styles.cpBtnText,
-                              { color: colors.background },
-                            ]}
-                            numberOfLines={1}
-                          >
-                            {t("sales.pay_all")}
-                          </AppText>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[
-                            styles.cpBtn,
+                            styles.cpFooter,
                             {
-                              backgroundColor:
-                                selectedDebtItems.length > 0
-                                  ? colors.warning
-                                  : colors.border,
-                              flex: 1,
+                              backgroundColor: colors.background,
+                              borderTopColor: colors.border,
+                              paddingTop: 12,
+                              paddingBottom: 20,
                             },
                           ]}
-                          disabled={selectedDebtItems.length === 0}
-                          onPress={async () => {
-                            if (selectedDebtItems.length === 0) {
-                              await dialog.alert({
-                                title: t("sales.select_items_title"),
-                                message: t("sales.select_items_msg"),
-                                iconType: "warning",
-                              });
-                              return;
-                            }
-                            setPendingPaymentAction("selected");
-                            setPaymentMethodModalVisible(true);
-                          }}
                         >
-                          <Check size={15} color="#FFF" />
-                          <AppText
-                            variant="body"
-                            weight="bold"
-                            style={[styles.cpBtnText, { color: "#FFF" }]}
-                            numberOfLines={1}
+                          <TutorialTarget id="cp-amount">
+                          <View
+                            style={[
+                              styles.cpTotalRow,
+                              {
+                                backgroundColor: colors.card,
+                                borderColor: colors.border,
+                                borderRadius: 14,
+                                paddingHorizontal: 14,
+                                paddingVertical: 10,
+                                marginBottom: 12,
+                              },
+                            ]}
                           >
-                            {t("sales.pay_selected", {
-                              count: String(selectedDebtItems.length),
-                            })}
-                          </AppText>
-                        </TouchableOpacity>
-                      </View>
-                      <TouchableOpacity
-                        style={[
-                          styles.cpBtn,
-                          {
-                            borderWidth: 1,
-                            borderColor: colors.error + "40",
-                            backgroundColor: colors.error + "10",
-                          },
-                        ]}
-                        onPress={async () => {
-                          const ok = await dialog.confirm({
-                            title: t("sales.mark_loss_title"),
-                            message: t("sales.write_off_msg", {
-                              amount:
-                                selectedCustomer.oweAmount.toLocaleString(),
-                              name: selectedCustomer.customerName,
-                            }),
-                            confirmText: t("sales.write_off_action"),
-                            cancelText: t("common.cancel"),
-                            iconType: "danger",
-                            destructive: true,
-                          });
-                          if (ok) {
-                            markDebtAsLoss(selectedCustomer.customerName);
-                            Haptics.notificationAsync(
-                              Haptics.NotificationFeedbackType.Warning,
-                            );
-                            playBad();
-                            setShowCollectPayment(false);
-                            loadData();
-                          }
-                        }}
-                      >
-                        <X size={15} color={colors.error} />
-                        <AppText
-                          variant="body"
-                          weight="bold"
-                          style={[styles.cpBtnText, { color: colors.error }]}
-                          numberOfLines={1}
-                        >
-                          {t("sales.mark_loss_title")}
-                        </AppText>
-                      </TouchableOpacity>
-                    </View>
-                    </TutorialTarget>
+                            <AppText
+                              variant="caption"
+                              weight="bold"
+                              style={[
+                                styles.cpTotalLabel,
+                                { color: colors.textSecondary },
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {t("sales.total_outstanding")}
+                            </AppText>
+                            <AppNumber
+                              value={selectedCustomer.oweAmount}
+                              size="body-lg"
+                              weight="extrabold"
+                              showCurrency
+                              color={colors.warning}
+                              style={styles.cpTotalValue}
+                            />
+                          </View>
+                          </TutorialTarget>
+                          <View style={{ flexDirection: "row", gap: 10, marginBottom: 8 }}>
+                            <TouchableOpacity
+                              style={[
+                                styles.cpBtn,
+                                { backgroundColor: colors.text, flex: 1, borderRadius: 14, paddingVertical: 12 },
+                              ]}
+                              onPress={() => handleFullPayment(selectedCustomer)}
+                            >
+                              <Check size={16} color={colors.background} />
+                              <AppText
+                                variant="body"
+                                weight="bold"
+                                style={[
+                                  styles.cpBtnText,
+                                  { color: colors.background },
+                                ]}
+                                numberOfLines={1}
+                              >
+                                {t("sales.pay_all")}
+                              </AppText>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[
+                                styles.cpBtn,
+                                {
+                                  backgroundColor:
+                                    selectedDebtItems.length > 0
+                                      ? colors.warning
+                                      : colors.border,
+                                  flex: 1,
+                                  borderRadius: 14,
+                                  paddingVertical: 12,
+                                },
+                              ]}
+                              disabled={selectedDebtItems.length === 0}
+                              onPress={async () => {
+                                if (selectedDebtItems.length === 0) {
+                                  await dialog.alert({
+                                    title: t("sales.select_items_title"),
+                                    message: t("sales.select_items_msg"),
+                                    iconType: "warning",
+                                  });
+                                  return;
+                                }
+                                setPendingPaymentAction("selected");
+                                setPaymentMethodModalVisible(true);
+                              }}
+                            >
+                              <Check size={16} color="#FFF" />
+                              <AppText
+                                variant="body"
+                                weight="bold"
+                                style={[styles.cpBtnText, { color: "#FFF" }]}
+                                numberOfLines={1}
+                              >
+                                {t("sales.pay_selected", {
+                                  count: String(selectedDebtItems.length),
+                                })}
+                              </AppText>
+                            </TouchableOpacity>
+                          </View>
+                          <TouchableOpacity
+                            style={[
+                              styles.cpBtn,
+                              {
+                                borderWidth: 1,
+                                borderColor: colors.error + "40",
+                                backgroundColor: colors.error + "10",
+                                borderRadius: 14,
+                                paddingVertical: 10,
+                              },
+                            ]}
+                            onPress={async () => {
+                              const ok = await dialog.confirm({
+                                title: t("sales.mark_loss_title"),
+                                message: t("sales.write_off_msg", {
+                                  amount:
+                                    selectedCustomer.oweAmount.toLocaleString(),
+                                  name: selectedCustomer.customerName,
+                                }),
+                                confirmText: t("sales.write_off_action"),
+                                cancelText: t("common.cancel"),
+                                iconType: "danger",
+                                destructive: true,
+                              });
+                              if (ok) {
+                                markDebtAsLoss(selectedCustomer.customerName);
+                                Haptics.notificationAsync(
+                                  Haptics.NotificationFeedbackType.Warning,
+                                );
+                                playBad();
+                                setShowCollectPayment(false);
+                                loadData();
+                              }
+                            }}
+                          >
+                            <X size={15} color={colors.error} />
+                            <AppText
+                              variant="body"
+                              weight="bold"
+                              style={[styles.cpBtnText, { color: colors.error }]}
+                              numberOfLines={1}
+                            >
+                              {t("sales.mark_loss_title")}
+                            </AppText>
+                          </TouchableOpacity>
+                        </View>
+                        </TutorialTarget>
+                        </View>
+                      )}
+                    />
                   </View>
                   </TutorialTarget>
                 ) : (
@@ -3464,6 +3577,7 @@ const SalesDashboard = () => {
                         paymentStatus: saleMetadata.paymentStatus,
                         customerName: saleMetadata.customerName,
                         customerPhone: saleMetadata.customerPhone,
+                        dueDate: saleMetadata.dueDate,
                         packId: undefined,
                         batchId,
                       });
@@ -4567,7 +4681,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     textAlign: "center",
+    textAlignVertical: "center",
     fontFamily: Fonts.bold,
+    backgroundColor: 'transparent',
+    paddingVertical: 0,
+    paddingHorizontal: 0,
   },
   cpQtyOf: {
     fontFamily: Fonts.medium,

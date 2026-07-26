@@ -120,6 +120,9 @@ export const createNotification = (
   input: CreateNotificationInput,
 ): AppNotification | null => {
   try {
+    if (input.groupKey && hasActiveNotificationByGroupKey(input.groupKey)) {
+      return null;
+    }
     const database = getDB();
     const result = database.prepareSync(
       `INSERT INTO notifications

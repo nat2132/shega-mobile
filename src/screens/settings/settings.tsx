@@ -5,7 +5,7 @@ import { clearDatabase, enablePremiumForTesting } from '@/database/db';
 import { useSubscription } from '@/context/SubscriptionContext';
 import * as Haptics from 'expo-haptics';
 import * as SecureStore from 'expo-secure-store';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -20,6 +20,12 @@ import {
 } from 'react-native';
 import Animated, {
   FadeInDown,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  withTiming,
 } from 'react-native-reanimated';
 import { getSettingsGlass } from './glass-settings';
 
@@ -202,50 +208,73 @@ const ThemeCard = ({
   onPress: () => void;
 }) => {
   const { t } = useSettings();
+  const scale = useSharedValue(isActive ? 1.04 : 1);
+
+  useEffect(() => {
+    scale.value = withSpring(isActive ? 1.04 : 1, {
+      damping: 14,
+      stiffness: 180,
+    });
+  }, [isActive]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const handlePress = () => {
+    scale.value = withSequence(
+      withSpring(0.94, { damping: 10, stiffness: 220 }),
+      withSpring(1.04, { damping: 14, stiffness: 180 }),
+    );
+    onPress();
+  };
+
   return (
-    <TouchableOpacity
-      activeOpacity={0.75}
-      onPress={onPress}
-      style={[
-        themeCardStyles.card,
-        { backgroundColor: item.bg, borderColor: isActive ? item.accent : 'transparent' },
-      ]}
-    >
-      {/* Mini Preview */}
-      <View style={themeCardStyles.preview}>
-        <View style={[themeCardStyles.topBar, { backgroundColor: item.card }]}>
-          <View style={[themeCardStyles.dot, { backgroundColor: item.accent }]} />
-          <View style={[themeCardStyles.barLine, { backgroundColor: item.text, opacity: 0.25 }]} />
-        </View>
-
-        <View style={[themeCardStyles.contentArea, { backgroundColor: item.card }]}>
-          <View style={[themeCardStyles.accentLine, { backgroundColor: item.accent }]} />
-          <View style={{ flexDirection: 'row', gap: 4, marginTop: 5 }}>
-            <View style={[themeCardStyles.smallBlock, { backgroundColor: item.highlight, opacity: 0.9 }]} />
-            <View style={[themeCardStyles.smallBlock, { backgroundColor: item.text, opacity: 0.15 }]} />
+    <Animated.View style={animatedStyle}>
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={handlePress}
+        style={[
+          themeCardStyles.card,
+          { backgroundColor: item.bg, borderColor: isActive ? item.accent : 'transparent' },
+        ]}
+      >
+        {/* Mini Preview */}
+        <View style={themeCardStyles.preview}>
+          <View style={[themeCardStyles.topBar, { backgroundColor: item.card }]}>
+            <View style={[themeCardStyles.dot, { backgroundColor: item.accent }]} />
+            <View style={[themeCardStyles.barLine, { backgroundColor: item.text, opacity: 0.25 }]} />
           </View>
-          <View style={[themeCardStyles.textLine, { backgroundColor: item.text, opacity: 0.12 }]} />
-        </View>
 
-        <View style={{ flexDirection: 'row', gap: 4, marginTop: 4 }}>
-          <View style={[themeCardStyles.statBlock, { backgroundColor: item.card }]}>
-            <View style={[themeCardStyles.statDot, { backgroundColor: item.accent }]} />
+          <View style={[themeCardStyles.contentArea, { backgroundColor: item.card }]}>
+            <View style={[themeCardStyles.accentLine, { backgroundColor: item.accent }]} />
+            <View style={{ flexDirection: 'row', gap: 4, marginTop: 5 }}>
+              <View style={[themeCardStyles.smallBlock, { backgroundColor: item.highlight, opacity: 0.9 }]} />
+              <View style={[themeCardStyles.smallBlock, { backgroundColor: item.text, opacity: 0.15 }]} />
+            </View>
+            <View style={[themeCardStyles.textLine, { backgroundColor: item.text, opacity: 0.12 }]} />
           </View>
-          <View style={[themeCardStyles.statBlock, { backgroundColor: item.card }]}>
-            <View style={[themeCardStyles.statDot, { backgroundColor: item.highlight }]} />
+
+          <View style={{ flexDirection: 'row', gap: 4, marginTop: 4 }}>
+            <View style={[themeCardStyles.statBlock, { backgroundColor: item.card }]}>
+              <View style={[themeCardStyles.statDot, { backgroundColor: item.accent }]} />
+            </View>
+            <View style={[themeCardStyles.statBlock, { backgroundColor: item.card }]}>
+              <View style={[themeCardStyles.statDot, { backgroundColor: item.highlight }]} />
+            </View>
           </View>
         </View>
-      </View>
 
-      <AppText variant="body" weight="bold" style={[themeCardStyles.label, { color: item.text }]} numberOfLines={1}>{t(item.label)}</AppText>
-      <AppText variant="body-sm" weight="medium" style={[themeCardStyles.subtitle, { color: item.text, opacity: 0.5 }]} numberOfLines={2}>{t(item.subtitle)}</AppText>
+        <AppText variant="body" weight="bold" style={[themeCardStyles.label, { color: item.text }]} numberOfLines={1}>{t(item.label)}</AppText>
+        <AppText variant="body-sm" weight="medium" style={[themeCardStyles.subtitle, { color: item.text, opacity: 0.5 }]} numberOfLines={2}>{t(item.subtitle)}</AppText>
 
-      {isActive && (
-        <View style={[themeCardStyles.activeBadge, { backgroundColor: item.accent }]}>
-          <View style={themeCardStyles.activeInner} />
-        </View>
-      )}
-    </TouchableOpacity>
+        {isActive && (
+          <View style={[themeCardStyles.activeBadge, { backgroundColor: item.accent }]}>
+            <View style={themeCardStyles.activeInner} />
+          </View>
+        )}
+      </TouchableOpacity>
+    </Animated.View>
   );
 };
 
@@ -362,6 +391,30 @@ const SettingsScreen = () => {
   const G = getSettingsGlass(colors);
   const tutorial = useTutorial({ tutorial: settingsTutorial });
 
+  const themeTransition = useSharedValue(0);
+  const [transitionAccent, setTransitionAccent] = useState('#FFFFFF');
+
+  const animatedOverlayStyle = useAnimatedStyle(() => ({
+    opacity: themeTransition.value,
+    transform: [
+      {
+        scale: interpolate(themeTransition.value, [0, 0.4, 1], [0.96, 1.02, 1]),
+      },
+    ],
+  }));
+
+  const handleThemeChange = (item: (typeof THEME_OPTIONS)[0]) => {
+    if (item.id === theme) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setTransitionAccent(item.accent);
+    themeTransition.value = 0;
+    themeTransition.value = withSequence(
+      withTiming(0.45, { duration: 180 }),
+      withTiming(0, { duration: 320 })
+    );
+    setTheme(item.id);
+  };
+
   const [showProfile, setShowProfile] = useState(false);
   const [showSecurity, setShowSecurity] = useState(false);
   const [showNotification, setShowNotification] = useState(false);
@@ -384,6 +437,19 @@ const SettingsScreen = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: G.bg }]}>
+      {/* Theme Transition Overlay */}
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            backgroundColor: transitionAccent,
+            zIndex: 9999,
+          },
+          animatedOverlayStyle,
+        ]}
+      />
+
       {/* Background Ambient Glows */}
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         <View style={[styles.bgWash, { top: -80, left: -60, backgroundColor: '#FFFFFF', opacity: 0.03 }]} />
@@ -575,10 +641,7 @@ const SettingsScreen = () => {
                 key={item.id}
                 item={item}
                 isActive={theme === item.id}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  setTheme(item.id);
-                }}
+                onPress={() => handleThemeChange(item)}
               />
             ))}
           </ScrollView>

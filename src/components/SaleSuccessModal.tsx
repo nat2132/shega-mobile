@@ -139,7 +139,7 @@ const SaleSuccessModal: React.FC<SaleSuccessModalProps> = ({ saleData, onClose, 
             <Animated.View entering={FadeInDown.delay(700)} style={styles.content}>
               <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.title, { color: colors.text, opacity: 0.6 }]} numberOfLines={1}>{t('common.success').toUpperCase()}</AppText>
               <AppText variant="heading" weight="bold" style={[styles.subtitle, { color: colors.text }]} numberOfLines={2}>
-                {saleData.paymentStatus === 'Debt' ? (t('sale.debt_credit') || 'Credit Sale') : (t('sales.sale_success') || 'Sale Completed')}
+                {saleData.paymentStatus === 'Order' ? (t('sale.order_placed') || 'Order Placed') : saleData.paymentStatus === 'Debt' ? (t('sale.debt_credit') || 'Credit Sale') : (t('sales.sale_success') || 'Sale Completed')}
               </AppText>
 
               {/* Premium Receipt Card */}

@@ -11,6 +11,7 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StyleSheet,
   TextInput,
   TouchableOpacity,
@@ -156,14 +157,14 @@ const SearchResultRow = React.memo(({
         bg: colors.warning + '12',
         border: colors.warning + '30',
         text: colors.warning,
-        label: `${item.totalBaseQuantity} ${t('form.' + (item.baseUnit || 'pieces').toLowerCase()) || item.baseUnit} ${t('search.left')}`,
+        label: `${item.totalBaseQuantity} ${item.baseUnit || 'pcs'} ${t('search.left')}`,
       };
     }
     return {
       bg: colors.success + '12',
       border: colors.success + '30',
       text: colors.success,
-      label: `${item.totalBaseQuantity} ${t('form.' + (item.baseUnit || 'pieces').toLowerCase()) || item.baseUnit} ${t('search.available')}`,
+      label: `${item.totalBaseQuantity} ${item.baseUnit || 'pcs'} ${t('search.available')}`,
     };
   }, [isOutOfStock, isLowStock, item.totalBaseQuantity, item.baseUnit, colors, t]);
 
@@ -359,7 +360,11 @@ const NoResultsState = React.memo(({
   const SALES_GLASS = useMemo(() => getSalesGlass(colors), [colors]);
 
   return (
-    <Animated.View entering={FadeInDown.duration(400).springify()} style={styles.noResultsRoot}>
+    <ScrollView
+      contentContainerStyle={styles.noResultsRoot}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+    >
       <View style={[styles.noResultsIconBox, { backgroundColor: colors.error + '10', borderColor: colors.error + '25' }]}>
         <AlertCircle size={32} color={colors.error} />
       </View>
@@ -379,7 +384,7 @@ const NoResultsState = React.memo(({
           {t('search.clear')}
         </AppText>
       </TouchableOpacity>
-    </Animated.View>
+    </ScrollView>
   );
 });
 NoResultsState.displayName = 'NoResultsState';
@@ -801,7 +806,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   noResultsRoot: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,

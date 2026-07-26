@@ -109,7 +109,8 @@ const categoryColor = (cat: NotificationCategory) => {
 };
 
 const formatRelativeTime = (iso: string, t: (key: string, params?: Record<string, string>) => string): string => {
-  const diff = Date.now() - new Date(iso).getTime();
+  const normalized = iso.includes('T') ? iso : iso.replace(' ', 'T') + 'Z';
+  const diff = Date.now() - new Date(normalized).getTime();
   const minutes = Math.floor(diff / 60_000);
   if (minutes < 1) return t('notif.just_now');
   if (minutes < 60) return t('notif.m_ago', { n: String(minutes) });
@@ -117,7 +118,7 @@ const formatRelativeTime = (iso: string, t: (key: string, params?: Record<string
   if (hours < 24) return t('notif.h_ago', { n: String(hours) });
   const days = Math.floor(hours / 24);
   if (days < 7) return t('notif.d_ago', { n: String(days) });
-  return new Date(iso).toLocaleDateString();
+  return new Date(normalized).toLocaleDateString();
 };
 
 const styles = StyleSheet.create({
@@ -301,7 +302,7 @@ const CATEGORIES: { key: 'all' | NotificationCategory; labelKey: string }[] = [
 // unread dot, supplier-call button) is encapsulated here so the
 // parent FlatList can skip re-rendering rows when other rows change
 // state.
-const NotificationRow = React.memo(({
+const NotificationRow = ({
   item,
   index,
   onPress,
@@ -449,8 +450,7 @@ const NotificationRow = React.memo(({
       </TouchableOpacity>
     </Animated.View>
   );
-});
-NotificationRow.displayName = 'NotificationRow';
+};
 
 export const NotificationsListScreen: React.FC = () => {
   const { colors, t } = useSettings();

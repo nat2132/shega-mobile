@@ -8,6 +8,7 @@ import { useSidebar } from '@/context/SidebarContext';
 import { useWarehouse } from '@/context/WarehouseContext';
 import {
   getExpiringItems,
+  getFilteredItems,
   getInventoryComparisonStats,
   getInventoryStats,
   getInventorySummary,
@@ -125,7 +126,7 @@ const CategoryBarRow = React.memo(({ item, idx }: { item: any; idx: number }) =>
   const { colors, t } = useSettings();
   const G = getInventoryGlass(colors);
   const safeName = item?.name
-    ? t(item.name.toLowerCase().startsWith('category.') ? item.name.toLowerCase() : 'category.' + item.name.toLowerCase())
+    ? (item.name.startsWith('category.') ? t(item.name) : item.name)
     : item?.name;
   const safeCount = Number(item?.count) || 0;
   return (
@@ -170,13 +171,13 @@ const InventoryLedgerItem = React.memo(({ item, onPress }: { item: ItemData, onP
       <View style={styles.ledgerMain}>
         <AppText variant="body" weight="bold" style={[styles.ledgerName, { color: G.fg }]} numberOfLines={1}>{item.name}</AppText>
         <AppText variant="caption" weight="medium" style={[styles.ledgerCategory, { color: G.muted }]} numberOfLines={1}>
-          {(item.categoryName ? t(item.categoryName.toLowerCase().startsWith('category.') ? item.categoryName.toLowerCase() : 'category.' + item.categoryName.toLowerCase()) : t('common.general'))} • {t('form.' + (item.baseUnit || 'pieces').toLowerCase())}
+          {(item.categoryName ? (item.categoryName.startsWith('category.') ? t(item.categoryName) : item.categoryName) : t('common.general'))} • {item.baseUnit || 'pcs'}
         </AppText>
       </View>
       <View style={styles.ledgerEnd}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
           <AppNumber value={item.totalBaseQuantity} size="body" style={styles.ledgerQty} />
-          <AppText variant="body" weight="bold" shrink={false} style={[styles.ledgerQty, { color: G.fg }]} numberOfLines={1}> {t('form.' + (item.baseUnit || 'pieces').toLowerCase())}</AppText>
+          <AppText variant="body" weight="bold" shrink={false} style={[styles.ledgerQty, { color: G.fg }]} numberOfLines={1}> {item.baseUnit || 'pcs'}</AppText>
         </View>
         <View style={[styles.ledgerStatus, { backgroundColor: G.accentGlass }]}>
           <AppText variant="micro" weight="bold" transform="uppercase" shrink={false} style={[styles.ledgerStatusText, { color: G.muted }]} numberOfLines={1}>
@@ -198,6 +199,7 @@ const InventoryDashboard = () => {
   const tutorial = useTutorial({ tutorial: inventoryTutorial });
   const dialog = useDialog();
   const [showInventoryRecord, setShowInventoryRecord] = useState(false);
+  const [recordModalKey, setRecordModalKey] = useState(0);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showItemDetails, setShowItemDetails] = useState(false);
   const [activeQuickStatus, setActiveQuickStatus] = useState<string | null>(null);
@@ -278,13 +280,13 @@ const InventoryDashboard = () => {
   );
 
 const loadRecentItems = () => {
-     const today = new Date().toISOString().split('T')[0];
-     const allItems = getRecentItems(100) as ItemData[];
-     const todayItems = allItems.filter((item: any) => {
-       const itemDate = item.createdAt ? item.createdAt.split(' ')[0] || item.createdAt.substring(0, 10) : '';
-       return itemDate === today;
-     });
-     setRecentItems(todayItems.slice(0, 5));
+     const options: any = { limit: 100 };
+     if (activeWarehouseId) {
+       options.warehouseId = activeWarehouseId;
+     }
+     const allItems = getFilteredItems(options) as ItemData[];
+     const itemsWithStock = allItems.filter((item: any) => (item.totalBaseQuantity || 0) > 0);
+     setRecentItems(itemsWithStock.slice(0, 5));
    };
 
   const onRefresh = useCallback(() => {
@@ -531,7 +533,7 @@ const loadRecentItems = () => {
                             </View>
                             <View style={styles.catLabelRow}>
                                <AppText variant="body" weight="medium" style={[styles.catNameText, { color: G.fg }]} numberOfLines={1}>
-                                 {cat.name ? t(cat.name.toLowerCase().startsWith('category.') ? cat.name.toLowerCase() : 'category.' + cat.name.toLowerCase()) : t('common.general')}
+                                 {cat.name ? (cat.name.startsWith('category.') ? t(cat.name) : cat.name) : t('common.general')}
                                </AppText>
                                <AppNumber value={pct} suffix="%" size="body" style={styles.catValueText} />
                             </View>
@@ -635,6 +637,7 @@ const loadRecentItems = () => {
         visible={showInventoryRecord}
         transparent
         animationType="slide"
+        onShow={() => setRecordModalKey(k => k + 1)}
         onRequestClose={() => setShowInventoryRecord(false)}
       >
         <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
@@ -644,7 +647,7 @@ const loadRecentItems = () => {
               <View style={[styles.modalHandle, { backgroundColor: G.borderLight }]} />
             </View>
             <View style={{ flex: 1 }}>
-              <InventoryRecordScreen />
+              <InventoryRecordScreen key={recordModalKey} />
             </View>
           </View>
         </View>
@@ -666,7 +669,7 @@ const loadRecentItems = () => {
             <AddAssetFlow 
               onSuccess={() => {
                 setShowAddForm(false);
-                loadRecentItems();
+                loadAllData();
               }} 
               onClose={() => setShowAddForm(false)}
             />
@@ -729,7 +732,7 @@ const loadRecentItems = () => {
                     </View>
                   }
                   title={item.name}
-                  subtitle={`${item.totalBaseQuantity} ${t('form.' + (item.baseUnit || 'pieces').toLowerCase())} ${t('inv.left_suffix')}`}
+                  subtitle={`${item.totalBaseQuantity} ${item.baseUnit || 'pcs'} ${t('inv.left_suffix')}`}
                   titleMaxLines={2}
                   subtitleMaxLines={1}
                   right={

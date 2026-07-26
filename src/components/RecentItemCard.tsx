@@ -48,7 +48,7 @@ const RecentItemCard: React.FC<RecentItemCardProps> = React.memo(({ item, onPres
         <View style={{ flex: 1, marginLeft: 15 }}>
           <AppText variant="body" weight="bold" style={[styles.itemName, { color: colors.text }]} numberOfLines={1}>{item.name}</AppText>
           <AppText variant="caption" weight="medium" style={[styles.itemSub, { color: colors.textSecondary }]} numberOfLines={2}>
-            {(item.categoryName ? t(item.categoryName.toLowerCase().startsWith('category.') ? item.categoryName.toLowerCase() : 'category.' + item.categoryName.toLowerCase()) : t('common.uncategorized'))} • {t('common.added')} {getTimeAgo(item.createdAt)}
+            {(item.categoryName ? (item.categoryName.startsWith('category.') ? t(item.categoryName) : item.categoryName) : t('common.uncategorized'))} • {t('common.added')} {getTimeAgo(item.createdAt)}
           </AppText>
         </View>
         <View style={[styles.stockBadge, isOutOfStock ? { backgroundColor: '#FF3B30' } : { backgroundColor: colors.border }]}>

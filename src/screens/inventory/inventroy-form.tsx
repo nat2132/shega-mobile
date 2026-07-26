@@ -5,6 +5,7 @@ import { AppNumber, AppText } from '@/components/ui';
 import { Fonts } from '@/constants/theme';
 import { useDialog } from '@/context/DialogContext';
 import { useSettings } from '@/context/SettingsContext';
+import { useWarehouse } from '@/context/WarehouseContext';
 import {
   getItems,
   getSuppliers,
@@ -535,6 +536,7 @@ const RestockFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?:
 
 const AddItemFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?: () => void }) => {
   const { colors, t, calendarType, language } = useSettings();
+  const { activeWarehouseId } = useWarehouse();
   const G = getInventoryGlass(colors);
   const styles = useMemo(() => createStyles(G), [G]);
   const tutorial = useTutorial({ tutorial: inventoryFormTutorial });
@@ -747,6 +749,7 @@ const loadCategories = async () => {
         supplierPhone: supplierCallEnabled || creditToggle === 'Yes' ? supplierPhone : null,
         supplierAccount: supplierCallEnabled || creditToggle === 'Yes' ? supplierAccount : null,
         supplierCallEnabled,
+        warehouseId: activeWarehouseId || null,
         createdAt: recordDate || undefined,
       };
 
@@ -1286,7 +1289,7 @@ const loadCategories = async () => {
                         await dialog.alert({ title: t('common.error'), message: t('form.category_exists'), iconType: 'danger' });
                         return;
                       }
-                      const newCat = { id: Date.now(), name, icon: 'ðŸ“¦' };
+                      const newCat = { id: Date.now(), name, icon: '\uD83D\uDCE6' };
                       setCategories([...categories, newCat]);
                       setSelectedCategory(newCat);
                       setNewCategoryName('');

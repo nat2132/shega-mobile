@@ -821,6 +821,7 @@ export interface InsertItemData {
   supplierPhone?: string;
   supplierAccount?: string;
   supplierCallEnabled?: boolean;
+  warehouseId?: number | null;
 }
 
 export const getNextItemId = () => {
@@ -838,11 +839,11 @@ export const insertItem = (data: InsertItemData) => {
   try {
     const database = getDB();
     const statement = database.prepareSync(`
-      INSERT INTO items (name, categoryId, companyName, purchaseUnit, baseUnit, unitsPerPack, totalPackQuantity, totalBaseQuantity, packPurchasePrice, basePurchasePrice, baseSellingPrice, packSellingPrice, allowSellByBaseUnit, allowSellByPackUnit, expiryDate, qualityGrade, notes, isCredit, supplierPhone, supplierAccount, supplierCallEnabled, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
+      INSERT INTO items (name, categoryId, companyName, purchaseUnit, baseUnit, unitsPerPack, totalPackQuantity, totalBaseQuantity, packPurchasePrice, basePurchasePrice, baseSellingPrice, packSellingPrice, allowSellByBaseUnit, allowSellByPackUnit, expiryDate, qualityGrade, notes, isCredit, supplierPhone, supplierAccount, supplierCallEnabled, warehouseId, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
     `);
     const result = statement.executeSync([
-      data.name, data.categoryId, data.companyName || null, data.purchaseUnit || 'pcs', data.baseUnit || 'pcs', data.unitsPerPack || 0, data.totalPackQuantity || 0, data.totalBaseQuantity || 0, data.packPurchasePrice || 0, data.basePurchasePrice || 0, data.baseSellingPrice || 0, data.packSellingPrice || 0, data.allowSellByBaseUnit ? 1 : 0, data.allowSellByPackUnit ? 1 : 0, data.expiryDate || null, data.qualityGrade || null, data.notes || null, data.isCredit ? 1 : 0, data.supplierPhone || null, data.supplierAccount || null, data.supplierCallEnabled ? 1 : 0, null
+      data.name, data.categoryId, data.companyName || null, data.purchaseUnit || 'pcs', data.baseUnit || 'pcs', data.unitsPerPack || 0, data.totalPackQuantity || 0, data.totalBaseQuantity || 0, data.packPurchasePrice || 0, data.basePurchasePrice || 0, data.baseSellingPrice || 0, data.packSellingPrice || 0, data.allowSellByBaseUnit ? 1 : 0, data.allowSellByPackUnit ? 1 : 0, data.expiryDate || null, data.qualityGrade || null, data.notes || null, data.isCredit ? 1 : 0, data.supplierPhone || null, data.supplierAccount || null, data.supplierCallEnabled ? 1 : 0, data.warehouseId ?? null, null
     ]);
     return result.lastInsertRowId;
   } catch (error) {
@@ -1148,21 +1149,23 @@ export const insertSale = (saleData: {
   customerPhone?: string;
   packId?: number;
   batchId?: string;
+  dueDate?: string;
 }) => {
   const database = getDB();
   beginTransaction(database);
   try {
     // Insert the sale record
     const statement = database.prepareSync(`
-      INSERT INTO sales (itemId, quantity, unit, unitType, discount, vat, taxType, totalPrice, paymentMethod, paymentStatus, customerName, customerPhone, packId, batchId)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO sales (itemId, quantity, unit, unitType, discount, vat, taxType, totalPrice, paymentMethod, paymentStatus, customerName, customerPhone, packId, batchId, dueDate)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const result = statement.executeSync([
       saleData.itemId, saleData.quantity, saleData.unit, saleData.unitType,
       saleData.discount || 0, saleData.vat || 0, saleData.taxType || 'VAT', saleData.totalPrice,
       saleData.paymentMethod || null, saleData.paymentStatus || 'Paid',
       saleData.customerName || null, saleData.customerPhone || null,
-      saleData.packId || null, saleData.batchId || null
+      saleData.packId || null, saleData.batchId || null,
+      saleData.dueDate || null
     ]);
 
     // Update inventory quantities
@@ -2306,15 +2309,15 @@ export const getDebtCustomers = () => {
     const database = getDB();
     return database.getAllSync(`
       SELECT 
-        customerName, 
+        TRIM(customerName) as customerName, 
         customerPhone, 
         SUM(totalPrice - paidAmount) as oweAmount,
         MAX(createdAt) as lastBorrowed,
         MIN(dueDate) as earliestDue,
         COUNT(*) as totalDebts
       FROM sales 
-      WHERE paymentStatus = 'Debt'
-      GROUP BY customerName, customerPhone
+      WHERE paymentStatus IN ('Debt', 'Order') AND customerName IS NOT NULL AND TRIM(customerName) != ''
+      GROUP BY TRIM(customerName), customerPhone
       ORDER BY oweAmount DESC
     `);
   } catch (error) {
@@ -2330,12 +2333,12 @@ export const getDebtSales = (customerName?: string) => {
       SELECT sales.*, items.name as itemName, items.baseUnit
       FROM sales
       LEFT JOIN items ON sales.itemId = items.id
-      WHERE (paymentStatus = 'Debt' OR (paymentStatus = 'Paid' AND totalPrice > paidAmount))
+      WHERE (paymentStatus IN ('Debt', 'Order', 'Loss') OR (paymentStatus = 'Paid' AND COALESCE(paidAmount, 0) > 0))
     `;
     const params: any[] = [];
-    if (customerName) {
-      query += ' AND customerName = ?';
-      params.push(customerName);
+    if (customerName && customerName.trim()) {
+      query += ' AND LOWER(TRIM(customerName)) = LOWER(TRIM(?))';
+      params.push(customerName.trim());
     }
     query += ' ORDER BY createdAt DESC';
     return database.getAllSync(query, params);

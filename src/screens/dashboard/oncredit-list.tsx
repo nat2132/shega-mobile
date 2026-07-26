@@ -67,7 +67,7 @@ const OnCreditRow = React.memo(({
             <View style={styles.statArea}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
                 <AppNumber value={item.totalBaseQuantity} size="title-sm" color={G.fg} numberOfLines={1} />
-                <AppText variant="caption" weight="medium" style={styles.unitSmall}>{t('form.' + (item.baseUnit || 'pieces').toLowerCase())}</AppText>
+                <AppText variant="caption" weight="medium" style={styles.unitSmall}>{item.baseUnit || 'pcs'}</AppText>
               </View>
               <View style={[styles.statusBadgeSmall, { backgroundColor: colors.primary + '15' }]}>
                 <ShieldAlert size={10} color={colors.primary} />

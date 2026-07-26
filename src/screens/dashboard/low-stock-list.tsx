@@ -51,7 +51,7 @@ const LowStockRow = React.memo(({
               <View style={styles.qtyRow}>
                 <ArrowDownRight size={14} color={isOut ? colors.primary : colors.warning} />
                 <AppNumber value={item.totalBaseQuantity} size="body" color={G.fg} numberOfLines={1} />
-                <AppText variant="caption" weight="medium" shrink={false} style={[styles.unitText, { color: G.fgSecondary }]} numberOfLines={1}>{t('form.' + (item.baseUnit || 'pieces').toLowerCase())}</AppText>
+                <AppText variant="caption" weight="medium" shrink={false} style={[styles.unitText, { color: G.fgSecondary }]} numberOfLines={1}>{item.baseUnit || 'pcs'}</AppText>
               </View>
               <AppText variant="micro" weight="bold" transform="uppercase" shrink={false} style={[styles.statusLabel, { color: isOut ? colors.primary : colors.warning }]} numberOfLines={1}>
                 {isOut ? t('dash.depleted') : t('dash.critical')}
