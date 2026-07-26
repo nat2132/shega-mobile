@@ -100,7 +100,7 @@ const BillsAndTransactions = ({ filterCategory }: { filterCategory?: string }) =
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showToast({ title: t('toast.ledger_exported'), message: t('toast.ledger_exported_desc'), type: 'success' });
     } catch (e: any) {
-      showToast(e.message || 'Export failed', 'error');
+      showToast(e.message || t('dt.export_failed'), 'error');
     }
   };
 
@@ -111,7 +111,7 @@ const BillsAndTransactions = ({ filterCategory }: { filterCategory?: string }) =
   };
 
   const handleImport = async () => {
-    showToast('CSV Import coming in the next update. Use the template to format your data.', 'info');
+    showToast(t('dt.import_coming_soon'), 'info');
   };
 
   const filteredData = useMemo(() => {

@@ -701,7 +701,7 @@ const SalesDashboard = () => {
         type: "success",
       });
     } catch {
-      showToast("Failed to generate invoice PDF", "error");
+      showToast(t("toast.invoice_pdf_failed"), "error");
     }
     setInvoiceTarget(null);
   };
@@ -3606,7 +3606,7 @@ const SalesDashboard = () => {
                     });
                     setShowSaleSuccess(true);
                   } catch {
-                    showToast(t("sales.failed_msg") || "Sale failed", "error");
+                    showToast(t("sales.failed_msg"), "error");
                   }
                 }}
               />
@@ -3628,13 +3628,13 @@ const SalesDashboard = () => {
             onClose={() => setShowSaleSuccess(false)}
             onPrint={() =>
               showToast(
-                t("sales.receipt_ready") || "Receipt available in sale details",
+                t("sales.receipt_ready"),
                 "info",
               )
             }
             onShare={() =>
               showToast(
-                t("sales.receipt_ready") || "Receipt available in sale details",
+                t("sales.receipt_ready"),
                 "info",
               )
             }
@@ -3646,7 +3646,7 @@ const SalesDashboard = () => {
                 setSelectedSale(found);
                 setShowSaleDetails(true);
               } else {
-                showToast("Sale not found", "error");
+                showToast(t("toast.sale_not_found"), "error");
               }
             }}
           />

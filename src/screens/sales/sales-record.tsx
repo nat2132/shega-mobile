@@ -799,7 +799,7 @@ const SalesRecordScreen: React.FC<SalesRecordProps> = ({ onClose }) => {
                 type: "success",
               });
             } catch {
-              showToast("Failed to generate receipt PDF", "error");
+              showToast(t("toast.receipt_pdf_failed"), "error");
             }
           }
         }}

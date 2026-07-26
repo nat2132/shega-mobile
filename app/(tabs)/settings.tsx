@@ -16,7 +16,7 @@ export default function SettingsTabRoute() {
       const intent = consumeIntent();
       if (intent?.kind === 'subscription') {
         setTimeout(() => {
-          showToast(t('notif.subscription_renew') || 'Renew your subscription in Settings → License.', 'info');
+          showToast(t('notif.subscription_renew'), 'info');
         }, 200);
       }
     }, [consumeIntent, showToast, t]),

@@ -181,9 +181,9 @@ const CSVManagerScreen = () => {
           });
           setCurrentStep('result');
           if (result.errors.length === 0) {
-            showToast({ title: t('dt.import_complete'), message: `${result.imported} records imported`, type: 'success' });
+            showToast({ title: t('dt.import_complete'), message: t('dt.records_imported', { count: String(result.imported) }), type: 'success' });
           } else {
-            showToast({ title: t('toast.import_complete'), message: `${result.imported} records imported with ${result.errors.length} issue(s)`, type: 'warning' });
+            showToast({ title: t('toast.import_complete'), message: t('dt.records_imported_issues', { count: String(result.imported), errors: String(result.errors.length) }), type: 'warning' });
             playBad();
           }
         } catch {
@@ -206,7 +206,7 @@ const CSVManagerScreen = () => {
         await doImport();
       }
     } catch {
-      showToast('Import failed', 'error');
+      showToast(t('toast.import_failed'), 'error');
       setProcessing(false);
     }
   }, [transformedData, selectedModule, showToast]);
@@ -244,7 +244,7 @@ const CSVManagerScreen = () => {
       }
 
       await exportToCSV(data, selectedModule);
-      showToast({ title: t('dt.export_summary'), message: `${data.length} records exported to CSV`, type: 'success' });
+      showToast({ title: t('dt.export_summary'), message: t('dt.records_exported', { count: String(data.length) }), type: 'success' });
     } catch {
       showToast(t('common.error'), 'error');
     }
