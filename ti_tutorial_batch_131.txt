@@ -1,0 +1,3 @@
+﻿
+    'tutorial.damaged-item.steps.di-unit.desc': 'Choose the unit type â€” base unit or pack. Make sure this matches the quantity you entered.',
+

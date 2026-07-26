@@ -1,0 +1,3 @@
+﻿
+    'tutorial.create-budget.subtitle': 'Set up a spending plan',
+

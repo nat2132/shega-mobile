@@ -1,0 +1,2 @@
+﻿    'tutorial.expense-form.steps.ef-recurring.desc': 'Toggle this on for bills that repeat (rent, utilities, subscriptions). Set the frequency â€” daily, weekly, monthly, or yearly.',
+

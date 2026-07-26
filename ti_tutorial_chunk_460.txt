@@ -1,0 +1,2 @@
+﻿    'tutorial.sales-hub.subtitle': 'Track and manage your sales',
+

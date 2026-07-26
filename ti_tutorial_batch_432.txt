@@ -1,0 +1,3 @@
+﻿
+    'tutorial.sales-details.steps.sales-details.desc': 'This screen shows the full details of a sale transaction. Review items sold, pricing, payment, and customer information.',
+

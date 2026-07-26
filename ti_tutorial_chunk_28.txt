@@ -1,0 +1,2 @@
+﻿    'tutorial.adjustment.steps.adj-stats.desc': 'Track monthly corrections, capital leakage from damaged items, and stock integrity scores to monitor inventory health.',
+

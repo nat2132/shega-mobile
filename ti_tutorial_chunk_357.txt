@@ -1,0 +1,2 @@
+﻿    'tutorial.orders.steps.ord-list.desc': 'All orders organized by status. See pending, confirmed, and completed orders. Tap any order to view details or update status.',
+

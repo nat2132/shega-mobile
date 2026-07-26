@@ -1,0 +1,2 @@
+﻿    'tutorial.sale-form.subtitle': 'Complete a transaction step by step',
+

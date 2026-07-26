@@ -1,0 +1,2 @@
+﻿    'tutorial.price-increase.steps.pi-reason.desc': 'Provide a reason for the price increase (e.g., supplier price change, market adjustment, inflation). This is recorded in the adjustment history.',
+

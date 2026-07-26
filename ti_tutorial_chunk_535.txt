@@ -1,0 +1,2 @@
+﻿    'tutorial.warehouse-manager.title': 'Warehouse Manager',
+

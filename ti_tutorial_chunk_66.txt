@@ -1,0 +1,2 @@
+﻿    'tutorial.collect-payments.steps.cp-items.title': 'Select Items to Pay',
+

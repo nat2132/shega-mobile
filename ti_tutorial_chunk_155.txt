@@ -1,0 +1,2 @@
+﻿    'tutorial.date-time.steps.dt-calendar.desc': 'Choose between Gregorian and Ethiopian calendar systems. All dates in the app will use your selection.',
+

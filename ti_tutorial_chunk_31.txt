@@ -1,0 +1,2 @@
+﻿    'tutorial.adjustment.steps.adj-types.title': 'Adjustment Types',
+

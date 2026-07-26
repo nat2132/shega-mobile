@@ -1,0 +1,2 @@
+﻿    'tutorial.expense-details.steps.ed-amount.title': 'Amount & Category',
+

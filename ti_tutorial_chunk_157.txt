@@ -1,0 +1,2 @@
+﻿    'tutorial.date-time.steps.dt-save.desc': 'Save your date and time preferences. The entire app updates to reflect your chosen format.',
+

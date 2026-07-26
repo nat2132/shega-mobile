@@ -1,0 +1,2 @@
+﻿    'tutorial.expense.steps.exp-add.desc': 'Tap to log a new expense. Enter the payee, amount, category, and notes. You can also set up recurring bills for regular payments like rent or utilities.',
+

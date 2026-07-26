@@ -1,0 +1,2 @@
+﻿    'tutorial.price-decrease.title': 'Decrease Prices',
+

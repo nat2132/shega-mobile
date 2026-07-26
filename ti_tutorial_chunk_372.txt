@@ -1,0 +1,2 @@
+﻿    'tutorial.price-decrease.steps.pd-commit.title': 'Apply Decrease',
+

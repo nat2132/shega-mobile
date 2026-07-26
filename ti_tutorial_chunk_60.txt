@@ -1,0 +1,2 @@
+﻿    'tutorial.collect-payments.steps.cp-amount.title': 'Payment Amount',
+

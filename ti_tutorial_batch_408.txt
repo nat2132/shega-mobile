@@ -1,0 +1,3 @@
+﻿
+    'tutorial.profile-settings.steps.pset-name.title': 'Name & Business',
+

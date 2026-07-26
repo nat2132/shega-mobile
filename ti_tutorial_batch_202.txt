@@ -1,0 +1,3 @@
+﻿
+    'tutorial.expense.subtitle': 'Monitor and control your spending',
+

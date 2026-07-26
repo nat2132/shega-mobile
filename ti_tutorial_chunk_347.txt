@@ -1,0 +1,2 @@
+﻿    'tutorial.order-detail.steps.od-summary.desc': 'View the order status, total items, and overall cost. The status indicator shows if the order is pending, received, or cancelled.',
+

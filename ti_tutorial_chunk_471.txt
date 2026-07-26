@@ -1,0 +1,2 @@
+﻿    'tutorial.sales-records.steps.sr-summary.title': 'Period Summary',
+

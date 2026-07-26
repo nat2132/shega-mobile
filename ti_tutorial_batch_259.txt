@@ -1,0 +1,3 @@
+﻿
+    'tutorial.inventory.steps.inv-stats.title': 'Inventory Insights',
+

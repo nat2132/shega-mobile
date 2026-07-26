@@ -1,0 +1,2 @@
+﻿    'tutorial.dashboard.steps.dash-quick-stats.desc': 'At-a-glance status of low stock items, credit customers, and on-credit inventory. Tap any card to open the full list and take action.',
+

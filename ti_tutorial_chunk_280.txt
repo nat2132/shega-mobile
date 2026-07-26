@@ -1,0 +1,2 @@
+﻿    'tutorial.inventory-form.subtitle': 'Add a new product to your stock',
+

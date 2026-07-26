@@ -1,0 +1,3 @@
+﻿
+    'tutorial.collect-payments.steps.cp-customer.title': 'Select Customer',
+

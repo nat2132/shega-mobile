@@ -1,0 +1,2 @@
+﻿    'tutorial.warehouse-manager.subtitle': 'Manage your storage locations',
+

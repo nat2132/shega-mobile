@@ -1,0 +1,2 @@
+﻿    'tutorial.expense-list.steps.el-list.title': 'Expense List',
+

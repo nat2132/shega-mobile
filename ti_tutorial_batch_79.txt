@@ -1,0 +1,3 @@
+﻿
+    'tutorial.contact-details.steps.contact-details.desc': 'This screen shows all information about a contact â€” personal details, transaction history, and outstanding balances.',
+

@@ -1,0 +1,2 @@
+﻿    'tutorial.create-budget.steps.cb-name.desc': 'Give your budget a clear name (e.g., "Monthly Operations", "Q1 Marketing"). This helps identify the budget in reports.',
+

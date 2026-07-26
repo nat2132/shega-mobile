@@ -1,0 +1,2 @@
+﻿    'tutorial.contacts.steps.contacts.desc': 'Store and manage all your business contacts â€” customers, suppliers, and partners. Quick access to call, message, and track interactions.',
+

@@ -1,0 +1,2 @@
+﻿    'tutorial.expense-list.steps.el-filter.desc': 'Filter by date range, category, or budget. Search by description or amount to find specific entries.',
+

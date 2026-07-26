@@ -1,0 +1,2 @@
+﻿    'tutorial.security-settings.steps.security-settings.desc': 'Manage your account security settings â€” PIN, biometric authentication, and recovery options.',
+

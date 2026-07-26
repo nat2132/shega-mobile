@@ -1,0 +1,3 @@
+﻿
+    'tutorial.order-detail.steps.order-detail.title': 'Purchase Order',
+

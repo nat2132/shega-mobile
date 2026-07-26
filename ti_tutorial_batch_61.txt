@@ -1,0 +1,3 @@
+﻿
+    'tutorial.collect-payments.steps.cp-commit.desc': 'Review the payment details and confirm. The customer\'s balance is updated and the transaction is recorded.',
+

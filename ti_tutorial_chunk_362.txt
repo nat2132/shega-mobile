@@ -1,0 +1,2 @@
+﻿    'tutorial.pending-sales.steps.pending-sales.title': 'Pending Transactions',
+

@@ -1,0 +1,3 @@
+﻿
+    'tutorial.adjustment.steps.adj-types.desc': 'Choose from three types: Price Increase, Price Decrease, or Damaged Items. Each type creates a permanent record for auditing.',
+

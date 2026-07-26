@@ -1,0 +1,3 @@
+﻿
+    'tutorial.inventory-records.subtitle': 'View stock movement history',
+

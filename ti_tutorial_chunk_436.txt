@@ -1,0 +1,2 @@
+﻿    'tutorial.sales-details.steps.sd-items.desc': 'This list shows every item in the transaction, including quantity, unit price, and subtotal. Tap any item for more details.',
+

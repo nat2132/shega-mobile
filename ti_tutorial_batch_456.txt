@@ -1,0 +1,3 @@
+﻿
+    'tutorial.sales-hub.steps.sales-revenue.desc': 'Your total sales revenue for today. The bar chart below shows your weekly trend so you can spot patterns at a glance.',
+

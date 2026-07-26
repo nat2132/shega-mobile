@@ -1,0 +1,2 @@
+﻿    'tutorial.inventory-form.steps.if-commit.title': 'Save to Inventory',
+

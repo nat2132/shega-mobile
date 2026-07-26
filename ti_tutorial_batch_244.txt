@@ -1,0 +1,3 @@
+﻿
+    'tutorial.expense-loss.steps.expense-loss.desc': 'This screen shows expenses categorized as losses â€” damaged goods, theft, wastage, or other financial losses.',
+

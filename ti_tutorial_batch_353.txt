@@ -1,0 +1,3 @@
+﻿
+    'tutorial.orders.steps.ord-add.desc': 'Tap to create a new customer order. Select items, set quantities, add customer details, and choose payment terms.',
+

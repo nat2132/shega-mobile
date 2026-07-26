@@ -1,0 +1,975 @@
+﻿account.continue	Continue
+adj.asset_drain	Asset Drain
+adj.asset_valuation	Asset Valuation
+adj.audit_id	AUDIT ID
+adj.authorize_loss	Authorize Loss Log
+adj.available	Available
+adj.change	CHANGE
+adj.commit_adjustment	Commit Adjustment
+adj.delete_confirm	Delete this adjustment?
+adj.elevation_complete	ELEVATION COMPLETE
+adj.integrity_audit	Integrity & Loss Audit
+adj.loss_authorized	LOSS AUTHORIZED
+adj.loss_magnitude	Loss Magnitude
+adj.loss_qty	Loss Qty
+adj.loss_reason	Loss Reason
+adj.magnitude	MAGNITUDE
+adj.market_impact	Market Impact
+adj.original	Original
+adj.pack	Pack
+adj.precision_price	Precision Price
+adj.price_rectify	Price Rectify
+adj.reason_broken	Broken
+adj.reason_defective	Defective
+adj.reason_expired	Expired
+adj.reason_market	Market Shift
+adj.reason_policy	Policy Change
+adj.reason_promo	Promo End
+adj.reason_supplier	Supplier Update
+adj.reason_water	Water Damage
+adj.rectification_reason	Rectification Reason
+adj.reduction_applied	REDUCTION APPLIED
+adj.scale	Scale
+adj.search_asset	Search Asset
+adj.search_placeholder	Search inventory...
+adj.security_footer	IMMUTABLE LOG ENTRY • SECURITY LAYER ACTIVE \n VALUE RECOVERY AUDIT TRAIL
+adj.select_asset	Select an asset to rectify
+adj.select_reason_placeholder	Select reason for shift...
+adj.target_asset	Target Asset
+adj.unit	Unit
+adj.valuation_impact	VALUATION IMPACT
+assistant.action_restock	Restock now
+assistant.action_review_expenses	Review expenses
+assistant.action_view_customers	View customers
+assistant.best_selling_item	{name} ({qty} sold)
+assistant.best_selling_title	Best Selling Products
+assistant.best_selling_value	{name} leading sales
+assistant.damaged_desc	{count} items have been marked as damaged.
+assistant.damaged_title	{count} Damaged Items
+assistant.debt_customers_desc	Total outstanding: ETB {amount}. {overdue} overdue.
+assistant.debt_customers_title	{count} Active Debt Customers
+assistant.expense_increase_desc	Expenses are up by ETB {diff} compared to last month.
+assistant.expense_increase_title	Expense Increase Detected
+assistant.highest_value_item	{name} (ETB {value})
+assistant.highest_value_title	Highest Value Items
+assistant.low_stock_desc_few	{names} are running low.
+assistant.low_stock_desc_many	{names} and {count} more need restocking.
+assistant.slow_moving_desc	These items have low turnover. Consider promotions or bundles.
+assistant.slow_moving_title	{count} Slow-Moving Items
+budget.alert_threshold	Alert Threshold
+budget.all_periods	All Periods
+budget.all_types	All Types
+budget.budget_vs_actual	Budget vs Actual
+budget.pending_adjustments	Pending Adjustments
+common.day_fri	Fri
+common.day_mon	Mon
+common.day_sat	Sat
+common.day_sun	Sun
+common.day_thu	Thu
+common.day_tue	Tue
+common.day_wed	Wed
+common.days	Days
+common.deleted	Deleted
+common.edited	Edited
+common.entries	entries
+common.notes	Notes
+common.optional	Optional
+common.preview	Preview
+common.save_changes	Save Changes
+common.search_customer	Search customer...
+common.tap_to_change	Tap to change
+common.unit	Unit
+common.unknown	Unknown
+common.verify	Verify
+dash.amount_exceeds	Amount cannot exceed total credit balance.
+dash.amount_received	Amount received
+dash.amount_required	Enter a valid amount
+dash.confirm_payment	Confirm Payment
+dash.customer_id	ID: {id}
+dash.debt_written_off	Debt written off
+dash.no_outstanding	No outstanding customer balances right now.
+dash.pending	Pending
+dash.settle_credit	Settle Credit
+dash.settlement_recorded	Payment recorded
+dash.total_outstanding	Total outstanding
+dash.unregistered	UNREGISTERED
+dash.write_off_action	Write off
+dash.write_off_msg	Mark {name}\\'s debt as bad debt?
+dash.write_off_title	Write off as loss
+detail.advanced_details	ADVANCED DETAILS
+detail.call_supplier_cta	Call supplier
+detail.could_not_call	Could not start the phone call
+detail.delete_confirm	Are you sure you want to permanently delete this record from the system? This action cannot be undone.
+detail.delete_title	Delete Record?
+detail.no_phone_set	No phone number set
+detail.no_supplier_phone	No phone number is set for this supplier
+detail.notes	NOTES
+detail.quality_grade	QUALITY GRADE
+detail.supplier_info	SUPPLIER INFO
+detail.tax_config	TAX CONFIGURATION
+dt.step_done	Done
+expense.add	Add an expense
+expense.committed	Committed
+expense.erase_outflow	ERASE OUTFLOW
+expense.erased_success	Expense Erased
+expense.failed_to_save	Failed to save expense
+expense.funds_recovered	Funds Recovered
+expense.inventory_loss	Inventory Loss
+expense.modified_success	Expense Modified
+expense.modify_outflow	MODIFY OUTFLOW
+expense.no_pulse	No spending pulse detected
+expense.no_records	No records found.
+expense.overall_loss	Total Overall Loss
+expense.recent_trans	Recent Transactions
+expense.select_category	Please select a category
+expense.total_expense	Total Expense
+expense.transactions	Transactions
+expense.upcoming_payments	Upcoming Payments
+expense.validation_amount	Amount
+expense.validation_name	Description / Payee
+expense.view_list	View all expenses
+inv.bags_left	bags left
+inv.category_title	Category
+inv.empty_subtitle	Add items or change filters
+inv.expires_in	Expires in {days}
+inv.minutes_ago	{count}m ago
+inv.no_items_found	No items found
+inv.none_left	None Left
+inv.order_date	Date: {date}
+inv.order_item_name	Item Name
+inv.order_notes	Notes
+inv.order_quantity	Order Quantity
+inv.order_total_items	Total Items: {count}
+inv.product_order_list	Product Order List
+inv.sort_title	Sort By
+inventory.asset_valuation	Live Asset Valuation
+inventory.base_cost	Base Cost
+inventory.base_price	Base Price
+inventory.base_unit	Base Unit
+inventory.category_stock	Stock by Category
+inventory.company_name	Company Name
+inventory.days_ago	days ago
+inventory.days_left	days left
+inventory.days_remaining	Days Remaining
+inventory.failed_to_save	Failed to save item
+inventory.fast_moving	Fast Moving
+inventory.is_credit	Credit Purchase
+inventory.low_stock	Low Stock Items
+inventory.no_items	No items in inventory.
+inventory.pack_purchase_price	Pack Purchase Price
+inventory.pack_selling_price	Pack Selling Price
+inventory.purchase_unit	Purchase Unit
+inventory.quality_grade	Quality Grade
+inventory.recent_added	Recent Added Items
+inventory.slow_moving	Slow Moving
+inventory.supplier_account	Supplier Account
+inventory.supplier_call	Supplier Call Enabled
+inventory.supplier_phone	Supplier Phone
+inventory.total_packs	Total Packs
+inventory.units_per_pack	Units Per Pack
+notif.active	Active
+notif.cancel	Cancel
+notif.cleared	All notifications cleared
+notif.critical	Critical
+notif.debt_msg	{name} settlement outstanding ({amount} Birr)
+notif.deficit_alert	Deficit Alert
+notif.exposure_warning	Exposure Warning
+notif.low_stock_msg	{name} capacity dropping ({qty} units remaining)
+notif.mark_complete_confirm	Mark this reminder as complete?
+notif.marked_read	All notifications marked as read
+notif.open_settings	Open Settings → Subscription
+notif.priority	Priority
+notif.reminder_completed	Reminder completed
+notif.reminder_removed	Reminder removed
+notif.remove_confirm	Are you sure you want to remove this reminder?
+notif.remove_reminder	Remove
+notif.snooze_15	Snooze 15 min
+notif.snooze_week	Snooze Next week
+notif.snoozed_for	Reminder snoozed for {minutes} minutes
+notif.status	Status
+notif.status_read	Read
+notif.status_resolved	Resolved
+notif.status_unread	Unread
+notif.subscription_renew	Renew your subscription in Settings → License.
+notif.supplier_call_msg	Price changed for {name} this week. Confirm the new price with the supplier.
+notif.supplier_price_down	Price went down
+notif.supplier_price_up	Price went up
+notif.test_popup	Test Pop-up
+notif.test_push	Test Push
+notif.weekly_supplier_alerts	Weekly supplier alerts
+notif.weekly_supplier_alerts_desc	Get reminded to call the supplier when item prices change
+sale.invalid_phone	Invalid Phone
+sale.invalid_phone_msg	Please enter a valid phone number (7-20 digits).
+sale.invalid_total	Invalid total amount. Check discount and VAT values.
+sale.save_error	Failed to save sale. Please check item data and try again.
+sales.activity_credit	On Credit
+sales.activity_full	Full Payment
+sales.activity_partial	Partial Payment
+sales.batch_transaction	Batch Transaction
+sales.checkout_msg	The checkout has been completed and stock has been updated.
+sales.confirm_action	Confirm
+sales.confirm_full_title	Confirm Full Payment
+sales.delete_batch_confirm	Delete all items in this batch?
+sales.failed_msg	Failed to record the sale.
+sales.items_purchased	Items Purchased
+sales.no_payment_data	No payment data available
+sales.no_peak_data	No sales data available yet
+sales.no_sales	No recent sales
+sales.no_sales_period	No sales recorded for this period
+sales.payment_debt	Debt
+sales.payment_items	Paid {count} item(s).
+sales.payment_methods_modal	Payment Methods
+sales.payment_paid	Paid
+sales.payment_processed	Payment Processed
+sales.payment_subtitle	Breakdown by transaction volume
+sales.peak_sales_hours	Peak Sales Hours
+sales.peak_subtitle	Top hours ranked by transaction count
+sales.process_return	Process Return
+sales.return_for	Process a return for {itemName}
+sales.return_item	Return Item
+sales.return_max	Max: {qty} {unit}
+sales.return_processed	Return Processed
+sales.return_quantity	Quantity to Return
+sales.return_reason_label	Reason for Return
+sales.return_success	{qty} {unit} of {itemName} has been returned to inventory.
+sales.sale	sale
+sales.sale_error	Error
+sales.sale_success	Sale Successful
+sales.sales_plural	sales
+sales.stat_method	Method
+sales.stat_owed	Owed
+sales.total_revenue	Total Revenue
+sales.transactions_count	{count} transactions
+sales.units_sold	{count} units sold
+sales.unknown_method	Unknown
+sales.view_sales	View Sales
+screen.activity_ledger	Activity Ledger
+screen.add_expense	Add Expense
+screen.add_inventory_item	Add Inventory Item
+screen.adjustment	Adjustment
+screen.adjustment_history	Adjustment History
+screen.budget	Budget
+screen.collect_payments	Collect Payments
+screen.contact_details	Contact Details
+screen.contacts	Contacts
+screen.create_budget	Create Budget
+screen.create_order	Create Order
+screen.damaged_item	Damaged Item
+screen.dashboard	Dashboard
+screen.debt_management	Debt Management
+screen.debt_records	Debt Records
+screen.expense	Expense
+screen.expense_details	Expense Details
+screen.expense_loss	Expense Loss
+screen.expense_records	Expense Records
+screen.inventory	Inventory
+screen.inventory_records	Inventory Records
+screen.item_details	Item Details
+screen.low_stock_items	Low Stock Items
+screen.notifications	Notifications
+screen.on_credit_list	On Credit List
+screen.order_details	Order Details
+screen.orders	Orders
+screen.pending_sales	Pending Sales
+screen.price_decrease	Price Decrease
+screen.price_increase	Price Increase
+screen.record_sale	Record Sale
+screen.reminder_history	Reminder History
+screen.sale_details	Sale Details
+screen.sales_hub	Sales Hub
+screen.sales_records	Sales Records
+screen.settings	Settings
+screen.summary	Summary
+screen.warehouse_manager	Warehouse Manager
+search.business	business
+search.damaged	Damaged
+search.expense_id	Expense
+search.monthly	monthly
+search.paid	Paid
+search.pcs	pcs
+search.price_down	Price Down
+search.price_up	Price Up
+search.sale_id	Sale
+search.uncategorized	Uncategorized
+security.authenticate_to	Authenticate to {action}
+security.biometrics	Biometrics
+security.biometrics_desc	Allow fingerprint or Face ID to unlock the app.
+security.biometrics_enabled	Biometrics enabled successfully.
+security.biometrics_off	Biometrics Disabled
+security.biometrics_on	Biometrics Enabled
+security.change_pin	Change PIN
+security.confirm_pin	Confirm PIN
+security.current_pin	Current PIN
+security.disable_biometrics	disable biometrics
+security.enable_biometrics	enable biometrics
+security.enter_current_pin	Enter your current PIN to remove it.
+security.generate_recovery	Generate Recovery Code
+security.identity_failed	Identity verification failed.
+security.new_pin	New PIN
+security.pin.confirm	Confirm PIN
+security.pin.new	New Pin
+security.recovery_active	Recovery code is set
+security.recovery_code	Recovery Code
+security.recovery_desc	Used to regain access if you forget your PIN.
+security.recovery_none	No recovery code set
+security.recovery_shown_once	Save this code securely. It will only be shown once.
+security.regenerate_recovery	Regenerate Recovery Code
+security.remove_pin	Remove PIN
+security.set_pin	Set PIN
+security.verify_identity	Verify Identity
+security.your_new_code	Your New Recovery Code
+settings.account	Account Settings
+settings.credit_debt	Credit & Debt
+settings.credit_status	Credit Status
+settings.credit_status_desc	Notify when new credit sales are made
+settings.daily_summary	Daily Summary
+settings.daily_summary_desc	End-of-day report and KPI overview
+settings.danger_zone	Danger Zone
+settings.date_time_desc	Configure how dates and times appear throughout the app.
+settings.debt_status	Debt Status
+settings.debt_status_desc	Notify when outstanding debt is overdue
+settings.expiration_status	Expiration Status
+settings.expiration_status_desc	Notify when items are close to expiry
+settings.lang_note	Changing language updates labels instantly.
+settings.pin_invalid	PIN must be 4 digits.
+settings.pin_mismatch	PINs do not match.
+settings.remove_desc	Enter current PIN above to remove protection.
+settings.stock_shortage_desc	Notify when items fall below threshold
+settings.support_availability	Mon-Fri, 9am - 6pm
+settings.time_device_preview	Device preview
+settings.time_ethiopian_preview	Ethiopian preview
+subscription.feature_ai_benefit_0	Smart recommendations
+subscription.feature_ai_benefit_1	Business insights
+subscription.feature_ai_benefit_2	Save time
+subscription.feature_ai_desc	Get intelligent insights and recommendations for your business.
+subscription.feature_biometrics_benefit_0	Fast access
+subscription.feature_biometrics_benefit_1	Enhanced security
+subscription.feature_biometrics_benefit_2	Modern convenience
+subscription.feature_biometrics_desc	Secure the app with fingerprint or face unlock.
+subscription.feature_budget_benefit_0	Plan your spending
+subscription.feature_budget_benefit_1	Stay on track
+subscription.feature_budget_benefit_2	Reduce waste
+subscription.feature_budget_desc	Create and manage budgets for your business.
+subscription.feature_csv_export	CSV Export
+subscription.feature_csv_export_benefit_0	Data portability
+subscription.feature_csv_export_benefit_1	Backup your records
+subscription.feature_csv_export_benefit_2	Analyze in spreadsheets
+subscription.feature_csv_export_desc	Export your business data to CSV format.
+subscription.feature_csv_import	CSV Import
+subscription.feature_csv_import_benefit_0	Bulk data import
+subscription.feature_csv_import_benefit_1	Save time on data entry
+subscription.feature_csv_import_benefit_2	Migrate from other tools
+subscription.feature_csv_import_desc	Import inventory and sales data from CSV files.
+subscription.feature_dashboard_benefit_0	Real-time business insights
+subscription.feature_dashboard_benefit_1	Visual performance metrics
+subscription.feature_dashboard_benefit_2	Quick decision making
+subscription.feature_dashboard_desc	Get a complete overview of your business at a glance.
+subscription.feature_debt_benefit_0	Track owed amounts
+subscription.feature_debt_benefit_1	Automate reminders
+subscription.feature_debt_benefit_2	Improve cash flow
+subscription.feature_debt_desc	Manage customer debts and payment tracking.
+subscription.feature_expense_benefit_0	Better financial control
+subscription.feature_expense_benefit_1	Understand profits
+subscription.feature_expense_benefit_2	Smarter spending
+subscription.feature_expense_desc	Track all business expenses and understand where your money goes.
+subscription.feature_health_benefit_0	Overall business view
+subscription.feature_health_benefit_1	Identify risks early
+subscription.feature_health_benefit_2	Track improvement
+subscription.feature_health_desc	Monitor your business health with a comprehensive score.
+subscription.feature_multi_warehouse_benefit_0	Track all locations
+subscription.feature_multi_warehouse_benefit_1	Optimize stock distribution
+subscription.feature_multi_warehouse_benefit_2	Full inventory visibility
+subscription.feature_multi_warehouse_desc	Manage inventory across multiple warehouse locations.
+subscription.feature_orders_benefit_0	Streamline ordering
+subscription.feature_orders_benefit_1	Track fulfillment
+subscription.feature_orders_benefit_2	Better customer service
+subscription.feature_orders_desc	Manage customer orders from placement to fulfillment.
+subscription.feature_pdf_benefit_0	Professional receipts
+subscription.feature_pdf_benefit_1	Easy record keeping
+subscription.feature_pdf_benefit_2	Share with customers
+subscription.feature_pdf_desc	Download and share professional PDF receipts.
+subscription.feature_purchase_orders_benefit_0	Simplify procurement
+subscription.feature_purchase_orders_benefit_1	Track supplier orders
+subscription.feature_purchase_orders_benefit_2	Manage inventory
+subscription.feature_purchase_orders_desc	Create and manage purchase orders for suppliers.
+subscription.feature_reports_benefit_0	Track business performance
+subscription.feature_reports_benefit_1	Make data-driven decisions
+subscription.feature_reports_benefit_2	Identify growth opportunities
+subscription.feature_reports_desc	Generate detailed business reports and analytics.
+subscription.feature_suppliers_benefit_0	Never miss a payment
+subscription.feature_suppliers_benefit_1	Maintain good relationships
+subscription.feature_suppliers_benefit_2	Avoid late fees
+subscription.feature_suppliers_desc	Get reminders for supplier credit payments.
+subscription.feature_themes_benefit_0	Personalized experience
+subscription.feature_themes_benefit_1	Professional look
+subscription.feature_themes_benefit_2	Visual appeal
+subscription.feature_themes_desc	Customize the app appearance with premium themes.
+subscription.footer_no_charges	No charges. Cancel anytime during trial.
+subscription.telebirr_account_name	Shega Business
+subscription.upgrade_to_premium	Unlock Premium
+summary.financial_summary	Financial Summary
+summary.from_yesterday	from yesterday
+summary.items_sold	Total Sales
+support.assistance	Assistance
+support.banner_text	Our elite support analysts typically respond within 12 standard operating hours.
+support.cloud_sync	Cloud-Sync Active • Secure Encryption Enabled
+support.concierge	Executive Concierge
+support.direct_support	Direct System Support
+support.email_channel	E-MAIL CHANNEL
+support.orchestration	InvPro Orchestration
+support.priority_voice	Priority Voice Support
+support.voice_hours	Available 09:00 - 18:00 (GMT+3)
+support.voice_terminal	VOICE TERMINAL
+translation.global_hub	Global Hub
+translation.localization	Localization
+translation.preview_desc	System orchestration mapped to current script
+translation.preview_label	LOCALIZATION PREVIEW
+translation.schema_notice	Selecting a new schema will re-orchestrate the entire application UI terminology.
+translation.selection_heading	SELECT LINGUISTIC SCHEMA
+trial.banner_compact	Premium Trial
+trial.banner_title	Premium Trial
+tutorial.action_done	\u2713 Done!
+tutorial.action_scroll	Scroll the highlighted area
+tutorial.action_swipe	Swipe the highlighted area
+tutorial.action_tap	Tap the highlighted element
+tutorial.action_type	Type in the highlighted field
+tutorial.activity-ledger.steps.activity-ledger.desc	This is your business activity feed — every transaction, adjustment, and event recorded in chronological order.
+tutorial.activity-ledger.steps.activity-ledger.title	Activity Ledger
+tutorial.activity-ledger.steps.al-feed.desc	Every action is listed here: sales, expenses, inventory changes, price adjustments, and payments received.
+tutorial.activity-ledger.steps.al-feed.title	Activity Feed
+tutorial.activity-ledger.steps.al-filter.desc	Filter by activity type (sales, expenses, inventory, payments) or date range to find specific events.
+tutorial.activity-ledger.steps.al-filter.title	Filter Activity
+tutorial.activity-ledger.subtitle	View all business activity
+tutorial.activity-ledger.title	Activity Ledger
+tutorial.add-order-item.steps.add-order-item.desc	Follow these steps to add a product to your purchase order. You can search for existing inventory items or enter custom details.
+tutorial.add-order-item.steps.add-order-item.title	Adding an Order Item
+tutorial.add-order-item.steps.aoi-commit.desc	Tap to add this item to your purchase order. You can add multiple items before submitting the complete order.
+tutorial.add-order-item.steps.aoi-commit.title	Add to Order
+tutorial.add-order-item.steps.aoi-company.desc	Enter the supplier or company name for this item. This is useful for tracking which vendor supplies the product.
+tutorial.add-order-item.steps.aoi-company.title	Supplier / Company
+tutorial.add-order-item.steps.aoi-name.desc	Enter the name of the product you want to order. If it exists in inventory, it will auto-fill details.
+tutorial.add-order-item.steps.aoi-name.title	Item Name
+tutorial.add-order-item.steps.aoi-quantity.desc	Enter the quantity you want to order. This will be added to the order summary and tracked against the supplier.
+tutorial.add-order-item.steps.aoi-quantity.title	Order Quantity
+tutorial.add-order-item.subtitle	Add products to a purchase order
+tutorial.add-order-item.title	Add Order Item
+tutorial.adjustment.steps.adj-ledger.desc	All past adjustments are recorded here. View the audit trail with timestamps, previous and new values, and reasons for each change.
+tutorial.adjustment.steps.adj-ledger.title	Calibration Ledger
+tutorial.adjustment.steps.adj-stats.desc	Track monthly corrections, capital leakage from damaged items, and stock integrity scores to monitor inventory health.
+tutorial.adjustment.steps.adj-stats.title	Integrity Statistics
+tutorial.adjustment.steps.adj-types.desc	Choose from three types: Price Increase, Price Decrease, or Damaged Items. Each type creates a permanent record for auditing.
+tutorial.adjustment.steps.adj-types.title	Adjustment Types
+tutorial.adjustment.steps.adjustment.desc	Make corrections to your inventory — price changes, damaged item logging, and stock corrections. All adjustments are recorded in an immutable audit trail.
+tutorial.adjustment.steps.adjustment.title	Adjustments Hub
+tutorial.adjustment.subtitle	Manage price and stock changes
+tutorial.adjustment.title	Adjustments
+tutorial.adjustment-history.steps.adjustment-history.desc	View the complete history of all price changes, stock adjustments, and damaged item records.
+tutorial.adjustment-history.steps.adjustment-history.title	Adjustment History
+tutorial.adjustment-history.steps.ah-filter.desc	Filter by adjustment type (price increase, decrease, damaged, stock correction) or by date range.
+tutorial.adjustment-history.steps.ah-filter.title	Filter Adjustments
+tutorial.adjustment-history.steps.ah-list.desc	Each entry shows the item name, adjustment type, old and new values, reason, and the user who made the change.
+tutorial.adjustment-history.steps.ah-list.title	Adjustment Entries
+tutorial.adjustment-history.subtitle	Review all price and stock adjustments
+tutorial.adjustment-history.title	Adjustment History
+tutorial.budget.steps.bud-categories.desc	View spending by category. Each category shows planned vs actual spend. Tap to drill down for detailed analysis.
+tutorial.budget.steps.bud-categories.title	Category Breakdown
+tutorial.budget.steps.bud-create.desc	Tap to create a new budget. Set a name, type (business, department, project), period (monthly, quarterly, yearly), and allocate amounts by category.
+tutorial.budget.steps.bud-create.title	Create a Budget
+tutorial.budget.steps.budget.desc	Create and manage budgets for your business. Track planned vs actual spending across categories, departments, or projects.
+tutorial.budget.steps.budget.title	Budget Dashboard
+tutorial.budget.steps.bud-overview.desc	See your total budget, spending to date, and remaining balance. The health indicator shows if you\\'re on track, near limit, or over budget.
+tutorial.budget.steps.bud-overview.title	Budget Overview
+tutorial.budget.steps.bud-trends.desc	Track your budget performance over time. See monthly trends and forecast future spending based on historical patterns.
+tutorial.budget.steps.bud-trends.title	Monthly Trends
+tutorial.budget.subtitle	Plan and track spending
+tutorial.budget.title	Budget Management
+tutorial.close	Close
+tutorial.collect-payments.steps.collect-payments.desc	Use this screen to receive payments from customers for credit sales or orders. Follow the steps to record a payment.
+tutorial.collect-payments.steps.collect-payments.title	Collect Payment
+tutorial.collect-payments.steps.cp-amount.desc	Enter the amount being paid. The system shows the remaining balance after this payment.
+tutorial.collect-payments.steps.cp-amount.title	Payment Amount
+tutorial.collect-payments.steps.cp-commit.desc	Review the payment details and confirm. The customer\\'s balance is updated and the transaction is recorded.
+tutorial.collect-payments.steps.cp-commit.title	Complete Payment
+tutorial.collect-payments.steps.cp-customer.desc	Search for the customer making the payment. Select them to see their outstanding balance and due items.
+tutorial.collect-payments.steps.cp-customer.title	Select Customer
+tutorial.collect-payments.steps.cp-items.desc	Choose which items or invoices the customer is paying for. You can pay partially or in full for each item.
+tutorial.collect-payments.steps.cp-items.title	Select Items to Pay
+tutorial.collect-payments.steps.cp-method.desc	Select how the customer is paying — cash or digital bank transfer. The payment method is recorded for reconciliation.
+tutorial.collect-payments.steps.cp-method.title	Payment Method
+tutorial.collect-payments.subtitle	Receive payments from customers
+tutorial.collect-payments.title	Collect Payments
+tutorial.complete_desc	You\\'ve completed the {name} tutorial.
+tutorial.complete_title	Tutorial Complete!
+tutorial.contact-details.steps.cd-actions.desc	Edit contact details, record a sale, or collect payment directly from this screen.
+tutorial.contact-details.steps.cd-actions.title	Actions
+tutorial.contact-details.steps.cd-balance.desc	Any outstanding credit balance for this contact. Track what they owe and when payments are due.
+tutorial.contact-details.steps.cd-balance.title	Outstanding Balance
+tutorial.contact-details.steps.cd-info.desc	View name, phone numbers, account number, category, and notes about this contact. Tap to call or message.
+tutorial.contact-details.steps.cd-info.title	Contact Information
+tutorial.contact-details.steps.contact-details.desc	This screen shows all information about a contact — personal details, transaction history, and outstanding balances.
+tutorial.contact-details.steps.contact-details.title	Contact Profile
+tutorial.contact-details.subtitle	View and manage a contact
+tutorial.contact-details.title	Contact Details
+tutorial.contacts.steps.con-add.desc	Tap to add a new contact. Enter their name, phone number, email, and notes. Assign them as customer, supplier, or partner.
+tutorial.contacts.steps.con-add.title	Add a Contact
+tutorial.contacts.steps.con-list.desc	All your contacts displayed here. Search by name or phone, tap to view details, call directly, or send a WhatsApp message.
+tutorial.contacts.steps.con-list.title	Contact List
+tutorial.contacts.steps.con-search.desc	Find any contact instantly by typing their name or phone number.
+tutorial.contacts.steps.con-search.title	Search Contacts
+tutorial.contacts.steps.contacts.desc	Store and manage all your business contacts — customers, suppliers, and partners. Quick access to call, message, and track interactions.
+tutorial.contacts.steps.contacts.title	Business Contacts
+tutorial.contacts.subtitle	Manage your business network
+tutorial.contacts.title	Contacts
+tutorial.create-budget.steps.cb-categories.desc	Add spending categories and allocate amounts to each. For example: rent, utilities, supplies. Each category gets its own limit.
+tutorial.create-budget.steps.cb-categories.title	Budget Categories
+tutorial.create-budget.steps.cb-commit.desc	Review your budget settings and confirm. The budget will be active immediately and track expenses in real-time.
+tutorial.create-budget.steps.cb-commit.title	Save Budget
+tutorial.create-budget.steps.cb-name.desc	Give your budget a clear name (e.g., "Monthly Operations", "Q1 Marketing"). This helps identify the budget in reports.
+tutorial.create-budget.steps.cb-name.title	Budget Name
+tutorial.create-budget.steps.cb-period.desc	Set the period — daily, weekly, monthly, quarterly, or yearly. The system will track spending against this period.
+tutorial.create-budget.steps.cb-period.title	Budget Period
+tutorial.create-budget.steps.cb-type.desc	Choose the budget type — business-wide, department-specific, or project-based. This determines how spending is tracked.
+tutorial.create-budget.steps.cb-type.title	Budget Type
+tutorial.create-budget.steps.create-budget.desc	Follow these steps to create a new budget. Budgets help you plan spending, track limits, and control costs.
+tutorial.create-budget.steps.create-budget.title	Creating a Budget
+tutorial.create-budget.subtitle	Set up a spending plan
+tutorial.create-budget.title	Create a Budget
+tutorial.create-order.steps.co-commit.desc	Review the order summary and tap the commit button to finalize. The order will appear in your orders list.
+tutorial.create-order.steps.co-commit.title	Place Order
+tutorial.create-order.steps.co-customer.desc	Enter the customer\\'s name. This is required for order tracking. Existing customers will auto-complete as you type.
+tutorial.create-order.steps.co-customer.title	Customer Name
+tutorial.create-order.steps.co-items.desc	Search and select items to add to this order. You can add multiple items with different quantities.
+tutorial.create-order.steps.co-items.title	Select Items
+tutorial.create-order.steps.create-order.desc	Create a new customer order by selecting items, setting quantities, and adding customer details.
+tutorial.create-order.steps.create-order.title	Creating an Order
+tutorial.create-order.subtitle	Place a customer order
+tutorial.create-order.title	Create Order
+tutorial.damaged-item.steps.damaged-item.desc	Follow these steps to record damaged, expired, or lost inventory items. This keeps your stock counts accurate.
+tutorial.damaged-item.steps.damaged-item.title	Damaged Item Log
+tutorial.damaged-item.steps.di-commit.desc	Review the details and confirm to record the damaged item. Your inventory count is adjusted immediately.
+tutorial.damaged-item.steps.di-commit.title	Record Loss
+tutorial.damaged-item.steps.di-date.desc	Set the date when the damage or loss was discovered. This is recorded in your adjustment history.
+tutorial.damaged-item.steps.di-date.title	Date of Loss
+tutorial.damaged-item.steps.di-item.desc	Select the item from search results. Review the current stock level before recording the loss.
+tutorial.damaged-item.steps.di-item.title	Select Item
+tutorial.damaged-item.steps.di-quantity.desc	Enter the quantity of items that are damaged or lost. Specify whether this is in base units or packs.
+tutorial.damaged-item.steps.di-quantity.title	Damaged Quantity
+tutorial.damaged-item.steps.di-reason.desc	Select the reason for the loss (damaged, expired, broken, stolen, or other). This helps track loss patterns.
+tutorial.damaged-item.steps.di-reason.title	Reason
+tutorial.damaged-item.steps.di-search.desc	Search for the damaged or lost item. Type its name to locate it in your inventory records.
+tutorial.damaged-item.steps.di-search.title	Find Item
+tutorial.damaged-item.steps.di-unit.desc	Choose the unit type — base unit or pack. Make sure this matches the quantity you entered.
+tutorial.damaged-item.steps.di-unit.title	Unit Type
+tutorial.damaged-item.subtitle	Record inventory damage or loss
+tutorial.damaged-item.title	Log Damaged Item
+tutorial.dashboard.steps.dash-activity.desc	See a live feed of everything happening in your business — sales, expenses, adjustments, and more. Tap any entry to view details.
+tutorial.dashboard.steps.dash-activity.title	Recent Activity Feed
+tutorial.dashboard.steps.dash-alerts.desc	Tap the bell to open your notifications — low stock items, overdue debts, deposits, and other urgent updates that need your attention.
+tutorial.dashboard.steps.dash-alerts.title	Action Alerts
+tutorial.dashboard.steps.dashboard.desc	This is your command center. View today\\'s revenue, profit, expenses, and sales count at a glance. The dashboard gives you a real-time snapshot of your business health.
+tutorial.dashboard.steps.dashboard.title	Welcome to Your Dashboard
+tutorial.dashboard.steps.dash-health.desc	Your overall business health rating based on multiple factors. A higher score means your business is performing well. Tap to see the breakdown.
+tutorial.dashboard.steps.dash-health.title	Business Health Score
+tutorial.dashboard.steps.dash-quick-stats.desc	At-a-glance status of low stock items, credit customers, and on-credit inventory. Tap any card to open the full list and take action.
+tutorial.dashboard.steps.dash-quick-stats.title	Quick Status Cards
+tutorial.dashboard.steps.dash-search.desc	Search across all your inventory, sales, expenses, and contacts from one place. Start typing to find anything instantly.
+tutorial.dashboard.steps.dash-search.title	Universal Search
+tutorial.dashboard.steps.dash-sidebar.desc	Tap your avatar to open the sidebar menu. From there you can access all sections: Sales, Inventory, Expenses, Settings, and more.
+tutorial.dashboard.steps.dash-sidebar.title	Profile & Navigation
+tutorial.dashboard.steps.dash-sparkline.desc	Swipe left or right to cycle through today\\'s Revenue, Gross Profit, Sales Count, and Expenses. The sparkline compares today against yesterday\\'s performance.
+tutorial.dashboard.steps.dash-sparkline.title	Performance Metrics
+tutorial.dashboard.subtitle	Master your business at a glance
+tutorial.dashboard.title	Dashboard
+tutorial.date-time.steps.date-time.desc	Customize how dates and times are displayed throughout the app. Choose your preferred calendar and time format.
+tutorial.date-time.steps.date-time.title	Date & Time
+tutorial.date-time.steps.dt-calendar.desc	Choose between Gregorian and Ethiopian calendar systems. All dates in the app will use your selection.
+tutorial.date-time.steps.dt-calendar.title	Calendar Type
+tutorial.date-time.steps.dt-save.desc	Save your date and time preferences. The entire app updates to reflect your chosen format.
+tutorial.date-time.steps.dt-save.title	Save Settings
+tutorial.date-time.steps.dt-time.desc	Select 12-hour or 24-hour time format. This affects how times appear on receipts, reports, and screens.
+tutorial.date-time.steps.dt-time.title	Time Format
+tutorial.date-time.subtitle	Configure date and time formats
+tutorial.date-time.title	Date & Time Settings
+tutorial.debt-detail.steps.dd-actions.desc	Record a new payment against this debt, or mark it as fully settled.
+tutorial.debt-detail.steps.dd-actions.title	Record Payment
+tutorial.debt-detail.steps.dd-info.desc	Details about the original transaction, interest rate (if any), due date, and the customer or vendor involved.
+tutorial.debt-detail.steps.dd-info.title	Debt Information
+tutorial.debt-detail.steps.dd-payments.desc	Chronological list of all payments made against this debt, including dates, amounts, and payment methods.
+tutorial.debt-detail.steps.dd-payments.title	Payment History
+tutorial.debt-detail.steps.dd-summary.desc	View total debt, amount paid, and outstanding balance. The progress bar shows how much has been repaid.
+tutorial.debt-detail.steps.dd-summary.title	Balance Summary
+tutorial.debt-detail.steps.debt-detail.desc	This screen shows the complete details of a debt or credit account — what was borrowed, payments made, and remaining balance.
+tutorial.debt-detail.steps.debt-detail.title	Debt Overview
+tutorial.debt-detail.subtitle	Track credit and payments
+tutorial.debt-detail.title	Debt Details
+tutorial.debt-list.steps.debt-list.desc	View all debt and credit records. This includes both receivables (customers owe you) and payables (you owe suppliers).
+tutorial.debt-list.steps.debt-list.title	Debt Records
+tutorial.debt-list.steps.dl-list.desc	Each entry shows the person or company, amount, due date, and status (pending, overdue, paid).
+tutorial.debt-list.steps.dl-list.title	Debt Entries
+tutorial.debt-list.subtitle	View all debt entries
+tutorial.debt-list.title	Debt Records
+tutorial.debt-management.steps.debt-management.desc	Track all credit transactions — what customers owe you and what you owe suppliers. Manage payments and due dates.
+tutorial.debt-management.steps.debt-management.title	Debt Management
+tutorial.debt-management.steps.dm-actions.desc	Record payments received from customers or make payments to suppliers directly from this screen.
+tutorial.debt-management.steps.dm-actions.title	Collect & Pay
+tutorial.debt-management.steps.dm-summary.desc	See total receivables (customers owe you) and total payables (you owe suppliers) at a glance.
+tutorial.debt-management.steps.dm-summary.title	Debt Overview
+tutorial.debt-management.subtitle	Track credits and collections
+tutorial.debt-management.title	Debt Management
+tutorial.done	Done
+tutorial.expense.steps.exp-add.desc	Tap to log a new expense. Enter the payee, amount, category, and notes. You can also set up recurring bills for regular payments like rent or utilities.
+tutorial.expense.steps.exp-add.title	Record an Expense
+tutorial.expense.steps.exp-budget.desc	Set a monthly spending limit to control costs. Track your spending against budget in real-time and get alerts when you\\'re close to the limit.
+tutorial.expense.steps.exp-budget.title	Budget Setting
+tutorial.expense.steps.expense.desc	Track every outflow from your business. Monitor spending patterns, manage bills, and stay on top of your financial health.
+tutorial.expense.steps.expense.title	Expense Management
+tutorial.expense.steps.exp-health.desc	View your overdue and due-today bills here. Tap "Paid" to mark recurring expenses as settled and keep your payment tracking accurate.
+tutorial.expense.steps.exp-health.title	Expense Health
+tutorial.expense.steps.exp-ledger.desc	Every transaction is recorded chronologically. Tap any entry to view or edit details. Swipe to delete if needed.
+tutorial.expense.steps.exp-ledger.title	Expense Ledger
+tutorial.expense.steps.exp-summary.desc	See your total monthly expenses, compare against last month, and track spending categories at a glance.
+tutorial.expense.steps.exp-summary.title	Monthly Overview
+tutorial.expense.subtitle	Monitor and control your spending
+tutorial.expense.title	Expense Tracker
+tutorial.expense-details.steps.ed-actions.desc	Edit or delete this expense from here. You can also duplicate it for similar recurring entries.
+tutorial.expense-details.steps.ed-actions.title	Actions
+tutorial.expense-details.steps.ed-amount.desc	The expense amount, category, and subcategory. This helps you understand where your money is going.
+tutorial.expense-details.steps.ed-amount.title	Amount & Category
+tutorial.expense-details.steps.ed-budget.desc	See how this expense affects your budget. If linked to a budget category, it shows remaining allowance and spending percentage.
+tutorial.expense-details.steps.ed-budget.title	Budget Impact
+tutorial.expense-details.steps.ed-details.desc	View the expense date, description, and whether it\\'s a recurring payment. Recurring expenses show frequency and next due date.
+tutorial.expense-details.steps.ed-details.title	Transaction Info
+tutorial.expense-details.steps.expense-details.desc	Review the full details of an expense transaction including amount, category, date, and payment information.
+tutorial.expense-details.steps.expense-details.title	Expense Details
+tutorial.expense-details.subtitle	Review an expense record
+tutorial.expense-details.title	Expense Details
+tutorial.expense-form.steps.ef-amount.desc	Type the expense amount. This is the total amount paid or owed for this expense.
+tutorial.expense-form.steps.ef-amount.title	Enter Amount
+tutorial.expense-form.steps.ef-budget.desc	Optionally link this expense to a budget category. This helps track spending against your planned budget.
+tutorial.expense-form.steps.ef-budget.title	Link to Budget
+tutorial.expense-form.steps.ef-category.desc	Choose a category that best describes this expense. Categories help you track spending patterns and stay organized.
+tutorial.expense-form.steps.ef-category.title	Select Category
+tutorial.expense-form.steps.ef-commit.desc	Review all details and tap to record the expense. It will appear in your expense ledger and reports immediately.
+tutorial.expense-form.steps.ef-commit.title	Save Expense
+tutorial.expense-form.steps.ef-date.desc	Set the date when this expense occurred. This is used for accurate monthly and period reporting.
+tutorial.expense-form.steps.ef-date.title	Expense Date
+tutorial.expense-form.steps.ef-description.desc	Add a brief description or note about this expense. Include details like vendor name, purpose, or receipt reference.
+tutorial.expense-form.steps.ef-description.title	Add Description
+tutorial.expense-form.steps.ef-recurring.desc	Toggle this on for bills that repeat (rent, utilities, subscriptions). Set the frequency — daily, weekly, monthly, or yearly.
+tutorial.expense-form.steps.ef-recurring.title	Recurring Expense
+tutorial.expense-form.steps.expense-form.desc	Follow these steps to log a new expense. Fill in the amount, category, date, and optionally set up recurring payments.
+tutorial.expense-form.steps.expense-form.title	Recording an Expense
+tutorial.expense-form.subtitle	Log a business expense step by step
+tutorial.expense-form.title	Record an Expense
+tutorial.expense-list.steps.el-filter.desc	Filter by date range, category, or budget. Search by description or amount to find specific entries.
+tutorial.expense-list.steps.el-filter.title	Filter Expenses
+tutorial.expense-list.steps.el-list.desc	Each entry shows the amount, category badge, date, and description. Tap any entry to view or edit details.
+tutorial.expense-list.steps.el-list.title	Expense List
+tutorial.expense-list.steps.expense-list.desc	Browse through all your recorded expenses. Each entry shows the amount, category, date, and description.
+tutorial.expense-list.steps.expense-list.title	Expense Records
+tutorial.expense-list.subtitle	Browse all expense entries
+tutorial.expense-list.title	Expense Records
+tutorial.expense-loss.steps.exl-list.desc	Each loss entry shows the amount, type, date, and description. Tap for more details about the incident.
+tutorial.expense-loss.steps.exl-list.title	Loss Entries
+tutorial.expense-loss.steps.expense-loss.desc	This screen shows expenses categorized as losses — damaged goods, theft, wastage, or other financial losses.
+tutorial.expense-loss.steps.expense-loss.title	Loss Tracking
+tutorial.expense-loss.subtitle	Track financial losses
+tutorial.expense-loss.title	Expense Loss
+tutorial.inventory.steps.inv-add.desc	Tap here to add a new product. Fill in the name, category, quantity, prices, and supplier details. You can also configure box/roll settings for bulk items.
+tutorial.inventory.steps.inv-add.title	Add New Item
+tutorial.inventory.steps.inventory.desc	Your complete inventory management system. Track stock levels, monitor valuations, and manage every item in your store.
+tutorial.inventory.steps.inventory.title	Inventory Vault
+tutorial.inventory.steps.inv-item.desc	Each card shows the item name, current stock, selling price, and unit. Items below threshold are flagged. Tap a card to view or edit details.
+tutorial.inventory.steps.inv-item.title	Item Cards
+tutorial.inventory.steps.inv-list.desc	All your inventory items listed here. Use the search bar to find items, filter by category, or sort by price, quantity, or name.
+tutorial.inventory.steps.inv-list.title	Stock Ledger
+tutorial.inventory.steps.inv-restock.desc	When stock runs low, tap to open the product order modal. Select items and set order quantities to replenish your inventory.
+tutorial.inventory.steps.inv-restock.title	Restock Items
+tutorial.inventory.steps.inv-stats.desc	View stock distribution by category, see low-stock alerts, track fast vs slow-moving items, and monitor expiration dates.
+tutorial.inventory.steps.inv-stats.title	Inventory Insights
+tutorial.inventory.steps.inv-valuation.desc	See the total value of your inventory. This updates automatically as you add, sell, or adjust items. Track how your stock value changes over time.
+tutorial.inventory.steps.inv-valuation.title	Portfolio Valuation
+tutorial.inventory.subtitle	Manage your stock efficiently
+tutorial.inventory.title	Inventory
+tutorial.inventory-form.steps.if-brand.desc	Enter the manufacturer or brand name. This is useful for identifying products, especially when dealing with multiple suppliers.
+tutorial.inventory-form.steps.if-brand.title	Manufacturer / Brand
+tutorial.inventory-form.steps.if-commit.desc	Review all details and tap "Initialize Asset" to add the item to your inventory vault. The item will appear in your stock ledger immediately.
+tutorial.inventory-form.steps.if-commit.title	Save to Inventory
+tutorial.inventory-form.steps.if-expiry.desc	Set an expiration date for perishable items and a quality grade. The system will alert you when items are close to expiring.
+tutorial.inventory-form.steps.if-expiry.title	Expiration & Quality
+tutorial.inventory-form.steps.if-name.desc	Give your item a clear, descriptive name. Select the appropriate category — this helps with organization and reporting.
+tutorial.inventory-form.steps.if-name.title	Item Name & Category
+tutorial.inventory-form.steps.if-pricing.desc	Enter the buying price (cost) and selling price. The system calculates your profit margin automatically and warns if you\\'re selling at a loss.
+tutorial.inventory-form.steps.if-pricing.title	Cost & Selling Price
+tutorial.inventory-form.steps.if-supplier.desc	Add supplier details if purchasing on credit. Log the supplier name, phone, account number, and credit terms.
+tutorial.inventory-form.steps.if-supplier.title	Supplier Information
+tutorial.inventory-form.steps.if-unit.desc	Choose the unit (pieces, kg, litre, meter, etc.) and enter the initial stock quantity. For bulk items, configure box/roll settings.
+tutorial.inventory-form.steps.if-unit.title	Unit & Quantity
+tutorial.inventory-form.steps.inventory-form.desc	Follow these steps to add a new product to your inventory. You\\'ll configure identification, pricing, and classification.
+tutorial.inventory-form.steps.inventory-form.title	Adding a New Item
+tutorial.inventory-form.subtitle	Add a new product to your stock
+tutorial.inventory-form.title	Add Inventory Item
+tutorial.inventory-records.steps.inventory-records.desc	View the complete movement history for all inventory items — stock additions, sales, adjustments, and transfers.
+tutorial.inventory-records.steps.inventory-records.title	Inventory Records
+tutorial.inventory-records.steps.ir-filter.desc	Filter by date range, transaction type (purchase, sale, adjustment), or specific item.
+tutorial.inventory-records.steps.ir-filter.title	Filter Records
+tutorial.inventory-records.steps.ir-list.desc	Every stock movement is listed chronologically with item name, type, quantity change, and resulting balance.
+tutorial.inventory-records.steps.ir-list.title	Movement Log
+tutorial.inventory-records.steps.ir-summary.desc	See totals for inbound, outbound, and net stock movement for the selected period.
+tutorial.inventory-records.steps.ir-summary.title	Movement Summary
+tutorial.inventory-records.subtitle	View stock movement history
+tutorial.inventory-records.title	Inventory Records
+tutorial.item-details.steps.id-actions.desc	Perform actions on this item — restock, adjust price, mark as damaged, or update item details.
+tutorial.item-details.steps.id-actions.title	Quick Actions
+tutorial.item-details.steps.id-details.desc	Detailed information including category, brand, unit type, supplier, and expiry date for perishable items.
+tutorial.item-details.steps.id-details.title	Item Information
+tutorial.item-details.steps.id-history.desc	View the complete transaction history for this item — sales, purchases, adjustments, and stock counts.
+tutorial.item-details.steps.id-history.title	Movement History
+tutorial.item-details.steps.id-stats.desc	View current stock quantity, buying price, selling price, and calculated profit margin. Low stock items are highlighted.
+tutorial.item-details.steps.id-stats.title	Stock & Pricing
+tutorial.item-details.steps.item-details.desc	This screen shows everything about an inventory item — stock levels, pricing, supplier info, and movement history.
+tutorial.item-details.steps.item-details.title	Item Overview
+tutorial.item-details.subtitle	View complete inventory item information
+tutorial.item-details.title	Item Details
+tutorial.low-stock-list.steps.low-stock-list.desc	View all inventory items that are running low and need to be restocked soon.
+tutorial.low-stock-list.steps.low-stock-list.title	Low Stock Alerts
+tutorial.low-stock-list.steps.lsl-list.desc	Each item shows current stock level, minimum threshold, and supplier information for quick reordering.
+tutorial.low-stock-list.steps.lsl-list.title	Low Stock Items
+tutorial.low-stock-list.subtitle	Items needing reorder
+tutorial.low-stock-list.title	Low Stock Items
+tutorial.menu_completed	You completed this tutorial! Take a refresher or restart.
+tutorial.menu_continue	Continue from step {step}
+tutorial.menu_continue_btn	Continue ({current}/{total})
+tutorial.menu_learn	Learn how to use this screen step by step.
+tutorial.menu_start	Start Tutorial
+tutorial.menu_title	{name} Tutorial
+tutorial.next	Next
+tutorial.notifications.steps.notifications.desc	View all your business notifications — low stock alerts, payment reminders, expense warnings, and more.
+tutorial.notifications.steps.notifications.title	Notifications
+tutorial.notifications.steps.nt-actions.desc	Mark notifications as read, dismiss them, or tap to take action directly (e.g., restock a low inventory item).
+tutorial.notifications.steps.nt-actions.title	Quick Actions
+tutorial.notifications.steps.nt-list.desc	Each notification shows the type, message, and time. Unread notifications are highlighted. Tap to view details.
+tutorial.notifications.steps.nt-list.title	Notification Feed
+tutorial.notifications.subtitle	Stay informed about your business
+tutorial.notifications.title	Notifications
+tutorial.notification-settings.steps.notification-settings.desc	Choose which business notifications you receive. Control alerts for stock, payments, expenses, and more.
+tutorial.notification-settings.steps.notification-settings.title	Notification Preferences
+tutorial.notification-settings.steps.ns-expense.desc	Get alerted about large or unusual expenses. Track budget limits and receive warnings when approaching limits.
+tutorial.notification-settings.steps.ns-expense.title	Expense Alerts
+tutorial.notification-settings.steps.ns-payment.desc	Receive reminders for upcoming and overdue payments. Stay on top of credit collections and bill payments.
+tutorial.notification-settings.steps.ns-payment.title	Payment Reminders
+tutorial.notification-settings.steps.ns-save.desc	Save your notification preferences. Changes take effect immediately.
+tutorial.notification-settings.steps.ns-save.title	Save Preferences
+tutorial.notification-settings.steps.ns-stock.desc	Get notified when inventory items reach low stock levels. Set your preferred threshold for each item.
+tutorial.notification-settings.steps.ns-stock.title	Stock Alerts
+tutorial.notification-settings.subtitle	Configure your alerts
+tutorial.notification-settings.title	Notification Settings
+tutorial.oncredit-list.steps.ocl-list.desc	Each entry shows the customer name, item sold, amount due, and days outstanding.
+tutorial.oncredit-list.steps.ocl-list.title	Credit Items
+tutorial.oncredit-list.steps.oncredit-list.desc	View all items that have been sold on credit and are awaiting payment from customers.
+tutorial.oncredit-list.steps.oncredit-list.title	On-Credit Items
+tutorial.oncredit-list.subtitle	Items sold on credit
+tutorial.oncredit-list.title	On-Credit List
+tutorial.order-detail.steps.od-items.desc	The list of items in this order, including quantities, unit prices, and line totals.
+tutorial.order-detail.steps.od-items.title	Ordered Items
+tutorial.order-detail.steps.od-notes.desc	Any notes or special instructions added when creating the order. Reference numbers and delivery notes are shown here.
+tutorial.order-detail.steps.od-notes.title	Notes & Attachments
+tutorial.order-detail.steps.od-summary.desc	View the order status, total items, and overall cost. The status indicator shows if the order is pending, received, or cancelled.
+tutorial.order-detail.steps.od-summary.title	Order Summary
+tutorial.order-detail.steps.order-detail.desc	This screen shows the complete details of a purchase order — items ordered, supplier info, and order status.
+tutorial.order-detail.steps.order-detail.title	Purchase Order
+tutorial.order-detail.subtitle	Review a purchase order
+tutorial.order-detail.title	Order Details
+tutorial.orders.steps.ord-add.desc	Tap to create a new customer order. Select items, set quantities, add customer details, and choose payment terms.
+tutorial.orders.steps.ord-add.title	Create New Order
+tutorial.orders.steps.orders.desc	Track customer orders from creation to fulfillment. Manage order status, quantities, and delivery all in one place.
+tutorial.orders.steps.orders.title	Order Management
+tutorial.orders.steps.ord-list.desc	All orders organized by status. See pending, confirmed, and completed orders. Tap any order to view details or update status.
+tutorial.orders.steps.ord-list.title	Orders List
+tutorial.orders.subtitle	Manage customer orders
+tutorial.orders.title	Orders
+tutorial.pending-sales.steps.pending-sales.desc	View all sale transactions that are in progress or awaiting completion. Complete or cancel pending sales from here.
+tutorial.pending-sales.steps.pending-sales.title	Pending Transactions
+tutorial.pending-sales.steps.ps-actions.desc	Finalize the sale to record it in your ledger, or cancel to remove all pending items.
+tutorial.pending-sales.steps.ps-actions.title	Complete or Cancel
+tutorial.pending-sales.steps.ps-list.desc	Items that have been added to a sale but not yet finalized. Review quantities and prices before completing.
+tutorial.pending-sales.steps.ps-list.title	Pending Items
+tutorial.pending-sales.steps.ps-totals.desc	See the subtotal, discounts, and grand total for the pending transaction in real-time as you make changes.
+tutorial.pending-sales.steps.ps-totals.title	Running Total
+tutorial.pending-sales.subtitle	Review and complete pending transactions
+tutorial.pending-sales.title	Pending Sales
+tutorial.price-decrease.steps.pd-commit.desc	Review and confirm to apply the price decrease. The selling price updates immediately in your inventory.
+tutorial.price-decrease.steps.pd-commit.title	Apply Decrease
+tutorial.price-decrease.steps.pd-date.desc	Set the date for the new price. The adjustment is recorded in your price history.
+tutorial.price-decrease.steps.pd-date.title	Effective Date
+tutorial.price-decrease.steps.pd-item.desc	Select the item from the search results. Check the current price and margin before reducing.
+tutorial.price-decrease.steps.pd-item.title	Select Item
+tutorial.price-decrease.steps.pd-price.desc	Enter the reduced selling price. The system shows the discount amount and updated profit margin.
+tutorial.price-decrease.steps.pd-price.title	New Selling Price
+tutorial.price-decrease.steps.pd-reason.desc	Enter a reason (e.g., promotion, clearance, competitive match). This is logged in the adjustment history.
+tutorial.price-decrease.steps.pd-reason.title	Reason for Decrease
+tutorial.price-decrease.steps.pd-search.desc	Search for the item whose price you want to decrease. Type the item name to locate it in your inventory.
+tutorial.price-decrease.steps.pd-search.title	Find Item
+tutorial.price-decrease.steps.price-decrease.desc	Follow these steps to decrease the selling price of an inventory item. Use this for promotions, clearance, or competitive pricing.
+tutorial.price-decrease.steps.price-decrease.title	Price Decrease
+tutorial.price-decrease.subtitle	Adjust selling prices downward
+tutorial.price-decrease.title	Decrease Prices
+tutorial.price-increase.steps.pi-commit.desc	Review the details and confirm to apply the price increase. The item\\'s selling price is updated immediately.
+tutorial.price-increase.steps.pi-commit.title	Apply Increase
+tutorial.price-increase.steps.pi-date.desc	Set the date when the new price takes effect. The change is logged in the price adjustment history for future reference.
+tutorial.price-increase.steps.pi-date.title	Effective Date
+tutorial.price-increase.steps.pi-item.desc	Select the item from the search results. Review the current price and stock information before adjusting.
+tutorial.price-increase.steps.pi-item.title	Select Item
+tutorial.price-increase.steps.pi-price.desc	Enter the new selling price. The system will show the price difference and calculate the new profit margin.
+tutorial.price-increase.steps.pi-price.title	New Selling Price
+tutorial.price-increase.steps.pi-reason.desc	Provide a reason for the price increase (e.g., supplier price change, market adjustment, inflation). This is recorded in the adjustment history.
+tutorial.price-increase.steps.pi-reason.title	Reason for Increase
+tutorial.price-increase.steps.pi-search.desc	Search for the item whose price you want to increase. Type the item name or scan to locate it in your inventory.
+tutorial.price-increase.steps.pi-search.title	Find Item
+tutorial.price-increase.steps.price-increase.desc	Follow these steps to increase the selling price of an inventory item. This helps you adjust to market changes or cost increases.
+tutorial.price-increase.steps.price-increase.title	Price Increase
+tutorial.price-increase.subtitle	Adjust selling prices upward
+tutorial.price-increase.title	Increase Prices
+tutorial.profile-settings.steps.profile-settings.desc	Manage your personal and business information. Update your name, business name, and profile photo.
+tutorial.profile-settings.steps.profile-settings.title	Your Profile
+tutorial.profile-settings.steps.pset-avatar.desc	Tap your avatar to change your profile photo. You can take a new photo or choose from your gallery.
+tutorial.profile-settings.steps.pset-avatar.title	Profile Photo
+tutorial.profile-settings.steps.pset-name.desc	Update your full name and business name. Your name appears on receipts and reports.
+tutorial.profile-settings.steps.pset-name.title	Name & Business
+tutorial.profile-settings.steps.pset-save.desc	Tap to save your profile changes. Updates are applied immediately across the app.
+tutorial.profile-settings.steps.pset-save.title	Save Changes
+tutorial.profile-settings.subtitle	Manage your personal information
+tutorial.profile-settings.title	Profile Settings
+tutorial.reminders.steps.reminders.desc	View all scheduled and past reminders for payments, stock checks, and business tasks.
+tutorial.reminders.steps.reminders.title	Reminder History
+tutorial.reminders.steps.rm-list.desc	Each reminder shows the title, due date, priority, and status. Completed reminders are marked with a check.
+tutorial.reminders.steps.rm-list.title	Reminder List
+tutorial.reminders.subtitle	Track your reminders
+tutorial.reminders.title	Reminder History
+tutorial.restart	Restart
+tutorial.sale-form.steps.sale-form.desc	Follow these steps to record a complete sale. You\\'ll select items, set quantities, apply pricing, and choose payment method.
+tutorial.sale-form.steps.sale-form.title	Recording a Sale
+tutorial.sale-form.steps.sf-commit.desc	Review the summary and tap "Authorize Settlement" to finalize the sale. The transaction is recorded permanently in the sales ledger.
+tutorial.sale-form.steps.sf-commit.title	Complete Transaction
+tutorial.sale-form.steps.sf-customer.desc	For credit sales, customer name and phone are required. For cash sales, this is optional but recommended for record keeping.
+tutorial.sale-form.steps.sf-customer.title	Customer Information
+tutorial.sale-form.steps.sf-payment.desc	Choose how the customer pays — cash or digital bank. For credit sales, enter customer details and the amount will be tracked as receivable.
+tutorial.sale-form.steps.sf-payment.title	Payment Method
+tutorial.sale-form.steps.sf-pricing.desc	Set unit prices, apply discounts, and configure VAT/tax if applicable. The system calculates the subtotal and total automatically.
+tutorial.sale-form.steps.sf-pricing.title	Pricing & Discounts
+tutorial.sale-form.subtitle	Complete a transaction step by step
+tutorial.sale-form.title	Record a Sale
+tutorial.sales-details.steps.sales-details.desc	This screen shows the full details of a sale transaction. Review items sold, pricing, payment, and customer information.
+tutorial.sales-details.steps.sales-details.title	Transaction Details
+tutorial.sales-details.steps.sd-customer.desc	Customer details including name and contact information. For credit sales, you can initiate payment collection from here.
+tutorial.sales-details.steps.sd-customer.title	Customer Info
+tutorial.sales-details.steps.sd-items.desc	This list shows every item in the transaction, including quantity, unit price, and subtotal. Tap any item for more details.
+tutorial.sales-details.steps.sd-items.title	Items Sold
+tutorial.sales-details.steps.sd-payment.desc	The payment method used (cash or transfer) and the payment status. For credit sales, the remaining balance is shown.
+tutorial.sales-details.steps.sd-payment.title	Payment Method
+tutorial.sales-details.steps.sd-pricing.desc	See the subtotal, discounts applied, tax (VAT/TOT), and the grand total. This section helps with accounting and reconciliation.
+tutorial.sales-details.steps.sd-pricing.title	Pricing Breakdown
+tutorial.sales-details.steps.sd-summary.desc	View the total amount, payment status, and transaction date at a glance. The header shows whether the sale is paid, pending, or on credit.
+tutorial.sales-details.steps.sd-summary.title	Sale Summary
+tutorial.sales-details.subtitle	Review a completed transaction
+tutorial.sales-details.title	Sale Details
+tutorial.sales-hub.steps.sales-add.desc	Tap the + button to expand the action menu, then tap the add item icon to start recording a new sale.
+tutorial.sales-hub.steps.sales-add.title	Record a New Sale
+tutorial.sales-hub.steps.sales-chart.desc	Visualize your sales trends with interactive charts. Toggle between daily, weekly, and monthly views to analyze performance over time.
+tutorial.sales-hub.steps.sales-chart.title	Sales Analytics Chart
+tutorial.sales-hub.steps.sales-hub.desc	This is your complete sales management center. View total revenue, track transactions, analyze trends, and record new sales — all in one place.
+tutorial.sales-hub.steps.sales-hub.title	Sales Hub Overview
+tutorial.sales-hub.steps.sales-ledger.desc	Every transaction is recorded here. Scroll through your sales history, tap any entry to see details, edit, or delete.
+tutorial.sales-hub.steps.sales-ledger.title	Sales Ledger
+tutorial.sales-hub.steps.sales-pending.desc	Manage unsettled credit sales here. Track who owes you money, send reminders, and mark payments as received.
+tutorial.sales-hub.steps.sales-pending.title	Pending & Credit Sales
+tutorial.sales-hub.steps.sales-revenue.desc	Your total sales revenue for today. The bar chart below shows your weekly trend so you can spot patterns at a glance.
+tutorial.sales-hub.steps.sales-revenue.title	Revenue Summary
+tutorial.sales-hub.steps.sales-top.desc	See which products sell the most. Use this insight to stock popular items and maximize your revenue.
+tutorial.sales-hub.steps.sales-top.title	Top Performing Items
+tutorial.sales-hub.subtitle	Track and manage your sales
+tutorial.sales-hub.title	Sales Hub
+tutorial.sales-records.steps.sales-records.desc	This screen lists all your sales transactions. Browse, search, and filter through your complete sales history.
+tutorial.sales-records.steps.sales-records.title	Sales Records
+tutorial.sales-records.steps.sr-export.desc	Export your sales data as a PDF or CSV report for accounting and record-keeping purposes.
+tutorial.sales-records.steps.sr-export.title	Export Records
+tutorial.sales-records.steps.sr-filter.desc	Filter transactions by date range, payment status, or customer. Search by transaction ID or customer name.
+tutorial.sales-records.steps.sr-filter.title	Filter & Search
+tutorial.sales-records.steps.sr-list.desc	Each entry shows the date, customer, item count, total amount, and payment status. Tap any entry for full details.
+tutorial.sales-records.steps.sr-list.title	Transaction List
+tutorial.sales-records.steps.sr-summary.desc	See total sales, transaction count, and average per sale for the selected period at a glance.
+tutorial.sales-records.steps.sr-summary.title	Period Summary
+tutorial.sales-records.subtitle	Browse all transactions
+tutorial.sales-records.title	Sales Records
+tutorial.security-settings.steps.sec-biometric.desc	Enable fingerprint or face ID for quicker, secure access to the app without entering your PIN each time.
+tutorial.security-settings.steps.sec-biometric.title	Biometric Auth
+tutorial.security-settings.steps.sec-pin.desc	Update your 6-digit security PIN. This is required to access the app and authorize transactions.
+tutorial.security-settings.steps.sec-pin.title	Change PIN
+tutorial.security-settings.steps.sec-recovery.desc	View your recovery code. Keep this safe — it\\'s the only way to regain access if you forget your PIN.
+tutorial.security-settings.steps.sec-recovery.title	Recovery Code
+tutorial.security-settings.steps.security-settings.desc	Manage your account security settings — PIN, biometric authentication, and recovery options.
+tutorial.security-settings.steps.security-settings.title	Security
+tutorial.security-settings.subtitle	Protect your account
+tutorial.security-settings.title	Security Settings
+tutorial.settings.steps.settings.desc	Configure every aspect of your app. From appearance and security to notifications and data management, everything is here.
+tutorial.settings.steps.settings.title	Settings Center
+tutorial.settings.steps.settings-export.desc	Export your database as a backup file for safekeeping. Regular backups protect your business data against accidental loss.
+tutorial.settings.steps.settings-export.title	Data Management
+tutorial.settings.steps.settings-language.desc	Switch between English, Amharic, Oromo, and Tigrinya. The calendar, date format, and time system adapt automatically.
+tutorial.settings.steps.settings-language.title	Language & Localization
+tutorial.settings.steps.settings-notifications.desc	Control which alerts you receive — stock shortages, expiration reminders, daily summaries, credit alerts, and more.
+tutorial.settings.steps.settings-notifications.title	Notification Preferences
+tutorial.settings.steps.settings-profile.desc	Edit your name, business name, and avatar. Your profile appears in the dashboard header and reports.
+tutorial.settings.steps.settings-profile.title	Profile & Account
+tutorial.settings.steps.settings-security.desc	Set or change your PIN, enable biometric unlock (fingerprint/Face ID), and manage your recovery code for account access.
+tutorial.settings.steps.settings-security.title	Security & Privacy
+tutorial.settings.steps.settings-theme.desc	Choose from 7 premium themes: Light, Dark, Midnight, Emerald, Charcoal, Slate, and Cocoa. Each theme has a carefully crafted color palette.
+tutorial.settings.steps.settings-theme.title	Theme Selection
+tutorial.settings.subtitle	Customize your experience
+tutorial.settings.title	Settings
+tutorial.summary.steps.sum-financial.desc	Your key financial metrics: total revenue, items sold, expenses, and outstanding amounts. Compare performance trends at a glance.
+tutorial.summary.steps.sum-financial.title	Financial Summary
+tutorial.summary.steps.sum-insights.desc	AI-powered insights about your business efficiency. Get recommendations on improving operations, reducing costs, and maximizing profits.
+tutorial.summary.steps.sum-insights.title	Intelligence Insights
+tutorial.summary.steps.summary.desc	A comprehensive overview of your business performance. See financial summaries, operational metrics, and intelligence insights all in one dashboard.
+tutorial.summary.steps.summary.title	Business Summary
+tutorial.summary.steps.sum-pulse.desc	The net pulse shows the difference between your sales inflow and operational outflow. A positive pulse means you\\'re earning more than you\\'re spending.
+tutorial.summary.steps.sum-pulse.title	Performance Pulse
+tutorial.summary.steps.sum-velocity.desc	Track price adjustments and net profit at a glance. The top card shows cumulative price changes, while the bottom card displays your overall net profit after all expenses and losses.
+tutorial.summary.steps.sum-velocity.title	Velocity Spotlight
+tutorial.summary.subtitle	Business performance insights
+tutorial.summary.title	Summary
+tutorial.support.steps.su-contact.desc	Reach out to our support team via email or phone. We\\'re here to help with any issues or questions.
+tutorial.support.steps.su-contact.title	Contact Support
+tutorial.support.steps.su-faq.desc	Browse frequently asked questions and user guides to learn more about app features.
+tutorial.support.steps.su-faq.title	FAQ & Guides
+tutorial.support.steps.su-info.desc	View the app version, build number, and system status. Check for updates here.
+tutorial.support.steps.su-info.title	App Information
+tutorial.support.steps.support.desc	Access app information, contact support, and view frequently asked questions.
+tutorial.support.steps.support.title	Help & Support
+tutorial.support.subtitle	Get help and app information
+tutorial.support.title	Help & Support
+tutorial.translation.steps.translation.desc	Choose your preferred language for the app interface. All menus, labels, and notifications will use your selection.
+tutorial.translation.steps.translation.title	Language Selection
+tutorial.translation.steps.tr-current.desc	Your current language is highlighted. Tap a different language to switch.
+tutorial.translation.steps.tr-current.title	Current Language
+tutorial.translation.steps.tr-list.desc	Select from available languages. The app interface will update immediately to your chosen language.
+tutorial.translation.steps.tr-list.title	Available Languages
+tutorial.translation.subtitle	Choose your preferred language
+tutorial.translation.title	Language Settings
+tutorial.warehouse-manager.steps.warehouse-manager.desc	Manage your storage locations and organize inventory across multiple warehouses or storage areas.
+tutorial.warehouse-manager.steps.warehouse-manager.title	Warehouse Management
+tutorial.warehouse-manager.steps.wm-list.desc	View all your warehouses and storage locations. Each entry shows item count and total stock value.
+tutorial.warehouse-manager.steps.wm-list.title	Warehouse List
+tutorial.warehouse-manager.subtitle	Manage your storage locations
+tutorial.warehouse-manager.title	Warehouse Manager
+tutorial.warehouse-settings.steps.warehouse-settings.desc	Manage your warehouse and storage location preferences. Set default warehouses for receiving stock.
+tutorial.warehouse-settings.steps.warehouse-settings.title	Warehouse Settings
+tutorial.warehouse-settings.steps.ws-default.desc	Set your default warehouse for new inventory items and purchases. Items will be assigned here by default.
+tutorial.warehouse-settings.steps.ws-default.title	Default Warehouse
+tutorial.warehouse-settings.steps.ws-list.desc	View all your warehouses with item counts and stock values. Tap to manage each location.
+tutorial.warehouse-settings.steps.ws-list.title	Warehouse List
+tutorial.warehouse-settings.steps.ws-prefs.desc	Configure stock transfer settings — approval requirements, notification preferences, and default transfer reasons.
+tutorial.warehouse-settings.steps.ws-prefs.title	Transfer Preferences
+tutorial.warehouse-settings.subtitle	Configure storage locations
+tutorial.warehouse-settings.title	Warehouse Settings

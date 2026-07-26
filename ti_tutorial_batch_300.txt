@@ -1,0 +1,3 @@
+﻿
+    'tutorial.item-details.steps.item-details.desc': 'This screen shows everything about an inventory item â€” stock levels, pricing, supplier info, and movement history.',
+

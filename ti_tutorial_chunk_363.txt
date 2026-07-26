@@ -1,0 +1,2 @@
+﻿    'tutorial.pending-sales.steps.ps-actions.desc': 'Finalize the sale to record it in your ledger, or cancel to remove all pending items.',
+

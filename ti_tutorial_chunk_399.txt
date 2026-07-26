@@ -1,0 +1,2 @@
+﻿    'tutorial.price-increase.steps.price-increase.desc': 'Follow these steps to increase the selling price of an inventory item. This helps you adjust to market changes or cost increases.',
+

@@ -1,0 +1,3 @@
+﻿
+    'tutorial.inventory.subtitle': 'Manage your stock efficiently',
+

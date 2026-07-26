@@ -1,0 +1,3 @@
+﻿
+    'tutorial.expense-details.steps.ed-details.desc': 'View the expense date, description, and whether it\'s a recurring payment. Recurring expenses show frequency and next due date.',
+

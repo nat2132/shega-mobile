@@ -1,0 +1,3 @@
+﻿
+    'tutorial.translation.steps.tr-list.desc': 'Select from available languages. The app interface will update immediately to your chosen language.',
+

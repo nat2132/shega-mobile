@@ -1,0 +1,2 @@
+﻿    'tutorial.summary.steps.sum-velocity.desc': 'Track price adjustments and net profit at a glance. The top card shows cumulative price changes, while the bottom card displays your overall net profit after all expenses and losses.',
+

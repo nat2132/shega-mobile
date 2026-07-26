@@ -1,0 +1,2 @@
+﻿    'tutorial.expense-list.steps.expense-list.desc': 'Browse through all your recorded expenses. Each entry shows the amount, category, date, and description.',
+

@@ -1,0 +1,2 @@
+﻿    'tutorial.sale-form.steps.sf-payment.title': 'Payment Method',
+

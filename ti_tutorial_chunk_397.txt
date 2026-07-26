@@ -1,0 +1,2 @@
+﻿    'tutorial.price-increase.steps.pi-search.desc': 'Search for the item whose price you want to increase. Type the item name or scan to locate it in your inventory.',
+

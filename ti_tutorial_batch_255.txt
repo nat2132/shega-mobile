@@ -1,0 +1,3 @@
+﻿
+    'tutorial.inventory.steps.inv-list.title': 'Stock Ledger',
+

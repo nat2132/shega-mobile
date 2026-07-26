@@ -1,0 +1,3 @@
+﻿
+    'tutorial.warehouse-settings.subtitle': 'Configure storage locations',
+

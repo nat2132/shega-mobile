@@ -1,0 +1,2 @@
+﻿    'tutorial.sales-hub.steps.sales-ledger.desc': 'Every transaction is recorded here. Scroll through your sales history, tap any entry to see details, edit, or delete.',
+

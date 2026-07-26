@@ -1,0 +1,2 @@
+﻿    'tutorial.low-stock-list.steps.lsl-list.desc': 'Each item shows current stock level, minimum threshold, and supplier information for quick reordering.',
+

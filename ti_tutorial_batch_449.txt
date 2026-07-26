@@ -1,0 +1,3 @@
+﻿
+    'tutorial.sales-hub.steps.sales-chart.title': 'Sales Analytics Chart',
+

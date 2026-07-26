@@ -1,0 +1,3 @@
+﻿
+    'tutorial.expense-loss.steps.expense-loss.title': 'Loss Tracking',
+

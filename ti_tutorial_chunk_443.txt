@@ -1,0 +1,2 @@
+﻿    'tutorial.sales-details.steps.sd-summary.title': 'Sale Summary',
+

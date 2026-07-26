@@ -1,0 +1,3 @@
+﻿
+    'tutorial.action_done': '\u2713 Done!',
+

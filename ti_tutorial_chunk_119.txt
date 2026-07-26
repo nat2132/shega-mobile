@@ -1,0 +1,2 @@
+﻿    'tutorial.damaged-item.steps.di-commit.desc': 'Review the details and confirm to record the damaged item. Your inventory count is adjusted immediately.',
+

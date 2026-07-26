@@ -1,0 +1,2 @@
+﻿    'tutorial.dashboard.steps.dashboard.desc': 'This is your command center. View today\'s revenue, profit, expenses, and sales count at a glance. The dashboard gives you a real-time snapshot of your business health.',
+

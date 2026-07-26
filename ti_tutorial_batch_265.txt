@@ -1,0 +1,3 @@
+﻿
+    'tutorial.inventory-form.steps.if-brand.title': 'Manufacturer / Brand',
+

@@ -1,0 +1,3 @@
+﻿
+    'tutorial.item-details.subtitle': 'View complete inventory item information',
+

@@ -1,0 +1,2 @@
+﻿    'tutorial.budget.steps.bud-categories.desc': 'View spending by category. Each category shows planned vs actual spend. Tap to drill down for detailed analysis.',
+

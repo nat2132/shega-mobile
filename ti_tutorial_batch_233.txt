@@ -1,0 +1,3 @@
+﻿
+    'tutorial.expense-form.title': 'Record an Expense',
+

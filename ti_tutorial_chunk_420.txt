@@ -1,0 +1,2 @@
+﻿    'tutorial.sale-form.steps.sale-form.desc': 'Follow these steps to record a complete sale. You\'ll select items, set quantities, apply pricing, and choose payment method.',
+

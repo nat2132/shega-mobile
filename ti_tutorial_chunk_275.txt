@@ -1,0 +1,2 @@
+﻿    'tutorial.inventory-form.steps.if-supplier.title': 'Supplier Information',
+

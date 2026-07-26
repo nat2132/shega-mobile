@@ -1,0 +1,2 @@
+﻿    'tutorial.price-decrease.steps.pd-price.desc': 'Enter the reduced selling price. The system shows the discount amount and updated profit margin.',
+

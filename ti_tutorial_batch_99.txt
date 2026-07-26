@@ -1,0 +1,3 @@
+﻿
+    'tutorial.create-budget.steps.cb-period.desc': 'Set the period â€” daily, weekly, monthly, quarterly, or yearly. The system will track spending against this period.',
+

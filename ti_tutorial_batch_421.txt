@@ -1,0 +1,3 @@
+﻿
+    'tutorial.sale-form.steps.sale-form.title': 'Recording a Sale',
+

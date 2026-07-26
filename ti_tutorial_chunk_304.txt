@@ -1,0 +1,2 @@
+﻿    'tutorial.low-stock-list.steps.low-stock-list.desc': 'View all inventory items that are running low and need to be restocked soon.',
+

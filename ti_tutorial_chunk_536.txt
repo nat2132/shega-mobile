@@ -1,0 +1,2 @@
+﻿    'tutorial.warehouse-settings.steps.warehouse-settings.desc': 'Manage your warehouse and storage location preferences. Set default warehouses for receiving stock.',
+

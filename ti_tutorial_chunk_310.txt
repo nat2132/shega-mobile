@@ -1,0 +1,2 @@
+﻿    'tutorial.menu_completed': 'You completed this tutorial! Take a refresher or restart.',
+

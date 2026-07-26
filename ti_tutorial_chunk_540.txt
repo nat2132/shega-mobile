@@ -1,0 +1,2 @@
+﻿    'tutorial.warehouse-settings.steps.ws-list.desc': 'View all your warehouses with item counts and stock values. Tap to manage each location.',
+

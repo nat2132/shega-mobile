@@ -1,0 +1,3 @@
+﻿
+    'tutorial.expense-details.steps.ed-budget.desc': 'See how this expense affects your budget. If linked to a budget category, it shows remaining allowance and spending percentage.',
+

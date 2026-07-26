@@ -1,0 +1,3 @@
+﻿
+    'tutorial.sales-records.steps.sales-records.desc': 'This screen lists all your sales transactions. Browse, search, and filter through your complete sales history.',
+

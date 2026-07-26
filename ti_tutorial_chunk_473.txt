@@ -1,0 +1,2 @@
+﻿    'tutorial.sales-records.title': 'Sales Records',
+

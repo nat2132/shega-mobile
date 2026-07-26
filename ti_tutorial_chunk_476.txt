@@ -1,0 +1,2 @@
+﻿    'tutorial.security-settings.steps.sec-pin.desc': 'Update your 6-digit security PIN. This is required to access the app and authorize transactions.',
+

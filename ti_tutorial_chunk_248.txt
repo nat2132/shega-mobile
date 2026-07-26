@@ -1,0 +1,2 @@
+﻿    'tutorial.inventory.steps.inv-add.desc': 'Tap here to add a new product. Fill in the name, category, quantity, prices, and supplier details. You can also configure box/roll settings for bulk items.',
+

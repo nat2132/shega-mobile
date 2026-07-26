@@ -1,0 +1,2 @@
+﻿    'tutorial.debt-management.steps.dm-summary.desc': 'See total receivables (customers owe you) and total payables (you owe suppliers) at a glance.',
+

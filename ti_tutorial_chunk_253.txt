@@ -1,0 +1,2 @@
+﻿    'tutorial.inventory.steps.inv-item.title': 'Item Cards',
+

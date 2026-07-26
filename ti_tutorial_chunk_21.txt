@@ -1,0 +1,2 @@
+﻿    'tutorial.add-order-item.steps.aoi-name.title': 'Item Name',
+

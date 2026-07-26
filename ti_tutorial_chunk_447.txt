@@ -1,0 +1,2 @@
+﻿    'tutorial.sales-hub.steps.sales-add.title': 'Record a New Sale',
+

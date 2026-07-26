@@ -1,0 +1,2 @@
+﻿    'tutorial.pending-sales.steps.ps-totals.desc': 'See the subtotal, discounts, and grand total for the pending transaction in real-time as you make changes.',
+

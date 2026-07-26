@@ -1,0 +1,2 @@
+﻿    'tutorial.summary.steps.sum-insights.desc': 'AI-powered insights about your business efficiency. Get recommendations on improving operations, reducing costs, and maximizing profits.',
+

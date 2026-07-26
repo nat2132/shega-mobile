@@ -1,0 +1,2 @@
+﻿    'tutorial.price-decrease.steps.pd-date.desc': 'Set the date for the new price. The adjustment is recorded in your price history.',
+

@@ -1,0 +1,3 @@
+﻿
+    'tutorial.sales-details.steps.sd-summary.desc': 'View the total amount, payment status, and transaction date at a glance. The header shows whether the sale is paid, pending, or on credit.',
+

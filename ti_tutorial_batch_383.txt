@@ -1,0 +1,3 @@
+﻿
+    'tutorial.price-decrease.steps.price-decrease.desc': 'Follow these steps to decrease the selling price of an inventory item. Use this for promotions, clearance, or competitive pricing.',
+

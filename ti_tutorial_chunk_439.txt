@@ -1,0 +1,2 @@
+﻿    'tutorial.sales-details.steps.sd-payment.title': 'Payment Method',
+

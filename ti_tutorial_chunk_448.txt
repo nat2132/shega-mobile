@@ -1,0 +1,2 @@
+﻿    'tutorial.sales-hub.steps.sales-chart.desc': 'Visualize your sales trends with interactive charts. Toggle between daily, weekly, and monthly views to analyze performance over time.',
+

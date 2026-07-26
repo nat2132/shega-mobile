@@ -1,0 +1,3 @@
+﻿
+    'tutorial.sale-form.steps.sf-customer.desc': 'For credit sales, customer name and phone are required. For cash sales, this is optional but recommended for record keeping.',
+

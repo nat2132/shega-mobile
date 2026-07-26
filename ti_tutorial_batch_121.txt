@@ -1,0 +1,3 @@
+﻿
+    'tutorial.damaged-item.steps.di-date.desc': 'Set the date when the damage or loss was discovered. This is recorded in your adjustment history.',
+

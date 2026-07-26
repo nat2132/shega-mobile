@@ -1,0 +1,2 @@
+﻿    'tutorial.expense.steps.exp-ledger.desc': 'Every transaction is recorded chronologically. Tap any entry to view or edit details. Swipe to delete if needed.',
+

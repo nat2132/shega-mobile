@@ -1,0 +1,3 @@
+﻿
+    'tutorial.summary.steps.sum-velocity.title': 'Velocity Spotlight',
+

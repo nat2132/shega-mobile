@@ -1,0 +1,2 @@
+﻿    'tutorial.inventory-records.steps.ir-list.desc': 'Every stock movement is listed chronologically with item name, type, quantity change, and resulting balance.',
+

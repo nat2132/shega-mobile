@@ -1,0 +1,2 @@
+﻿    'tutorial.warehouse-settings.steps.ws-prefs.title': 'Transfer Preferences',
+

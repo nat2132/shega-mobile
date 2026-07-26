@@ -1,0 +1,3 @@
+﻿
+    'tutorial.inventory-form.steps.inventory-form.title': 'Adding a New Item',
+

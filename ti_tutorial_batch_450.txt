@@ -1,0 +1,3 @@
+﻿
+    'tutorial.sales-hub.steps.sales-hub.desc': 'This is your complete sales management center. View total revenue, track transactions, analyze trends, and record new sales â€” all in one place.',
+

@@ -1,0 +1,2 @@
+﻿    'tutorial.damaged-item.steps.damaged-item.title': 'Damaged Item Log',
+

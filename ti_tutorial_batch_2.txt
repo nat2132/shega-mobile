@@ -1,0 +1,3 @@
+﻿
+    'tutorial.action_scroll': 'Scroll the highlighted area',
+

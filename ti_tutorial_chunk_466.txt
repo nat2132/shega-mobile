@@ -1,0 +1,2 @@
+﻿    'tutorial.sales-records.steps.sr-filter.desc': 'Filter transactions by date range, payment status, or customer. Search by transaction ID or customer name.',
+

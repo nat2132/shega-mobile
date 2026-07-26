@@ -1,0 +1,2 @@
+﻿    'tutorial.warehouse-manager.steps.wm-list.title': 'Warehouse List',
+

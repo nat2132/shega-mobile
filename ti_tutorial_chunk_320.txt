@@ -1,0 +1,2 @@
+﻿    'tutorial.notifications.steps.nt-actions.title': 'Quick Actions',
+

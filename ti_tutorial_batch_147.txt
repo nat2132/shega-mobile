@@ -1,0 +1,3 @@
+﻿
+    'tutorial.dashboard.steps.dash-sidebar.desc': 'Tap your avatar to open the sidebar menu. From there you can access all sections: Sales, Inventory, Expenses, Settings, and more.',
+

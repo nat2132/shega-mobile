@@ -1,0 +1,2 @@
+﻿    'tutorial.item-details.steps.id-history.title': 'Movement History',
+

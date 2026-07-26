@@ -1,0 +1,2 @@
+﻿    'tutorial.add-order-item.steps.aoi-quantity.desc': 'Enter the quantity you want to order. This will be added to the order summary and tracked against the supplier.',
+

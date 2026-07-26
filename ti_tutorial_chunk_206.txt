@@ -1,0 +1,2 @@
+﻿    'tutorial.expense-details.steps.ed-amount.desc': 'The expense amount, category, and subcategory. This helps you understand where your money is going.',
+

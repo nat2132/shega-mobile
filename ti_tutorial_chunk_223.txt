@@ -1,0 +1,2 @@
+﻿    'tutorial.expense-form.steps.ef-commit.title': 'Save Expense',
+

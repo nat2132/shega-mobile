@@ -1,0 +1,2 @@
+﻿    'tutorial.adjustment-history.steps.adjustment-history.desc': 'View the complete history of all price changes, stock adjustments, and damaged item records.',
+

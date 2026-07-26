@@ -1,0 +1,3 @@
+﻿
+    'tutorial.item-details.steps.id-details.title': 'Item Information',
+

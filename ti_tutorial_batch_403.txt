@@ -1,0 +1,3 @@
+﻿
+    'tutorial.profile-settings.steps.profile-settings.desc': 'Manage your personal and business information. Update your name, business name, and profile photo.',
+

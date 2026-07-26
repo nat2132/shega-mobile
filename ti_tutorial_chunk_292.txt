@@ -1,0 +1,2 @@
+﻿    'tutorial.item-details.steps.id-actions.desc': 'Perform actions on this item â€” restock, adjust price, mark as damaged, or update item details.',
+

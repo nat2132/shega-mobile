@@ -1,0 +1,3 @@
+﻿
+    'tutorial.create-budget.steps.cb-categories.desc': 'Add spending categories and allocate amounts to each. For example: rent, utilities, supplies. Each category gets its own limit.',
+

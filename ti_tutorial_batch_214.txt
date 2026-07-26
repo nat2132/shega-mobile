@@ -1,0 +1,3 @@
+﻿
+    'tutorial.expense-details.subtitle': 'Review an expense record',
+

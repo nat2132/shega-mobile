@@ -1,0 +1,3 @@
+﻿
+    'tutorial.low-stock-list.subtitle': 'Items needing reorder',
+

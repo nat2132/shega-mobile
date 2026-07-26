@@ -1,0 +1,2 @@
+﻿    'tutorial.oncredit-list.steps.oncredit-list.desc': 'View all items that have been sold on credit and are awaiting payment from customers.',
+

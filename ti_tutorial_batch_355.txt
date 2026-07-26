@@ -1,0 +1,3 @@
+﻿
+    'tutorial.orders.steps.orders.desc': 'Track customer orders from creation to fulfillment. Manage order status, quantities, and delivery all in one place.',
+

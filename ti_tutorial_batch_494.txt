@@ -1,0 +1,3 @@
+﻿
+    'tutorial.settings.steps.settings-security.desc': 'Set or change your PIN, enable biometric unlock (fingerprint/Face ID), and manage your recovery code for account access.',
+

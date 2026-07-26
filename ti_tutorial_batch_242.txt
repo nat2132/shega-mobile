@@ -1,0 +1,3 @@
+﻿
+    'tutorial.expense-loss.steps.exl-list.desc': 'Each loss entry shows the amount, type, date, and description. Tap for more details about the incident.',
+

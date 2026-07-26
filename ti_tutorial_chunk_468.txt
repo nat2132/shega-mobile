@@ -1,0 +1,2 @@
+﻿    'tutorial.sales-records.steps.sr-list.desc': 'Each entry shows the date, customer, item count, total amount, and payment status. Tap any entry for full details.',
+

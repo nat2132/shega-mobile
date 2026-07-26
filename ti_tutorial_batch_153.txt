@@ -1,0 +1,3 @@
+﻿
+    'tutorial.date-time.steps.date-time.desc': 'Customize how dates and times are displayed throughout the app. Choose your preferred calendar and time format.',
+

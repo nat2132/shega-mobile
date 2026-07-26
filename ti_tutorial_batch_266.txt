@@ -1,0 +1,3 @@
+﻿
+    'tutorial.inventory-form.steps.if-commit.desc': 'Review all details and tap "Initialize Asset" to add the item to your inventory vault. The item will appear in your stock ledger immediately.',
+

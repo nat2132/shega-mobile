@@ -1,0 +1,3 @@
+﻿
+    'tutorial.low-stock-list.steps.low-stock-list.title': 'Low Stock Alerts',
+

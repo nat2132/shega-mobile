@@ -1,0 +1,3 @@
+﻿
+    'tutorial.profile-settings.steps.pset-avatar.title': 'Profile Photo',
+

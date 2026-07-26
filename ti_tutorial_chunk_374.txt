@@ -1,0 +1,2 @@
+﻿    'tutorial.price-decrease.steps.pd-date.title': 'Effective Date',
+

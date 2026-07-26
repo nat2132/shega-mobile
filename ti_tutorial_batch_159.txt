@@ -1,0 +1,3 @@
+﻿
+    'tutorial.date-time.steps.dt-time.desc': 'Select 12-hour or 24-hour time format. This affects how times appear on receipts, reports, and screens.',
+

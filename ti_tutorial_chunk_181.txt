@@ -1,0 +1,2 @@
+﻿    'tutorial.debt-management.steps.debt-management.desc': 'Track all credit transactions â€” what customers owe you and what you owe suppliers. Manage payments and due dates.',
+

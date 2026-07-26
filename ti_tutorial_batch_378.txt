@@ -1,0 +1,3 @@
+﻿
+    'tutorial.price-decrease.steps.pd-price.title': 'New Selling Price',
+

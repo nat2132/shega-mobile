@@ -1,0 +1,3 @@
+﻿
+    'tutorial.adjustment.subtitle': 'Manage price and stock changes',
+

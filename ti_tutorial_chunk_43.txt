@@ -1,0 +1,2 @@
+﻿    'tutorial.adjustment-history.title': 'Adjustment History',
+

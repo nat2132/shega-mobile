@@ -1,0 +1,3 @@
+﻿
+    'tutorial.summary.steps.sum-pulse.desc': 'The net pulse shows the difference between your sales inflow and operational outflow. A positive pulse means you\'re earning more than you\'re spending.',
+

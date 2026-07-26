@@ -1,0 +1,2 @@
+﻿    'tutorial.notifications.steps.nt-actions.desc': 'Mark notifications as read, dismiss them, or tap to take action directly (e.g., restock a low inventory item).',
+

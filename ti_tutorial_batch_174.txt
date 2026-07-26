@@ -1,0 +1,3 @@
+﻿
+    'tutorial.debt-detail.title': 'Debt Details',
+

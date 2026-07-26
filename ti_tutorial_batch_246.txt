@@ -1,0 +1,3 @@
+﻿
+    'tutorial.expense-loss.subtitle': 'Track financial losses',
+

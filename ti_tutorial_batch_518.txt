@@ -1,0 +1,3 @@
+﻿
+    'tutorial.support.steps.support.desc': 'Access app information, contact support, and view frequently asked questions.',
+

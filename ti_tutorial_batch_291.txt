@@ -1,0 +1,3 @@
+﻿
+    'tutorial.inventory-records.title': 'Inventory Records',
+

@@ -1,0 +1,2 @@
+﻿    'tutorial.settings.steps.settings-export.desc': 'Export your database as a backup file for safekeeping. Regular backups protect your business data against accidental loss.',
+

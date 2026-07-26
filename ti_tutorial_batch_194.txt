@@ -1,0 +1,3 @@
+﻿
+    'tutorial.expense.steps.expense.desc': 'Track every outflow from your business. Monitor spending patterns, manage bills, and stay on top of your financial health.',
+

@@ -1,0 +1,2 @@
+﻿    'tutorial.budget.steps.bud-trends.title': 'Monthly Trends',
+

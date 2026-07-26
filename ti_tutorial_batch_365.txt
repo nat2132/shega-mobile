@@ -1,0 +1,3 @@
+﻿
+    'tutorial.pending-sales.steps.ps-list.desc': 'Items that have been added to a sale but not yet finalized. Review quantities and prices before completing.',
+

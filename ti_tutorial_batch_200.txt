@@ -1,0 +1,3 @@
+﻿
+    'tutorial.expense.steps.exp-summary.desc': 'See your total monthly expenses, compare against last month, and track spending categories at a glance.',
+

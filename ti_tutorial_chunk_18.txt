@@ -1,0 +1,2 @@
+﻿    'tutorial.add-order-item.steps.aoi-company.desc': 'Enter the supplier or company name for this item. This is useful for tracking which vendor supplies the product.',
+

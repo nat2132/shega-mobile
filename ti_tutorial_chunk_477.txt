@@ -1,0 +1,2 @@
+﻿    'tutorial.security-settings.steps.sec-pin.title': 'Change PIN',
+

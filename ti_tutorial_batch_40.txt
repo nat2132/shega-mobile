@@ -1,0 +1,3 @@
+﻿
+    'tutorial.adjustment-history.steps.ah-list.desc': 'Each entry shows the item name, adjustment type, old and new values, reason, and the user who made the change.',
+

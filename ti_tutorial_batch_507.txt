@@ -1,0 +1,3 @@
+﻿
+    'tutorial.summary.steps.sum-pulse.title': 'Performance Pulse',
+

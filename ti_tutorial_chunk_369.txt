@@ -1,0 +1,2 @@
+﻿    'tutorial.pending-sales.subtitle': 'Review and complete pending transactions',
+

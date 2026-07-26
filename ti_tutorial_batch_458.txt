@@ -1,0 +1,3 @@
+﻿
+    'tutorial.sales-hub.steps.sales-top.desc': 'See which products sell the most. Use this insight to stock popular items and maximize your revenue.',
+

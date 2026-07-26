@@ -1,0 +1,2 @@
+﻿    'tutorial.collect-payments.steps.collect-payments.desc': 'Use this screen to receive payments from customers for credit sales or orders. Follow the steps to record a payment.',
+

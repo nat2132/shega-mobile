@@ -1,0 +1,2 @@
+﻿    'tutorial.support.steps.su-info.desc': 'View the app version, build number, and system status. Check for updates here.',
+

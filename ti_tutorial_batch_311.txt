@@ -1,0 +1,3 @@
+﻿
+    'tutorial.menu_continue': 'Continue from step {step}',
+

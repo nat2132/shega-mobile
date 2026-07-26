@@ -1,0 +1,2 @@
+﻿    'tutorial.summary.steps.sum-financial.desc': 'Your key financial metrics: total revenue, items sold, expenses, and outstanding amounts. Compare performance trends at a glance.',
+

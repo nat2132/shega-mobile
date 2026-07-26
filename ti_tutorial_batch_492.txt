@@ -1,0 +1,3 @@
+﻿
+    'tutorial.settings.steps.settings-profile.desc': 'Edit your name, business name, and avatar. Your profile appears in the dashboard header and reports.',
+

@@ -1,0 +1,3 @@
+﻿
+    'tutorial.sales-details.steps.sd-payment.desc': 'The payment method used (cash or transfer) and the payment status. For credit sales, the remaining balance is shown.',
+

@@ -1,0 +1,2 @@
+﻿    'tutorial.price-increase.steps.pi-date.title': 'Effective Date',
+

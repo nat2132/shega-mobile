@@ -1,0 +1,2 @@
+﻿    'tutorial.inventory-records.steps.ir-summary.desc': 'See totals for inbound, outbound, and net stock movement for the selected period.',
+

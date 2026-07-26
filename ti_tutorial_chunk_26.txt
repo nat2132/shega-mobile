@@ -1,0 +1,2 @@
+﻿    'tutorial.adjustment.steps.adj-ledger.desc': 'All past adjustments are recorded here. View the audit trail with timestamps, previous and new values, and reasons for each change.',
+

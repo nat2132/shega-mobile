@@ -1,0 +1,3 @@
+﻿
+    'tutorial.notification-settings.steps.ns-payment.desc': 'Receive reminders for upcoming and overdue payments. Stay on top of credit collections and bill payments.',
+

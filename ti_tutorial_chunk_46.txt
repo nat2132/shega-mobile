@@ -1,0 +1,2 @@
+﻿    'tutorial.budget.steps.bud-create.desc': 'Tap to create a new budget. Set a name, type (business, department, project), period (monthly, quarterly, yearly), and allocate amounts by category.',
+

@@ -1,0 +1,3 @@
+﻿
+    'tutorial.inventory-form.steps.if-brand.desc': 'Enter the manufacturer or brand name. This is useful for identifying products, especially when dealing with multiple suppliers.',
+

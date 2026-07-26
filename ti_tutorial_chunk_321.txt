@@ -1,0 +1,2 @@
+﻿    'tutorial.notifications.steps.nt-list.desc': 'Each notification shows the type, message, and time. Unread notifications are highlighted. Tap to view details.',
+

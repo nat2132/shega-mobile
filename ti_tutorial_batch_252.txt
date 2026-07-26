@@ -1,0 +1,3 @@
+﻿
+    'tutorial.inventory.steps.inv-item.desc': 'Each card shows the item name, current stock, selling price, and unit. Items below threshold are flagged. Tap a card to view or edit details.',
+

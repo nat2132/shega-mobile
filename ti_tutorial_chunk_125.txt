@@ -1,0 +1,2 @@
+﻿    'tutorial.damaged-item.steps.di-quantity.desc': 'Enter the quantity of items that are damaged or lost. Specify whether this is in base units or packs.',
+

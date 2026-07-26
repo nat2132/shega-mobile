@@ -1,0 +1,2 @@
+﻿    'tutorial.price-increase.steps.pi-commit.desc': 'Review the details and confirm to apply the price increase. The item\'s selling price is updated immediately.',
+

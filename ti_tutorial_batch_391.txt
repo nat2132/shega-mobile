@@ -1,0 +1,3 @@
+﻿
+    'tutorial.price-increase.steps.pi-item.desc': 'Select the item from the search results. Review the current price and stock information before adjusting.',
+

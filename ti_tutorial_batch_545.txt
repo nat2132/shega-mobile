@@ -1,0 +1,3 @@
+﻿
+    'tutorial.warehouse-settings.title': 'Warehouse Settings',
+

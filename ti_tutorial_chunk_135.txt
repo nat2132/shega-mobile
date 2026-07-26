@@ -1,0 +1,2 @@
+﻿    'tutorial.dashboard.steps.dash-activity.desc': 'See a live feed of everything happening in your business â€” sales, expenses, adjustments, and more. Tap any entry to view details.',
+

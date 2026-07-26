@@ -1,0 +1,3 @@
+﻿
+    'tutorial.sales-records.steps.sr-list.title': 'Transaction List',
+

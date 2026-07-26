@@ -1,0 +1,3 @@
+﻿
+    'tutorial.expense-list.steps.el-list.desc': 'Each entry shows the amount, category badge, date, and description. Tap any entry to view or edit details.',
+

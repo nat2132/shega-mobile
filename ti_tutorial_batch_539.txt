@@ -1,0 +1,3 @@
+﻿
+    'tutorial.warehouse-settings.steps.ws-default.title': 'Default Warehouse',
+

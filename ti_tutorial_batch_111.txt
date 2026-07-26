@@ -1,0 +1,3 @@
+﻿
+    'tutorial.create-order.steps.co-items.desc': 'Search and select items to add to this order. You can add multiple items with different quantities.',
+

@@ -1,0 +1,3 @@
+﻿
+    'tutorial.oncredit-list.subtitle': 'Items sold on credit',
+

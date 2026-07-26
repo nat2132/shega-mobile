@@ -1,0 +1,2 @@
+﻿    'tutorial.dashboard.steps.dash-sparkline.desc': 'Swipe left or right to cycle through today\'s Revenue, Gross Profit, Sales Count, and Expenses. The sparkline compares today against yesterday\'s performance.',
+

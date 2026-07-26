@@ -1,0 +1,2 @@
+﻿    'tutorial.pending-sales.steps.pending-sales.desc': 'View all sale transactions that are in progress or awaiting completion. Complete or cancel pending sales from here.',
+

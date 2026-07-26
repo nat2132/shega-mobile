@@ -1,0 +1,3 @@
+﻿
+    'tutorial.profile-settings.steps.pset-avatar.desc': 'Tap your avatar to change your profile photo. You can take a new photo or choose from your gallery.',
+

@@ -1,0 +1,2 @@
+﻿    'tutorial.expense-details.title': 'Expense Details',
+

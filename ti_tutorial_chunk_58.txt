@@ -1,0 +1,2 @@
+﻿    'tutorial.collect-payments.steps.collect-payments.title': 'Collect Payment',
+

@@ -1,0 +1,2 @@
+﻿    'tutorial.damaged-item.steps.di-reason.desc': 'Select the reason for the loss (damaged, expired, broken, stolen, or other). This helps track loss patterns.',
+

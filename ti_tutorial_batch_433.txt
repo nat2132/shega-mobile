@@ -1,0 +1,3 @@
+﻿
+    'tutorial.sales-details.steps.sales-details.title': 'Transaction Details',
+

@@ -1,0 +1,3 @@
+﻿
+    'tutorial.debt-list.subtitle': 'View all debt entries',
+

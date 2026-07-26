@@ -1,0 +1,2 @@
+﻿    'tutorial.warehouse-manager.steps.wm-list.desc': 'View all your warehouses and storage locations. Each entry shows item count and total stock value.',
+

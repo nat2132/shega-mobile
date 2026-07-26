@@ -1,0 +1,2 @@
+﻿    'tutorial.sales-records.steps.sr-export.desc': 'Export your sales data as a PDF or CSV report for accounting and record-keeping purposes.',
+

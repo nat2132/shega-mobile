@@ -1,0 +1,2 @@
+﻿    'tutorial.create-order.steps.co-customer.desc': 'Enter the customer\'s name. This is required for order tracking. Existing customers will auto-complete as you type.',
+

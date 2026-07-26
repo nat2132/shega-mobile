@@ -1,0 +1,3 @@
+﻿
+    'tutorial.activity-ledger.subtitle': 'View all business activity',
+

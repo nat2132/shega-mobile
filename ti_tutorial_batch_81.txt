@@ -1,0 +1,3 @@
+﻿
+    'tutorial.contact-details.subtitle': 'View and manage a contact',
+

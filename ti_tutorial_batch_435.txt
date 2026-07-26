@@ -1,0 +1,3 @@
+﻿
+    'tutorial.sales-details.steps.sd-customer.title': 'Customer Info',
+

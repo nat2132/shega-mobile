@@ -1,0 +1,2 @@
+﻿    'tutorial.expense-details.steps.ed-details.title': 'Transaction Info',
+

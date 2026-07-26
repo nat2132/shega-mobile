@@ -1,0 +1,2 @@
+﻿    'tutorial.damaged-item.steps.di-search.desc': 'Search for the damaged or lost item. Type its name to locate it in your inventory records.',
+

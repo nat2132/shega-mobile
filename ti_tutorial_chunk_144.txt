@@ -1,0 +1,2 @@
+﻿    'tutorial.dashboard.steps.dash-quick-stats.title': 'Quick Status Cards',
+

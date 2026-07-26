@@ -1,0 +1,2 @@
+﻿    'tutorial.collect-payments.steps.cp-commit.title': 'Complete Payment',
+

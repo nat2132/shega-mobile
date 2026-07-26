@@ -1,0 +1,2 @@
+﻿    'tutorial.collect-payments.steps.cp-method.desc': 'Select how the customer is paying â€” cash or digital bank transfer. The payment method is recorded for reconciliation.',
+

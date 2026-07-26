@@ -1,0 +1,3 @@
+﻿
+    'tutorial.inventory-records.steps.ir-filter.desc': 'Filter by date range, transaction type (purchase, sale, adjustment), or specific item.',
+

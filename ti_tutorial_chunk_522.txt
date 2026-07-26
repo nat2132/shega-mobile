@@ -1,0 +1,2 @@
+﻿    'tutorial.translation.steps.translation.desc': 'Choose your preferred language for the app interface. All menus, labels, and notifications will use your selection.',
+

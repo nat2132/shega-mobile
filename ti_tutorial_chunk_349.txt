@@ -1,0 +1,2 @@
+﻿    'tutorial.order-detail.steps.order-detail.desc': 'This screen shows the complete details of a purchase order â€” items ordered, supplier info, and order status.',
+

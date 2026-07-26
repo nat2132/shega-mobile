@@ -1,0 +1,2 @@
+﻿    'tutorial.translation.title': 'Language Settings',
+

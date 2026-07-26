@@ -1,0 +1,3 @@
+﻿
+    'tutorial.create-budget.steps.cb-commit.desc': 'Review your budget settings and confirm. The budget will be active immediately and track expenses in real-time.',
+

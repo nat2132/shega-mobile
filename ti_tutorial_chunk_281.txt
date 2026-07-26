@@ -1,0 +1,2 @@
+﻿    'tutorial.inventory-form.title': 'Add Inventory Item',
+

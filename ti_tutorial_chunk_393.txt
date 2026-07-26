@@ -1,0 +1,2 @@
+﻿    'tutorial.price-increase.steps.pi-price.desc': 'Enter the new selling price. The system will show the price difference and calculate the new profit margin.',
+

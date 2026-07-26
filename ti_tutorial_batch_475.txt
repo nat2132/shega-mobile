@@ -1,0 +1,3 @@
+﻿
+    'tutorial.security-settings.steps.sec-biometric.title': 'Biometric Auth',
+

@@ -1,0 +1,2 @@
+﻿    'tutorial.item-details.steps.id-history.desc': 'View the complete transaction history for this item â€” sales, purchases, adjustments, and stock counts.',
+

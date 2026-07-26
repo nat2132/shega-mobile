@@ -1,0 +1,2 @@
+﻿    'tutorial.expense-list.subtitle': 'Browse all expense entries',
+

@@ -1,0 +1,3 @@
+﻿
+    'tutorial.item-details.title': 'Item Details',
+

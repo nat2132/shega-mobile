@@ -1,0 +1,2 @@
+﻿    'tutorial.expense-form.steps.ef-amount.desc': 'Type the expense amount. This is the total amount paid or owed for this expense.',
+

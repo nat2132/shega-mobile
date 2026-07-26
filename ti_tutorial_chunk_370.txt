@@ -1,0 +1,2 @@
+﻿    'tutorial.pending-sales.title': 'Pending Sales',
+

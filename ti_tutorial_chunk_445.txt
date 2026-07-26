@@ -1,0 +1,2 @@
+﻿    'tutorial.sales-details.title': 'Sale Details',
+

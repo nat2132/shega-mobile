@@ -1,0 +1,2 @@
+﻿    'tutorial.security-settings.steps.sec-biometric.desc': 'Enable fingerprint or face ID for quicker, secure access to the app without entering your PIN each time.',
+

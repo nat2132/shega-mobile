@@ -1,0 +1,2 @@
+﻿    'tutorial.item-details.steps.id-stats.desc': 'View current stock quantity, buying price, selling price, and calculated profit margin. Low stock items are highlighted.',
+

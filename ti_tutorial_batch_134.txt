@@ -1,0 +1,3 @@
+﻿
+    'tutorial.damaged-item.title': 'Log Damaged Item',
+

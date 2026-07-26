@@ -1,0 +1,2 @@
+﻿    'tutorial.inventory.steps.inv-restock.desc': 'When stock runs low, tap to open the product order modal. Select items and set order quantities to replenish your inventory.',
+

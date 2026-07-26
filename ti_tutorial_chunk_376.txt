@@ -1,0 +1,2 @@
+﻿    'tutorial.price-decrease.steps.pd-item.title': 'Select Item',
+

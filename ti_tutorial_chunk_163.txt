@@ -1,0 +1,2 @@
+﻿    'tutorial.debt-detail.steps.dd-actions.desc': 'Record a new payment against this debt, or mark it as fully settled.',
+

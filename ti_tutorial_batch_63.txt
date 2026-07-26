@@ -1,0 +1,3 @@
+﻿
+    'tutorial.collect-payments.steps.cp-customer.desc': 'Search for the customer making the payment. Select them to see their outstanding balance and due items.',
+

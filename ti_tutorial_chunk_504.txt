@@ -1,0 +1,2 @@
+﻿    'tutorial.summary.steps.summary.desc': 'A comprehensive overview of your business performance. See financial summaries, operational metrics, and intelligence insights all in one dashboard.',
+

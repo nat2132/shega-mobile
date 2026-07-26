@@ -1,0 +1,2 @@
+﻿    'tutorial.inventory-records.steps.inventory-records.title': 'Inventory Records',
+

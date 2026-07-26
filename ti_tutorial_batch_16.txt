@@ -1,0 +1,3 @@
+﻿
+    'tutorial.add-order-item.steps.aoi-commit.desc': 'Tap to add this item to your purchase order. You can add multiple items before submitting the complete order.',
+

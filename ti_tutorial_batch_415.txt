@@ -1,0 +1,3 @@
+﻿
+    'tutorial.reminders.steps.rm-list.desc': 'Each reminder shows the title, due date, priority, and status. Completed reminders are marked with a check.',
+

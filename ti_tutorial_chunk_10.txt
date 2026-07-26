@@ -1,0 +1,2 @@
+﻿    'tutorial.activity-ledger.steps.al-filter.desc': 'Filter by activity type (sales, expenses, inventory, payments) or date range to find specific events.',
+

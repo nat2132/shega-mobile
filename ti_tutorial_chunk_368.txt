@@ -1,0 +1,2 @@
+﻿    'tutorial.pending-sales.steps.ps-totals.title': 'Running Total',
+

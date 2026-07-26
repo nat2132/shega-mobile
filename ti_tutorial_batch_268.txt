@@ -1,0 +1,3 @@
+﻿
+    'tutorial.inventory-form.steps.if-expiry.desc': 'Set an expiration date for perishable items and a quality grade. The system will alert you when items are close to expiring.',
+

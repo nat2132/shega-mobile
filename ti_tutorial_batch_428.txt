@@ -1,0 +1,3 @@
+﻿
+    'tutorial.sale-form.steps.sf-pricing.desc': 'Set unit prices, apply discounts, and configure VAT/tax if applicable. The system calculates the subtotal and total automatically.',
+

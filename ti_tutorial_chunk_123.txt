@@ -1,0 +1,2 @@
+﻿    'tutorial.damaged-item.steps.di-item.desc': 'Select the item from search results. Review the current stock level before recording the loss.',
+

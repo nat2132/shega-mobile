@@ -1,0 +1,2 @@
+﻿    'tutorial.debt-detail.steps.dd-info.desc': 'Details about the original transaction, interest rate (if any), due date, and the customer or vendor involved.',
+

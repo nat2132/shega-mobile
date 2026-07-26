@@ -1,0 +1,3 @@
+﻿
+    'tutorial.inventory-form.steps.if-name.desc': 'Give your item a clear, descriptive name. Select the appropriate category â€” this helps with organization and reporting.',
+

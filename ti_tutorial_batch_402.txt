@@ -1,0 +1,3 @@
+﻿
+    'tutorial.price-increase.title': 'Increase Prices',
+

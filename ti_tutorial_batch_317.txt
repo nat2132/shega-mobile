@@ -1,0 +1,3 @@
+﻿
+    'tutorial.notifications.steps.notifications.desc': 'View all your business notifications â€” low stock alerts, payment reminders, expense warnings, and more.',
+

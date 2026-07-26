@@ -1,0 +1,2 @@
+﻿    'tutorial.damaged-item.steps.damaged-item.desc': 'Follow these steps to record damaged, expired, or lost inventory items. This keeps your stock counts accurate.',
+

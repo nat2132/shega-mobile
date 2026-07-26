@@ -1,0 +1,3 @@
+﻿
+    'tutorial.expense-form.steps.ef-budget.desc': 'Optionally link this expense to a budget category. This helps track spending against your planned budget.',
+

@@ -1,0 +1,3 @@
+﻿
+    'tutorial.sales-records.subtitle': 'Browse all transactions',
+

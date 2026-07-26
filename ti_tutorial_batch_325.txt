@@ -1,0 +1,3 @@
+﻿
+    'tutorial.notification-settings.steps.notification-settings.desc': 'Choose which business notifications you receive. Control alerts for stock, payments, expenses, and more.',
+

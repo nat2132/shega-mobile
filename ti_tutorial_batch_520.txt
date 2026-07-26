@@ -1,0 +1,3 @@
+﻿
+    'tutorial.support.subtitle': 'Get help and app information',
+

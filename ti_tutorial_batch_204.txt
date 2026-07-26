@@ -1,0 +1,3 @@
+﻿
+    'tutorial.expense-details.steps.ed-actions.desc': 'Edit or delete this expense from here. You can also duplicate it for similar recurring entries.',
+

@@ -1,0 +1,2 @@
+﻿    'tutorial.warehouse-settings.steps.ws-list.title': 'Warehouse List',
+

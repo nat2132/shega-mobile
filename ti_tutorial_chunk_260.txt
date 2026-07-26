@@ -1,0 +1,2 @@
+﻿    'tutorial.inventory.steps.inv-valuation.desc': 'See the total value of your inventory. This updates automatically as you add, sell, or adjust items. Track how your stock value changes over time.',
+

@@ -1,0 +1,3 @@
+﻿
+    'tutorial.contacts.steps.con-list.desc': 'All your contacts displayed here. Search by name or phone, tap to view details, call directly, or send a WhatsApp message.',
+

@@ -1,0 +1,3 @@
+﻿
+    'tutorial.expense.steps.exp-health.desc': 'View your overdue and due-today bills here. Tap "Paid" to mark recurring expenses as settled and keep your payment tracking accurate.',
+

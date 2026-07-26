@@ -1,0 +1,2 @@
+﻿    'tutorial.sale-form.steps.sf-pricing.title': 'Pricing & Discounts',
+

@@ -1,0 +1,3 @@
+﻿
+    'tutorial.menu_title': '{name} Tutorial',
+

@@ -1,0 +1,3 @@
+﻿
+    'tutorial.contact-details.steps.cd-actions.desc': 'Edit contact details, record a sale, or collect payment directly from this screen.',
+

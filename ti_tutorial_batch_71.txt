@@ -1,0 +1,3 @@
+﻿
+    'tutorial.complete_desc': 'You\'ve completed the {name} tutorial.',
+

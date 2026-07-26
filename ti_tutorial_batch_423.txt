@@ -1,0 +1,3 @@
+﻿
+    'tutorial.sale-form.steps.sf-commit.title': 'Complete Transaction',
+

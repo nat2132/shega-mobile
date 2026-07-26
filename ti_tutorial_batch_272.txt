@@ -1,0 +1,3 @@
+﻿
+    'tutorial.inventory-form.steps.if-pricing.desc': 'Enter the buying price (cost) and selling price. The system calculates your profit margin automatically and warns if you\'re selling at a loss.',
+

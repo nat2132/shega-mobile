@@ -1,0 +1,2 @@
+﻿    'tutorial.warehouse-settings.steps.ws-default.desc': 'Set your default warehouse for new inventory items and purchases. Items will be assigned here by default.',
+

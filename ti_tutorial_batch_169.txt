@@ -1,0 +1,3 @@
+﻿
+    'tutorial.debt-detail.steps.dd-summary.desc': 'View total debt, amount paid, and outstanding balance. The progress bar shows how much has been repaid.',
+

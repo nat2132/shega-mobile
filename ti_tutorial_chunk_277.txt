@@ -1,0 +1,2 @@
+﻿    'tutorial.inventory-form.steps.if-unit.title': 'Unit & Quantity',
+

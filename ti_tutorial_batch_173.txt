@@ -1,0 +1,3 @@
+﻿
+    'tutorial.debt-detail.subtitle': 'Track credit and payments',
+

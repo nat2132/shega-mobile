@@ -1,0 +1,2 @@
+﻿    'tutorial.pending-sales.steps.ps-actions.title': 'Complete or Cancel',
+

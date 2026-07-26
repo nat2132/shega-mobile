@@ -1,0 +1,3 @@
+﻿
+    'tutorial.inventory.title': 'Inventory',
+

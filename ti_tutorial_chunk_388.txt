@@ -1,0 +1,2 @@
+﻿    'tutorial.price-increase.steps.pi-commit.title': 'Apply Increase',
+

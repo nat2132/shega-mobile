@@ -1,0 +1,3 @@
+﻿
+    'tutorial.sales-hub.steps.sales-pending.title': 'Pending & Credit Sales',
+

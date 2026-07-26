@@ -1,0 +1,3 @@
+﻿
+    'tutorial.adjustment-history.steps.ah-filter.desc': 'Filter by adjustment type (price increase, decrease, damaged, stock correction) or by date range.',
+

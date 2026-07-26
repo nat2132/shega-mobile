@@ -1,0 +1,3 @@
+﻿
+    'tutorial.adjustment-history.subtitle': 'Review all price and stock adjustments',
+

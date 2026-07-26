@@ -1,0 +1,3 @@
+﻿
+    'tutorial.contacts.steps.con-search.desc': 'Find any contact instantly by typing their name or phone number.',
+

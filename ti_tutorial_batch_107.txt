@@ -1,0 +1,3 @@
+﻿
+    'tutorial.create-order.steps.co-commit.desc': 'Review the order summary and tap the commit button to finalize. The order will appear in your orders list.',
+

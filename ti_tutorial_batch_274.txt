@@ -1,0 +1,3 @@
+﻿
+    'tutorial.inventory-form.steps.if-supplier.desc': 'Add supplier details if purchasing on credit. Log the supplier name, phone, account number, and credit terms.',
+

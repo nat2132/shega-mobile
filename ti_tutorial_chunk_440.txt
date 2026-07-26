@@ -1,0 +1,2 @@
+﻿    'tutorial.sales-details.steps.sd-pricing.desc': 'See the subtotal, discounts applied, tax (VAT/TOT), and the grand total. This section helps with accounting and reconciliation.',
+

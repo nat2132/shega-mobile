@@ -1,0 +1,3 @@
+﻿
+    'tutorial.profile-settings.steps.pset-save.desc': 'Tap to save your profile changes. Updates are applied immediately across the app.',
+

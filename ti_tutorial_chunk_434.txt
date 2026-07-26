@@ -1,0 +1,2 @@
+﻿    'tutorial.sales-details.steps.sd-customer.desc': 'Customer details including name and contact information. For credit sales, you can initiate payment collection from here.',
+

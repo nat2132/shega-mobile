@@ -1,0 +1,2 @@
+﻿    'tutorial.budget.steps.budget.desc': 'Create and manage budgets for your business. Track planned vs actual spending across categories, departments, or projects.',
+

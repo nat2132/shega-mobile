@@ -1,0 +1,2 @@
+﻿    'tutorial.contacts.steps.con-add.desc': 'Tap to add a new contact. Enter their name, phone number, email, and notes. Assign them as customer, supplier, or partner.',
+

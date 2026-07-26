@@ -1,0 +1,3 @@
+﻿
+    'tutorial.sales-records.steps.sr-summary.desc': 'See total sales, transaction count, and average per sale for the selected period at a glance.',
+

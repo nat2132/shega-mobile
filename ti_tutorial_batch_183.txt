@@ -1,0 +1,3 @@
+﻿
+    'tutorial.debt-management.steps.dm-actions.desc': 'Record payments received from customers or make payments to suppliers directly from this screen.',
+

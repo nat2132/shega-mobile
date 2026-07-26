@@ -1,0 +1,2 @@
+﻿    'tutorial.sale-form.steps.sf-payment.desc': 'Choose how the customer pays â€” cash or digital bank. For credit sales, enter customer details and the amount will be tracked as receivable.',
+

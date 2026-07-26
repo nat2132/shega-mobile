@@ -1,0 +1,2 @@
+﻿    'tutorial.action_tap': 'Tap the highlighted element',
+

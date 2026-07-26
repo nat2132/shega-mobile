@@ -1,0 +1,2 @@
+﻿    'tutorial.sales-details.steps.sd-pricing.title': 'Pricing Breakdown',
+

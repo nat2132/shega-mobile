@@ -1,0 +1,2 @@
+﻿    'tutorial.dashboard.steps.dash-health.desc': 'Your overall business health rating based on multiple factors. A higher score means your business is performing well. Tap to see the breakdown.',
+

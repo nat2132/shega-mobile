@@ -1,0 +1,2 @@
+﻿    'tutorial.add-order-item.steps.add-order-item.desc': 'Follow these steps to add a product to your purchase order. You can search for existing inventory items or enter custom details.',
+

@@ -1,0 +1,3 @@
+﻿
+    'tutorial.inventory.steps.inventory.desc': 'Your complete inventory management system. Track stock levels, monitor valuations, and manage every item in your store.',
+

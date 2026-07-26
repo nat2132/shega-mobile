@@ -1,0 +1,3 @@
+﻿
+    'tutorial.collect-payments.steps.cp-amount.desc': 'Enter the amount being paid. The system shows the remaining balance after this payment.',
+

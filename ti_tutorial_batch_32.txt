@@ -1,0 +1,3 @@
+﻿
+    'tutorial.adjustment.steps.adjustment.desc': 'Make corrections to your inventory â€” price changes, damaged item logging, and stock corrections. All adjustments are recorded in an immutable audit trail.',
+

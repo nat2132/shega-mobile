@@ -1,0 +1,3 @@
+﻿
+    'tutorial.order-detail.subtitle': 'Review a purchase order',
+

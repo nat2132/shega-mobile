@@ -1,0 +1,3 @@
+﻿
+    'tutorial.menu_learn': 'Learn how to use this screen step by step.',
+

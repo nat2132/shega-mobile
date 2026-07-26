@@ -1,0 +1,3 @@
+﻿
+    'tutorial.budget.steps.bud-overview.desc': 'See your total budget, spending to date, and remaining balance. The health indicator shows if you\'re on track, near limit, or over budget.',
+

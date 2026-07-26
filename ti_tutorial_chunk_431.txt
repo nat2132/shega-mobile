@@ -1,0 +1,2 @@
+﻿    'tutorial.sale-form.title': 'Record a Sale',
+

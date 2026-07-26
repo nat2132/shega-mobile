@@ -1,0 +1,2 @@
+﻿    'tutorial.settings.steps.settings-language.desc': 'Switch between English, Amharic, Oromo, and Tigrinya. The calendar, date format, and time system adapt automatically.',
+

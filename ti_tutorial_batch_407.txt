@@ -1,0 +1,3 @@
+﻿
+    'tutorial.profile-settings.steps.pset-name.desc': 'Update your full name and business name. Your name appears on receipts and reports.',
+

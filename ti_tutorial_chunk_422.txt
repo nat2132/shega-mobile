@@ -1,0 +1,2 @@
+﻿    'tutorial.sale-form.steps.sf-commit.desc': 'Review the summary and tap "Authorize Settlement" to finalize the sale. The transaction is recorded permanently in the sales ledger.',
+

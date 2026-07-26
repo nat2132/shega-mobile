@@ -1,0 +1,2 @@
+﻿    'tutorial.collect-payments.steps.cp-items.desc': 'Choose which items or invoices the customer is paying for. You can pay partially or in full for each item.',
+

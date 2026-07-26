@@ -1,0 +1,3 @@
+﻿
+    'tutorial.expense-details.steps.expense-details.desc': 'Review the full details of an expense transaction including amount, category, date, and payment information.',
+

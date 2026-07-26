@@ -1,0 +1,3 @@
+﻿
+    'tutorial.warehouse-manager.steps.warehouse-manager.title': 'Warehouse Management',
+

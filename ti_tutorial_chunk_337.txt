@@ -1,0 +1,2 @@
+﻿    'tutorial.oncredit-list.steps.ocl-list.desc': 'Each entry shows the customer name, item sold, amount due, and days outstanding.',
+

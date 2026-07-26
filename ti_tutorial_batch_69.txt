@@ -1,0 +1,3 @@
+﻿
+    'tutorial.collect-payments.subtitle': 'Receive payments from customers',
+

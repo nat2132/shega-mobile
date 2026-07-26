@@ -1,0 +1,3 @@
+﻿
+    'tutorial.expense-form.steps.ef-date.desc': 'Set the date when this expense occurred. This is used for accurate monthly and period reporting.',
+

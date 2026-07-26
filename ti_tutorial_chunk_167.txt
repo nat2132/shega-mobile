@@ -1,0 +1,2 @@
+﻿    'tutorial.debt-detail.steps.dd-payments.desc': 'Chronological list of all payments made against this debt, including dates, amounts, and payment methods.',
+

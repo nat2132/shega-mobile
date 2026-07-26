@@ -1,0 +1,2 @@
+﻿    'tutorial.collect-payments.steps.cp-method.title': 'Payment Method',
+

@@ -1,0 +1,3 @@
+﻿
+    'tutorial.notification-settings.steps.ns-stock.desc': 'Get notified when inventory items reach low stock levels. Set your preferred threshold for each item.',
+

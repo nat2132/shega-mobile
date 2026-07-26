@@ -1,0 +1,3 @@
+﻿
+    'tutorial.sales-hub.steps.sales-add.desc': 'Tap the + button to expand the action menu, then tap the add item icon to start recording a new sale.',
+

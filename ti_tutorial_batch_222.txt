@@ -1,0 +1,3 @@
+﻿
+    'tutorial.expense-form.steps.ef-commit.desc': 'Review all details and tap to record the expense. It will appear in your expense ledger and reports immediately.',
+

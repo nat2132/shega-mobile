@@ -1,0 +1,2 @@
+﻿    'tutorial.notification-settings.steps.ns-save.desc': 'Save your notification preferences. Changes take effect immediately.',
+

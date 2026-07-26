@@ -1,0 +1,3 @@
+﻿
+    'tutorial.damaged-item.steps.di-date.title': 'Date of Loss',
+

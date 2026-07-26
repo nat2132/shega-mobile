@@ -1,0 +1,3 @@
+﻿
+    'tutorial.item-details.steps.id-details.desc': 'Detailed information including category, brand, unit type, supplier, and expiry date for perishable items.',
+

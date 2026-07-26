@@ -1,0 +1,3 @@
+﻿
+    'tutorial.damaged-item.subtitle': 'Record inventory damage or loss',
+

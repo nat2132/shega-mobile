@@ -1,0 +1,3 @@
+﻿
+    'tutorial.adjustment-history.steps.ah-list.title': 'Adjustment Entries',
+

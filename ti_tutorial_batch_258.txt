@@ -1,0 +1,3 @@
+﻿
+    'tutorial.inventory.steps.inv-stats.desc': 'View stock distribution by category, see low-stock alerts, track fast vs slow-moving items, and monitor expiration dates.',
+

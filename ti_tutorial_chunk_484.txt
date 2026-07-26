@@ -1,0 +1,2 @@
+﻿    'tutorial.settings.steps.settings.desc': 'Configure every aspect of your app. From appearance and security to notifications and data management, everything is here.',
+

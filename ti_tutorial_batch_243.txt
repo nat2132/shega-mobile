@@ -1,0 +1,3 @@
+﻿
+    'tutorial.expense-loss.steps.exl-list.title': 'Loss Entries',
+

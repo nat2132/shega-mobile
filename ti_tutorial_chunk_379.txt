@@ -1,0 +1,2 @@
+﻿    'tutorial.price-decrease.steps.pd-reason.desc': 'Enter a reason (e.g., promotion, clearance, competitive match). This is logged in the adjustment history.',
+

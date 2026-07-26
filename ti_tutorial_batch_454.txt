@@ -1,0 +1,3 @@
+﻿
+    'tutorial.sales-hub.steps.sales-pending.desc': 'Manage unsettled credit sales here. Track who owes you money, send reminders, and mark payments as received.',
+

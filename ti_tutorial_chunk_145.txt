@@ -1,0 +1,2 @@
+﻿    'tutorial.dashboard.steps.dash-search.desc': 'Search across all your inventory, sales, expenses, and contacts from one place. Start typing to find anything instantly.',
+

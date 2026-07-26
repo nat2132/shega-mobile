@@ -1,0 +1,2 @@
+﻿    'tutorial.reminders.steps.reminders.desc': 'View all scheduled and past reminders for payments, stock checks, and business tasks.',
+

@@ -1,0 +1,3 @@
+﻿
+    'tutorial.action_type': 'Type in the highlighted field',
+

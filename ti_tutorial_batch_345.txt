@@ -1,0 +1,3 @@
+﻿
+    'tutorial.order-detail.steps.od-notes.desc': 'Any notes or special instructions added when creating the order. Reference numbers and delivery notes are shown here.',
+

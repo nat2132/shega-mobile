@@ -1,0 +1,2 @@
+﻿    'tutorial.translation.steps.tr-current.desc': 'Your current language is highlighted. Tap a different language to switch.',
+
