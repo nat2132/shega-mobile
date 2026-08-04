@@ -6,13 +6,18 @@ import { useDialog } from "@/context/DialogContext";
 import { PROFILE_IMAGES, useSettings } from "@/context/SettingsContext";
 import { useSidebar } from "@/context/SidebarContext";
 import {
+  archiveBudget,
   deleteBudget,
   getBudgetAlerts,
   getBudgetDashboard,
+  getBudgetFinalStats,
+  getBudgetLifecycle,
   getBudgets,
   getBudgetWithCategoryProgress,
   getMonthlyBudgetSummary,
+  getNextBudgetPeriod,
   insertBudget,
+  renewBudget,
 } from "@/database/db";
 import { useFormDrafts } from '@/hooks/useFormDrafts';
 import { useNotifications } from "@/hooks/useNotifications";
@@ -107,9 +112,11 @@ const BudgetOverview = () => {
 
   const [allBudgets, setAllBudgets] = useState<any[]>([]);
   const [selectedBudgetId, setSelectedBudgetId] = useState<number | null>(null);
+  const [lifecycle, setLifecycle] = useState<any>({ active: [], expiringSoon: [], expired: [], archived: [] });
 
   const loadData = useCallback(() => {
     setAllBudgets(getBudgets());
+    setLifecycle(getBudgetLifecycle());
     const now = new Date();
     if (selectedBudgetId) {
       const budgetData = getBudgetWithCategoryProgress(selectedBudgetId);
@@ -151,7 +158,11 @@ const BudgetOverview = () => {
 
   const handleBudgetPress = (budgetId: number) => {
     const full = getBudgetWithCategoryProgress(budgetId);
-    if (full) { setSelectedBudget(full); setShowDetailModal(true); }
+    if (!full) return;
+    const isHistoric = full.status === 'expired' || full.status === 'archived' || full.status === 'closed';
+    const detail = { ...full, finalStats: isHistoric ? getBudgetFinalStats(budgetId) : null };
+    setSelectedBudget(detail);
+    setShowDetailModal(true);
   };
 
   const handleDeleteBudget = async (id: number) => {
@@ -163,6 +174,89 @@ const BudgetOverview = () => {
       destructive: true,
     });
     if (confirmed) { deleteBudget(id); playNice(); loadData(); setShowDetailModal(false); }
+  };
+
+  const handleRenewBudget = async (budget: any) => {
+    const confirmed = await dialog.confirm({
+      title: t('budget.renew') || 'Renew Budget',
+      message: t('budget.renew_confirm_msg') || 'Renew this budget for the next period? The previous period stays saved for history.',
+      confirmText: t('budget.renew') || 'Renew',
+      cancelText: t('common.cancel'),
+    });
+    if (!confirmed) return;
+    const next = getNextBudgetPeriod(budget);
+    const newId = renewBudget(budget.id, { name: budget.name, period: budget.period, year: next.year, month: next.month });
+    if (!newId) {
+      await dialog.alert({ title: t('common.error'), message: t('budget.renew_failed') || 'Could not renew the budget.', iconType: 'danger' });
+      return;
+    }
+    notifyBudgetCreated({
+      id: newId as number,
+      name: budget.name,
+      period: budget.period,
+      year: next.year,
+      month: next.month,
+    });
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    playNice();
+    setSelectedBudgetId(newId as number);
+    loadData();
+    setShowDetailModal(false);
+  };
+
+  const handleArchiveBudget = async (budget: any) => {
+    const confirmed = await dialog.confirm({
+      title: t('budget.archive') || 'Archive Budget',
+      message: t('budget.archive_confirm_msg') || 'Archive this budget? Its expenses stay saved and reports still include it.',
+      confirmText: t('budget.archive') || 'Archive',
+      cancelText: t('common.cancel'),
+    });
+    if (!confirmed) return;
+    archiveBudget(budget.id);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    playNice();
+    if (selectedBudgetId === budget.id) setSelectedBudgetId(null);
+    loadData();
+    setShowDetailModal(false);
+  };
+
+  const lifecycleSections = [
+    { key: 'active', label: t('budget.status_active'), items: lifecycle.active || [], empty: t('budget.no_budgets') },
+    { key: 'expiring', label: t('budget.expiring_soon'), items: lifecycle.expiringSoon || [], empty: t('budget.no_expiring') },
+    { key: 'expired', label: t('budget.status_expired'), items: lifecycle.expired || [], empty: t('budget.no_expired') },
+    { key: 'archived', label: t('budget.status_archived'), items: lifecycle.archived || [], empty: t('budget.no_archived') },
+  ];
+
+  const renderBudgetCard = (budget: any) => {
+    const pct = budget.totalPlanned > 0 ? Math.round((budget.totalActual / budget.totalPlanned) * 100) : 0;
+    const expired = budget.status === 'expired' || budget.status === 'archived' || budget.status === 'closed' || budget.hasExpired;
+    const barColor = expired ? G.fgSecondary : pct >= 100 ? colors.error : pct >= 80 ? colors.warning : colors.success;
+    return (
+      <TouchableOpacity key={budget.id} style={[s.budgetCard, { backgroundColor: G.bgCard, borderColor: expired ? colors.warning + '40' : G.border }]}
+        onPress={() => handleBudgetPress(budget.id)}>
+        <View style={s.budgetCardHeader}>
+          <View style={{ flex: 1 }}>
+            <AppText variant="body" weight="bold" style={{ color: G.fg }} numberOfLines={1}>{budget.name}</AppText>
+            <AppText variant="caption" style={{ color: G.fgSecondary, marginTop: 2 }}>
+              {budget.type} · {budget.period} · {budget.year}{budget.month ? `/${String(budget.month).padStart(2, '0')}` : ""}
+              {budget.endDate ? ` · ${t('budget.ends_on')} ${budget.endDate}` : ""}
+            </AppText>
+          </View>
+          {expired ? (
+            <StatusBadge status="over" />
+          ) : (
+            <StatusBadge status={pct >= 100 ? "exceeded" : pct >= 80 ? "near" : "within"} />
+          )}
+        </View>
+        <View style={[s.catBar, { backgroundColor: G.border, marginTop: 12 }]}>
+          <View style={[s.catBarFill, { width: `${Math.min(pct, 100)}%`, backgroundColor: barColor }]} />
+        </View>
+        <View style={s.budgetCardFooter}>
+          <AppNumber value={budget.totalActual} size="body" prefix={`${t('common.etb')} `} />
+          <AppNumber value={budget.totalPlanned} size="body" prefix={`${t('common.etb')} `} />
+        </View>
+      </TouchableOpacity>
+    );
   };
 
   const summary = dashboard || {};
@@ -349,43 +443,32 @@ const BudgetOverview = () => {
         </Animated.View>
         </TutorialTarget>
 
-        {/* Active Budgets */}
-        {summary.activeBudgets?.length > 0 && (
-          <TutorialTarget id="bud-trends">
-          <Animated.View entering={FadeInDown.duration(600).delay(300)} style={s.budgetsSection}>
-            <AppText variant="caption" weight="bold" transform="uppercase" style={[s.sectionTitle, { color: G.fgSecondary }]}>
-              {t("budget.budgets")}
-            </AppText>
-            {summary.activeBudgets.map((budget: any) => {
-              const pct = budget.totalPlanned > 0 ? Math.round((budget.totalActual / budget.totalPlanned) * 100) : 0;
-              return (
-                <TouchableOpacity key={budget.id} style={[s.budgetCard, { backgroundColor: G.bgCard, borderColor: G.border }]}
-                  onPress={() => handleBudgetPress(budget.id)}>
-                  <View style={s.budgetCardHeader}>
-                    <View style={{ flex: 1 }}>
-                      <AppText variant="body" weight="bold" style={{ color: G.fg }}>{budget.name}</AppText>
-                      <AppText variant="caption" style={{ color: G.fgSecondary, marginTop: 2 }}>
-                        {budget.type} · {budget.period} · {budget.year}{budget.month ? `/${String(budget.month).padStart(2, '0')}` : ""}
-                      </AppText>
-                    </View>
-                    <StatusBadge status={pct >= 100 ? "exceeded" : pct >= 80 ? "near" : "within"} />
-                  </View>
-                  <View style={[s.catBar, { backgroundColor: G.border, marginTop: 12 }]}>
-                    <View style={[s.catBarFill, {
-                      width: `${Math.min(pct, 100)}%`,
-                      backgroundColor: pct >= 100 ? colors.error : pct >= 80 ? colors.warning : colors.success
-                    }]} />
-                  </View>
-                  <View style={s.budgetCardFooter}>
-                    <AppNumber value={budget.totalActual} size="body" prefix={`${t('common.etb')} `} />
-                    <AppNumber value={budget.totalPlanned} size="body" prefix={`${t('common.etb')} `} />
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </Animated.View>
-          </TutorialTarget>
-        )}
+        {/* Budget Lifecycle Sections */}
+        <TutorialTarget id="bud-trends">
+        <Animated.View entering={FadeInDown.duration(600).delay(300)} style={s.budgetsSection}>
+          {lifecycleSections.map((section) =>
+            section.items.length > 0 ? (
+              <View key={section.key} style={{ marginBottom: 20 }}>
+                <View style={s.sectionHeaderRow}>
+                  <AppText variant="caption" weight="bold" transform="uppercase" style={[s.sectionTitle, { color: G.fgSecondary }]}>
+                    {section.label}
+                  </AppText>
+                  <AppText variant="micro" style={{ color: G.fgSecondary }}>({section.items.length})</AppText>
+                </View>
+                {section.items.map((b: any) => renderBudgetCard(b))}
+              </View>
+            ) : null
+          )}
+          {lifecycle.active.length === 0 && lifecycle.expiringSoon.length === 0 && lifecycle.expired.length === 0 && lifecycle.archived.length === 0 && (
+            <View style={s.emptyState}>
+              <DollarSign size={48} color={G.border} />
+              <AppText variant="body" weight="bold" style={{ color: G.fgSecondary, marginTop: 12, textAlign: "center" }}>
+                {t('budget.no_budgets')}
+              </AppText>
+            </View>
+          )}
+        </Animated.View>
+        </TutorialTarget>
 
 
 
@@ -427,9 +510,11 @@ const BudgetOverview = () => {
                 <>
                   <View style={s.detailHeader}>
                     <AppText variant="title" weight="bold" style={{ color: G.fg, flex: 1 }} numberOfLines={1}>{selectedBudget.name}</AppText>
-                    <TouchableOpacity onPress={() => handleDeleteBudget(selectedBudget.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                      <X size={24} color={G.fgSecondary} />
-                    </TouchableOpacity>
+                    {!(selectedBudget.status === 'expired' || selectedBudget.status === 'archived' || selectedBudget.status === 'closed') ? (
+                      <TouchableOpacity onPress={() => handleDeleteBudget(selectedBudget.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                        <X size={24} color={G.fgSecondary} />
+                      </TouchableOpacity>
+                    ) : null}
                   </View>
 
                   <View style={[s.statsRow, { marginVertical: 20 }]}>
@@ -489,6 +574,84 @@ const BudgetOverview = () => {
                       </TouchableOpacity>
                     );
                   })}
+
+                  {(() => {
+                    const isHistoric = selectedBudget.status === 'expired' || selectedBudget.status === 'archived' || selectedBudget.status === 'closed';
+                    if (!isHistoric) return null;
+                    return (
+                      <View style={[s.historicBanner, { backgroundColor: colors.warning + '18', borderColor: colors.warning + '40' }]}>
+                        <AlertTriangle size={18} color={colors.warning} />
+                        <AppText variant="body-sm" weight="bold" style={{ color: G.fg, flex: 1, marginLeft: 10 }}>
+                          {selectedBudget.status === 'expired'
+                            ? (t('budget.expired_review') || 'This budget has expired. Renew it or create a new budget to keep tracking expenses.')
+                            : (t('budget.archived_review') || 'This budget has been archived. Its history stays saved.')}
+                        </AppText>
+                      </View>
+                    );
+                  })()}
+
+                  {(() => {
+                    const isHistoric = selectedBudget.status === 'expired' || selectedBudget.status === 'archived' || selectedBudget.status === 'closed';
+                    const stats = isHistoric ? selectedBudget.finalStats : null;
+                    if (!stats) return null;
+                    return (
+                      <View style={[s.finalStatsCard, { backgroundColor: G.bgCard, borderColor: G.border, marginTop: 16 }]}>
+                        <AppText variant="caption" weight="bold" transform="uppercase" style={[s.sectionTitle, { color: G.fgSecondary }]}>
+                          {t('budget.final_stats') || 'Final Stats'}
+                        </AppText>
+                        <View style={s.finalStatsRow}>
+                          <View style={[s.finalStat, { borderRightWidth: 1, borderRightColor: G.border }]}>
+                            <AppText variant="caption" style={{ color: G.fgSecondary }}>{t('budget.total_budget')}</AppText>
+                            <AppNumber value={stats.totalPlanned} size="body" prefix={`${t('common.etb')} `} />
+                          </View>
+                          <View style={[s.finalStat, { borderRightWidth: 1, borderRightColor: G.border }]}>
+                            <AppText variant="caption" style={{ color: G.fgSecondary }}>{t('budget.total_spent')}</AppText>
+                            <AppNumber value={stats.totalSpent} size="body" prefix={`${t('common.etb')} `} />
+                          </View>
+                          <View style={s.finalStat}>
+                            <AppText variant="caption" style={{ color: G.fgSecondary }}>{t('budget.remaining')}</AppText>
+                            <AppNumber value={stats.remaining} size="body" prefix={`${t('common.etb')} `} negative={stats.remaining < 0} />
+                          </View>
+                        </View>
+                        <View style={[s.finalStatsRow, { marginTop: 12 }]}>
+                          <View style={[s.finalStat, { borderRightWidth: 1, borderRightColor: G.border }]}>
+                            <AppText variant="caption" style={{ color: G.fgSecondary }}>{t('budget.percent_used')}</AppText>
+                            <AppNumber value={stats.percentUsed} size="body" suffix="%" />
+                          </View>
+                          <View style={s.finalStat}>
+                            <AppText variant="caption" style={{ color: G.fgSecondary }}>{t('budget.expense_count') || 'Expenses'}</AppText>
+                            <AppNumber value={stats.expenseCount} size="body" />
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })()}
+
+                  <View style={s.actionRow}>
+                    <TouchableOpacity
+                      style={[s.actionBtn, { backgroundColor: G.fg, marginRight: 8 }]}
+                      onPress={() => { setShowDetailModal(false); setShowCreateModal(true); }}
+                    >
+                      <Plus size={16} color={G.bg} />
+                      <AppText variant="body-sm" weight="bold" style={{ color: G.bg, marginLeft: 6 }}>{t('budget.create_new') || 'Create New'}</AppText>
+                    </TouchableOpacity>
+                    {selectedBudget.status !== 'archived' && (
+                      <TouchableOpacity
+                        style={[s.actionBtn, { backgroundColor: colors.success, marginRight: 8 }]}
+                        onPress={() => handleRenewBudget(selectedBudget)}
+                      >
+                        <AppText variant="body-sm" weight="bold" style={{ color: '#ffffff' }}>{t('budget.renew') || 'Renew'}</AppText>
+                      </TouchableOpacity>
+                    )}
+                    {selectedBudget.status !== 'archived' && (
+                      <TouchableOpacity
+                        style={[s.actionBtn, { backgroundColor: G.bgCard, borderWidth: 1, borderColor: G.border }]}
+                        onPress={() => handleArchiveBudget(selectedBudget)}
+                      >
+                        <AppText variant="body-sm" weight="bold" style={{ color: G.fgSecondary }}>{t('budget.archive') || 'Archive'}</AppText>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </>
               )}
             </ScrollView>
@@ -663,9 +826,16 @@ const s = StyleSheet.create({
   catBarFill: { height: "100%", borderRadius: 3 },
   catFooter: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   budgetsSection: { marginHorizontal: 24, marginTop: 24 },
+  sectionHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   budgetCard: { borderRadius: 18, padding: 18, borderWidth: 1, marginBottom: 10, overflow: "hidden" },
   budgetCardHeader: { flexDirection: "row", alignItems: "flex-start" },
   budgetCardFooter: { flexDirection: "row", justifyContent: "space-between", marginTop: 8 },
+  historicBanner: { flexDirection: "row", alignItems: "center", borderRadius: 16, borderWidth: 1, padding: 16, marginTop: 16 },
+  finalStatsCard: { borderRadius: 18, padding: 18, borderWidth: 1 },
+  finalStatsRow: { flexDirection: "row", flexWrap: "wrap" },
+  finalStat: { minWidth: 110, paddingVertical: 6, paddingRight: 12 },
+  actionRow: { flexDirection: "row", flexWrap: "wrap", marginTop: 20 },
+  actionBtn: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14 },
   badge: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, gap: 4 },
   badgeDot: { width: 6, height: 6, borderRadius: 3 },
   emptyState: { alignItems: "center", paddingVertical: 60 },

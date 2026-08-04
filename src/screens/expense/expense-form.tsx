@@ -30,6 +30,7 @@ import {
   getBudgets,
   getBudgetCategorySpending,
   getActiveBudgetForExpenses,
+  isBudgetExpired,
 } from '@/database/db';
 import { notifyExpenseRecorded, notifyExpensePushedBudgetOverLimit, notifyLargeExpense } from '@/services/notificationService';
 import { useSettings } from '@/context/SettingsContext';
@@ -212,6 +213,17 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
     }
 
     const activeBudget = getActiveBudgetForExpenses();
+    const budgetIdToCheck = selectedBudgetId ?? activeBudget?.id ?? null;
+    if (budgetIdToCheck && !isRecurring && isBudgetExpired(budgetIdToCheck)) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      playBad();
+      await dialog.alert({
+        title: t('budget.expired') || 'Budget Expired',
+        message: t('budget.expired_block_message') || 'This budget has expired. Please renew it or create a new budget before recording additional expenses.',
+        iconType: 'warning',
+      });
+      return;
+    }
     if (!activeBudget && !isRecurring) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       playBad();

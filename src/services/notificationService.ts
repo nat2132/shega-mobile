@@ -30,6 +30,9 @@ import {
   getBudgetWithCategoryProgress,
   getCurrentMonthBudget,
   getRecurringTemplates,
+  getBudgetLifecycle,
+  getBudgetFinalStats,
+  expireOverdueBudgets,
 } from '@/database/db';
 
 // â”€â”€ Inventory triggers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -640,6 +643,45 @@ export const checkBudgetThresholds = (): AppNotification[] => {
           if (n) created.push(n);
         }
       }
+
+      // Budget-level thresholds (overall usage of the active budget).
+      if (progress.totalPlanned > 0) {
+        const overallPct = progress.percentUsed || 0;
+        if (overallPct >= 100) {
+          const n = notifyBudgetApproachingLimit({
+            categoryName: progress.name,
+            budgetName: progress.name,
+            percentUsed: overallPct,
+            budgetId: budget.id,
+            categoryId: 0,
+            spent: progress.totalSpent || 0,
+            planned: progress.totalPlanned,
+          });
+          if (n) created.push(n);
+        } else if (overallPct >= 90) {
+          const n = notifyBudgetApproachingLimit({
+            categoryName: progress.name,
+            budgetName: progress.name,
+            percentUsed: overallPct,
+            budgetId: budget.id,
+            categoryId: 0,
+            spent: progress.totalSpent || 0,
+            planned: progress.totalPlanned,
+          });
+          if (n) created.push(n);
+        } else if (overallPct >= 80) {
+          const n = notifyBudgetApproachingLimit({
+            categoryName: progress.name,
+            budgetName: progress.name,
+            percentUsed: overallPct,
+            budgetId: budget.id,
+            categoryId: 0,
+            spent: progress.totalSpent || 0,
+            planned: progress.totalPlanned,
+          });
+          if (n) created.push(n);
+        }
+      }
     }
     return created;
   } catch (e) {
@@ -648,38 +690,99 @@ export const checkBudgetThresholds = (): AppNotification[] => {
   }
 };
 
+export const notifyBudgetExpired = (data: {
+  budgetId: number;
+  budgetName: string;
+  endDate: string;
+  totalPlanned: number;
+  totalSpent: number;
+  remaining: number;
+  percentUsed: number;
+  expenseCount: number;
+}): AppNotification | null => {
+  return createNotification({
+    type: 'budget_expired',
+    category: 'budget',
+    priority: 'high',
+    title: 'Budget Expired',
+    message: `${data.budgetName} has ended. Renew it or create a new budget to keep tracking expenses.`,
+    icon: 'alert-triangle',
+    deepLink: '/(tabs)/budget',
+    data: {
+      budgetId: data.budgetId,
+      budgetName: data.budgetName,
+      name: data.budgetName,
+      endDate: data.endDate,
+      totalPlanned: data.totalPlanned,
+      totalSpent: data.totalSpent,
+      remaining: data.remaining,
+      percentUsed: data.percentUsed,
+      expenseCount: data.expenseCount,
+      titleKey: 'notif.title.budget_expired',
+      messageKey: 'notif.message.budget_expired',
+    },
+    groupKey: `budget-expired-${data.budgetId}`,
+    requiresAction: true,
+  });
+};
+
+export const checkExpiredBudgets = (): AppNotification[] => {
+  try {
+    const lifecycle = getBudgetLifecycle();
+    if (!lifecycle.expired.length) return [];
+    const created: AppNotification[] = [];
+    for (const budget of lifecycle.expired) {
+      const stats = getBudgetFinalStats(budget.id);
+      const n = notifyBudgetExpired({
+        budgetId: budget.id,
+        budgetName: budget.name,
+        endDate: budget.endDate,
+        totalPlanned: stats?.totalPlanned || 0,
+        totalSpent: stats?.totalSpent || 0,
+        remaining: stats?.remaining || 0,
+        percentUsed: stats?.percentUsed || 0,
+        expenseCount: stats?.expenseCount || 0,
+      });
+      if (n) created.push(n);
+    }
+    return created;
+  } catch (e) {
+    console.error('checkExpiredBudgets error:', e);
+    return [];
+  }
+};
+
 export const checkEndingBudgets = (): AppNotification[] => {
   try {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth() + 1;
-    const summary = getMonthlyBudgetSummary(currentYear, currentMonth);
-    if (!summary?.hasBudget || !summary.budgetId) return [];
-    const remaining = summary.remaining || 0;
-    if (remaining > 0) return [];
-    const daysLeft = new Date(currentYear, currentMonth, 0).getDate() - now.getDate();
-    if (daysLeft > 3) return [];
-    const n = createNotification({
-      type: 'budget_ending',
-      category: 'budget',
-      priority: daysLeft <= 1 ? 'high' : 'normal',
-      title: 'Budget Period Ending',
-      message: `Your ${summary.budgetName || 'monthly'} budget ends in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}.`,
-      icon: 'clock',
-      deepLink: '/(tabs)/budget',
-      data: {
-        budgetId: summary.budgetId,
-        daysLeft,
-        days: daysLeft,
-        budgetName: summary.budgetName,
-        name: summary.budgetName,
-        remaining,
-        titleKey: 'notif.title.budget_ending',
-        messageKey: 'notif.message.budget_ending',
-      },
-      groupKey: `budget-ending-${summary.budgetId}-${currentYear}-${currentMonth}`,
-    });
-    return n ? [n] : [];
+    const lifecycle = getBudgetLifecycle();
+    if (!lifecycle.expiringSoon.length) return [];
+    const created: AppNotification[] = [];
+    for (const budget of lifecycle.expiringSoon) {
+      const daysLeft = budget.daysLeft || 0;
+      const n = createNotification({
+        type: 'budget_ending',
+        category: 'budget',
+        priority: daysLeft <= 1 ? 'high' : 'normal',
+        title: 'Budget Period Ending',
+        message: `Your ${budget.name} budget ends in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}.`,
+        icon: 'clock',
+        deepLink: '/(tabs)/budget',
+        data: {
+          budgetId: budget.id,
+          daysLeft,
+          days: daysLeft,
+          budgetName: budget.name,
+          name: budget.name,
+          remaining: (Number(budget.totalPlanned) || 0) - (Number(budget.totalActual) || 0),
+          endDate: budget.endDate,
+          titleKey: 'notif.title.budget_ending',
+          messageKey: 'notif.message.budget_ending',
+        },
+        groupKey: `budget-ending-${budget.id}-${budget.endDate}`,
+      });
+      if (n) created.push(n);
+    }
+    return created;
   } catch (e) {
     console.error('checkEndingBudgets error:', e);
     return [];
@@ -1124,6 +1227,7 @@ export const notifyBudgetReviewReminder = (data: {
 
 export const runAllNotificationChecks = (): AppNotification[] => {
   const all: AppNotification[] = [];
+  try { expireOverdueBudgets(); } catch (e) { console.error('expireOverdueBudgets in runAllNotificationChecks error:', e); }
   all.push(...checkLowStock());
   all.push(...checkExpiringItems());
   all.push(...checkOutstandingDebts());
@@ -1133,6 +1237,7 @@ export const runAllNotificationChecks = (): AppNotification[] => {
   all.push(...checkRecurringDueTomorrow());
   all.push(...checkExpiredTemplates());
   all.push(...checkBudgetThresholds());
+  all.push(...checkExpiredBudgets());
   all.push(...checkEndingBudgets());
   all.push(...checkNoActiveBudget());
   all.push(...checkInactiveBudgetCategories());
