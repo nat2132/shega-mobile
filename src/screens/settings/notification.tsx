@@ -4,7 +4,6 @@
 //   - Push notification sound
 //   - Vibration
 //   - Quiet hours
-//   - Test push + test toast
 
 import React, { useEffect } from 'react';
 import {
@@ -16,15 +15,12 @@ import {
   View,
 } from 'react-native';
 import Constants from 'expo-constants';
-import * as Haptics from 'expo-haptics';
 import {
   Bell,
-  BellRing,
   Calendar,
   CheckCircle2,
   Clock,
   LineChart,
-  MessageSquare,
   Package,
   Shield,
   Volume2,
@@ -36,7 +32,6 @@ import {
 } from 'lucide-react-native';
 import { Fonts } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
-import { useToast } from '@/context/ToastContext';
 import { useNotificationCenter } from '@/context/NotificationContext';
 import { useRouter } from 'expo-router';
 import { AppText, AppNumber} from '@/components/ui';
@@ -51,17 +46,14 @@ try {
     setNotificationHandler: async () => {},
     getPermissionsAsync: async () => ({ status: 'undetermined' }),
     requestPermissionsAsync: async () => ({ status: 'undetermined' }),
-    scheduleNotificationAsync: async () => 'noop',
-    SchedulableTriggerInputTypes: { TIME_INTERVAL: 'timeInterval' },
   };
 }
 const NotificationSettings = () => {
   const { notifications, setNotifications, colors, t } = useSettings();
   const G = getSettingsGlass(colors);
-  const { showToast } = useToast();
   const { preferences, updatePreference, reminders } = useNotificationCenter();
   const router = useRouter();
-  const tutorial = useTutorial({ tutorial: notificationSettingsTutorial });
+  useTutorial({ tutorial: notificationSettingsTutorial });
 
   const getPref = (key: string) =>
     preferences.find((p) => p.key === key) || {
@@ -97,31 +89,6 @@ const NotificationSettings = () => {
 
   const toggle = (key: keyof typeof notifications) => {
     setNotifications({ ...notifications, [key]: !notifications[key] });
-  };
-
-  const triggerPushNotification = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const isExpoGo = Constants.appOwnership === 'expo';
-    if (isExpoGo && Platform.OS === 'android') {
-      showToast(t('notif.push_disabled'), 'error');
-      return;
-    }
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: t('notif.test_alert_title'),
-        body: t('notif.test_push_msg'),
-        sound: true,
-      },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-        seconds: 2,
-      },
-    });
-    showToast({ title: t('notif.test_scheduled_title'), message: t('notif.test_scheduled'), type: 'success' });
-  };
-
-  const triggerPopupNotification = () => {
-    showToast({ title: t('notif.test_popup_title'), message: t('notif.test_popup_msg'), type: 'info' });
   };
 
   const AlertCard = ({ title, subtitle, value, onValueChange, icon: Icon }: any) => (
@@ -161,24 +128,6 @@ const NotificationSettings = () => {
         </AppText>
         <AppText variant="display" weight="bold" style={[styles.mainTitle, { color: G.fg }]} numberOfLines={2}>{t('settings.notifications')}</AppText>
         </TutorialTarget>
-
-        {/* Test buttons */}
-        <View style={styles.testButtonsContainer}>
-          <TouchableOpacity
-            style={[styles.testButton, { backgroundColor: G.bgCard, borderColor: G.border }]}
-            onPress={triggerPopupNotification}
-          >
-            <MessageSquare size={18} color={G.fg} />
-            <AppText variant="body" weight="bold" style={[styles.testButtonText, { color: G.fg }]} numberOfLines={1}>{t('notif.test_pop_up')}</AppText>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.testButton, { backgroundColor: G.fg, borderColor: G.fg }]}
-            onPress={triggerPushNotification}
-          >
-            <BellRing size={18} color={G.bg} />
-            <AppText variant="body" weight="bold" style={[styles.testButtonText, { color: G.bg }]} numberOfLines={1}>{t('notif.test_push')}</AppText>
-          </TouchableOpacity>
-        </View>
 
         {/* Global delivery */}
         <View style={styles.sectionHeader}>
@@ -402,7 +351,7 @@ const NotificationSettings = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: 25 },
+  container: { flex: 1 },
   headerLabel: {
     fontFamily: Fonts.bold,
     fontWeight: '700',
@@ -415,18 +364,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 20,
   },
-  testButtonsContainer: { flexDirection: 'row', gap: 10, marginBottom: 10 },
-  testButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 8,
-  },
-  testButtonText: { fontSize: 14, fontFamily: Fonts.bold, fontWeight: '700' },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',

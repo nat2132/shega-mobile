@@ -1252,24 +1252,45 @@ export const notifyBudgetReviewReminder = (data: {
 
 // â”€â”€ Master "run all" trigger used at app start / on refresh â”€â”€â”€â”€â”€â”€â”€â”€
 
-export const runAllNotificationChecks = (): AppNotification[] => {
+export interface NotificationGate {
+  stock?: boolean;
+  expiration?: boolean;
+  daily?: boolean;
+  credit?: boolean;
+  debt?: boolean;
+  budget?: boolean;
+  budgetStatus?: boolean;
+  expense?: boolean;
+  largeExpense?: boolean;
+  recurring?: boolean;
+  weeklySummary?: boolean;
+  monthlySummary?: boolean;
+}
+
+export const runAllNotificationChecks = (settings?: NotificationGate): AppNotification[] => {
   const all: AppNotification[] = [];
   try { expireOverdueBudgets(); } catch (e) { console.error('expireOverdueBudgets in runAllNotificationChecks error:', e); }
-  all.push(...checkLowStock());
-  all.push(...checkExpiringItems());
-  all.push(...checkOutstandingDebts());
-  all.push(...checkUnpaidSuppliers());
-  all.push(...checkOverdueExpenses());
-  all.push(...checkRecurringExpenses());
-  all.push(...checkRecurringDueTomorrow());
-  all.push(...checkExpiredTemplates());
-  all.push(...checkBudgetThresholds());
-  all.push(...checkExpiredBudgets());
-  all.push(...checkEndingBudgets());
-  all.push(...checkNoActiveBudget());
-  all.push(...checkInactiveBudgetCategories());
-  all.push(...checkSupplierPriceChanges());
-  all.push(...checkSupplierPeriodicReview());
+  if (settings?.stock !== false) all.push(...checkLowStock());
+  if (settings?.expiration !== false) all.push(...checkExpiringItems());
+  if (settings?.debt !== false) all.push(...checkOutstandingDebts());
+  if (settings?.credit !== false) {
+    all.push(...checkUnpaidSuppliers());
+    all.push(...checkSupplierPriceChanges());
+    all.push(...checkSupplierPeriodicReview());
+  }
+  if (settings?.expense !== false) all.push(...checkOverdueExpenses());
+  if (settings?.recurring !== false) {
+    all.push(...checkRecurringExpenses());
+    all.push(...checkRecurringDueTomorrow());
+    all.push(...checkExpiredTemplates());
+  }
+  if (settings?.budget !== false) {
+    all.push(...checkBudgetThresholds());
+    all.push(...checkExpiredBudgets());
+    all.push(...checkEndingBudgets());
+    all.push(...checkNoActiveBudget());
+    all.push(...checkInactiveBudgetCategories());
+  }
   return all;
 };
 

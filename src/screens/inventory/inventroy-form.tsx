@@ -155,6 +155,7 @@ const RestockFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?:
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [showSupplierModal, setShowSupplierModal] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<any>(null);
+  const [creditToggle, setCreditToggle] = useState<'Yes' | 'No'>('No');
   
   // Success modal state
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -174,7 +175,8 @@ const RestockFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?:
       supplierPhone,
       supplierCallEnabled,
       selectedSupplier,
-    }), [searchQuery, selectedItem, buyingPrice, unitSellingPrice, bulkSellingPrice, restockQty, supplierPhone, supplierCallEnabled, selectedSupplier]),
+      creditToggle,
+    }), [searchQuery, selectedItem, buyingPrice, unitSellingPrice, bulkSellingPrice, restockQty, supplierPhone, supplierCallEnabled, selectedSupplier, creditToggle]),
     getTitle: useCallback(() => (selectedItem?.name ? t('draft.restock_title', { name: selectedItem.name }) : t('draft.restock_default')), [selectedItem, t]),
     getSubtitle: useCallback(() => t('draft.restock_subtitle', { qty: restockQty || '0' }), [restockQty, t]),
     enabled: true,
@@ -202,6 +204,7 @@ const RestockFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?:
     setSupplierPhone(item.supplierPhone || '');
     setSupplierCallEnabled(!!item.supplierCallEnabled);
     setSupplierLog(false);
+    setCreditToggle('No');
     const linked = suppliers.find((s: any) => s.id === item.supplierId);
     setSelectedSupplier(linked || null);
   };
@@ -233,8 +236,8 @@ const RestockFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?:
       const unitPrice = parseFloat(buyingPrice) || selectedItem.basePurchasePrice || 0;
       const addedQty = qty * (selectedItem.unitsPerPack || 1);
       updates.purchaseUnitPrice = unitPrice;
-      updates.purchasePaymentStatus = 'Paid';
-      updates.purchasePaidAmount = unitPrice * addedQty;
+      updates.purchasePaymentStatus = creditToggle === 'Yes' ? 'Unpaid' : 'Paid';
+      updates.purchasePaidAmount = creditToggle === 'Yes' ? 0 : unitPrice * addedQty;
     }
 
     const success = updateItem(selectedItem.id, updates);
@@ -358,6 +361,7 @@ const RestockFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?:
               setRestockQty(d.restockQty || '1');
               setSupplierPhone(d.supplierPhone || '');
               setSupplierCallEnabled(d.supplierCallEnabled || false);
+              setCreditToggle(d.creditToggle || 'No');
               if (d.selectedItem) setSelectedItem(d.selectedItem);
               if (d.selectedSupplier) setSelectedSupplier(d.selectedSupplier);
               await draftFormDataRestock.remove(draft.id);
@@ -466,6 +470,36 @@ const RestockFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?:
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* Log as supplier credit */}
+          <View style={[styles.intelligenceBlock, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+            <View style={styles.blockHeader}>
+              <CreditCard size={20} color={colors.primary} />
+              <View style={{ flex: 1 }}>
+                <AppText variant="body" weight="bold" style={[styles.blockTitle, { color: G.fg }]} numberOfLines={2}>{t('form.supplier_credit')}</AppText>
+                <AppText variant="micro" weight="medium" style={{ color: G.fgSecondary, marginTop: 2 }} numberOfLines={2}>{t('form.log_as_supplier_desc')}</AppText>
+              </View>
+              <TouchableOpacity
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setCreditToggle(creditToggle === 'Yes' ? 'No' : 'Yes'); }}
+                style={[styles.switch, { backgroundColor: creditToggle === 'Yes' ? G.fg : G.border }]}
+              >
+                <View style={[styles.switchThumb, { backgroundColor: G.bg, left: creditToggle === 'Yes' ? 24 : 2 }]} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {creditToggle === 'Yes' && selectedSupplier && (
+            <Animated.View entering={FadeInDown} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 5 }}>
+              <Phone size={14} color={G.fgSecondary} />
+              <AppText variant="body-sm" weight="medium" style={{ color: G.fgSecondary, flex: 1 }} numberOfLines={1}>
+                {selectedSupplier.phone || supplierPhone}
+              </AppText>
+              <CreditCard size={14} color={G.fgSecondary} />
+              <AppText variant="body-sm" weight="medium" style={{ color: G.fgSecondary }} numberOfLines={1}>
+                {selectedSupplier.accountNumber || selectedItem.supplierAccount}
+              </AppText>
+            </Animated.View>
+          )}
         </Animated.View>
 
         {/* Save button */}

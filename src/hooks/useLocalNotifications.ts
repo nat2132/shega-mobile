@@ -213,6 +213,22 @@ export const useLocalNotifications = (): LocalNotificationState & {
         const soundPref = allPrefs.find(p => p.key === 'sound');
         const shouldPlaySound = soundPref ? soundPref.enabled : true;
 
+        // 4. Check vibration preference (applied via the Android channel)
+        const vibrationPref = allPrefs.find(p => p.key === 'vibration');
+        const shouldVibrate = vibrationPref ? vibrationPref.enabled : true;
+        if (Platform.OS === 'android') {
+          try {
+            await Notifications.setNotificationChannelAsync('default', {
+              name: 'Default',
+              importance: Notifications.AndroidImportance.MAX,
+              vibrationPattern: shouldVibrate ? [0, 250, 250, 250] : [],
+              lightColor: '#5555557C',
+            });
+          } catch {
+            // ignore channel update failures
+          }
+        }
+
         const highest = latest.reduce((a, b) => {
           const rank: Record<string, number> = { critical: 0, high: 1, normal: 2, low: 3 };
           return (rank[a.priority] ?? 3) < (rank[b.priority] ?? 3) ? a : b;
