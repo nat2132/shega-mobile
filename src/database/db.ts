@@ -2524,7 +2524,7 @@ export const getDebtCustomers = () => {
         MIN(dueDate) as earliestDue,
         COUNT(*) as totalDebts
       FROM sales 
-      WHERE paymentStatus IN ('Debt', 'Order') AND customerName IS NOT NULL AND TRIM(customerName) != ''
+      WHERE paymentStatus = 'Debt' AND customerName IS NOT NULL AND TRIM(customerName) != ''
       GROUP BY TRIM(customerName), customerPhone
       ORDER BY oweAmount DESC
     `);
@@ -2541,7 +2541,7 @@ export const getDebtSales = (customerName?: string) => {
       SELECT sales.*, items.name as itemName, items.baseUnit
       FROM sales
       LEFT JOIN items ON sales.itemId = items.id
-      WHERE (paymentStatus IN ('Debt', 'Order', 'Loss') OR (paymentStatus = 'Paid' AND COALESCE(paidAmount, 0) > 0))
+      WHERE (paymentStatus IN ('Debt', 'Loss') OR (paymentStatus = 'Paid' AND COALESCE(paidAmount, 0) > 0))
     `;
     const params: any[] = [];
     if (customerName && customerName.trim()) {

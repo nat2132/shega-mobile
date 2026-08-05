@@ -1,3 +1,5 @@
+import { formatDate, parseLocalDate } from '@/utils/date-utils';
+
 export interface SearchResult {
   id: string;
   type: 'item' | 'sale' | 'expense' | 'adjustment' | 'budget' | 'category' | 'warehouse' | 'contact' | 'draft';
@@ -8,9 +10,15 @@ export interface SearchResult {
 }
 
 type TranslateFn = (key: string, params?: Record<string, string>) => string;
-type SearchFn = (query: string, t: TranslateFn) => SearchResult[];
+type SearchFn = (query: string, t: TranslateFn, calendarType: string, language: string) => SearchResult[];
 
-export function searchAll(query: string, t?: TranslateFn): SearchResult[] {
+const fmtDate = (value: string | null | undefined, calendarType: string, language: string): string => {
+  if (!value) return '';
+  const d = parseLocalDate(value);
+  return d ? formatDate(d, calendarType as any, language) : '';
+};
+
+export function searchAll(query: string, t?: TranslateFn, calendarType: string = 'gregorian', language: string = 'en'): SearchResult[] {
   if (!query.trim() || query.length < 1) return [];
   const q = query.toLowerCase().trim();
   const translate = t || ((key: string) => key);
@@ -30,7 +38,7 @@ export function searchAll(query: string, t?: TranslateFn): SearchResult[] {
   const seen = new Set<string>();
 
   for (const fn of searchers) {
-    for (const r of fn(q, translate)) {
+    for (const r of fn(q, translate, calendarType, language)) {
       const key = `${r.type}:${r.id}`;
       if (!seen.has(key)) {
         seen.add(key);
@@ -62,33 +70,33 @@ function searchItems(q: string, t: TranslateFn): SearchResult[] {
     }));
 }
 
-function searchSales(q: string, t: TranslateFn): SearchResult[] {
+function searchSales(q: string, t: TranslateFn, calendarType: string, language: string): SearchResult[] {
   const { getFilteredSales } = require('@/database/db');
   const sales = getFilteredSales({ search: q, sortBy: 'createdAt DESC', limit: 10 });
   return (sales || []).slice(0, 10).map((s: any) => ({
     id: `sale-${s.id}`,
     type: 'sale' as const,
     title: s.itemName || `${t('search.sale_id')} #${s.id}`,
-    subtitle: `ETB ${s.totalPrice || 0} • ${s.paymentStatus || t('search.paid')} • ${s.createdAt || ''}`,
+    subtitle: `${t('common.etb')} ${s.totalPrice || 0} • ${s.paymentStatus || t('search.paid')} • ${fmtDate(s.createdAt, calendarType, language)}`,
     route: 'sales',
     data: s,
   }));
 }
 
-function searchExpenses(q: string, t: TranslateFn): SearchResult[] {
+function searchExpenses(q: string, t: TranslateFn, calendarType: string, language: string): SearchResult[] {
   const { getFilteredExpenses } = require('@/database/db');
   const expenses = getFilteredExpenses({ search: q, sortBy: 'date DESC', limit: 10 });
   return (expenses || []).slice(0, 10).map((e: any) => ({
     id: `expense-${e.id}`,
     type: 'expense' as const,
     title: e.name || `${t('search.expense_id')} #${e.id}`,
-    subtitle: `ETB ${e.amount || 0} • ${e.category || ''} • ${e.date || ''}`,
+    subtitle: `${t('common.etb')} ${e.amount || 0} • ${e.category || ''} • ${fmtDate(e.date, calendarType, language)}`,
     route: 'expense',
     data: e,
   }));
 }
 
-function searchAdjustments(q: string, t: TranslateFn): SearchResult[] {
+function searchAdjustments(q: string, t: TranslateFn, calendarType: string, language: string): SearchResult[] {
   const { getFilteredAdjustments } = require('@/database/db');
   const adjustments = getFilteredAdjustments({ search: q, limit: 10 });
   return (adjustments || []).slice(0, 10).map((a: any) => {
@@ -97,7 +105,7 @@ function searchAdjustments(q: string, t: TranslateFn): SearchResult[] {
       id: `adj-${a.id}`,
       type: 'adjustment' as const,
       title: `${typeLabel} - ${a.itemName || ''}`,
-      subtitle: `${a.reason || ''} • ${a.date || ''}`,
+      subtitle: `${a.reason || ''} • ${fmtDate(a.date, calendarType, language)}`,
       route: 'adjustments',
       data: a,
     };
@@ -117,7 +125,7 @@ function searchBudgets(q: string, t: TranslateFn): SearchResult[] {
       id: `budget-${b.id}`,
       type: 'budget' as const,
       title: b.name,
-      subtitle: `${b.type || t('search.business')} • ${b.period || t('search.monthly')} • ETB ${b.totalPlanned || 0}`,
+      subtitle: `${b.type || t('search.business')} • ${b.period || t('search.monthly')} • ${t('common.etb')} ${b.totalPlanned || 0}`,
       route: 'budget',
       data: b,
     }));

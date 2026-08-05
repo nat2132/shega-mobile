@@ -138,7 +138,7 @@ const CategoryBarRow = React.memo(({ item, idx }: { item: any; idx: number }) =>
         </View>
       }
       title={safeName}
-      subtitle={`${safeCount} ${t('inv.items_suffix')}`}
+      subtitle={t('inv.items_suffix', { count: String(safeCount) })}
       titleMaxLines={2}
       subtitleMaxLines={1}
       noBorder

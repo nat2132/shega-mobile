@@ -3669,17 +3669,25 @@ const SalesActivityCard = React.memo(
     const isBatch = sale.isBatch;
     const isPayment = sale.batchId && String(sale.batchId).startsWith("PAY_");
     const customerLabel = sale.customerName || t("sales.walk_in_customer");
+    const paymentLabel = (method?: string) => {
+      if (!method) return t("suppliers.payment_cash");
+      const m = method.toLowerCase();
+      if (m === "cash") return t("suppliers.payment_cash");
+      if (m === "mobile") return t("suppliers.payment_mobile");
+      if (m === "credit") return t("suppliers.payment_credit");
+      return method;
+    };
     const itemDetail = isPayment
-      ? sale.paymentMethod || "Cash"
+      ? paymentLabel(sale.paymentMethod)
       : isBatch
-        ? (sale.itemCount || sale.quantity) +
-          " items • " +
-          (sale.paymentMethod || "Cash")
+        ? t("inv.items_suffix", { count: String(sale.itemCount || sale.quantity) }) +
+          " • " +
+          paymentLabel(sale.paymentMethod)
         : sale.quantity +
           " " +
           (sale.unit || "") +
           " • " +
-          (sale.paymentMethod || "Cash");
+          paymentLabel(sale.paymentMethod);
     const badgeColor = isPayment
       ? colors.success
       : isCancelled
@@ -3696,7 +3704,7 @@ const SalesActivityCard = React.memo(
       : isCancelled
         ? t("sale.cancelled")
         : isOrder
-          ? "Order"
+          ? t("sale.order")
           : isPaid
             ? t("sales.payment_paid")
             : t("sales.payment_debt");

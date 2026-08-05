@@ -177,7 +177,7 @@ const SearchResultRow = React.memo(({
 SearchResultRow.displayName = 'SearchResultRow';
 
 export function UniversalSearch({ visible, onClose, onNavigate }: UniversalSearchProps) {
-  const { colors, t } = useSettings();
+  const { colors, t, calendarType, language } = useSettings();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isFocused, setIsFocused] = useState(false);
@@ -199,13 +199,13 @@ export function UniversalSearch({ visible, onClose, onNavigate }: UniversalSearc
   useEffect(() => {
     const timer = setTimeout(() => {
       if (query.trim()) {
-        setResults(searchAll(query, t));
+        setResults(searchAll(query, t, calendarType, language));
       } else {
         setResults([]);
       }
     }, 200);
     return () => clearTimeout(timer);
-  }, [query, t]);
+  }, [query, t, calendarType, language]);
 
   const grouped = useMemo(() => results.reduce((acc, r) => {
     if (!acc[r.type]) acc[r.type] = [];

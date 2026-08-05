@@ -1871,7 +1871,7 @@ const SaleDetailsScreen = ({
             <TouchableOpacity
               style={[
                 styles.primaryAction,
-                { backgroundColor: colors.success, flex: 1 },
+                { backgroundColor: colors.success + "15", flex: 1 },
               ]}
               onPress={() => {
                 const ref = sale.batchId || sale.id;
@@ -1886,12 +1886,12 @@ const SaleDetailsScreen = ({
                 }
               }}
             >
-              <Check size={18} color={SALES_GLASS.fg} />
+              <Check size={18} color={colors.success} />
               <AppText
                 variant="body"
                 weight="bold"
                 shrink={false}
-                style={[styles.actionText, { color: SALES_GLASS.fg }]}
+                style={[styles.actionText, { color: colors.success }]}
                 numberOfLines={1}
               >
                 {t("sale.convert_to_sale")}
@@ -1900,7 +1900,7 @@ const SaleDetailsScreen = ({
             <TouchableOpacity
               style={[
                 styles.primaryAction,
-                { backgroundColor: colors.warning, flex: 1 },
+                { backgroundColor: colors.warning + "18", flex: 1 },
               ]}
               onPress={() => {
                 const ref = sale.batchId || sale.id;
@@ -1915,12 +1915,12 @@ const SaleDetailsScreen = ({
                 }
               }}
             >
-              <CreditCard size={18} color={SALES_GLASS.fg} />
+              <CreditCard size={18} color={colors.warning} />
               <AppText
                 variant="body"
                 weight="bold"
                 shrink={false}
-                style={[styles.actionText, { color: SALES_GLASS.fg }]}
+                style={[styles.actionText, { color: colors.warning }]}
                 numberOfLines={1}
               >
                 {t("sale.convert_to_debt")}
@@ -1930,7 +1930,7 @@ const SaleDetailsScreen = ({
           <TouchableOpacity
             style={[
               styles.primaryAction,
-              { backgroundColor: colors.error, marginTop: 10 },
+              { backgroundColor: colors.error + "12", marginTop: 10 },
             ]}
             onPress={() => {
               const ref = sale.batchId || sale.id;
@@ -1945,12 +1945,12 @@ const SaleDetailsScreen = ({
               }
             }}
           >
-            <X size={18} color={SALES_GLASS.fg} />
+            <X size={18} color={colors.error} />
             <AppText
               variant="body"
               weight="bold"
               shrink={false}
-              style={[styles.actionText, { color: SALES_GLASS.fg }]}
+              style={[styles.actionText, { color: colors.error }]}
               numberOfLines={1}
             >
               {t("sale.cancel_order")}
