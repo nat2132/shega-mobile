@@ -12,18 +12,19 @@ import {
   getUpcomingRecurringExpenses,
   getRecurringTemplates,
   getMonthlyBudgetSummary,
+  getAllBudgetsSummary,
   getBudgets,
   getBudgetWithCategoryProgress,
   getActiveBudgetForExpenses,
   checkBudgetPeriodEnd,
   getBudgetSpendingAlerts,
   insertBudget,
-  insertBudgetCategory,
   duplicateBudget,
 } from '@/database/db';
 import { notifyRecurringMarkedPaid } from '@/services/notificationService';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useAutoHideScroll } from '@/hooks/useAutoHideScroll';
 import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
@@ -60,6 +61,7 @@ import ExpenseDetailsScreen from './expense-details';
 import ExpenseFormScreen from './expense-form';
 import ExpenseListScreen from './expense-list';
 import { getExpenseGlass } from './glass-expense';
+import { formatDate } from '@/utils/date-utils';
 import { LineChartSkeleton} from '@/components/ChartSkeleton';
 import { ChartEmpty } from '@/components/ChartStateView';
 import { AppNumber, AppText } from '@/components/ui';
@@ -80,8 +82,9 @@ const PointerLabel = (items: any) => {
 
   const CapitalHub = ({ filterCategory }: { filterCategory?: string }) => {
     const { openSidebar } = useSidebar();
-    const { userProfile, colors, t, language, timeSystem } = useSettings();
+    const { userProfile, colors, t, language, timeSystem, calendarType } = useSettings();
     const G = getExpenseGlass(colors);
+    const hideFABStyle = useAutoHideScroll();
     const { notifCount } = useNotifications();
     _tooltipCtx.colors = colors;
     _tooltipCtx.t = t;
@@ -183,7 +186,7 @@ const PointerLabel = (items: any) => {
         setMonthSummary(baseSummary);
       }
     } else {
-      setMonthSummary(baseSummary);
+      setMonthSummary(getAllBudgetsSummary());
     }
   }, [dateFilterMode, language, expenseBudgetId, timeSystem]);
 
@@ -265,9 +268,9 @@ const PointerLabel = (items: any) => {
       period: budgetPeriod as any,
       year: now.getFullYear(),
       month: budgetPeriod === "monthly" || budgetPeriod === "quarterly" ? now.getMonth() + 1 : undefined,
+      plannedAmount: amount,
     });
     if (budgetId) {
-      insertBudgetCategory(budgetId, { category: 'General', plannedAmount: amount });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
     setBudgetSetupLoading(false);
@@ -296,6 +299,14 @@ const PointerLabel = (items: any) => {
   };
 
   const budgetSummary = monthSummary;
+
+  // Status for whatever the budget selector is showing: the selected budget, or
+  // the all-budgets aggregate. Derived from percentUsed so the badge/progress
+  // stay consistent with the numbers shown (unlike activeBudget, which is
+  // always the current-period budget regardless of the selector).
+  const viewBudgetStatus = budgetSummary
+    ? (budgetSummary.percentUsed >= 100 ? 'over_budget' : budgetSummary.percentUsed >= 80 ? 'warning' : 'on_track')
+    : 'on_track';
 
   const displayTransactions = useMemo(() => {
     if (searchResults !== null) return searchResults ?? [];
@@ -524,7 +535,7 @@ const PointerLabel = (items: any) => {
                 onPress={() => setExpenseBudgetId(null)}
               >
                 <AppText variant="body-sm" weight="bold" style={[styles.budgetChipText, { color: expenseBudgetId === null ? G.bg : G.fg }]} numberOfLines={1}>
-                  All Budgets
+                  {t('budget.all_budgets')}
                 </AppText>
               </TouchableOpacity>
               {allBudgets.map((b) => (
@@ -572,7 +583,7 @@ const PointerLabel = (items: any) => {
           </View>
 
           {/* Budget Summary Card */}
-          {budgetSummary && budgetSummary.hasBudget && activeBudget && (
+          {budgetSummary && budgetSummary.hasBudget && (
             <TutorialTarget id="exp-budget">
             <TouchableOpacity
               style={[styles.budgetSummaryRow, { borderTopColor: G.border }]}
@@ -582,12 +593,12 @@ const PointerLabel = (items: any) => {
                 <View style={styles.budgetSummaryHeader}>
                   <DollarSign size={16} color={G.muted} />
                   <AppText variant="caption" weight="bold" style={{ color: G.fgSecondary, marginLeft: 6 }}>
-                    {budgetSummary.budgetName || 'Budget'}
+                    {budgetSummary.budgetName || t('budget.all_budgets')}
                   </AppText>
-                  <View style={[styles.budgetStatusBadge, { backgroundColor: getStatusColor(activeBudget.budgetStatus) + '20' }]}>
-                    <View style={[styles.budgetStatusDot, { backgroundColor: getStatusColor(activeBudget.budgetStatus) }]} />
-                    <AppText variant="micro" weight="bold" style={{ color: getStatusColor(activeBudget.budgetStatus), marginLeft: 4 }}>
-                      {getStatusLabel(activeBudget.budgetStatus)}
+                  <View style={[styles.budgetStatusBadge, { backgroundColor: getStatusColor(viewBudgetStatus) + '20' }]}>
+                    <View style={[styles.budgetStatusDot, { backgroundColor: getStatusColor(viewBudgetStatus) }]} />
+                    <AppText variant="micro" weight="bold" style={{ color: getStatusColor(viewBudgetStatus), marginLeft: 4 }}>
+                      {getStatusLabel(viewBudgetStatus)}
                     </AppText>
                   </View>
                 </View>
@@ -598,7 +609,7 @@ const PointerLabel = (items: any) => {
                   </View>
                   <View style={styles.budgetStatItem}>
                     <AppText variant="micro" weight="medium" style={{ color: G.muted }}>{t('expense.spent') || 'Spent'}</AppText>
-                    <AppNumber value={budgetSummary.totalSpent} size="body-sm" weight="bold" prefix={t('common.etb') + ' '} style={{ color: activeBudget.budgetStatus === 'over_budget' ? colors.error : G.fg }} />
+                    <AppNumber value={budgetSummary.totalSpent} size="body-sm" weight="bold" prefix={t('common.etb') + ' '} style={{ color: viewBudgetStatus === 'over_budget' ? colors.error : G.fg }} />
                   </View>
                   <View style={styles.budgetStatItem}>
                     <AppText variant="micro" weight="medium" style={{ color: G.muted }}>{t('budget.remaining') || 'Remaining'}</AppText>
@@ -609,13 +620,13 @@ const PointerLabel = (items: any) => {
                   <View style={[styles.budgetBarBg, { backgroundColor: G.border }]}>
                     <View style={[styles.budgetBarFill, {
                       width: `${Math.min(budgetSummary.percentUsed, 100)}%`,
-                      backgroundColor: activeBudget.budgetStatus === 'over_budget' ? colors.error : activeBudget.budgetStatus === 'warning' ? colors.warning : colors.success
+                      backgroundColor: viewBudgetStatus === 'over_budget' ? colors.error : viewBudgetStatus === 'warning' ? colors.warning : colors.success
                     }]} />
                   </View>
                 </View>
                 <View style={styles.budgetStatsRow}>
                   <AppNumber value={budgetSummary.totalSpent} size="caption" prefix={t('common.etb') + ' '} />
-                  <AppText variant="caption" weight="bold" style={{ color: activeBudget.budgetStatus === 'over_budget' ? colors.error : activeBudget.budgetStatus === 'warning' ? colors.warning : colors.success }}>
+                  <AppText variant="caption" weight="bold" style={{ color: viewBudgetStatus === 'over_budget' ? colors.error : viewBudgetStatus === 'warning' ? colors.warning : colors.success }}>
                     {budgetSummary.percentUsed}%
                   </AppText>
                   <AppNumber value={budgetSummary.remaining} size="caption" prefix={t('common.etb') + ' '} suffix=" left" />
@@ -713,7 +724,7 @@ const PointerLabel = (items: any) => {
                   <AppText variant="body-sm" weight="bold" style={{ color: G.fg }}>{item.name}</AppText>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <AppNumber value={item.amount} size="caption" prefix={t('common.etb') + ' '} />
-                    <AppText variant="caption" style={{ color: G.muted }}> · due {item.nextBillingDate}</AppText>
+                    <AppText variant="caption" style={{ color: G.muted }}> · due {formatDate(new Date(item.nextBillingDate), calendarType, language)}</AppText>
                   </View>
                 </View>
                 <Calendar size={16} color={G.muted} />
@@ -787,7 +798,7 @@ const PointerLabel = (items: any) => {
                     {item.name || item.category}
                   </AppText>
                   <AppText variant="caption" style={{ color: G.muted }}>
-                    {item.category} · {item.date}
+                    {item.category} · {formatDate(new Date(item.date), calendarType, language)}
                   </AppText>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
@@ -825,7 +836,7 @@ const PointerLabel = (items: any) => {
       </TutorialScrollView>
 
       {/* Expanding Smart FAB */}
-      <View style={styles.dockedBarWrapper}>
+      <Animated.View style={[styles.dockedBarWrapper, hideFABStyle]}>
         <Animated.View style={[expandStyle, { height: 60, borderRadius: 30, overflow: 'hidden' }]}>
           <View style={[styles.dockedBar, { borderColor: G.borderLight, backgroundColor: G.bgCardStrong, paddingHorizontal: isBarExpanded ? 12 : 0 }]}>
             {isBarExpanded && (
@@ -855,7 +866,7 @@ const PointerLabel = (items: any) => {
             )}
           </View>
         </Animated.View>
-      </View>
+      </Animated.View>
 
       {/* Expense Form Modal */}
       <Modal visible={showExpenseForm} transparent animationType="slide" onRequestClose={() => setShowExpenseForm(false)}>

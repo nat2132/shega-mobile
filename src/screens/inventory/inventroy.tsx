@@ -22,6 +22,7 @@ import {
   updateItem
 } from '@/database/db';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useAutoHideScroll } from '@/hooks/useAutoHideScroll';
 import { formatNumber } from '@/utils/formatNumber';
 import * as Haptics from 'expo-haptics';
 import * as Print from 'expo-print';
@@ -195,6 +196,7 @@ const InventoryDashboard = () => {
   const { userProfile, colors, t } = useSettings();
   const G = getInventoryGlass(colors);
   const { notifCount } = useNotifications();
+  const hideFABStyle = useAutoHideScroll();
   const { activeWarehouseId, warehouses } = useWarehouse();
   const tutorial = useTutorial({ tutorial: inventoryTutorial });
   const dialog = useDialog();
@@ -589,7 +591,7 @@ const loadRecentItems = () => {
       </Animated.View>
 
       {/* Expanding Smart FAB */}
-      <View style={styles.dockedBarWrapper}>
+      <Animated.View style={[styles.dockedBarWrapper, hideFABStyle]}>
         <Animated.View style={[expandStyle, { height: 60, borderRadius: 30, overflow: 'hidden' }]}>
           <View style={[styles.dockedBar, { backgroundColor: G.bgCardStrong, borderColor: G.borderLight, paddingHorizontal: isBarExpanded ? 10 : 0 }]}>
             {isBarExpanded && (
@@ -630,7 +632,7 @@ const loadRecentItems = () => {
             )}
           </View>
         </Animated.View>
-      </View>
+      </Animated.View>
 
       {/* View Stocks Bottom Sheet */}
       <Modal

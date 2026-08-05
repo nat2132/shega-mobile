@@ -62,9 +62,10 @@ import { useSidebar } from '@/context/SidebarContext';
 import { useTutorial, TutorialScrollView, TutorialTarget, TutorialButton } from '@/tutorials';
 import { dashboardTutorial } from '@/tutorials/definitions';
 import { useWarehouse } from '@/context/WarehouseContext';
-import { getActivityFeed, getAdjustmentById, getDashboardStats, getDebtCustomers, getExpenseById, getInventoryStats, getLowStockItems, getOnCreditItems, getRecentItems, getSaleWithItemsById, ItemData } from '@/database/db';
+import { getActivityFeed, getAdjustmentById, getDashboardStats, getDebtCustomers, getExpenseById, getInventoryStats, getLowStockItems, getOnCreditItems, getRecentItems, getSaleWithItemsById, getBudgetsOverBudget, ItemData } from '@/database/db';
 import { useBusinessAssistant } from '@/hooks/useBusinessAssistant';
 import { useBusinessHealthScore } from '@/hooks/useBusinessHealthScore';
+import { useAutoHideScroll } from '@/hooks/useAutoHideScroll';
 import { useNotifications } from '@/hooks/useNotifications';
 import { playBad } from '@/services/soundService';
 import { formatDate, toEthiopianHour } from '@/utils/date-utils';
@@ -185,6 +186,7 @@ SparklineChart.displayName = 'SparklineChart';
     const tutorial = useTutorial({ tutorial: dashboardTutorial });
     const G = getDashGlass(colors);
     const styles = useMemo(() => createStyles(G), [G]);
+    const hideFABStyle = useAutoHideScroll();
     const { notifCount } = useNotifications();
     const { showToast } = useToast();
     const dialog = useDialog();
@@ -210,6 +212,7 @@ SparklineChart.displayName = 'SparklineChart';
     const [debtCustomersCount, setDebtCustomersCount] = useState(0);
     const [creditItemsCount, setCreditItemsCount] = useState(0);
     const [lowStockCount, setLowStockCount] = useState(0);
+    const [overBudgetBudgets, setOverBudgetBudgets] = useState<any[]>([]);
     const [refreshing, setRefreshing] = useState(false);
     const [showActivityLedger, setShowActivityLedger] = useState(false);
     const [showUniversalSearch, setShowUniversalSearch] = useState(false);
@@ -255,6 +258,7 @@ SparklineChart.displayName = 'SparklineChart';
     if (lowStock.length > 0) {
       playBad();
     }
+    setOverBudgetBudgets(getBudgetsOverBudget());
     refreshHealth();
     refreshAssistant();
     refreshTrialDays();
@@ -572,6 +576,42 @@ SparklineChart.displayName = 'SparklineChart';
             </View>
           )}
 
+          {/* Over Budget Alert - budgets that have exceeded their limit */}
+          {overBudgetBudgets.length > 0 && (
+            <Animated.View entering={FadeInDown.delay(100).springify().damping(20).stiffness(150)} style={{ paddingHorizontal: DASH_SPACING.gutter, marginBottom: 16 }}>
+              <View style={styles.overBudgetTitleRow}>
+                <AlertTriangle size={15} color={colors.error} />
+                <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.overBudgetTitle, { color: colors.error }]} numberOfLines={1}>
+                  {t('budget.over_budget_alert_title')}
+                </AppText>
+              </View>
+              {overBudgetBudgets.map((b: any) => (
+                <TouchableOpacity
+                  key={b.budgetId}
+                  style={[styles.overBudgetCard, { backgroundColor: colors.error + '12', borderColor: colors.error + '45' }]}
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    router.push('/(tabs)/budget' as any);
+                  }}
+                >
+                  <View style={{ flex: 1, marginRight: 12 }}>
+                    <AppText variant="body-sm" weight="bold" style={{ color: colors.text }} numberOfLines={1}>{b.budgetName}</AppText>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2, flexWrap: 'wrap' }}>
+                      <AppText variant="caption" weight="bold" style={{ color: colors.error }} numberOfLines={1}>
+                        {t('budget.over_by')}
+                      </AppText>
+                      <AppNumber value={Math.abs(b.remaining)} size="body-sm" prefix={` ${t('common.etb')} `} />
+                    </View>
+                  </View>
+                  <View style={[styles.overBudgetRemaining, { backgroundColor: colors.error + '18' }]}>
+                    <AppNumber value={b.remaining} size="body" prefix={`${t('common.etb')} `} />
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </Animated.View>
+          )}
+
           {/* Business Health Score */}
           {dashboardVisibility.businessHealth && (
             <TutorialTarget id="dash-health">
@@ -752,7 +792,7 @@ SparklineChart.displayName = 'SparklineChart';
         </TutorialScrollView>
 
         {/* Smart FAB */}
-        <View style={styles.dockedBarWrapper}>
+        <Animated.View style={[styles.dockedBarWrapper, hideFABStyle]}>
           <Animated.View style={[expandStyle, { height: 60, borderRadius: 30, overflow: 'hidden' }]}>
             <View style={[styles.dockedBar, { paddingHorizontal: isBarExpanded ? 12 : 0 }]}>
               {isBarExpanded && (
@@ -782,7 +822,7 @@ SparklineChart.displayName = 'SparklineChart';
               )}
             </View>
           </Animated.View>
-        </View>
+        </Animated.View>
       </View>
 
       {/* Bottom Sheet Modal */}
@@ -1158,6 +1198,28 @@ const createStyles = (G: any) => StyleSheet.create({
   },
   searchPlaceholder: {
     flex: 1,
+  },
+  overBudgetTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  overBudgetTitle: {
+    letterSpacing: 1,
+  },
+  overBudgetCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 8,
+  },
+  overBudgetRemaining: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
   },
   greetingLabel: {
     fontFamily: Fonts.medium,

@@ -2,7 +2,6 @@ import { CustomDatePicker } from '@/components/CustomDatePicker';
 import { AppListItem, AppNumber, AppText } from '@/components/ui';
 import { Fonts, Spacing } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
-import { useToast } from '@/context/ToastContext';
 import {
   getFilteredExpenses,
   getUpcomingExpenses,
@@ -10,7 +9,6 @@ import {
 } from '@/database/db';
 import { useDebounce } from '@/hooks/useDebounce';
 import { notifyRecurringMarkedPaid } from '@/services/notificationService';
-import { exportToCSV } from '@/utils/export';
 import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { playNice} from '@/services/soundService';
@@ -19,11 +17,8 @@ import {
   ArrowUpDown,
   Calendar,
   CalendarDays,
-  Download,
-  FileDown,
   Filter,
   Search,
-  Upload,
   Wallet,
   X
 } from 'lucide-react-native';
@@ -46,11 +41,11 @@ import ExpenseDetailsScreen from './expense-details';
 import { getExpenseGlass } from './glass-expense';
 import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
 import { expenseListTutorial } from '@/tutorials/definitions';
+import { formatDate } from '@/utils/date-utils';
 
 const BillsAndTransactions = ({ filterCategory }: { filterCategory?: string }) => {
-  const { colors, t } = useSettings();
+  const { colors, t, calendarType, language } = useSettings();
   const G = getExpenseGlass(colors);
-  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState(() => t('expense.tab_transactions'));
   const [, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -93,26 +88,6 @@ const BillsAndTransactions = ({ filterCategory }: { filterCategory?: string }) =
   }, [debouncedSearch, selectedDate, selectedSort, selectedCategory]);
 
   useFocusEffect(useCallback(() => { loadData(); }, [loadData]));
-
-  const handleDownload = async () => {
-    try {
-      await exportToCSV(filteredData, 'Capital_Ledger_Export', 'expenses');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showToast({ title: t('toast.ledger_exported'), message: t('toast.ledger_exported_desc'), type: 'success' });
-    } catch (e: any) {
-      showToast(e.message || t('dt.export_failed'), 'error');
-    }
-  };
-
-  const handleTemplate = async () => {
-    const { downloadCSVTemplate } = await import('@/utils/csv-utils');
-    await downloadCSVTemplate('expenses');
-    showToast({ title: t('toast.template_ready'), message: t('toast.template_ready_desc'), type: 'success' });
-  };
-
-  const handleImport = async () => {
-    showToast(t('dt.import_coming_soon'), 'info');
-  };
 
   const filteredData = useMemo(() => {
     return activeTab === t('expense.tab_transactions') ? transactions : upcoming;
@@ -167,9 +142,6 @@ const BillsAndTransactions = ({ filterCategory }: { filterCategory?: string }) =
           <AppText variant="title" weight="bold" style={[styles.headerTitle, { color: G.fg }]}>
             {selectedCategory || t('expense.capital_ledger')}
           </AppText>
-          <TouchableOpacity onPress={handleDownload} style={[styles.downloadBtn, { backgroundColor: G.fg }]}>
-            <Download size={18} color={G.bg} />
-          </TouchableOpacity>
           <TutorialButton tutorialId="expense-list" screenName={t('screen.expense_records')} />
         </View>
       </View>
@@ -203,7 +175,7 @@ const BillsAndTransactions = ({ filterCategory }: { filterCategory?: string }) =
         >
           <Calendar size={14} color={selectedDate ? G.bg : G.fgSecondary} />
           <AppText variant="caption" weight="bold" style={{ color: selectedDate ? G.bg : G.fgSecondary, marginLeft: 4 }}>
-            {selectedDate || 'Date'}
+            {selectedDate ? formatDate(new Date(selectedDate), calendarType, language) : t('expense.date') || 'Date'}
           </AppText>
         </TouchableOpacity>
 
@@ -248,18 +220,6 @@ const BillsAndTransactions = ({ filterCategory }: { filterCategory?: string }) =
         </View>
       )}
       </TutorialTarget>
-
-      {/* Import/Export Section */}
-      <View style={styles.actionRow}>
-        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: G.bgCard, borderColor: G.border, overflow: 'hidden' }]} onPress={handleImport}>
-          <Upload size={16} color={G.fg} />
-           <AppText variant="caption" weight="bold" style={{ color: G.fg, marginLeft: 6 }}>{t('expense.import_csv')}</AppText>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: G.fg, borderColor: G.fg }]} onPress={handleTemplate}>
-          <FileDown size={16} color={G.bg} />
-           <AppText variant="caption" weight="bold" style={{ color: G.bg, marginLeft: 6 }}>{t('expense.template')}</AppText>
-        </TouchableOpacity>
-      </View>
 
       {/* Tabs */}
       <View style={[styles.tabContainer, { backgroundColor: G.bgCard, borderColor: G.border, marginHorizontal: 24, overflow: 'hidden' }]}>
@@ -353,7 +313,7 @@ const ExpenseCardRow = React.memo(({
   item: any; index: number; activeTab: string;
   onPress: (i: any) => void; onMarkPaid: (id: number) => void;
 }) => {
-  const { colors, t } = useSettings();
+  const { colors, t, calendarType, language } = useSettings();
   const G = getExpenseGlass(colors);
   const isOverdue = item.isOverdue === 1 || item.isOverdue === true;
   const isRecurringPending = item.isRecurring === 1 && item.paymentStatus === 'pending';
@@ -374,8 +334,8 @@ const ExpenseCardRow = React.memo(({
         }
         title={item.name || item.category || t('common.untitled')}
         subtitle={activeTab === 'Transactions'
-          ? (item.date ? item.date : t('common.n_a'))
-          : `${t('expense.due')}: ${item.nextBillingDate || t('common.n_a')}`
+          ? (item.date ? formatDate(new Date(item.date), calendarType, language) : t('common.n_a'))
+          : `${t('expense.due')}: ${item.nextBillingDate ? formatDate(new Date(item.nextBillingDate), calendarType, language) : t('common.n_a')}`
         }
         onPress={() => onPress(item)}
         padding={Spacing.md}
@@ -416,9 +376,6 @@ const styles = StyleSheet.create({
   headerSub: { fontSize: 12, letterSpacing: 1.2, marginBottom: 4 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   headerTitle: { fontSize: 28, letterSpacing: -1 },
-  downloadBtn: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
-  actionRow: { flexDirection: 'row', paddingHorizontal: 24, gap: 8, marginBottom: 12 },
-  actionBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1 },
   searchRow: { paddingHorizontal: 24, marginBottom: 10 },
   searchBox: { flexDirection: 'row', alignItems: 'center', height: 46, borderRadius: 14, borderWidth: 1, paddingHorizontal: 14 },
   searchInput: { flex: 1, marginLeft: 10, fontFamily: Fonts.medium, fontSize: 15 },

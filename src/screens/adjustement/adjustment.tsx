@@ -5,6 +5,7 @@ import { useSidebar } from '@/context/SidebarContext';
 import { formatTime } from '@/utils/date-utils';
 import { getAdjustmentDashboardMetrics, getRecentAdjustments } from '@/database/db';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useAutoHideScroll } from '@/hooks/useAutoHideScroll';
 import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
@@ -111,6 +112,7 @@ const MetricCard = ({ label, value, icon: Icon }: { label: string; value: React.
 const AdjustmentScreen = () => {
   const { colors, t, userProfile } = useSettings();
   const G = getAdjustmentGlass(colors);
+  const hideFABStyle = useAutoHideScroll();
   const { openSidebar } = useSidebar();
   const { notifCount } = useNotifications();
   const router = useRouter();
@@ -272,7 +274,7 @@ const AdjustmentScreen = () => {
       </TutorialScrollView>
       
       {/* Quick Actions FAB */}
-      <View style={styles.dockedBarWrapper}>
+      <Animated.View style={[styles.dockedBarWrapper, hideFABStyle]}>
         <Animated.View style={[expandStyle, { height: 60, borderRadius: 30, overflow: 'hidden' }]}>
           <View style={[styles.dockedBar, { borderColor: G.borderLight, backgroundColor: G.bgCardStrong, paddingHorizontal: isBarExpanded ? 12 : 0 }]}>
             {isBarExpanded && (
@@ -354,7 +356,7 @@ const AdjustmentScreen = () => {
             </TouchableOpacity>
           </View>
         </Animated.View>
-      </View>
+      </Animated.View>
 
       {/* Options Modal */}
       <Modal visible={showOptions} transparent animationType="fade" onRequestClose={() => setShowOptions(false)}>

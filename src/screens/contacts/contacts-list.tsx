@@ -34,6 +34,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import ContactDetails from './contact-details';
 import ContactForm from './contact-form';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useAutoHideScroll } from '@/hooks/useAutoHideScroll';
 import { useRouter } from 'expo-router';
 import { useDebounce } from '@/hooks/useDebounce';
 import { SkeletonList } from '@/components/Skeleton';
@@ -164,6 +165,7 @@ ContactRow.displayName = 'ContactRow';
 export default function ContactsList() {
   const { colors, userProfile, t } = useSettings();
   const G = getContactsGlass(colors);
+  const hideFABStyle = useAutoHideScroll();
   const { openSidebar } = useSidebar();
   const { notifCount } = useNotifications();
   const router = useRouter();
@@ -416,7 +418,7 @@ export default function ContactsList() {
       </Modal>
 
       {/* Floating Add Button */}
-      <View style={styles.dockedBarWrapper}>
+      <Animated.View style={[styles.dockedBarWrapper, hideFABStyle]}>
         <TutorialTarget id="con-add-btn">
         <TouchableOpacity
           style={[styles.fab, { backgroundColor: G.bgCardStrong, borderColor: G.borderLight }]}
@@ -426,7 +428,7 @@ export default function ContactsList() {
           <Plus size={24} color={G.fg} />
         </TouchableOpacity>
         </TutorialTarget>
-      </View>
+      </Animated.View>
     </View>
   );
 }

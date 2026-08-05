@@ -46,6 +46,7 @@ import Animated, {
 } from "react-native-reanimated";
 import SaleDetailsScreen from "./sales-details";
 import { useDebounce } from "@/hooks/useDebounce";
+import { useAutoHideScroll } from "@/hooks/useAutoHideScroll";
 import { SkeletonList } from "@/components/Skeleton";
 import { AppText, AppNumber } from "@/components/ui";
 import { getSalesGlass } from './glass-sales';
@@ -78,6 +79,7 @@ const SalesRecordScreen: React.FC<SalesRecordProps> = ({ onClose }) => {
   const { colors, calendarType, language, timeSystem, t } =
     useSettings();
   const SALES_GLASS = useMemo(() => getSalesGlass(colors), [colors]);
+  const hideFABStyle = useAutoHideScroll();
   const { showToast } = useToast();
   const [dateModalVisible, setDateModalVisible] = useState(false);
   const [sortModalVisible, setSortModalVisible] = useState(false);
@@ -649,12 +651,14 @@ const SalesRecordScreen: React.FC<SalesRecordProps> = ({ onClose }) => {
 
       {/* Sort FAB */}
       <TutorialTarget id="sr-export">
+      <Animated.View style={hideFABStyle}>
       <TouchableOpacity
         style={[styles.sortFab, { backgroundColor: SALES_GLASS.fg }]}
         onPress={() => setSortModalVisible(true)}
       >
         <ArrowDownUp size={20} color={SALES_GLASS.bg} />
       </TouchableOpacity>
+      </Animated.View>
       </TutorialTarget>
 
       {/* Date Picker */}

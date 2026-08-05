@@ -5,7 +5,7 @@ import { PDFLanguageModal } from '@/components/PDFLanguageModal';
 import { Fonts } from '@/constants/theme';
 import { PROFILE_IMAGES, useSettings } from '@/context/SettingsContext';
 import { useSidebar } from '@/context/SidebarContext';
-import { getActiveBusiness, getDB, getLowStockItems } from '@/database/db';
+import { getActiveBusiness, getDB, getLowStockItems, getBudgetOverageStats } from '@/database/db';
 import { useNotifications } from '@/hooks/useNotifications';
 import { toEthiopianDate, getEthiopianMonthNames } from '@/utils/date-utils';
 import { formatNumber } from '@/utils/formatNumber';
@@ -39,7 +39,8 @@ import {
     ShoppingCart,
     Trash2,
     TrendingUp,
-    Wallet
+    Wallet,
+    AlertTriangle,
 } from 'lucide-react-native';
 import React, { useEffect, useState, useMemo } from 'react';
 import { ActivityIndicator, FlatList, Image, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -123,6 +124,8 @@ const ReportsHubScreenContent = () => {
     itemsCount: 0, itemsValue: 0,
     expensesCount: 0, expensesValue: 0,
   });
+
+  const [overageStats, setOverageStats] = useState<any>(null);
 
   const formatDisplayDate = (dateStr: string): string => {
     if (!dateStr) return '';
@@ -231,6 +234,8 @@ const ReportsHubScreenContent = () => {
         expensesCount: expensesResult?.count || 0,
         expensesValue: expensesResult?.total || 0,
       });
+
+      setOverageStats(getBudgetOverageStats());
     } catch (e) {
       console.error('Failed to load statistics:', e);
     }
@@ -501,6 +506,43 @@ const ReportsHubScreenContent = () => {
           <ReportCard title={t('reports.pl_title')} description={t('reports.pl_desc')} icon={Scale} iconColor="#8B5CF6" stats={t('reports.pl_net_label', { value: formatNumber(stats.salesValue - stats.expensesValue) })} onExport={() => handleExportTrigger('pl')} onExportCSV={() => handleCSVExport('pl')} colors={colors} t={t} repGlass={REP_GLASS} />
           <ReportCard title={t('reports.catalog_title')} description={t('reports.catalog_desc')} icon={ClipboardList} iconColor="#F59E0B" stats={t('reports.catalog_count_label', { count: String(stats.itemsCount) })} onExport={() => handleExportTrigger('products')} onExportCSV={() => handleCSVExport('products')} colors={colors} t={t} repGlass={REP_GLASS} />
         </View>
+
+        {/* Over Budget Analytics */}
+        {overageStats && overageStats.overageCount > 0 && (
+          <Animated.View entering={FadeInDown.duration(500)} style={[styles.overBudgetCard, { backgroundColor: REP_GLASS.bgCard, borderColor: colors.error + '40' }]}>
+            <View style={styles.cardHeader}>
+              <View style={[styles.iconBox, { backgroundColor: colors.error + '20' }]}>
+                <AlertTriangle size={22} color={colors.error} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.cardTitle, { color: colors.error }]}>{t('budget.over_budget_analytics')}</Text>
+                <Text style={[styles.cardDesc, { color: REP_GLASS.muted }]}>{t('reports.over_budget_desc')}</Text>
+              </View>
+            </View>
+            <View style={[styles.overBudgetStatsRow, { borderTopColor: REP_GLASS.border }]}>
+              <View style={styles.overBudgetStat}>
+                <Text style={[styles.overBudgetStatValue, { color: colors.error }]}>{formatNumber(overageStats.overageCount)}</Text>
+                <Text style={[styles.overBudgetStatLabel, { color: REP_GLASS.muted }]}>{t('budget.times_exceeded')}</Text>
+              </View>
+              <View style={styles.overBudgetStat}>
+                <Text style={[styles.overBudgetStatValue, { color: colors.error }]}>{formatNumber(overageStats.totalOverAmount, { prefix: `${t('common.etb')} ` })}</Text>
+                <Text style={[styles.overBudgetStatLabel, { color: REP_GLASS.muted }]}>{t('budget.total_over')}</Text>
+              </View>
+              <View style={styles.overBudgetStat}>
+                <Text style={[styles.overBudgetStatValue, { color: colors.error }]}>{formatNumber(overageStats.percentOver, { suffix: '%' })}</Text>
+                <Text style={[styles.overBudgetStatLabel, { color: REP_GLASS.muted }]}>{t('budget.percent_over')}</Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={[styles.overBudgetViewBtn, { backgroundColor: colors.error + '15' }]}
+              activeOpacity={0.7}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)/budget' as any); }}
+            >
+              <AlertTriangle size={14} color={colors.error} style={{ marginRight: 6 }} />
+              <Text style={[styles.overBudgetViewBtnText, { color: colors.error }]}>{t('reports.view_over_budget')}</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        )}
       </ScrollView>
 
       {/* Order Bottom Sheet */}
@@ -753,6 +795,14 @@ const styles = StyleSheet.create({
   cardBtnRow: { flexDirection: 'row', gap: 8 },
   exportBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 11, paddingVertical: 8, borderRadius: 12 },
   exportBtnText: { fontSize: 11, fontFamily: Fonts.bold },
+
+  overBudgetCard: { borderRadius: 24, borderWidth: 1, padding: 20, marginTop: 16 },
+  overBudgetStatsRow: { flexDirection: 'row', borderTopWidth: 1, paddingTop: 15, marginBottom: 16 },
+  overBudgetStat: { flex: 1, alignItems: 'center' },
+  overBudgetStatValue: { fontSize: 18, fontFamily: Fonts.bold, textAlign: 'center' },
+  overBudgetStatLabel: { fontSize: 10, fontFamily: Fonts.bold, marginTop: 4, textAlign: 'center', textTransform: 'uppercase' },
+  overBudgetViewBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 11, borderRadius: 14 },
+  overBudgetViewBtnText: { fontSize: 12, fontFamily: Fonts.bold },
 
   loadingOverlay: { ...StyleSheet.absoluteFill, justifyContent: 'center', alignItems: 'center', zIndex: 9999 },
   loadingBox: { padding: 30, borderRadius: 24, alignItems: 'center', gap: 15, elevation: 5 },

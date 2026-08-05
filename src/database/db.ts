@@ -1,4 +1,4 @@
-import { fromEthiopianToDate, getEthiopianDaysInMonth, toEthiopianDate } from '@/utils/date-utils';
+import { fromEthiopianToDate, getEthiopianDaysInMonth, toEthiopianDate, toLocalDateString } from '@/utils/date-utils';
 import * as SQLite from 'expo-sqlite';
 
 const GLOBAL_DB_KEY = '__shega_db';
@@ -238,6 +238,21 @@ export const initDB = () => {
       );
     `);
     console.log('Table "item_packs" checked/created.');
+
+    // Stock movement log — records each stock-add event so the activity
+    // feed shows historical additions instead of live (shrinking) stock levels.
+    database.execSync(`
+      CREATE TABLE IF NOT EXISTS stock_movements (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        itemId INTEGER,
+        quantityAdded REAL NOT NULL,
+        unit TEXT,
+        note TEXT,
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (itemId) REFERENCES items(id)
+      );
+    `);
+    console.log('Table "stock_movements" checked/created.');
 
     database.execSync(`
       CREATE TABLE IF NOT EXISTS sales (
@@ -524,6 +539,7 @@ export const initDB = () => {
       month INTEGER,
       quarter INTEGER,
       notes TEXT,
+      plannedAmount REAL DEFAULT 0,
       status TEXT DEFAULT 'active' CHECK(status IN ('active','archived','closed')),
       createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
       updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
@@ -545,6 +561,7 @@ export const initDB = () => {
       month INTEGER,
       quarter INTEGER,
       notes TEXT,
+      plannedAmount REAL DEFAULT 0,
       status TEXT DEFAULT 'active',
       createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
       updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
@@ -555,6 +572,10 @@ export const initDB = () => {
     database.execSync(`PRAGMA foreign_keys=ON`);
   } catch { /* table already has wider constraint or first creation */ }
   console.log('Table "budgets" checked/created.');
+
+  // Migration: Budgets can carry their own planned amount so a catch-all
+  // category is no longer needed to store the total budget.
+  try { database.execSync(`ALTER TABLE budgets ADD COLUMN plannedAmount REAL DEFAULT 0`); } catch { /* column exists */ }
 
   database.execSync(`
     CREATE TABLE IF NOT EXISTS budget_categories (
@@ -568,6 +589,30 @@ export const initDB = () => {
     );
   `);
   console.log('Table "budget_categories" checked/created.');
+
+  // Migrate legacy budgets that stored their whole amount in a single catch-all
+  // category (e.g. "General"): move that amount to budgets.plannedAmount and drop
+  // the redundant category so the categories list only shows categories the user
+  // actually created or used.
+  try {
+    const catchAlls = database.getAllSync<any>(`
+      SELECT b.id as budgetId, bc.id as catId, bc.plannedAmount
+      FROM budgets b
+      JOIN budget_categories bc ON bc.budgetId = b.id
+      WHERE (b.plannedAmount IS NULL OR b.plannedAmount = 0)
+      GROUP BY b.id
+      HAVING COUNT(bc.id) = 1
+    `);
+    for (const row of catchAlls) {
+      database.runSync(
+        `UPDATE budgets SET plannedAmount = ?, updatedAt = datetime('now') WHERE id = ?`,
+        row.plannedAmount || 0,
+        row.budgetId,
+      );
+      database.runSync(`DELETE FROM budget_categories WHERE id = ?`, row.catId);
+    }
+  } catch { /* migration already applied */ }
+  console.log('Legacy catch-all budget categories migrated.');
 
   database.execSync(`
     CREATE TABLE IF NOT EXISTS budget_adjustments (
@@ -584,10 +629,33 @@ export const initDB = () => {
   `);
   console.log('Table "budget_adjustments" checked/created.');
 
+  // Budget over-budget events — records every expense that pushed a budget
+  // over its limit so analytics/reports can track historical overages.
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS budget_overages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      budgetId INTEGER NOT NULL,
+      budgetName TEXT,
+      expenseId INTEGER,
+      expenseName TEXT,
+      amount REAL NOT NULL,
+      totalPlanned REAL DEFAULT 0,
+      totalSpent REAL DEFAULT 0,
+      overAmount REAL NOT NULL,
+      remainingAfter REAL DEFAULT 0,
+      percentOver REAL DEFAULT 0,
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (budgetId) REFERENCES budgets(id) ON DELETE CASCADE
+    );
+  `);
+  console.log('Table "budget_overages" checked/created.');
+
   // Budget indexes
   database.execSync(`CREATE INDEX IF NOT EXISTS idx_budgets_type ON budgets(type);`);
   database.execSync(`CREATE INDEX IF NOT EXISTS idx_budgets_period ON budgets(year, month);`);
   database.execSync(`CREATE INDEX IF NOT EXISTS idx_budget_cat_budget ON budget_categories(budgetId);`);
+  database.execSync(`CREATE INDEX IF NOT EXISTS idx_budget_overages_budget ON budget_overages(budgetId);`);
+  database.execSync(`CREATE INDEX IF NOT EXISTS idx_budget_overages_created ON budget_overages(createdAt DESC);`);
 
   // Migration: Add budgetCategoryId to expenses table
   try {
@@ -842,6 +910,21 @@ export const getNextItemId = () => {
   }
 };
 
+// Records a stock-add event so the activity feed can show historical
+// additions instead of live (shrinking) stock levels.
+export const logStockMovement = (itemId: number, quantityAdded: number, unit?: string, note?: string) => {
+  try {
+    if (!itemId || !quantityAdded || quantityAdded <= 0) return;
+    const database = getDB();
+    database.runSync(
+      'INSERT INTO stock_movements (itemId, quantityAdded, unit, note) VALUES (?, ?, ?, ?)',
+      itemId, quantityAdded, unit || null, note || null
+    );
+  } catch (error) {
+    console.error('Log stock movement error:', error);
+  }
+};
+
 export const insertItem = (data: InsertItemData) => {
   try {
     const database = getDB();
@@ -852,7 +935,12 @@ export const insertItem = (data: InsertItemData) => {
     const result = statement.executeSync([
       data.name, data.categoryId, data.companyName || null, data.purchaseUnit || 'pcs', data.baseUnit || 'pcs', data.unitsPerPack || 0, data.totalPackQuantity || 0, data.totalBaseQuantity || 0, data.packPurchasePrice || 0, data.basePurchasePrice || 0, data.baseSellingPrice || 0, data.packSellingPrice || 0, data.allowSellByBaseUnit ? 1 : 0, data.allowSellByPackUnit ? 1 : 0, data.expiryDate || null, data.qualityGrade || null, data.notes || null, data.isCredit ? 1 : 0, data.supplierPhone || null, data.supplierAccount || null, data.supplierCallEnabled ? 1 : 0, data.warehouseId ?? null, null
     ]);
-    return result.lastInsertRowId;
+    const newId = result.lastInsertRowId;
+    // Log the initial stock as a movement so it appears in the activity feed.
+    if (newId && (data.totalBaseQuantity || 0) > 0) {
+      logStockMovement(newId, data.totalBaseQuantity, data.baseUnit || data.purchaseUnit || 'pcs', 'Initial stock');
+    }
+    return newId;
   } catch (error) {
     console.error('Insert item error:', error);
     return null;
@@ -1513,7 +1601,6 @@ export const getActivityFeed = (options: { search?: string, date?: string, limit
     const saleDateWhere = options.date ? "WHERE date(s.createdAt) = '" + options.date + "'" : '';
     const adjDateWhere = options.date ? "WHERE date(a.createdAt) = '" + options.date + "'" : '';
     const expDateWhere = options.date ? "WHERE date(e.date) = '" + options.date + "'" : '';
-    const invDateWhere = options.date ? "WHERE date(i.createdAt) = '" + options.date + "'" : '';
 
     // Sales (grouped by batchId)
     const sales = database.getAllSync(`
@@ -1584,12 +1671,15 @@ export const getActivityFeed = (options: { search?: string, date?: string, limit
       LIMIT ${limit}
     `);
 
-    // Inventory additions
+    // Inventory additions — from the stock_movements log so each entry
+    // reflects the actual quantity added at that time (not the live,
+    // shrinking stock level).
     const inventory = database.getAllSync(`
-      SELECT 'inventory' as type, 'inventory' as category, i.id, (i.totalBaseQuantity * i.basePurchasePrice) as value, i.totalBaseQuantity as quantity, i.name as label, i.createdAt, i.companyName
-      FROM items i
-      ${invDateWhere}
-      ORDER BY i.createdAt DESC
+      SELECT 'inventory' as type, 'inventory' as category, sm.id, (sm.quantityAdded * i.basePurchasePrice) as value, sm.quantityAdded as quantity, i.name as label, sm.createdAt, i.companyName
+      FROM stock_movements sm
+      JOIN items i ON sm.itemId = i.id
+      ${options.date ? "WHERE date(sm.createdAt) = '" + options.date + "'" : ''}
+      ORDER BY sm.createdAt DESC
       LIMIT ${limit}
     `);
 
@@ -1617,7 +1707,7 @@ export const getActivityFeed = (options: { search?: string, date?: string, limit
 export const insertExpense = (expense: { name: string; amount: number; category: string; date?: string; isRecurring?: boolean; frequency?: string; nextBillingDate?: string; budgetCategoryId?: number; budgetId?: number }) => {
   try {
     const database = getDB();
-    const today = new Date().toISOString().split('T')[0];
+    const today = toLocalDateString(new Date());
     const statement = database.prepareSync(`
       INSERT INTO expenses (name, amount, category, date, isRecurring, frequency, nextBillingDate, budgetCategoryId, budgetId, createdAt)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
@@ -1650,7 +1740,7 @@ export const getRecentExpenses = (limit: number = 10, targetDate?: string) => {
 export const getTodaysExpenses = () => {
   try {
     const database = getDB();
-    const today = new Date().toISOString().split('T')[0];
+    const today = toLocalDateString(new Date());
     return database.getAllSync('SELECT * FROM expenses WHERE date(date) = ? ORDER BY createdAt DESC', [today]);
   } catch (error) {
     console.error('Get todays expenses error:', error);
@@ -3056,22 +3146,22 @@ export const getExpenseComparisonStats = () => {
 export const getCapitalSummary = (period: string = 'this_month', targetDate?: string) => {
   try {
     const database = getDB();
-    const d = targetDate ? new Date(targetDate.replace(/-/g, '/')) : new Date();
+    const d = targetDate ? parseLocalDate(targetDate) || new Date() : new Date();
     let startStr = '';
     let endStr = '';
 
     if (period === 'today') {
-      startStr = endStr = d.toISOString().split('T')[0];
+      startStr = endStr = toLocalDateString(d);
     } else if (period === 'yesterday') {
       const yesterday = new Date(d.getTime() - 86400000);
-      startStr = endStr = yesterday.toISOString().split('T')[0];
+      startStr = endStr = toLocalDateString(yesterday);
     } else if (period === 'this_week') {
       const weekStart = new Date(d);
       weekStart.setDate(d.getDate() - d.getDay());
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekStart.getDate() + 6);
-      startStr = weekStart.toISOString().split('T')[0];
-      endStr = weekEnd.toISOString().split('T')[0];
+      startStr = toLocalDateString(weekStart);
+      endStr = toLocalDateString(weekEnd);
     } else if (period === 'this_year') {
       startStr = `${d.getFullYear()}-01-01`;
       endStr = `${d.getFullYear()}-12-31`;
@@ -3079,8 +3169,8 @@ export const getCapitalSummary = (period: string = 'this_month', targetDate?: st
       // default: this_month
       const monthStart = new Date(d.getFullYear(), d.getMonth(), 1);
       const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-      startStr = monthStart.toISOString().split('T')[0];
-      endStr = monthEnd.toISOString().split('T')[0];
+      startStr = toLocalDateString(monthStart);
+      endStr = toLocalDateString(monthEnd);
     }
 
     // 1. Total Disbursement in this period
@@ -3113,7 +3203,7 @@ export const getCapitalSummary = (period: string = 'this_month', targetDate?: st
     const year = d.getFullYear();
     const month = d.getMonth() + 1;
     const activeBudget = database.getFirstSync<any>(
-      `SELECT b.*, COALESCE(SUM(bc.plannedAmount), 0) as totalPlanned
+      `SELECT b.*, CASE WHEN b.plannedAmount > 0 THEN b.plannedAmount ELSE COALESCE(SUM(bc.plannedAmount), 0) END as totalPlanned
        FROM budgets b
        LEFT JOIN budget_categories bc ON bc.budgetId = b.id
        WHERE b.status = 'active'
@@ -3169,6 +3259,20 @@ export const updateItem = (id: number, updates: any) => {
       }, {});
 
     if (Object.keys(filteredUpdates).length === 0) return true;
+
+    // If stock is being increased, log the movement so the activity feed
+    // shows the actual added quantity (not the live, shrinking stock level).
+    if (filteredUpdates.totalBaseQuantity !== undefined) {
+      const current = database.getFirstSync<{ totalBaseQuantity: number, baseUnit: string }>(
+        'SELECT totalBaseQuantity, baseUnit FROM items WHERE id = ?', [id]
+      );
+      if (current) {
+        const added = filteredUpdates.totalBaseQuantity - (current.totalBaseQuantity || 0);
+        if (added > 0) {
+          logStockMovement(id, added, current.baseUnit || 'pcs', 'Restock');
+        }
+      }
+    }
 
     const setQuery = Object.keys(filteredUpdates).map(k => `${k} = ?`).join(', ');
     const values = Object.values(filteredUpdates);
@@ -3314,6 +3418,7 @@ export const clearDatabase = () => {
     database.execSync('DELETE FROM adjustments;');
     database.execSync('DELETE FROM sales;');
     database.execSync('DELETE FROM item_packs;');
+    database.execSync('DELETE FROM stock_movements;');
     database.execSync('DELETE FROM items;');
     database.execSync('DELETE FROM expenses;');
     database.execSync('DELETE FROM categories;');
@@ -5358,18 +5463,20 @@ export const insertBudget = (data: {
   month?: number;
   quarter?: number;
   notes?: string;
+  plannedAmount?: number;
 }) => {
   try {
     const database = getDB();
     const result = database.runSync(
-      `INSERT INTO budgets (name, type, period, year, month, quarter, notes) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO budgets (name, type, period, year, month, quarter, notes, plannedAmount) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       data.name,
       data.type,
       data.period,
       data.year,
       data.month || null,
       data.quarter || null,
-      data.notes || null
+      data.notes || null,
+      data.plannedAmount || 0
     );
     return result.lastInsertRowId;
   } catch (error) {
@@ -5381,6 +5488,7 @@ export const insertBudget = (data: {
 export const updateBudget = (id: number, data: {
   name?: string;
   notes?: string;
+  plannedAmount?: number;
   status?: 'active' | 'archived' | 'closed' | 'expired';
 }) => {
   try {
@@ -5389,6 +5497,7 @@ export const updateBudget = (id: number, data: {
     const params: any[] = [];
     if (data.name !== undefined) { updates.push('name = ?'); params.push(data.name); }
     if (data.notes !== undefined) { updates.push('notes = ?'); params.push(data.notes); }
+    if (data.plannedAmount !== undefined) { updates.push('plannedAmount = ?'); params.push(data.plannedAmount); }
     if (data.status !== undefined) { updates.push('status = ?'); params.push(data.status); }
     updates.push("updatedAt = datetime('now')");
     params.push(id);
@@ -5423,7 +5532,7 @@ export const getBudgets = (filters?: {
     return database.getAllSync(`
       SELECT
         b.*,
-        COALESCE(SUM(bc.plannedAmount), 0) as totalPlanned,
+        CASE WHEN b.plannedAmount > 0 THEN b.plannedAmount ELSE COALESCE(SUM(bc.plannedAmount), 0) END as totalPlanned,
         COALESCE((
           SELECT SUM(e.amount) FROM expenses e
           JOIN budget_categories bc2 ON e.budgetCategoryId = bc2.id
@@ -5468,7 +5577,9 @@ export const getBudgetById = (id: number) => {
       ORDER BY bc.category ASC
     `, [id]);
 
-    const totalPlanned = categories.reduce((s: number, c: any) => s + c.plannedAmount, 0);
+    const totalPlanned = (budget?.plannedAmount || 0) > 0
+      ? budget.plannedAmount
+      : categories.reduce((s: number, c: any) => s + c.plannedAmount, 0);
     const categoryActual = categories.reduce((s: number, c: any) => s + c.actualAmount, 0);
     const unlinkedActual = database.getFirstSync<{ total: number }>(
       `SELECT COALESCE(SUM(e.amount), 0) as total FROM expenses e
@@ -5560,7 +5671,7 @@ export const getBudgetDashboard = () => {
     const database = getDB();
     const activeBudgets = database.getAllSync<any>(`
       SELECT b.*,
-        COALESCE(SUM(bc.plannedAmount), 0) as totalPlanned,
+        CASE WHEN b.plannedAmount > 0 THEN b.plannedAmount ELSE COALESCE(SUM(bc.plannedAmount), 0) END as totalPlanned,
         COALESCE((
           SELECT SUM(e.amount) FROM expenses e
           JOIN budget_categories bc3 ON e.budgetCategoryId = bc3.id
@@ -5651,8 +5762,8 @@ export const duplicateBudget = (sourceId: number, month?: number, year?: number)
 
     // Create new budget
     const result = database.runSync(
-      `INSERT INTO budgets (name, type, period, year, month, quarter, notes) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      source.name, source.type, source.period, newYear, newMonth, source.quarter, source.notes
+      `INSERT INTO budgets (name, type, period, year, month, quarter, notes, plannedAmount) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      source.name, source.type, source.period, newYear, newMonth, source.quarter, source.notes, source.plannedAmount || 0
     );
     const newId = result.lastInsertRowId;
 
@@ -5739,7 +5850,11 @@ export const getBudgetForecast = (budgetId: number) => {
       };
     });
 
-    const totalPlanned = categories.reduce((s: number, c: any) => s + c.plannedAmount, 0);
+    const budgetRow = database.getFirstSync<any>('SELECT plannedAmount FROM budgets WHERE id = ?', [budgetId]);
+    const budgetPlanned = (budgetRow?.plannedAmount || 0) > 0 ? budgetRow.plannedAmount : 0;
+    const totalPlanned = budgetPlanned > 0
+      ? budgetPlanned
+      : categories.reduce((s: number, c: any) => s + c.plannedAmount, 0);
     const totalProjected = forecast.reduce((s: number, f: any) => s + f.projected, 0);
 
     return { forecast, totalPlanned, totalProjected, totalRemaining: totalPlanned - totalProjected };
@@ -5910,7 +6025,7 @@ export const getCurrentMonthBudget = () => {
     const month = now.getMonth() + 1;
     const budget = database.getFirstSync<any>(
       `SELECT b.*,
-        COALESCE(SUM(bc.plannedAmount), 0) as totalPlanned,
+        CASE WHEN b.plannedAmount > 0 THEN b.plannedAmount ELSE COALESCE(SUM(bc.plannedAmount), 0) END as totalPlanned,
         COALESCE(SUM(bc2.actualAmount), 0) as totalActual
        FROM budgets b
        LEFT JOIN budget_categories bc ON bc.budgetId = b.id
@@ -5970,7 +6085,7 @@ export const getActiveBudgetForExpenses = () => {
     const yymm = `${year}-${String(month).padStart(2, '0')}`;
     const budget = database.getFirstSync<any>(
       `SELECT b.*,
-        COALESCE(SUM(bc.plannedAmount), 0) as totalPlanned
+        CASE WHEN b.plannedAmount > 0 THEN b.plannedAmount ELSE COALESCE(SUM(bc.plannedAmount), 0) END as totalPlanned
        FROM budgets b
        LEFT JOIN budget_categories bc ON bc.budgetId = b.id
        WHERE b.status = 'active'
@@ -6017,7 +6132,7 @@ export const getMonthlyBudgetExpenseSummary = (budgetId: number) => {
     const database = getDB();
     const budget = database.getFirstSync<any>(
       `SELECT b.*,
-        COALESCE(SUM(bc.plannedAmount), 0) as totalPlanned
+        CASE WHEN b.plannedAmount > 0 THEN b.plannedAmount ELSE COALESCE(SUM(bc.plannedAmount), 0) END as totalPlanned
        FROM budgets b
        LEFT JOIN budget_categories bc ON bc.budgetId = b.id
        WHERE b.id = ?
@@ -6205,7 +6320,7 @@ export const getBudgetFinalStats = (budgetId: number) => {
        WHERE e.budgetId = ? OR bc.budgetId = ?`,
       [budgetId, budgetId],
     );
-    const totalPlanned = planned?.total || 0;
+    const totalPlanned = (budget?.plannedAmount || 0) > 0 ? budget.plannedAmount : (planned?.total || 0);
     const totalSpent = spentRow?.total || 0;
     const expenseCount = countRow?.count || 0;
     const percentUsed = totalPlanned > 0 ? Math.round((totalSpent / totalPlanned) * 100) : 0;
@@ -6266,8 +6381,8 @@ export const renewBudget = (sourceId: number, options?: {
     const period = options?.period || source.period;
 
     const result = database.runSync(
-      `INSERT INTO budgets (name, type, period, year, month, quarter, notes, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'active')`,
+      `INSERT INTO budgets (name, type, period, year, month, quarter, notes, status, plannedAmount)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?)`,
       options?.name || source.name,
       source.type,
       period,
@@ -6275,6 +6390,7 @@ export const renewBudget = (sourceId: number, options?: {
       month ?? null,
       source.quarter || null,
       source.notes || null,
+      source.plannedAmount || 0,
     );
     const newId = result.lastInsertRowId;
 
@@ -6380,22 +6496,51 @@ export const getBudgetWithCategoryProgress = (budgetId: number) => {
       ORDER BY bc.category ASC
     `, [budgetId]);
 
-    const totalPlanned = categories.reduce((s: number, c: any) => s + c.plannedAmount, 0);
-    const categorySpent = categories.reduce((s: number, c: any) => s + (c.spent || 0), 0);
+    // Include expense categories the user actually used against this budget but
+    // that have no budget category allocation, so they show their spent amount
+    // (e.g. a "Rent" expense recorded without a matching budget category).
+    const usedCategories = database.getAllSync(`
+      SELECT
+        NULL as id,
+        e.category as category,
+        0 as plannedAmount,
+        NULL as notes,
+        SUM(e.amount) as spent,
+        COUNT(e.id) as expenseCount
+      FROM expenses e
+      WHERE e.budgetId = ? AND e.budgetCategoryId IS NULL
+        AND LOWER(COALESCE(e.category, '')) NOT IN (
+          SELECT LOWER(category) FROM budget_categories WHERE budgetId = ?
+        )
+      GROUP BY e.category
+      ORDER BY spent DESC
+    `, [budgetId, budgetId]);
+    const allCategories = [...categories, ...usedCategories];
+
+    const totalPlanned = (budget?.plannedAmount || 0) > 0
+      ? budget.plannedAmount
+      : allCategories.reduce((s: number, c: any) => s + (c.plannedAmount || 0), 0);
+    const categorySpent = allCategories.reduce((s: number, c: any) => s + (c.spent || 0), 0);
+    // Unlinked expenses that fall back to a budget category by name (not yet
+    // included via budgetCategoryId join nor the "used" categories above).
     const unlinkedSpent = database.getFirstSync<{ total: number }>(
       `SELECT COALESCE(SUM(e.amount), 0) as total FROM expenses e
-       WHERE e.budgetId = ? AND e.budgetCategoryId IS NULL`,
-      [budgetId]
+       WHERE e.budgetId = ? AND e.budgetCategoryId IS NULL
+         AND LOWER(COALESCE(e.category, '')) IN (
+           SELECT LOWER(category) FROM budget_categories WHERE budgetId = ?
+         )`,
+      [budgetId, budgetId]
     );
     const totalSpent = categorySpent + (unlinkedSpent?.total || 0);
 
-    const categoriesWithStatus = categories.map((c: any) => {
-      const pct = c.plannedAmount > 0 ? Math.round((c.spent / c.plannedAmount) * 100) : 0;
+    const categoriesWithStatus = allCategories.map((c: any) => {
+      const pct = (c.plannedAmount || 0) > 0 ? Math.round(((c.spent || 0) / c.plannedAmount) * 100) : 0;
       return {
         ...c,
         percentUsed: pct,
-        remaining: c.plannedAmount - (c.spent || 0),
-        status: pct >= 100 ? 'exceeded' : pct >= 90 ? 'critical' : pct >= 80 ? 'warning' : 'ok',
+        remaining: (c.plannedAmount || 0) - (c.spent || 0),
+        status: (c.plannedAmount || 0) <= 0 ? (c.spent > 0 ? 'unallocated' : 'ok')
+          : pct >= 100 ? 'exceeded' : pct >= 90 ? 'critical' : pct >= 80 ? 'warning' : 'ok',
       };
     });
 
@@ -6413,13 +6558,193 @@ export const getBudgetWithCategoryProgress = (budgetId: number) => {
   }
 };
 
+// →→ Budget Limit Enforcement & Over-Budget Analytics →→→→→→→→→→→→→→→→→→→→→→→→→→→
+
+// The live remaining balance for a budget: total allocated (sum of category
+// plannedAmount) minus every expense linked to the budget (via a category or
+// directly via budgetId). Used before an expense is saved to decide whether
+// it would push the budget over its limit.
+export const getBudgetLimitOverview = (budgetId: number) => {
+  try {
+    const database = getDB();
+    const budget = database.getFirstSync<any>('SELECT * FROM budgets WHERE id = ?', [budgetId]);
+    if (!budget) return null;
+
+    const planned = database.getFirstSync<{ total: number }>(
+      `SELECT COALESCE(SUM(plannedAmount), 0) as total FROM budget_categories WHERE budgetId = ?`,
+      [budgetId],
+    );
+
+    const categorySpent = database.getFirstSync<{ total: number }>(
+      `SELECT COALESCE(SUM(e.amount), 0) as total
+       FROM expenses e
+       JOIN budget_categories bc ON e.budgetCategoryId = bc.id
+       WHERE bc.budgetId = ?`,
+      [budgetId],
+    );
+
+    const unlinkedSpent = database.getFirstSync<{ total: number }>(
+      `SELECT COALESCE(SUM(e.amount), 0) as total
+       FROM expenses e
+       WHERE e.budgetId = ? AND e.budgetCategoryId IS NULL`,
+      [budgetId],
+    );
+
+    const totalBudget = (budget?.plannedAmount || 0) > 0 ? budget.plannedAmount : (planned?.total || 0);
+    const totalSpent = (categorySpent?.total || 0) + (unlinkedSpent?.total || 0);
+    const remaining = totalBudget - totalSpent;
+
+    return {
+      budgetId: budget.id,
+      budgetName: budget.name,
+      totalBudget,
+      totalSpent,
+      remaining,
+      percentUsed: totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0,
+    };
+  } catch (error) {
+    console.error('getBudgetLimitOverview error:', error);
+    return null;
+  }
+};
+
+// Pre-save check: would this expense put the selected budget over its limit?
+export const willExpenseExceedBudget = (budgetId: number, expenseAmount: number) => {
+  const overview = getBudgetLimitOverview(budgetId);
+  if (!overview) return null;
+  const overBy = Math.max(0, expenseAmount - overview.remaining);
+  return {
+    ...overview,
+    expenseAmount,
+    overBy,
+    exceeds: overview.remaining < expenseAmount,
+  };
+};
+
+// Records a budget over-budget event for analytics + historical reporting.
+export const recordBudgetOverage = (data: {
+  budgetId: number;
+  budgetName?: string;
+  expenseId?: number;
+  expenseName?: string;
+  amount: number;
+  totalPlanned?: number;
+  totalSpent?: number;
+  overAmount: number;
+  remainingAfter?: number;
+  percentOver?: number;
+}) => {
+  try {
+    const database = getDB();
+    const result = database.runSync(
+      `INSERT INTO budget_overages
+        (budgetId, budgetName, expenseId, expenseName, amount, totalPlanned, totalSpent, overAmount, remainingAfter, percentOver)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      data.budgetId,
+      data.budgetName || null,
+      data.expenseId || null,
+      data.expenseName || null,
+      data.amount,
+      data.totalPlanned || 0,
+      data.totalSpent || 0,
+      data.overAmount,
+      data.remainingAfter || 0,
+      data.percentOver || 0,
+    );
+    return result.lastInsertRowId;
+  } catch (error) {
+    console.error('recordBudgetOverage error:', error);
+    return null;
+  }
+};
+
+// Aggregate over-budget analytics across all recorded overage events.
+export const getBudgetOverageStats = () => {
+  try {
+    const database = getDB();
+    const totals = database.getFirstSync<any>(
+      `SELECT COUNT(*) as overageCount,
+              COALESCE(SUM(overAmount), 0) as totalOverAmount,
+              COALESCE(SUM(amount), 0) as totalExpenseAmount,
+              COALESCE(SUM(totalPlanned), 0) as totalPlanned
+       FROM budget_overages`,
+    );
+
+    const byBudget = database.getAllSync<any>(
+      `SELECT budgetId, budgetName,
+              COUNT(*) as overageCount,
+              COALESCE(SUM(overAmount), 0) as totalOverAmount,
+              COALESCE(SUM(amount), 0) as totalExpenseAmount,
+              COALESCE(SUM(totalPlanned), 0) as totalPlanned
+       FROM budget_overages
+       GROUP BY budgetId
+       ORDER BY totalOverAmount DESC`,
+    );
+
+    const totalPlanned = totals?.totalPlanned || 0;
+    const totalOverAmount = totals?.totalOverAmount || 0;
+
+    return {
+      overageCount: totals?.overageCount || 0,
+      totalOverAmount,
+      totalExpenseAmount: totals?.totalExpenseAmount || 0,
+      totalPlanned,
+      percentOver: totalPlanned > 0 ? Math.round((totalOverAmount / totalPlanned) * 100) : 0,
+      byBudget,
+    };
+  } catch (error) {
+    console.error('getBudgetOverageStats error:', error);
+    return { overageCount: 0, totalOverAmount: 0, totalExpenseAmount: 0, totalPlanned: 0, percentOver: 0, byBudget: [] };
+  }
+};
+
+// Historical over-budget events, optionally scoped to one budget.
+export const getBudgetOverageHistory = (budgetId?: number, limit: number = 100) => {
+  try {
+    const database = getDB();
+    const params: any[] = [];
+    let where = '';
+    if (budgetId) {
+      where = 'WHERE budgetId = ?';
+      params.push(budgetId);
+    }
+    params.push(limit);
+    return database.getAllSync(
+      `SELECT * FROM budget_overages ${where} ORDER BY createdAt DESC, id DESC LIMIT ?`,
+      params,
+    );
+  } catch (error) {
+    console.error('getBudgetOverageHistory error:', error);
+    return [];
+  }
+};
+
+// Active budgets that are currently over their limit (negative remaining).
+export const getBudgetsOverBudget = () => {
+  try {
+    const dashboard = getBudgetDashboard();
+    if (!dashboard?.activeBudgets) return [];
+    const over: any[] = [];
+    for (const b of dashboard.activeBudgets) {
+      const overview = getBudgetLimitOverview(b.id);
+      if (overview && overview.remaining < 0) {
+        over.push(overview);
+      }
+    }
+    return over.sort((a, b) => a.remaining - b.remaining);
+  } catch (error) {
+    console.error('getBudgetsOverBudget error:', error);
+    return [];
+  }
+};
+
 export const getMonthlyBudgetSummary = (year: number, month: number) => {
   try {
     const database = getDB();
     const yymm = `${year}-${String(month).padStart(2, '0')}`;
 
     const budget = database.getFirstSync<any>(
-      `SELECT b.*, COALESCE(SUM(bc.plannedAmount), 0) as totalPlanned
+      `SELECT b.*, CASE WHEN b.plannedAmount > 0 THEN b.plannedAmount ELSE COALESCE(SUM(bc.plannedAmount), 0) END as totalPlanned
        FROM budgets b
        LEFT JOIN budget_categories bc ON bc.budgetId = b.id
        WHERE b.year = ? AND b.month = ? AND b.status = 'active' AND b.period = 'monthly'
@@ -6433,16 +6758,63 @@ export const getMonthlyBudgetSummary = (year: number, month: number) => {
       [yymm]
     );
 
-    const byCategory = database.getAllSync(
-      `SELECT e.category as name, SUM(e.amount) as spent,
-        COALESCE(bc.plannedAmount, 0) as planned
-       FROM expenses e
-       LEFT JOIN budget_categories bc ON e.budgetCategoryId = bc.id
-       WHERE strftime('%Y-%m', e.date) = ?
-       GROUP BY e.category
-       ORDER BY spent DESC`,
-      [yymm]
-    );
+    let byCategory: any[] = [];
+    if (budget) {
+      // Build categories from the budget's own categories (the source of truth
+      // for planned amounts). Spent is the sum of this month's expenses that are
+      // either explicitly linked to the category via budgetCategoryId, or (as a
+      // fallback) match the budget category by name when not linked to any other
+      // budget category. This ensures each row shows the correct spent vs planned,
+      // e.g. a Rent budget of 600 with a 600 rent expense shows "600 / 600".
+      byCategory = database.getAllSync(
+        `SELECT
+           bc.category as name,
+           bc.plannedAmount as planned,
+           COALESCE(SUM(e.amount), 0) as spent
+         FROM budget_categories bc
+         LEFT JOIN expenses e
+           ON strftime('%Y-%m', e.date) = ?
+           AND (
+             e.budgetCategoryId = bc.id
+             OR (
+               e.budgetCategoryId IS NULL
+               AND (e.budgetId IS NULL OR e.budgetId = ?)
+               AND LOWER(COALESCE(e.category, '')) = LOWER(bc.category)
+             )
+           )
+         WHERE bc.budgetId = ?
+         GROUP BY bc.id
+         ORDER BY spent DESC, bc.category ASC`,
+        [yymm, budget.id, budget.id]
+      );
+
+      // Include this month's expense categories that are not linked and don't
+      // match any budget category name, so unlinked spending is still visible.
+      const unlinked = database.getAllSync(
+        `SELECT e.category as name, SUM(e.amount) as spent, 0 as planned
+         FROM expenses e
+         WHERE strftime('%Y-%m', e.date) = ?
+           AND e.budgetCategoryId IS NULL
+           AND (e.budgetId IS NULL OR e.budgetId = ?)
+           AND LOWER(COALESCE(e.category, '')) NOT IN (
+             SELECT LOWER(category) FROM budget_categories WHERE budgetId = ?
+           )
+         GROUP BY e.category
+         ORDER BY spent DESC`,
+        [yymm, budget.id, budget.id]
+      );
+      byCategory = [...byCategory, ...unlinked];
+    } else {
+      // No budget for this month: show all this month's expenses grouped by category.
+      byCategory = database.getAllSync(
+        `SELECT e.category as name, SUM(e.amount) as spent, 0 as planned
+         FROM expenses e
+         WHERE strftime('%Y-%m', e.date) = ?
+         GROUP BY e.category
+         ORDER BY spent DESC`,
+        [yymm]
+      );
+    }
 
     const totalPlanned = budget?.totalPlanned || 0;
     const actual = totalSpent?.total || 0;
@@ -6466,6 +6838,158 @@ export const getMonthlyBudgetSummary = (year: number, month: number) => {
     };
   } catch (error) {
     console.error('Get monthly budget summary error:', error);
+    return null;
+  }
+};
+
+// Aggregate summary across ALL active budgets regardless of period (monthly,
+// quarterly, yearly, ...). Returns the same shape as getMonthlyBudgetSummary so
+// screens can swap it in for the "All Budgets" view — every budget contributes
+// to the totals and the byCategory breakdown, not just the first one.
+export const getAllBudgetsSummary = () => {
+  try {
+    const database = getDB();
+    const activeBudgets = database.getAllSync<any>(`SELECT id FROM budgets WHERE status = 'active'`);
+    if (activeBudgets.length === 0) {
+      return {
+        hasBudget: false,
+        budgetId: null,
+        budgetName: null,
+        totalPlanned: 0,
+        totalSpent: 0,
+        remaining: 0,
+        percentUsed: 0,
+        projectedRemaining: 0,
+        projectedPercent: 0,
+        recurringMonthlyProjection: 0,
+        recurringTemplateCount: 0,
+        byCategory: [],
+      };
+    }
+    const ids = activeBudgets.map((b: any) => b.id);
+    const placeholders = ids.map(() => '?').join(',');
+
+    // Planned per category, merged case-insensitively across budgets.
+    const plannedRows = database.getAllSync<any>(
+      `SELECT LOWER(bc.category) AS catKey, MIN(bc.category) AS name, SUM(bc.plannedAmount) AS planned
+       FROM budget_categories bc
+       JOIN budgets b ON bc.budgetId = b.id
+       WHERE b.status = 'active'
+       GROUP BY LOWER(bc.category)`
+    );
+
+    // Per-budget planned total: budgets carry their own plannedAmount (set when
+    // created), falling back to the sum of their category amounts for legacy
+    // budgets that only stored amounts in categories.
+    const budgetPlannedRows = database.getAllSync<any>(
+      `SELECT b.id AS budgetId,
+              CASE WHEN b.plannedAmount > 0 THEN b.plannedAmount ELSE COALESCE(SUM(bc.plannedAmount), 0) END AS planned
+       FROM budgets b
+       LEFT JOIN budget_categories bc ON bc.budgetId = b.id
+       WHERE b.status = 'active'
+       GROUP BY b.id`
+    );
+
+    // Spent via explicitly linked categories.
+    const linkedRows = database.getAllSync<any>(
+      `SELECT LOWER(bc.category) AS catKey, MIN(bc.category) AS name, SUM(e.amount) AS spent
+       FROM expenses e
+       JOIN budget_categories bc ON e.budgetCategoryId = bc.id
+       JOIN budgets b ON bc.budgetId = b.id
+       WHERE b.status = 'active'
+       GROUP BY LOWER(bc.category)`
+    );
+
+    // Unlinked expenses assigned to an active budget (budgetId set, no category link).
+    const unlinkedRows = database.getAllSync<any>(
+      `SELECT e.category AS name, e.budgetId AS budgetId, SUM(e.amount) AS spent
+       FROM expenses e
+       WHERE e.budgetCategoryId IS NULL AND e.budgetId IN (${placeholders})
+       GROUP BY e.category, e.budgetId`,
+      ...ids
+    );
+
+    // Which category names each active budget defines (for name-fallback attribution).
+    const budgetCats = database.getAllSync<any>(
+      `SELECT bc.budgetId AS budgetId, LOWER(bc.category) AS catKey
+       FROM budget_categories bc
+       JOIN budgets b ON bc.budgetId = b.id
+       WHERE b.status = 'active'`
+    );
+    const catMap: Record<number, Set<string>> = {};
+    budgetCats.forEach((c: any) => {
+      catMap[c.budgetId] = catMap[c.budgetId] || new Set<string>();
+      catMap[c.budgetId].add(c.catKey);
+    });
+
+    const spentByKey: Record<string, number> = {};
+    linkedRows.forEach((r: any) => {
+      spentByKey[r.catKey] = (spentByKey[r.catKey] || 0) + (r.spent || 0);
+    });
+    const unallocated: Record<string, number> = {};
+    unlinkedRows.forEach((r: any) => {
+      const key = String(r.name || '').toLowerCase();
+      if (catMap[r.budgetId]?.has(key)) {
+        spentByKey[key] = (spentByKey[key] || 0) + (r.spent || 0);
+      } else {
+        const display = r.name || 'Uncategorized';
+        unallocated[display] = (unallocated[display] || 0) + (r.spent || 0);
+      }
+    });
+
+    const plannedByKey: Record<string, number> = {};
+    const nameByKey: Record<string, string> = {};
+    plannedRows.forEach((r: any) => {
+      plannedByKey[r.catKey] = (plannedByKey[r.catKey] || 0) + (r.planned || 0);
+      nameByKey[r.catKey] = r.name;
+    });
+
+    const byCategory: any[] = [];
+    Object.keys(plannedByKey).forEach((key) => {
+      const planned = plannedByKey[key] || 0;
+      const spent = spentByKey[key] || 0;
+      byCategory.push({
+        name: nameByKey[key],
+        planned,
+        spent,
+        percentUsed: planned > 0 ? Math.round((spent / planned) * 100) : 0,
+        remaining: planned - spent,
+        status: planned <= 0 ? (spent > 0 ? 'unallocated' : 'ok')
+          : spent / planned >= 1 ? 'exceeded'
+          : spent / planned >= 0.8 ? 'warning' : 'ok',
+      });
+    });
+    Object.keys(unallocated).forEach((name) => {
+      byCategory.push({
+        name,
+        planned: 0,
+        spent: unallocated[name],
+        percentUsed: 0,
+        remaining: -unallocated[name],
+        status: 'unallocated',
+      });
+    });
+    byCategory.sort((a: any, b: any) => (b.spent || 0) - (a.spent || 0));
+
+    const totalPlanned = budgetPlannedRows.reduce((s: number, r: any) => s + (r.planned || 0), 0);
+    const totalSpent = byCategory.reduce((s: number, c: any) => s + (c.spent || 0), 0);
+
+    return {
+      hasBudget: true,
+      budgetId: null,
+      budgetName: null,
+      totalPlanned,
+      totalSpent,
+      remaining: totalPlanned - totalSpent,
+      percentUsed: totalPlanned > 0 ? Math.round((totalSpent / totalPlanned) * 100) : 0,
+      projectedRemaining: 0,
+      projectedPercent: 0,
+      recurringMonthlyProjection: 0,
+      recurringTemplateCount: 0,
+      byCategory,
+    };
+  } catch (error) {
+    console.error('Get all budgets summary error:', error);
     return null;
   }
 };

@@ -14,13 +14,16 @@ import {
   getBudgetLifecycle,
   getBudgets,
   getBudgetWithCategoryProgress,
-  getMonthlyBudgetSummary,
+  getBudgetOverageStats,
+  getBudgetOverageHistory,
+  getAllBudgetsSummary,
   getNextBudgetPeriod,
   insertBudget,
   renewBudget,
 } from "@/database/db";
 import { useFormDrafts } from '@/hooks/useFormDrafts';
 import { useNotifications } from "@/hooks/useNotifications";
+import { useAutoHideScroll } from "@/hooks/useAutoHideScroll";
 import { notifyBudgetCreated } from '@/services/notificationService';
 import { playNice } from '@/services/soundService';
 import { useFocusEffect } from "expo-router";
@@ -43,6 +46,17 @@ import Svg, { Circle } from "react-native-svg";
 import { getBudgetGlass } from './glass-budget';
 import { useTutorial, useTutorialExample, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
 import { budgetTutorial, createBudgetTutorial } from '@/tutorials/definitions';
+import { formatDate, getEthiopianMonthNames, toEthiopianDate } from '@/utils/date-utils';
+
+const formatBudgetPeriod = (budget: any, calendarType: 'ethiopian' | 'gregorian', language: string) => {
+  if (!budget?.year) return '';
+  if (calendarType === 'ethiopian') {
+    const et = toEthiopianDate(new Date(budget.year, (budget.month || 1) - 1, 15));
+    const monthName = getEthiopianMonthNames(language)[et.month - 1];
+    return budget.month ? `${monthName} ${et.year}` : String(et.year);
+  }
+  return budget.month ? `${budget.year}/${String(budget.month).padStart(2, '0')}` : String(budget.year);
+};
 
 const StatusBadge = ({ status }: { status: string }) => {
   const { colors, t } = useSettings();
@@ -55,6 +69,7 @@ const StatusBadge = ({ status }: { status: string }) => {
     ok: { color: colors.success, labelKey: "budget.on_track" },
     within: { color: colors.success, labelKey: "budget.on_track" },
     on_track: { color: colors.success, labelKey: "budget.on_track" },
+    no_budget: { color: colors.textSecondary, labelKey: "budget.no_budget_label" },
   };
   const c = statusMap[status] || statusMap.ok;
   return (
@@ -95,8 +110,9 @@ const ProgressRing = ({ progress, size = 88 }: { progress: number; size?: number
 
 const BudgetOverview = () => {
   const { openSidebar } = useSidebar();
-  const { userProfile, colors, t } = useSettings();
+  const { userProfile, colors, t, calendarType, language } = useSettings();
   const G = getBudgetGlass(colors);
+  const hideFABStyle = useAutoHideScroll();
   const { notifCount } = useNotifications();
   const router = useRouter();
   const dialog = useDialog();
@@ -117,7 +133,6 @@ const BudgetOverview = () => {
   const loadData = useCallback(() => {
     setAllBudgets(getBudgets());
     setLifecycle(getBudgetLifecycle());
-    const now = new Date();
     if (selectedBudgetId) {
       const budgetData = getBudgetWithCategoryProgress(selectedBudgetId);
       setDashboard(budgetData ? { activeBudgets: [budgetData], totalBudget: budgetData.totalPlanned, totalSpent: budgetData.totalSpent, remaining: budgetData.remaining, healthScore: budgetData.percentUsed ? 100 - budgetData.percentUsed : 100 } : getBudgetDashboard());
@@ -140,7 +155,7 @@ const BudgetOverview = () => {
       });
     } else {
       setDashboard(getBudgetDashboard());
-      setMonthSummary(getMonthlyBudgetSummary(now.getFullYear(), now.getMonth() + 1));
+      setMonthSummary(getAllBudgetsSummary());
     }
     setAlerts(getBudgetAlerts(80));
   }, [selectedBudgetId]);
@@ -160,7 +175,12 @@ const BudgetOverview = () => {
     const full = getBudgetWithCategoryProgress(budgetId);
     if (!full) return;
     const isHistoric = full.status === 'expired' || full.status === 'archived' || full.status === 'closed';
-    const detail = { ...full, finalStats: isHistoric ? getBudgetFinalStats(budgetId) : null };
+    const overageStats = getBudgetOverageStats();
+    const overage = {
+      stats: overageStats?.byBudget?.find((s: any) => s.budgetId === budgetId) || null,
+      history: getBudgetOverageHistory(budgetId, 10),
+    };
+    const detail = { ...full, finalStats: isHistoric ? getBudgetFinalStats(budgetId) : null, overage };
     setSelectedBudget(detail);
     setShowDetailModal(true);
   };
@@ -238,8 +258,8 @@ const BudgetOverview = () => {
           <View style={{ flex: 1 }}>
             <AppText variant="body" weight="bold" style={{ color: G.fg }} numberOfLines={1}>{budget.name}</AppText>
             <AppText variant="caption" style={{ color: G.fgSecondary, marginTop: 2 }}>
-              {budget.type} · {budget.period} · {budget.year}{budget.month ? `/${String(budget.month).padStart(2, '0')}` : ""}
-              {budget.endDate ? ` · ${t('budget.ends_on')} ${budget.endDate}` : ""}
+              {budget.type} · {budget.period} · {formatBudgetPeriod(budget, calendarType, language)}
+              {budget.endDate ? ` · ${t('budget.ends_on')} ${formatDate(new Date(budget.endDate), calendarType, language)}` : ""}
             </AppText>
           </View>
           {expired ? (
@@ -319,16 +339,16 @@ const BudgetOverview = () => {
           </ScrollView>
         </Animated.View>
 
-        {/* Monthly Summary Card */}
+        {/* Budget Summary Card */}
         <TutorialTarget id="bud-overview">
         <Animated.View entering={FadeInDown.duration(600)} style={[s.summaryCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
           <View style={s.summaryTop}>
             <View style={{ flex: 1, marginRight: 16 }}>
               <AppText variant="caption" weight="bold" transform="uppercase" style={[s.summaryLabel, { color: G.fgSecondary }]}>
-                {selectedBudgetId ? t("budget.budget_summary") : t("budget.monthly_summary")}
+                {selectedBudgetId ? t("budget.budget_summary") : t("budget.all_budgets")}
               </AppText>
               <AppText variant="title" weight="bold" style={[s.summaryTitle, { color: G.fg }]} numberOfLines={1}>
-                {selectedBudgetFromDashboard?.name || (monthSummary?.budgetName || t("budget.title"))}
+                {selectedBudgetFromDashboard?.name || monthSummary?.budgetName || (selectedBudgetId ? t("budget.title") : t("budget.all_budgets"))}
               </AppText>
             </View>
             <ProgressRing progress={progressPct} />
@@ -402,8 +422,13 @@ const BudgetOverview = () => {
 
           {monthSummary?.byCategory?.length > 0 ? (
             monthSummary.byCategory.map((cat: any, i: number) => {
-              const pct = cat.planned > 0 ? Math.round((cat.spent / cat.planned) * 100) : 0;
-              const status = pct >= 100 ? "exceeded" : pct >= 80 ? "warning" : "ok";
+              const planned = cat.planned || 0;
+              const spent = cat.spent || 0;
+              const hasAllocation = planned > 0;
+              const pct = hasAllocation ? Math.min(100, Math.round((spent / planned) * 100)) : 0;
+              const status = !hasAllocation
+                ? (spent > 0 ? "no_budget" : "ok")
+                : pct >= 100 ? "exceeded" : pct >= 80 ? "warning" : "ok";
               return (
                 <TouchableOpacity key={cat.name + i} style={[s.catCard, { backgroundColor: G.bgCard, borderColor: G.border }]}
                   onPress={() => handleCategoryPress(cat.name)}>
@@ -414,16 +439,21 @@ const BudgetOverview = () => {
                   <View style={[s.catBar, { backgroundColor: G.border }]}>
                     <View style={[s.catBarFill, {
                       width: `${Math.min(pct, 100)}%`,
-                      backgroundColor: status === "exceeded" ? colors.error : status === "warning" ? colors.warning : colors.success
+                      backgroundColor: status === "exceeded" ? colors.error : status === "warning" || status === "no_budget" ? colors.warning : colors.success
                     }]} />
                   </View>
                   <View style={s.catFooter}>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' }}>
-                      <AppNumber value={cat.spent} size="body" prefix={`${t('common.etb')} `} />
-                      <AppText variant="caption" style={{ color: G.fgSecondary }}>{' / '}</AppText>
-                      <AppNumber value={cat.planned} size="body" prefix={`${t('common.etb')} `} />
+                    <View style={s.catSpendRow}>
+                      <AppText variant="caption" weight="bold" style={{ color: G.fgSecondary, marginRight: 4 }}>{t('budget.spent_of')}:</AppText>
+                      <AppNumber value={spent} size="body" prefix={`${t('common.etb')} `} />
+                      {hasAllocation ? (
+                        <>
+                          <AppText variant="caption" style={{ color: G.fgSecondary, marginHorizontal: 4 }}>{t('budget.of_label')}</AppText>
+                          <AppNumber value={planned} size="body" prefix={`${t('common.etb')} `} />
+                        </>
+                      ) : null}
                     </View>
-                    <AppNumber value={pct} size="caption" suffix="%" />
+                    {hasAllocation ? <AppNumber value={pct} size="caption" suffix="%" /> : null}
                   </View>
                 </TouchableOpacity>
               );
@@ -477,11 +507,11 @@ const BudgetOverview = () => {
 
       {/* FAB */}
       <TutorialTarget id="bud-create-btn">
-      <View style={s.fabRow}>
+      <Animated.View style={[s.fabRow, hideFABStyle]}>
         <TouchableOpacity style={[s.fab, { backgroundColor: G.fg, shadowColor: G.fg }]} onPress={() => setShowCreateModal(true)} activeOpacity={0.8}>
           <Plus size={28} color={G.bg} />
         </TouchableOpacity>
-      </View>
+      </Animated.View>
       </TutorialTarget>
 
       {/* Create Budget Modal */}
@@ -543,9 +573,14 @@ const BudgetOverview = () => {
                     {t('budget.categories')}
                   </AppText>
                   {selectedBudget.categories?.map((cat: any, i: number) => {
-                    const pct = cat.plannedAmount > 0 ? Math.round(((cat.spent || 0) / cat.plannedAmount) * 100) : 0;
-                    const catRemaining = cat.plannedAmount - (cat.spent || 0);
-                    const catStatus = pct >= 100 ? "exceeded" : pct >= 80 ? "warning" : "ok";
+                    const planned = cat.plannedAmount || 0;
+                    const spent = cat.spent || 0;
+                    const hasAllocation = planned > 0;
+                    const pct = hasAllocation ? Math.min(100, Math.round((spent / planned) * 100)) : 0;
+                    const catRemaining = planned - spent;
+                    const catStatus = !hasAllocation
+                      ? (spent > 0 ? "no_budget" : "ok")
+                      : pct >= 100 ? "exceeded" : pct >= 80 ? "warning" : "ok";
                     return (
                       <TouchableOpacity key={cat.id || i} style={[s.catCard, { backgroundColor: G.bgCard, borderColor: G.border }]}
                         onPress={() => handleCategoryPress(cat.category)}>
@@ -556,20 +591,27 @@ const BudgetOverview = () => {
                         <View style={[s.catBar, { backgroundColor: G.border }]}>
                           <View style={[s.catBarFill, {
                             width: `${Math.min(pct, 100)}%`,
-                            backgroundColor: catStatus === "exceeded" ? colors.error : catStatus === "warning" ? colors.warning : colors.success
+                            backgroundColor: catStatus === "exceeded" ? colors.error : catStatus === "warning" || catStatus === "no_budget" ? colors.warning : colors.success
                           }]} />
                         </View>
                         <View style={s.catFooter}>
-                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' }}>
-                            <AppNumber value={cat.spent || 0} size="body" prefix={`${t('common.etb')} `} />
-                            <AppText variant="caption" style={{ color: G.fgSecondary }}>{' / '}</AppText>
-                            <AppNumber value={cat.plannedAmount} size="body" prefix={`${t('common.etb')} `} />
+                          <View style={s.catSpendRow}>
+                            <AppText variant="caption" weight="bold" style={{ color: G.fgSecondary, marginRight: 4 }}>{t('budget.spent_of')}:</AppText>
+                            <AppNumber value={spent} size="body" prefix={`${t('common.etb')} `} />
+                            {hasAllocation ? (
+                              <>
+                                <AppText variant="caption" style={{ color: G.fgSecondary, marginHorizontal: 4 }}>{t('budget.of_label')}</AppText>
+                                <AppNumber value={planned} size="body" prefix={`${t('common.etb')} `} />
+                              </>
+                            ) : null}
                           </View>
-                          {catRemaining >= 0 ? (
-                            <AppNumber value={catRemaining} size="body" suffix={` ${t('budget.left_label')}`} />
-                          ) : (
-                            <AppNumber value={Math.abs(catRemaining)} size="body" suffix={` ${t('budget.over_label')}`} negative />
-                          )}
+                          {hasAllocation ? (
+                            catRemaining >= 0 ? (
+                              <AppNumber value={catRemaining} size="body" suffix={` ${t('budget.left_label')}`} />
+                            ) : (
+                              <AppNumber value={Math.abs(catRemaining)} size="body" suffix={` ${t('budget.over_label')}`} negative />
+                            )
+                          ) : null}
                         </View>
                       </TouchableOpacity>
                     );
@@ -627,6 +669,62 @@ const BudgetOverview = () => {
                     );
                   })()}
 
+                                    {(() => {
+                    const over = selectedBudget.overage;
+                    const isOverNow = selectedBudget.remaining < 0;
+                    if (!over || (!over.stats && !over.history?.length && !isOverNow)) return null;
+                    return (
+                      <View style={[s.overageCard, { backgroundColor: G.bgCard, borderColor: colors.error + '40', marginTop: 16 }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                          <AlertTriangle size={16} color={colors.error} />
+                          <AppText variant="caption" weight="bold" transform="uppercase" style={[s.sectionTitle, { color: colors.error, marginBottom: 0, marginLeft: 8, flex: 1 }]}>
+                            {t('budget.over_budget_analytics')}
+                          </AppText>
+                        </View>
+                        {isOverNow && (
+                          <View style={[s.overageBanner, { backgroundColor: colors.error + '15' }]}>
+                            <AppText variant="body-sm" weight="bold" style={{ color: colors.error, flex: 1 }}>
+                              {t('budget.currently_over', { amount: Math.abs(selectedBudget.remaining).toLocaleString() })}
+                            </AppText>
+                          </View>
+                        )}
+                        <View style={s.overageStatsRow}>
+                          <View style={[s.overageStat, { borderRightWidth: 1, borderRightColor: G.border }]}>
+                            <AppNumber value={over.stats?.overageCount || 0} size="heading" color={colors.error} />
+                            <AppText variant="micro" style={{ color: G.fgSecondary, marginTop: 2, textAlign: 'center' }}>{t('budget.times_exceeded')}</AppText>
+                          </View>
+                          <View style={[s.overageStat, { borderRightWidth: 1, borderRightColor: G.border }]}>
+                            <AppNumber value={over.stats?.totalOverAmount || 0} size="heading" prefix={`${t('common.etb')} `} color={colors.error} />
+                            <AppText variant="micro" style={{ color: G.fgSecondary, marginTop: 2, textAlign: 'center' }}>{t('budget.total_over')}</AppText>
+                          </View>
+                          <View style={s.overageStat}>
+                            <AppNumber value={over.stats?.percentOver || 0} size="heading" suffix="%" color={colors.error} />
+                            <AppText variant="micro" style={{ color: G.fgSecondary, marginTop: 2, textAlign: 'center' }}>{t('budget.percent_over')}</AppText>
+                          </View>
+                        </View>
+                        {over.history?.length > 0 && (
+                          <>
+                            <AppText variant="caption" weight="bold" transform="uppercase" style={[s.sectionTitle, { color: G.fgSecondary, marginTop: 16 }]}>
+                              {t('budget.over_budget_history')}
+                            </AppText>
+                            {over.history.map((ev: any, i: number) => (
+                              <View key={ev.id || i} style={[s.overageHistoryRow, { borderBottomColor: G.border }]}>
+                                <View style={{ flex: 1, marginRight: 10 }}>
+                                  <AppText variant="body-sm" weight="bold" style={{ color: G.fg }} numberOfLines={1}>{ev.expenseName || t('expense.transactions')}</AppText>
+                                  <AppText variant="micro" style={{ color: G.fgSecondary }}>{formatDate(new Date(ev.createdAt || ''), calendarType, language)}</AppText>
+                                </View>
+                                <AppNumber value={ev.amount} size="body-sm" prefix={`${t('common.etb')} `} />
+                                <View style={{ marginLeft: 12 }}>
+                                  <AppNumber value={ev.overAmount} size="body-sm" prefix={`${t('budget.over_label')} ${t('common.etb')} `} negative />
+                                </View>
+                              </View>
+                            ))}
+                          </>
+                        )}
+                      </View>
+                    );
+                  })()}
+
                   <View style={s.actionRow}>
                     <TouchableOpacity
                       style={[s.actionBtn, { backgroundColor: G.fg, marginRight: 8 }]}
@@ -667,11 +765,13 @@ const PERIOD_OPTIONS = ["daily", "weekly", "monthly", "quarterly", "yearly", "cu
 const CreateBudgetModal = ({ colors, t, onClose, onSaved }: { colors: any; t: any; onClose: () => void; onSaved: () => void }) => {
   const G = getBudgetGlass(colors);
   const [name, setName] = useState("");
+  const [amount, setAmount] = useState("");
   const [period, setPeriod] = useState<typeof PERIOD_OPTIONS[number]>("monthly");
   const [showAdvancedPeriod, setShowAdvancedPeriod] = useState(false);
   const dialog = useDialog();
   const cbTutorial = useTutorial({ tutorial: createBudgetTutorial });
   useTutorialExample('cb-name', setName);
+  useTutorialExample('cb-amount', setAmount);
 
   const defaultPeriods = ["monthly"] as const;
   const advancedPeriods = ["weekly", "quarterly", "yearly", "custom"] as const;
@@ -682,16 +782,22 @@ const CreateBudgetModal = ({ colors, t, onClose, onSaved }: { colors: any; t: an
     formKey: draftFormKey,
     getPayload: useCallback(() => ({
       name,
+      amount,
       period,
-    }), [name, period]),
+    }), [name, amount, period]),
     getTitle: useCallback(() => (name ? `${t('budget.draft_prefix')} - ${name}` : t('budget.draft_title')), [name, t]),
-    getSubtitle: useCallback(() => t('budget.period') || 'Period', [t]),
+    getSubtitle: useCallback(() => (amount ? `${t('common.etb')} ${amount}` : t('budget.period') || 'Period'), [amount, t]),
     enabled: true,
   });
 
   const handleSave = async () => {
     if (!name.trim()) {
       await dialog.alert({ title: t('common.error'), message: t('budget.enter_name'), iconType: "warning" });
+      return;
+    }
+    const amountNum = parseFloat(amount.replace(/,/g, ''));
+    if (!amountNum || amountNum <= 0) {
+      await dialog.alert({ title: t('common.error'), message: t('budget.enter_amount') || 'Please enter a valid budget amount', iconType: "warning" });
       return;
     }
     const now = new Date();
@@ -701,6 +807,7 @@ const CreateBudgetModal = ({ colors, t, onClose, onSaved }: { colors: any; t: an
       period,
       year: now.getFullYear(),
       month: period === "monthly" || period === "quarterly" ? now.getMonth() + 1 : undefined,
+      plannedAmount: amountNum,
     });
     if (!budgetId) { await dialog.alert({ title: t('common.error'), message: t('budget.create_failed'), iconType: "danger" }); return; }
 
@@ -732,6 +839,7 @@ const CreateBudgetModal = ({ colors, t, onClose, onSaved }: { colors: any; t: an
             onRestore={async (draft) => {
               const d = draft.data;
               setName(d.name || '');
+              setAmount(d.amount || '');
               setPeriod(d.period || 'monthly');
               await draftFormData.remove(draft.id);
             }}
@@ -752,6 +860,20 @@ const CreateBudgetModal = ({ colors, t, onClose, onSaved }: { colors: any; t: an
             placeholderTextColor={G.fgSecondary}
             value={name}
             onChangeText={setName}
+          />
+        </TutorialTarget>
+
+        <TutorialTarget id="cb-amount">
+          <AppText variant="caption" weight="bold" transform="uppercase" style={[s.sectionTitle, { color: G.fgSecondary, marginTop: 20, marginBottom: 10 }]}>
+            {t('budget.total_amount')} ({t('common.etb')})
+          </AppText>
+          <TextInput
+            style={[s.input, { color: G.fg, borderColor: G.border, backgroundColor: G.bgCard }]}
+            placeholder="e.g. 50,000"
+            placeholderTextColor={G.fgSecondary}
+            value={amount}
+            onChangeText={setAmount}
+            keyboardType="numeric"
           />
         </TutorialTarget>
 
@@ -825,6 +947,7 @@ const s = StyleSheet.create({
   catBar: { height: 6, borderRadius: 3, overflow: "hidden", marginBottom: 8 },
   catBarFill: { height: "100%", borderRadius: 3 },
   catFooter: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  catSpendRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center" },
   budgetsSection: { marginHorizontal: 24, marginTop: 24 },
   sectionHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   budgetCard: { borderRadius: 18, padding: 18, borderWidth: 1, marginBottom: 10, overflow: "hidden" },
@@ -834,6 +957,11 @@ const s = StyleSheet.create({
   finalStatsCard: { borderRadius: 18, padding: 18, borderWidth: 1 },
   finalStatsRow: { flexDirection: "row", flexWrap: "wrap" },
   finalStat: { minWidth: 110, paddingVertical: 6, paddingRight: 12 },
+  overageCard: { borderRadius: 18, padding: 18, borderWidth: 1 },
+  overageBanner: { flexDirection: "row", alignItems: "center", borderRadius: 12, padding: 12, marginBottom: 14 },
+  overageStatsRow: { flexDirection: "row", flexWrap: "wrap" },
+  overageStat: { minWidth: 100, flex: 1, paddingVertical: 6, paddingRight: 12 },
+  overageHistoryRow: { flexDirection: "row", alignItems: "center", paddingVertical: 10, borderBottomWidth: 1 },
   actionRow: { flexDirection: "row", flexWrap: "wrap", marginTop: 20 },
   actionBtn: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14 },
   badge: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, gap: 4 },

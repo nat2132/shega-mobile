@@ -1,6 +1,9 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef } from 'react';
 import { ScrollView, type ScrollViewProps } from 'react-native';
 import { useTutorialContext } from './TutorialContext';
+import { reportScrollDirection } from '@/utils/scroll-visibility';
+
+const SCROLL_DIRECTION_THRESHOLD = 12;
 
 interface ScrollViewRefValue {
   ref: React.RefObject<ScrollView | null>;
@@ -24,6 +27,7 @@ export const TutorialScrollView: React.FC<TutorialScrollViewProps> = ({ children
   const ctx = useTutorialContext();
   const scrollY = useRef(0);
   const viewportHeight = useRef(0);
+  const scrollDelta = useRef(0);
 
   useEffect(() => {
     ctx.registerScrollViewRef(ref.current);
@@ -36,8 +40,24 @@ export const TutorialScrollView: React.FC<TutorialScrollViewProps> = ({ children
   }, []);
 
   const handleScroll = useCallback((event: any) => {
-    scrollY.current = event.nativeEvent.contentOffset.y;
-    ctx.updateScrollPosition(scrollY.current, viewportHeight.current);
+    const nextY = event.nativeEvent.contentOffset.y;
+    const prevY = scrollY.current;
+    scrollY.current = nextY;
+    ctx.updateScrollPosition(nextY, viewportHeight.current);
+
+    const delta = nextY - prevY;
+    scrollDelta.current += delta;
+    if (nextY <= 4) {
+      scrollDelta.current = 0;
+      reportScrollDirection('up');
+    } else if (scrollDelta.current >= SCROLL_DIRECTION_THRESHOLD) {
+      scrollDelta.current = 0;
+      reportScrollDirection('down');
+    } else if (scrollDelta.current <= -SCROLL_DIRECTION_THRESHOLD) {
+      scrollDelta.current = 0;
+      reportScrollDirection('up');
+    }
+
     onScroll?.(event);
   }, [onScroll, ctx.updateScrollPosition]);
 

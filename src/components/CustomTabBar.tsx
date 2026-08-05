@@ -14,12 +14,14 @@ import Animated, {
 import { Home, Store, Warehouse, Settings as SettingsIcon } from 'lucide-react-native';
 import { useSettings } from '@/context/SettingsContext';
 import { AppText } from '@/components/ui';
+import { addScrollVisibilityListener, forceScrollVisibility } from '@/utils/scroll-visibility';
 
 const TAB_BAR_PADDING = 20;
 const TAB_BAR_INNER_PADDING = 8;
 const TAB_HEIGHT = 72;
 const PILL_HEIGHT = 44;
 const SPRING_CFG = { damping: 20, stiffness: 260, mass: 0.8 };
+const HIDE_OFFSET = 160;
 
 type TabBarItemProps = {
   state: any;
@@ -125,6 +127,17 @@ export const CustomTabBar = (props: BottomTabBarProps) => {
 
   const pillX = useSharedValue(0);
   const pillW = useSharedValue(0);
+  const translateY = useSharedValue(0);
+
+  useEffect(() => {
+    return addScrollVisibilityListener((direction) => {
+      translateY.value = direction === 'down' ? withSpring(HIDE_OFFSET, SPRING_CFG) : withSpring(0, SPRING_CFG);
+    });
+  }, [translateY]);
+
+  useEffect(() => {
+    forceScrollVisibility('up');
+  }, [props.state.index]);
 
   // Store layout measurements — never writes to shared values
   const onTabLayout = useCallback((index: number, x: number, w: number) => {
@@ -157,8 +170,12 @@ export const CustomTabBar = (props: BottomTabBarProps) => {
     width: pillW.value,
   }));
 
+  const hideStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+
   return (
-    <View style={styles.tabBarContainer}>
+    <Animated.View style={[styles.tabBarContainer, hideStyle]}>
       <View style={[styles.shadowWrapper, { shadowColor: colors.border }]}>
         <View style={[styles.tabBar, { backgroundColor: colors.tabBar }]}>
           <Animated.View style={[styles.activePill, { backgroundColor: colors.tint + '15' }, pillStyle]} />
@@ -178,7 +195,7 @@ export const CustomTabBar = (props: BottomTabBarProps) => {
           })}
         </View>
       </View>
-    </View>
+    </Animated.View>
   );
 };
 

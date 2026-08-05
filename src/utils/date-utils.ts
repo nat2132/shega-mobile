@@ -263,13 +263,27 @@ export const formatEthiopianTime = (dateStr: string, language: string = 'en'): s
  * Ethiopian shifts consistent across the app.
  */
 export const parseLocalDate = (dateStr: string): Date | null => {
-  if (!dateStr) return null;
-  let normalized = dateStr;
-  if (!normalized.includes('T') && !normalized.includes('Z')) {
-    normalized = normalized.replace(' ', 'T') + 'Z';
-  }
-  const d = new Date(normalized);
-  return isNaN(d.getTime()) ? null : d;
+   if (!dateStr) return null;
+   let normalized = dateStr;
+   if (!normalized.includes('T') && !normalized.includes('Z')) {
+     normalized = normalized.replace(' ', 'T') + 'Z';
+   }
+   const d = new Date(normalized);
+   return isNaN(d.getTime()) ? null : d;
+};
+
+/**
+ * Format a Date as a local-time `YYYY-MM-DD` string. Unlike
+ * `date.toISOString().split('T')[0]` — which returns the *UTC* calendar date
+ * and can shift a day for non-zero UTC offsets — this uses the device-local
+ * year/month/day, so date-range math (e.g. "this month", "today") lines up
+ * with the dates the user actually sees and picks.
+ */
+export const toLocalDateString = (date: Date): string => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 };
 
 /**

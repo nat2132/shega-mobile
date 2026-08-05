@@ -597,6 +597,59 @@ export const notifyBudgetApproachingLimit = (data: {
   });
 };
 
+// Notifies the user each time a budget crosses one of the guard-rail
+// thresholds (50% / 75% / 90% / 100% / over budget). Uses a group key that
+// includes the crossed threshold so each level is only notified once until
+// the notification is resolved or dismissed.
+const BUDGET_USAGE_THRESHOLDS = [50, 75, 90, 100];
+
+export const notifyBudgetThresholdReached = (data: {
+  budgetId: number;
+  budgetName: string;
+  percentUsed: number;
+  totalPlanned: number;
+  totalSpent: number;
+  remaining: number;
+}): AppNotification | null => {
+  const pct = Number(data.percentUsed) || 0;
+  const isOver = (Number(data.remaining) || 0) < 0;
+  const crossed = [...BUDGET_USAGE_THRESHOLDS].reverse().find((th) => pct >= th);
+  if (crossed === undefined) return null;
+
+  const threshold = isOver ? 'over' : crossed;
+  const title = isOver
+    ? 'Budget Over Limit'
+    : `Budget ${crossed}% Used`;
+  const message = isOver
+    ? `Your ${data.budgetName} budget is over its limit by ${formatNumber(Math.abs(Number(data.remaining) || 0))} ETB.`
+    : `Your ${data.budgetName} budget has reached ${pct}% usage.`;
+  return createNotification({
+    type: isOver ? 'budget_over_budget' : 'budget_threshold_reached',
+    category: 'budget',
+    priority: isOver ? 'critical' : crossed >= 90 ? 'high' : 'normal',
+    title,
+    message,
+    icon: 'alert-triangle',
+    deepLink: '/(tabs)/budget',
+    data: {
+      budgetId: data.budgetId,
+      budgetName: data.budgetName,
+      name: data.budgetName,
+      percentUsed: pct,
+      percent: pct,
+      threshold: crossed,
+      remaining: data.remaining,
+      amount: Math.abs(Number(data.remaining) || 0),
+      totalPlanned: data.totalPlanned,
+      totalSpent: data.totalSpent,
+      titleKey: isOver ? 'notif.title.budget_over_budget' : 'notif.title.budget_threshold',
+      messageKey: isOver ? 'notif.message.budget_over_budget' : 'notif.message.budget_threshold',
+    },
+    groupKey: `budget-threshold-${data.budgetId}-${threshold}`,
+    requiresAction: isOver || crossed >= 90,
+  });
+};
+
 export const checkBudgetThresholds = (): AppNotification[] => {
   try {
     const dashboard = getBudgetDashboard();
@@ -644,43 +697,17 @@ export const checkBudgetThresholds = (): AppNotification[] => {
         }
       }
 
-      // Budget-level thresholds (overall usage of the active budget).
+      // Budget-level guard-rail thresholds (50% / 75% / 90% / 100% / over).
       if (progress.totalPlanned > 0) {
-        const overallPct = progress.percentUsed || 0;
-        if (overallPct >= 100) {
-          const n = notifyBudgetApproachingLimit({
-            categoryName: progress.name,
-            budgetName: progress.name,
-            percentUsed: overallPct,
-            budgetId: budget.id,
-            categoryId: 0,
-            spent: progress.totalSpent || 0,
-            planned: progress.totalPlanned,
-          });
-          if (n) created.push(n);
-        } else if (overallPct >= 90) {
-          const n = notifyBudgetApproachingLimit({
-            categoryName: progress.name,
-            budgetName: progress.name,
-            percentUsed: overallPct,
-            budgetId: budget.id,
-            categoryId: 0,
-            spent: progress.totalSpent || 0,
-            planned: progress.totalPlanned,
-          });
-          if (n) created.push(n);
-        } else if (overallPct >= 80) {
-          const n = notifyBudgetApproachingLimit({
-            categoryName: progress.name,
-            budgetName: progress.name,
-            percentUsed: overallPct,
-            budgetId: budget.id,
-            categoryId: 0,
-            spent: progress.totalSpent || 0,
-            planned: progress.totalPlanned,
-          });
-          if (n) created.push(n);
-        }
+        const n = notifyBudgetThresholdReached({
+          budgetId: budget.id,
+          budgetName: progress.name,
+          percentUsed: progress.percentUsed || 0,
+          totalPlanned: progress.totalPlanned,
+          totalSpent: progress.totalSpent || 0,
+          remaining: progress.remaining,
+        });
+        if (n) created.push(n);
       }
     }
     return created;

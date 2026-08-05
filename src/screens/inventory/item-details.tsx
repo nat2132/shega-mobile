@@ -217,7 +217,7 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => 
        <TutorialScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
         {/* Supplier Call Card — only shown when supplierCallEnabled is on */}
-        {editForm.supplierCallEnabled && (
+        {Boolean(editForm.supplierCallEnabled) && (
           <Animated.View style={styles.section}>
             <TouchableOpacity
               activeOpacity={0.8}
@@ -275,7 +275,7 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => 
           </View>
         </TouchableOpacity>
 
-        {showAdvanced && (
+        {Boolean(showAdvanced) && (
           <>
 
           <Animated.View style={styles.section}>
@@ -387,7 +387,7 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => 
                   <AppText variant="body-sm" weight="bold" style={[styles.nodeValue, { color: editForm.isCredit ? colors.warning : G.fg }]} numberOfLines={1}>{editForm.isCredit ? t('common.yes') : t('common.no')}</AppText>
                 )}
               </View>
-              {editForm.supplierCallEnabled && (
+              {Boolean(editForm.supplierCallEnabled) && (
                 <>
                   <View style={styles.nodeDivider} />
                   <View style={styles.node}>
@@ -474,7 +474,7 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => 
                      <AppNumber value={editForm.baseSellingPrice} prefix={t('common.etb') + ' '} size="body-sm" style={styles.nodeValue} />
                   )}
                </View>
-               {editForm.hasPacks && (
+               {Boolean(editForm.hasPacks) && (
                  <>
                    <View style={styles.nodeDivider} />
                    <View style={styles.node}>
@@ -590,7 +590,7 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => 
                       </View>
                    )}
                 </View>
-                {editForm.hasPacks && (
+                {Boolean(editForm.hasPacks) && (
                   <>
                     <View style={styles.nodeDivider} />
                     <View style={styles.node}>

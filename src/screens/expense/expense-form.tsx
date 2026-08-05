@@ -31,12 +31,15 @@ import {
   getBudgetCategorySpending,
   getActiveBudgetForExpenses,
   isBudgetExpired,
+  getBudgetLimitOverview,
+  willExpenseExceedBudget,
+  recordBudgetOverage,
 } from '@/database/db';
-import { notifyExpenseRecorded, notifyExpensePushedBudgetOverLimit, notifyLargeExpense } from '@/services/notificationService';
+import { notifyExpenseRecorded, notifyExpensePushedBudgetOverLimit, notifyLargeExpense, checkBudgetThresholds } from '@/services/notificationService';
 import { useSettings } from '@/context/SettingsContext';
 import { useDialog } from '@/context/DialogContext';
 import { Fonts } from '@/constants/theme';
-import { formatDate } from '@/utils/date-utils';
+import { formatDate, toLocalDateString } from '@/utils/date-utils';
 import BusinessSuccessModal, { BusinessSuccessDetails } from '@/components/BusinessSuccessModal';
 import { CustomDatePicker } from '@/components/CustomDatePicker';
 import { AppNumber, AppText } from '@/components/ui';
@@ -56,7 +59,7 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
 
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(() => toLocalDateString(new Date()));
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [description, setDescription] = useState('');
 
@@ -70,9 +73,9 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
   const [budgetCategoryNames, setBudgetCategoryNames] = useState<string[]>([]);
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurFrequency, setRecurFrequency] = useState('Monthly');
-  const [recurStartDate, setRecurStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [recurStartDate, setRecurStartDate] = useState(() => toLocalDateString(new Date()));
   const [recurEndDate, setRecurEndDate] = useState(() => {
-    const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().split('T')[0];
+    const d = new Date(); d.setDate(d.getDate() + 30); return toLocalDateString(d);
   });
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
@@ -231,6 +234,40 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
       return;
     }
 
+    // →→ Budget limit enforcement →→
+    // Before saving, compare the expense amount with the remaining balance of
+    // the selected budget. If it would exceed, never save silently — ask the
+    // user whether to cancel or record the expense anyway.
+    let budgetLimit: ReturnType<typeof willExpenseExceedBudget> = null;
+    if (budgetIdToCheck && !isRecurring) {
+      budgetLimit = willExpenseExceedBudget(budgetIdToCheck, amountNum);
+      if (budgetLimit && budgetLimit.exceeds && budgetLimit.totalBudget > 0) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        playBad();
+        const detailLines = [
+          `${t('budget.name_label') || 'Budget Name'}: ${budgetLimit.budgetName}`,
+          `${t('budget.total_budget')}: ${budgetLimit.totalBudget.toLocaleString()} ${t('common.etb')}`,
+          `${t('budget.total_spent')}: ${budgetLimit.totalSpent.toLocaleString()} ${t('common.etb')}`,
+          `${t('budget.remaining')}: ${budgetLimit.remaining.toLocaleString()} ${t('common.etb')}`,
+          `${t('expense.magnitude')}: ${amountNum.toLocaleString()} ${t('common.etb')}`,
+          `${t('budget.over_by')}: ${budgetLimit.overBy.toLocaleString()} ${t('common.etb')}`,
+        ];
+        const confirmed = await dialog.confirm({
+          title: t('budget.over_budget_warning_title'),
+          message: `${detailLines.join('\n')}\n\n${t('budget.over_budget_confirm_msg', { amount: budgetLimit.overBy.toLocaleString() })}`,
+          confirmText: t('budget.record_anyway'),
+          cancelText: t('common.cancel'),
+          destructive: true,
+          iconType: 'warning',
+        });
+        if (!confirmed) {
+          // Cancel — keep the form intact so the user can edit the amount or
+          // select another budget.
+          return;
+        }
+      }
+    }
+
     saveFrequentCategory(category.trim());
 
     if (isRecurring) {
@@ -304,6 +341,28 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
           }
         } catch {}
       }
+
+      // Record the over-budget event for analytics + recalculate the remaining
+      // balance immediately, then fire any newly crossed guard-rail thresholds
+      // (50% / 75% / 90% / 100% / over budget).
+      try {
+        if (budgetIdToCheck && budgetLimit && budgetLimit.exceeds) {
+          const after = getBudgetLimitOverview(budgetIdToCheck);
+          recordBudgetOverage({
+            budgetId: budgetIdToCheck,
+            budgetName: budgetLimit.budgetName,
+            expenseId: id as number,
+            expenseName: description.trim() || category.trim(),
+            amount: amountNum,
+            totalPlanned: after?.totalBudget ?? budgetLimit.totalBudget,
+            totalSpent: after?.totalSpent ?? budgetLimit.totalSpent,
+            overAmount: after && after.remaining < 0 ? Math.abs(after.remaining) : budgetLimit.overBy,
+            remainingAfter: after?.remaining ?? 0,
+            percentOver: after?.percentUsed ?? 0,
+          });
+        }
+        checkBudgetThresholds();
+      } catch {}
 
       setSuccessDetails({
         title: t('expense.commit_success'),

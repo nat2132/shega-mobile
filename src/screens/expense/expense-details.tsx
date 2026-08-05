@@ -262,7 +262,7 @@ const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => vo
                 </View>
               </View>
             </View>
-            {editForm.isRecurring && isEditing && (
+            {Boolean(editForm.isRecurring) && isEditing && (
               <View style={{ flexDirection: 'row', gap: 6, paddingVertical: 10, flexWrap: 'wrap' }}>
                 {['Daily', 'Weekly', 'Monthly', 'Yearly'].map((freq) => {
                   const isActive = editForm.frequency === freq;
@@ -278,7 +278,7 @@ const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => vo
                 })}
               </View>
             )}
-            {editForm.isRecurring && !isEditing && (
+            {Boolean(editForm.isRecurring) && !isEditing && (
               <View style={styles.dateNodes}>
                 <View style={[styles.dNode, { backgroundColor: G.bg, borderColor: G.border, overflow: 'hidden' }]}>
                   <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.dLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('expense.committed')}</AppText>

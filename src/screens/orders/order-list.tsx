@@ -9,6 +9,7 @@ import {
 import { useFocusEffect, useRouter } from "expo-router";
 import { useSettings } from "@/context/SettingsContext";
 import { useSidebar } from "@/context/SidebarContext";
+import { useAutoHideScroll } from "@/hooks/useAutoHideScroll";
 import {
   getOrders,
   getOrderSummary,
@@ -146,6 +147,7 @@ OrderCard.displayName = "OrderCard";
 const OrdersScreen = () => {
   const { colors, t } = useSettings();
   const ORD_GLASS = useMemo(() => getOrdersGlass(colors), [colors]);
+  const hideFABStyle = useAutoHideScroll();
   const { openSidebar } = useSidebar();
   const router = useRouter();
   const tutorial = useTutorial({ tutorial: ordersTutorial });
@@ -366,6 +368,7 @@ const OrdersScreen = () => {
       </TutorialTarget>
 
       <TutorialTarget id="ord-add-btn">
+      <Animated.View style={hideFABStyle}>
       <TouchableOpacity
         style={[styles.fab, { backgroundColor: ORD_GLASS.fg }]}
         activeOpacity={0.8}
@@ -376,6 +379,7 @@ const OrdersScreen = () => {
       >
         <Plus size={24} color={ORD_GLASS.bg} />
       </TouchableOpacity>
+      </Animated.View>
       </TutorialTarget>
     </View>
   );

@@ -26,6 +26,7 @@ import {
   processIndividualPayment,
 } from "@/database/db";
 import { useNotifications } from "@/hooks/useNotifications";
+import { useAutoHideScroll } from "@/hooks/useAutoHideScroll";
 import { playBad, playNice } from "@/services/soundService";
 import {
   formatHourLabel,
@@ -122,6 +123,7 @@ const SalesDashboard = () => {
     useSettings();
   const insets = useSafeAreaInsets();
   const SALES_GLASS = useMemo(() => getSalesGlass(colors), [colors]);
+  const hideFABStyle = useAutoHideScroll();
   const { showToast } = useToast();
   const tutorial = useTutorial({ tutorial: salesHubTutorial });
   const cpTutorial = useTutorial({ tutorial: collectPaymentsTutorial });
@@ -1268,7 +1270,7 @@ const SalesDashboard = () => {
       </Animated.View>
 
       {/* Expanding Smart FAB */}
-      <View style={[styles.dockedBarWrapper, { bottom: 100 + (insets.bottom > 0 ? insets.bottom : 10) }]}>
+      <Animated.View style={[styles.dockedBarWrapper, { bottom: 100 + (insets.bottom > 0 ? insets.bottom : 10) }, hideFABStyle]}>
         <Animated.View
           style={[
             expandStyle,
@@ -1361,7 +1363,7 @@ const SalesDashboard = () => {
             </View>
           </View>
         </Animated.View>
-      </View>
+      </Animated.View>
 
       {/* Peak Hours Modal */}
       <Modal visible={showPeakHoursModal} transparent animationType="slide">
