@@ -28,6 +28,23 @@ export interface PDFTranslations {
     thanks: string;
     powered: string;
   };
+  supplierOrder: {
+    title: string;
+    orderNo: string;
+    date: string;
+    supplier: string;
+    phone: string;
+    address: string;
+    item: string;
+    currentStock: string;
+    orderQty: string;
+    unitPrice: string;
+    lineTotal: string;
+    total: string;
+    notes: string;
+    thanks: string;
+    powered: string;
+  };
   invoice: {
     title: string;
     customer: string;
@@ -145,6 +162,23 @@ export const pdfTranslations: Record<'en' | 'am' | 'om' | 'ti', PDFTranslations>
       thanks: "Please expedite this restock order.",
       powered: "Generated via Shega Mobile"
     },
+    supplierOrder: {
+      title: "Product Order",
+      orderNo: "Order #",
+      date: "Order Date",
+      supplier: "Supplier",
+      phone: "Phone",
+      address: "Address",
+      item: "Product",
+      currentStock: "Current Stock",
+      orderQty: "Order Qty",
+      unitPrice: "Unit Price",
+      lineTotal: "Line Total",
+      total: "Total",
+      notes: "Notes",
+      thanks: "Please expedite this product order.",
+      powered: "Generated via Shega Mobile"
+    },
     invoice: {
       title: "Customer Debt Invoice",
       customer: "Customer Name",
@@ -258,6 +292,23 @@ export const pdfTranslations: Record<'en' | 'am' | 'om' | 'ti', PDFTranslations>
       orderQty: "የታዘዘ ብዛት",
       notes: "ተጨማሪ መግለጫ",
       thanks: "እባክዎን ይህንን ዝርዝር በፍጥነት ያቅርቡልን።",
+      powered: "በሸጋ ሞባይል የተዘጋጀ"
+    },
+    supplierOrder: {
+      title: "የምርት ማዘዣ",
+      orderNo: "ማዘዣ #",
+      date: "የትእዛዝ ቀን",
+      supplier: "አቅራቢ",
+      phone: "ስልክ",
+      address: "አድራሻ",
+      item: "ምርት",
+      currentStock: "ያለ ክምችት",
+      orderQty: "የታዘዘ ብዛት",
+      unitPrice: "የንጥል ዋጋ",
+      lineTotal: "የመስመር ድምር",
+      total: "ጠቅላላ",
+      notes: "ማስታወሻ",
+      thanks: "እባክዎን ይህንን የምርት ማዘዣ በፍጥነት ያቅርቡልን።",
       powered: "በሸጋ ሞባይል የተዘጋጀ"
     },
     invoice: {
@@ -375,6 +426,23 @@ export const pdfTranslations: Record<'en' | 'am' | 'om' | 'ti', PDFTranslations>
       thanks: "Maaloo ajaja meeshaalee kana nuuf ariifachiisaa.",
       powered: "Shega Mobile kanaan kan qophaaye"
     },
+    supplierOrder: {
+      title: "Ajaja Meeshaa",
+      orderNo: "Ajaja #",
+      date: "Guyyaa Ajajaa",
+      supplier: "Dhiyeessaa",
+      phone: "Bilbila",
+      address: "Teessoo",
+      item: "Meeshaa",
+      currentStock: "Kuusaa Jiru",
+      orderQty: "Baay'ina Ajajame",
+      unitPrice: "Gatii Tokkoo",
+      lineTotal: "Dimshaash Sararaa",
+      total: "Waliigala",
+      notes: "Yaadannoo",
+      thanks: "Maaloo ajaja meeshaa kana nuuf ariifachiisaa.",
+      powered: "Shega Mobile kanaan kan qophaaye"
+    },
     invoice: {
       title: "Nagee Liqii Maamiltootaa",
       customer: "Maqaa Maamilaa",
@@ -488,6 +556,23 @@ export const pdfTranslations: Record<'en' | 'am' | 'om' | 'ti', PDFTranslations>
       orderQty: "ዝእዘዝ ብዝሒ",
       notes: "ተወሳኺ ሓበሬታ",
       thanks: "እባክኹም ነዚ ዝርዝር ፍርያት ብቕልጡፍ የቕርቡልና።",
+      powered: "ብሸጋ ሞባይል ዝተዳለወ"
+    },
+    supplierOrder: {
+      title: "ትእዛዝ ምርት",
+      orderNo: "ትእዛዝ #",
+      date: "ዕለት ትእዛዝ",
+      supplier: "ኣቕራቢ",
+      phone: "ስልኪ ቁፅሪ",
+      address: "ኣድራሻ",
+      item: "ምርት",
+      currentStock: "ዘሎ ክምችት",
+      orderQty: "ዝእዘዝ ብዝሒ",
+      unitPrice: "ዋጋ ንሓደ",
+      lineTotal: "ድምር መስመር",
+      total: "ጠቕላላ",
+      notes: "መዘከሪ",
+      thanks: "እባክኹም ነዚ ትእዛዝ ምርት ብቕልጡፍ የቕርቡልና።",
       powered: "ብሸጋ ሞባይል ዝተዳለወ"
     },
     invoice: {

@@ -3,6 +3,7 @@ import { NotificationBell } from '@/components/NotificationBell';
 import { AppNumber, AppText } from "@/components/ui";
 import { Fonts } from "@/constants/theme";
 import { useDialog } from "@/context/DialogContext";
+import { useSubscription } from "@/context/SubscriptionContext";
 import { PROFILE_IMAGES, useSettings } from "@/context/SettingsContext";
 import { useSidebar } from "@/context/SidebarContext";
 import {
@@ -111,6 +112,7 @@ const ProgressRing = ({ progress, size = 88 }: { progress: number; size?: number
 const BudgetOverview = () => {
   const { openSidebar } = useSidebar();
   const { userProfile, colors, t, calendarType, language } = useSettings();
+  const { isReadOnly } = useSubscription();
   const G = getBudgetGlass(colors);
   const hideFABStyle = useAutoHideScroll();
   const { notifCount } = useNotifications();
@@ -523,6 +525,7 @@ const BudgetOverview = () => {
             t={t}
             onClose={() => setShowCreateModal(false)}
             onSaved={() => { setShowCreateModal(false); loadData(); }}
+            isReadOnly={isReadOnly}
           />
         </View>
       </Modal>
@@ -762,7 +765,7 @@ const BudgetOverview = () => {
 
 const PERIOD_OPTIONS = ["daily", "weekly", "monthly", "quarterly", "yearly"] as const;
 
-const CreateBudgetModal = ({ colors, t, onClose, onSaved }: { colors: any; t: any; onClose: () => void; onSaved: () => void }) => {
+const CreateBudgetModal = ({ colors, t, onClose, onSaved, isReadOnly }: { colors: any; t: any; onClose: () => void; onSaved: () => void; isReadOnly: boolean }) => {
   const G = getBudgetGlass(colors);
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
@@ -791,6 +794,10 @@ const CreateBudgetModal = ({ colors, t, onClose, onSaved }: { colors: any; t: an
   });
 
   const handleSave = async () => {
+    if (isReadOnly) {
+      await dialog.alert({ title: t('common.read_only_mode'), message: t('common.read_only_mode'), iconType: 'warning' });
+      return;
+    }
     if (!name.trim()) {
       await dialog.alert({ title: t('common.error'), message: t('budget.enter_name'), iconType: "warning" });
       return;

@@ -825,9 +825,17 @@ const SaleItemCard = React.memo(
     const customerLabel = sale.customerName || t("sales.walk_in_customer");
     const itemDetail = isPayment
       ? `${sale.paymentMethod || "Cash"}`
-      : sale.isBatch
-        ? `${sale.quantity} items • ${sale.paymentMethod || "Cash"}`
-        : `${sale.quantity} ${sale.baseUnit || ""} • ${sale.paymentMethod || "Cash"}`;
+        : sale.isBatch
+          ? String(sale.quantity || sale.itemCount || 1) +
+            " " +
+            t("inv.items_suffix", { count: String(sale.quantity || sale.itemCount || 1) }) +
+            " • " +
+            (sale.paymentMethod || "Cash")
+          : String(sale.quantity || 1) +
+            " " +
+            t("inv.items_suffix", { count: String(sale.quantity || 1) }) +
+            " • " +
+            (sale.paymentMethod || "Cash");
     const badgeColor = isPayment
       ? colors.success
       : isCancelled

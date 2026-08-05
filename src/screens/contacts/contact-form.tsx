@@ -14,6 +14,7 @@ import * as Haptics from 'expo-haptics';
 import { playNice, playBad } from '@/services/soundService';
 import { useSettings } from '@/context/SettingsContext';
 import { useDialog } from '@/context/DialogContext';
+import { useSubscription } from '@/context/SubscriptionContext';
 import { getContactsGlass } from './glass-contacts';
 import { Fonts } from '@/constants/theme';
 import { insertContact, updateContact } from '@/database/db';
@@ -61,6 +62,11 @@ export default function ContactForm({ contact, onClose, onSaved }: ContactFormPr
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
+    const { isReadOnly } = useSubscription();
+    if (isReadOnly) {
+      await dialog.alert({ title: t('common.read_only_mode'), message: t('common.read_only_mode'), iconType: 'warning' });
+      return;
+    }
     if (!fullName.trim()) {
       playBad();
       await dialog.alert({ title: t('common.error'), message: t('contacts.form_name_required'), iconType: 'danger' });

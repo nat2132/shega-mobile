@@ -14,9 +14,57 @@ import { useRouter } from 'expo-router';
 
 const PremiumTrialBanner: React.FC<{ compact?: boolean }> = ({ compact }) => {
   const { colors, theme, t } = useSettings();
-  const { isTrial, trialDaysRemaining } = useSubscription();
+  const { isTrial, trialDaysRemaining, isExpiringSoon, daysUntilExpiry, isExpired } = useSubscription();
   const router = useRouter();
   const gold = '#D4AF37';
+
+  if (isExpired) {
+    return (
+      <Animated.View entering={FadeInDown.duration(500)}>
+        <TouchableOpacity
+          style={[styles.expiredBanner, { backgroundColor: '#EF444415', borderColor: '#EF444430' }]}
+          onPress={() => router.push('/subscription/renewal')}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.expiredIcon, { backgroundColor: '#EF444420' }]}>
+            <Clock size={16} color="#EF4444" />
+          </View>
+          <View style={styles.expiredText}>
+            <AppText variant="body" weight="bold" style={{ color: '#EF4444' }}>
+              {t('subscription.expired')}
+            </AppText>
+            <AppText variant="caption" weight="medium" style={{ color: '#EF4444CC' }}>
+              {t('subscription.expired_banner')}
+            </AppText>
+          </View>
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  }
+
+  if (isExpiringSoon && daysUntilExpiry > 0) {
+    return (
+      <Animated.View entering={FadeInDown.duration(500)}>
+        <TouchableOpacity
+          style={[styles.expiringBanner, { backgroundColor: '#F59E0B15', borderColor: '#F59E0B30' }]}
+          onPress={() => router.push('/subscription/manage')}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.expiringIcon, { backgroundColor: '#F59E0B20' }]}>
+            <Clock size={16} color="#F59E0B" />
+          </View>
+          <View style={styles.expiringText}>
+            <AppText variant="body" weight="bold" style={{ color: '#F59E0B' }}>
+              {t('subscription.expiring_soon')}
+            </AppText>
+            <AppText variant="caption" weight="medium" style={{ color: '#F59E0BCC' }}>
+              {t('subscription.expiring_banner', { days: String(daysUntilExpiry) })}
+            </AppText>
+          </View>
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  }
 
   if (!isTrial || trialDaysRemaining <= 0) return null;
 
@@ -124,6 +172,50 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+  },
+  expiredBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 10,
+    marginHorizontal: 16,
+    marginBottom: 12,
+  },
+  expiredIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  expiredText: {
+    flex: 1,
+    gap: 2,
+  },
+  expiringBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 10,
+    marginHorizontal: 16,
+    marginBottom: 12,
+  },
+  expiringIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  expiringText: {
+    flex: 1,
+    gap: 2,
   },
 });
 

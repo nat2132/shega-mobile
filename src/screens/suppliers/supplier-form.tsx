@@ -13,6 +13,7 @@ import { X, Check, User, Phone, Bookmark, FileText, Building2, CreditCard } from
 import * as Haptics from 'expo-haptics';
 import { playNice, playBad } from '@/services/soundService';
 import { useSettings } from '@/context/SettingsContext';
+import { useSubscription } from '@/context/SubscriptionContext';
 import { useDialog } from '@/context/DialogContext';
 import { getSuppliersGlass } from './glass-suppliers';
 import { Fonts } from '@/constants/theme';
@@ -30,6 +31,7 @@ interface SupplierFormProps {
 
 export default function SupplierForm({ supplier, onClose, onSaved }: SupplierFormProps) {
   const { colors, t } = useSettings();
+  const { isReadOnly } = useSubscription();
   const G = getSuppliersGlass(colors);
   const dialog = useDialog();
   const isEditing = !!supplier;
@@ -49,6 +51,10 @@ export default function SupplierForm({ supplier, onClose, onSaved }: SupplierFor
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
+    if (isReadOnly) {
+      await dialog.alert({ title: t('common.read_only_mode'), message: t('common.read_only_mode'), iconType: 'warning' });
+      return;
+    }
     if (!fullName.trim()) {
       playBad();
       await dialog.alert({ title: t('common.error'), message: t('suppliers.form_name_required'), iconType: 'danger' });

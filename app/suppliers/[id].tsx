@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useSettings } from '@/context/SettingsContext';
 import SupplierDetails from '@/screens/suppliers/supplier-details';
+import PremiumFeatureGate from '@/components/PremiumFeatureGate';
 
 export default function SupplierDetailsRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -19,7 +20,9 @@ export default function SupplierDetailsRoute() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <Stack.Screen options={{ headerShown: false }} />
       {!Number.isNaN(supplierId) && supplierId > 0 ? (
-        <SupplierDetails supplierId={supplierId} onClose={close} />
+        <PremiumFeatureGate feature="supplier_management">
+          <SupplierDetails supplierId={supplierId} onClose={close} />
+        </PremiumFeatureGate>
       ) : null}
     </View>
   );

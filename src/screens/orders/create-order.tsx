@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useSettings } from "@/context/SettingsContext";
+import { useSubscription } from "@/context/SubscriptionContext";
 import { useToast } from "@/context/ToastContext";
 import { useDialog } from "@/context/DialogContext";
 import { searchInventory, insertOrder} from "@/database/db";
@@ -47,6 +48,7 @@ interface CartItem {
 
 const CreateOrderScreen = () => {
   const { colors, t } = useSettings();
+  const { isReadOnly } = useSubscription();
   const ORD_GLASS = useMemo(() => getOrdersGlass(colors), [colors]);
   const tutorial = useTutorial({ tutorial: createOrderTutorial });
   const router = useRouter();
@@ -132,6 +134,10 @@ const CreateOrderScreen = () => {
   );
 
   const handleCreate = async () => {
+    if (isReadOnly) {
+      await dialog.alert({ title: t('common.read_only_mode'), message: t('common.read_only_mode'), iconType: 'warning' });
+      return;
+    }
     if (cart.length === 0) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       await dialog.alert({

@@ -7,6 +7,7 @@ import { Fonts, LightTheme } from "@/constants/theme";
 import { useDialog } from "@/context/DialogContext";
 import { useNavigationIntent } from "@/context/NavigationIntentContext";
 import { PROFILE_IMAGES, useSettings } from "@/context/SettingsContext";
+import { useSubscription } from "@/context/SubscriptionContext";
 import { useSidebar } from "@/context/SidebarContext";
 import { useToast } from "@/context/ToastContext";
 import {
@@ -121,6 +122,7 @@ const SalesDashboard = () => {
   const { openSidebar } = useSidebar();
   const { userProfile, colors, calendarType, language, timeSystem, t } =
     useSettings();
+  const { isReadOnly } = useSubscription();
   const insets = useSafeAreaInsets();
   const SALES_GLASS = useMemo(() => getSalesGlass(colors), [colors]);
   const hideFABStyle = useAutoHideScroll();
@@ -3533,6 +3535,10 @@ const SalesDashboard = () => {
                 cart={pendingSales}
                 onBack={() => setSaleFlowStep("pending")}
                 onFinish={async (saleMetadata: any) => {
+                  if (isReadOnly) {
+                    dialog.alert({ title: t('common.read_only_mode'), message: t('common.read_only_mode'), iconType: 'warning' });
+                    return;
+                  }
                   try {
                     const batchId =
                       Date.now().toString() +
@@ -3679,15 +3685,19 @@ const SalesActivityCard = React.memo(
     };
     const itemDetail = isPayment
       ? paymentLabel(sale.paymentMethod)
-      : isBatch
-        ? t("inv.items_suffix", { count: String(sale.itemCount || sale.quantity) }) +
-          " • " +
-          paymentLabel(sale.paymentMethod)
-        : sale.quantity +
-          " " +
-          (sale.unit || "") +
-          " • " +
-          paymentLabel(sale.paymentMethod);
+        : isBatch
+          ? String(sale.itemCount || sale.quantity || 1) +
+            " " +
+            t("inv.items_suffix", { count: String(sale.itemCount || sale.quantity) }) +
+            " • " +
+            paymentLabel(sale.paymentMethod)
+          : (sale.itemName || "") +
+            " • " +
+            String(sale.quantity || 1) +
+            " " +
+            t("inv.items_suffix", { count: String(sale.quantity || 1) }) +
+            " • " +
+            paymentLabel(sale.paymentMethod);
     const badgeColor = isPayment
       ? colors.success
       : isCancelled

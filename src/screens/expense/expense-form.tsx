@@ -37,6 +37,7 @@ import {
 } from '@/database/db';
 import { notifyExpenseRecorded, notifyExpensePushedBudgetOverLimit, notifyLargeExpense, checkBudgetThresholds } from '@/services/notificationService';
 import { useSettings } from '@/context/SettingsContext';
+import { useSubscription } from '@/context/SubscriptionContext';
 import { useDialog } from '@/context/DialogContext';
 import { Fonts } from '@/constants/theme';
 import { formatDate, toLocalDateString } from '@/utils/date-utils';
@@ -54,6 +55,7 @@ const FREQUENT_CATEGORIES_KEY = 'frequent_expense_categories';
 
 const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
   const { colors, t, calendarType, language } = useSettings();
+  const { isReadOnly } = useSubscription();
   const G = getExpenseGlass(colors);
   const dialog = useDialog();
 
@@ -201,6 +203,10 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
   };
 
   const handleSave = async () => {
+    if (isReadOnly) {
+      await dialog.alert({ title: t('common.read_only_mode'), message: t('common.read_only_mode'), iconType: 'warning' });
+      return;
+    }
     const amountNum = Number(amount);
     if (!amount || isNaN(amountNum) || amountNum <= 0) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);

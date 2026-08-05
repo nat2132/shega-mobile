@@ -20,9 +20,9 @@ const SupportCenter = () => {
 
   const handleContact = (type: 'email' | 'phone') => {
     if (type === 'email') {
-      Linking.openURL('mailto:support@invpro.com');
+      Linking.openURL('mailto:ssshegas@gmail.com');
     } else {
-      Linking.openURL('tel:+18885550123');
+      Linking.openURL('tel:+251925319901');
     }
   };
 
@@ -57,7 +57,7 @@ const SupportCenter = () => {
               <View style={styles.cardInfo}>
                 <AppText variant="caption" weight="bold" style={[styles.cardTag, { color: G.fgSecondary }]} numberOfLines={1}>{t('support.email_channel')}</AppText>
                 <AppText variant="title" weight="bold" style={[styles.cardMain, { color: G.fg }]} numberOfLines={2}>{t('support.direct_support')}</AppText>
-                <AppText variant="body-sm" weight="medium" style={[styles.cardDesc, { color: G.fgSecondary }]} numberOfLines={2}>support@invpro.com</AppText>
+                <AppText variant="body-sm" weight="medium" style={[styles.cardDesc, { color: G.fgSecondary }]} numberOfLines={2}>ssshegas@gmail.com</AppText>
               </View>
               <View style={styles.extIcon}>
                 <ExternalLink size={18} color={G.border} />

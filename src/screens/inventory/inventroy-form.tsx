@@ -5,6 +5,7 @@ import { AppNumber, AppText } from '@/components/ui';
 import { Fonts } from '@/constants/theme';
 import { useDialog } from '@/context/DialogContext';
 import { useSettings } from '@/context/SettingsContext';
+import { useSubscription } from '@/context/SubscriptionContext';
 import { useWarehouse } from '@/context/WarehouseContext';
 import {
   getItems,
@@ -137,6 +138,7 @@ export const AddAssetFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, o
 
 const RestockFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?: () => void }) => {
   const { colors, t } = useSettings();
+  const { isReadOnly } = useSubscription();
   const G = getInventoryGlass(colors);
   const styles = useMemo(() => createStyles(G), [G]);
   const dialog = useDialog();
@@ -210,6 +212,10 @@ const RestockFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?:
   };
 
   const handleSave = async () => {
+    if (isReadOnly) {
+      await dialog.alert({ title: t('common.read_only_mode'), message: t('common.read_only_mode'), iconType: 'warning' });
+      return;
+    }
     if (!selectedItem) return;
     const qty = parseInt(restockQty) || 0;
     if (qty <= 0) {
@@ -578,6 +584,7 @@ const RestockFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?:
 
 const AddItemFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?: () => void }) => {
   const { colors, t, calendarType, language } = useSettings();
+  const { isReadOnly } = useSubscription();
   const { activeWarehouseId } = useWarehouse();
   const G = getInventoryGlass(colors);
   const styles = useMemo(() => createStyles(G), [G]);
@@ -755,6 +762,10 @@ const loadCategories = async () => {
   };
 
   const handleFinish = async () => {
+    if (isReadOnly) {
+      await dialog.alert({ title: t('common.read_only_mode'), message: t('common.read_only_mode'), iconType: 'warning' });
+      return;
+    }
     // Validate all steps before saving
     if (!validateStep(4)) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);

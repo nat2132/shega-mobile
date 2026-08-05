@@ -129,14 +129,15 @@ const MyStoreMenu: React.FC<SidebarProps> = ({ onClose }) => {
               
               <MenuItem 
                 icon={Users} 
-                label={t('sidebar.suppliers_contacts')} 
+                label={t('sidebar.contacts')} 
                 onPress={() => handleRoute('/contacts')} 
                 delay={150}
               />
               <MenuItem 
                 icon={Truck} 
                 label={t('sidebar.suppliers')} 
-                onPress={() => handleRoute('/(tabs)/suppliers')} 
+                onPress={() => handlePremiumRoute('/(tabs)/suppliers', 'supplier_management')} 
+                locked={!isFeatureUnlocked('supplier_management')}
                 delay={200}
               />
               <MenuItem 

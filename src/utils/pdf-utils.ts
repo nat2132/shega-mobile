@@ -472,6 +472,117 @@ export const generateLowStockOrderPDF = async (items: any[], business: any, lang
   return triggerShare(html, trans.order.title, action);
 };
 
+// 2b. Supplier Product Order PDF Generator — a reviewable purchase order
+// built from a supplier's linked products.
+const escHtml = (value: any): string =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+export const generateSupplierOrderPDF = async (
+  order: {
+    orderNumber?: string;
+    supplier?: { fullName?: string; companyName?: string; phone?: string; address?: string } | null;
+    items: { name?: string; currentStock?: number; unit?: string; quantity: number; price: number }[];
+    totalAmount?: number;
+    notes?: string | null;
+    createdAt?: string | null;
+  },
+  business: any,
+  language: Lang = 'en',
+  action: 'share' | 'save' = 'share'
+) => {
+  const trans = pdfTranslations[language];
+  const so = trans.supplierOrder;
+  const sup = order.supplier || {};
+
+  const itemsHtml = (order.items || []).map((item) => {
+    const qty = item.quantity || 0;
+    const price = item.price || 0;
+    const lineTotal = qty * price;
+    const unit = item.unit || 'pcs';
+    return `
+    <tr>
+      <td>${escHtml(item.name || 'Product')}</td>
+      <td style="text-align: center;">${formatNumber(item.currentStock || 0)} ${escHtml(unit)}</td>
+      <td style="text-align: center;">${formatNumber(qty)} ${escHtml(unit)}</td>
+      <td style="text-align: right;">${formatNumber(price)} ${trans.common.etb}</td>
+      <td style="text-align: right; font-weight: 600;">${formatNumber(lineTotal)} ${trans.common.etb}</td>
+    </tr>`;
+  }).join('');
+
+  const html = `
+    <html>
+      <head>
+        ${getCommonStyles()}
+      </head>
+      <body>
+        <div class="shega-stamp">
+          <img src="${SHEGA_LOGO}" alt="Shega" />
+        </div>
+        <div class="header">
+          <div class="business-info">
+            <div class="business-name">${escHtml(business?.businessName || trans.common.shegaStore)}</div>
+            <div class="business-sub">${escHtml(business?.storeName || trans.common.mainBranch)}</div>
+          </div>
+          <div class="doc-meta">
+            <div class="doc-title" style="color: #3B82F6;">${escHtml(so.title)}</div>
+            ${order.orderNumber
+              ? `<div class="doc-date">${escHtml(so.orderNo)}: ${escHtml(order.orderNumber)}</div>`
+              : `<div class="doc-date">${escHtml(so.date)}: ${escHtml(formatReceiptDateTime(order.createdAt || new Date().toISOString(), language, 'device'))}</div>`}
+          </div>
+        </div>
+
+        <div class="info-grid">
+          <div class="info-column">
+            <div class="info-row"><span class="label">${escHtml(so.supplier)}:</span><span class="value">${escHtml(sup.fullName || sup.companyName || '—')}</span></div>
+            ${sup.companyName ? `<div class="info-row"><span class="label">${escHtml(trans.reports.brandCompany)}:</span><span class="value">${escHtml(sup.companyName)}</span></div>` : ''}
+            ${sup.phone ? `<div class="info-row"><span class="label">${escHtml(so.phone)}:</span><span class="value">${escHtml(sup.phone)}</span></div>` : ''}
+            ${sup.address ? `<div class="info-row"><span class="label">${escHtml(so.address)}:</span><span class="value">${escHtml(sup.address)}</span></div>` : ''}
+          </div>
+          <div class="info-column">
+            <div class="info-row"><span class="label">${escHtml(so.date)}:</span><span class="value">${escHtml(formatReceiptDateTime(order.createdAt || new Date().toISOString(), language, 'device'))}</span></div>
+            <div class="info-row"><span class="label">${escHtml(trans.reports.itemCount)}:</span><span class="value">${(order.items || []).length}</span></div>
+          </div>
+        </div>
+
+        <table class="items-table">
+          <thead>
+            <tr>
+              <th>${escHtml(so.item)}</th>
+              <th style="text-align: center;">${escHtml(so.currentStock)}</th>
+              <th style="text-align: center;">${escHtml(so.orderQty)}</th>
+              <th style="text-align: right;">${escHtml(so.unitPrice)}</th>
+              <th style="text-align: right;">${escHtml(so.lineTotal)}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsHtml}
+          </tbody>
+        </table>
+
+        <div class="total-section">
+          <div class="total-row">
+            <span class="label">${escHtml(so.total)}</span>
+            <span class="grand-total">${formatNumber(order.totalAmount || 0)} ${trans.common.etb}</span>
+          </div>
+        </div>
+
+        ${order.notes ? `<div class="info-grid" style="margin-bottom: 20px;"><div class="info-column"><div class="info-row"><span class="label">${escHtml(so.notes)}:</span><span class="value">${escHtml(order.notes)}</span></div></div></div>` : ''}
+
+        <div class="footer">
+          ${escHtml(so.thanks)}<br/>
+          ${escHtml(so.powered)}
+        </div>
+      </body>
+    </html>
+  `;
+
+  return triggerShare(html, `${so.title}_${order.orderNumber || 'Order'}`, action);
+};
+
 // 3. Customer Debt Invoice PDF Generator
 export const generateInvoicePDF = async (customer: any, debtSales: any[], business: any, language: Lang = 'en', action: 'share' | 'save' = 'share', timeSystem: 'device' | 'ethiopian' = 'device') => {
   const trans = pdfTranslations[language];

@@ -33,6 +33,7 @@ export const PREMIUM_FEATURES = [
   'biometrics',
   'themes',
   'supplier_reminders',
+  'supplier_management',
 ] as const;
 
 export type PremiumFeature = typeof PREMIUM_FEATURES[number];
@@ -118,6 +119,11 @@ export const FEATURE_LABELS: Record<PremiumFeature, { name: string; description:
     description: 'Get reminders for supplier credit payments.',
     benefits: ['Never miss a payment', 'Maintain good relationships', 'Avoid late fees'],
   },
+  supplier_management: {
+    name: 'Supplier Management',
+    description: 'Full supplier management including orders, payments, and purchase tracking.',
+    benefits: ['Track supplier orders', 'Manage supplier payments', 'View purchase history'],
+  },
 };
 
 const BASIC_FEATURES = ['inventory', 'sales', 'contacts', 'adjustments'];
@@ -128,6 +134,10 @@ interface SubscriptionContextType {
   trialDaysRemaining: number;
   isPremium: boolean;
   isTrial: boolean;
+  isExpired: boolean;
+  isReadOnly: boolean;
+  isExpiringSoon: boolean;
+  daysUntilExpiry: number;
   refresh: () => Promise<void>;
   selectPlan: (plan: string, durationMonths: number, price: number) => Promise<boolean>;
   submitPayment: (data: {
@@ -143,6 +153,7 @@ interface SubscriptionContextType {
   renewCurrentSubscription: (durationMonths: number, price: number) => Promise<boolean>;
   isFeatureUnlocked: (feature: string) => boolean;
   isBasicFeature: (feature: string) => boolean;
+  isFeatureLocked: (feature: string) => boolean;
   refreshTrialDays: () => Promise<void>;
   payments: any[];
   renewals: any[];
@@ -222,12 +233,34 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return BASIC_FEATURES.includes(feature);
   }, []);
 
+  const isFeatureLocked = useCallback((feature: string) => {
+    if (!PREMIUM_FEATURES.includes(feature as any)) return false;
+    if (!subscription) return true;
+    if (subscription.status === 'expired') return true;
+    if (subscription.status === 'cancelled') return true;
+    if (subscription.status === 'rejected') return true;
+    if (subscription.status === 'pending_verification') return true;
+    return subscription.plan !== 'premium';
+  }, [subscription]);
+
   const refreshTrialDays = useCallback(async () => {
     setTrialDaysRemaining(getTrialDaysRemaining());
   }, []);
 
   const isPremium = subscription?.status === 'active' && subscription?.plan === 'premium';
   const isTrial = subscription?.status === 'trial';
+  const isExpired = subscription?.status === 'expired';
+  const isReadOnly = ['expired', 'cancelled', 'rejected'].includes(subscription?.status || '');
+
+  const daysUntilExpiry = (() => {
+    if (!subscription?.expiresAt) return 0;
+    const expiry = new Date(subscription.expiresAt);
+    const now = new Date();
+    const diff = expiry.getTime() - now.getTime();
+    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+  })();
+
+  const isExpiringSoon = daysUntilExpiry <= 7 && daysUntilExpiry > 0 && subscription?.status === 'active';
 
   return (
     <SubscriptionContext.Provider
@@ -237,6 +270,10 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         trialDaysRemaining,
         isPremium,
         isTrial,
+        isExpired,
+        isReadOnly,
+        isExpiringSoon,
+        daysUntilExpiry,
         refresh,
         selectPlan,
         submitPayment,
@@ -244,6 +281,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         renewCurrentSubscription,
         isFeatureUnlocked,
         isBasicFeature,
+        isFeatureLocked,
         refreshTrialDays,
         payments,
         renewals,

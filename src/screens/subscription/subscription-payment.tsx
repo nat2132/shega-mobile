@@ -56,8 +56,8 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const telebirrNumber = 'XXXXXXX';
-  const telebirrName = t('subscription.telebirr_account_name');
+  const telebirrNumber = '+251925319901';
+  const telebirrName = 'Aselefech';
 
   const copyToClipboard = async (text: string) => {
     await Clipboard.setStringAsync(text);

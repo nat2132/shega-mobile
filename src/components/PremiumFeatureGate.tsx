@@ -20,7 +20,7 @@ const PremiumFeatureGate: React.FC<PremiumFeatureGateProps> = ({
   fallback,
 }) => {
   const { colors, theme, t } = useSettings();
-  const { isFeatureUnlocked, isBasicFeature } = useSubscription();
+  const { isFeatureUnlocked, isBasicFeature, isExpired, isReadOnly } = useSubscription();
   const router = useRouter();
   const gold = '#D4AF37';
 
@@ -29,12 +29,48 @@ const PremiumFeatureGate: React.FC<PremiumFeatureGateProps> = ({
   }
 
   if (isBasicFeature(feature)) {
+    if (isReadOnly) {
+      if (fallback) return <>{fallback}</>;
+      return (
+        <View style={[styles.container, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.lockIcon, { backgroundColor: '#EF444415' }]}>
+            <Lock size={20} color="#EF4444" />
+          </View>
+          <View style={styles.textSection}>
+            <AppText variant="body" weight="bold" style={{ color: colors.text }}>
+              {featureName || t('common.basic_feature')}
+            </AppText>
+            <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }}>
+              {t('common.read_only_mode')}
+            </AppText>
+          </View>
+          <TouchableOpacity
+            style={[styles.upgradeButton, { backgroundColor: '#EF4444' }]}
+            onPress={() => router.push('/subscription/renewal')}
+            activeOpacity={0.8}
+          >
+            <AppText variant="caption" weight="bold" style={{ color: '#FFF' }}>
+              {t('common.renew')}
+            </AppText>
+            <ArrowRight size={14} color="#FFF" strokeWidth={2.5} />
+          </TouchableOpacity>
+        </View>
+      );
+    }
     return <>{children}</>;
   }
 
   if (fallback) {
     return <>{fallback}</>;
   }
+
+  const handlePress = () => {
+    if (isExpired || isReadOnly) {
+      router.push('/subscription/renewal');
+    } else {
+      router.push(`/subscription/upgrade?feature=${feature}`);
+    }
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -46,16 +82,16 @@ const PremiumFeatureGate: React.FC<PremiumFeatureGateProps> = ({
           {featureName || t('common.premium_feature')}
         </AppText>
         <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }}>
-          {t('common.upgrade_unlock')}
+          {isReadOnly ? t('common.renew_to_unlock') : t('common.upgrade_unlock')}
         </AppText>
       </View>
       <TouchableOpacity
-        style={[styles.upgradeButton, { backgroundColor: gold }]}
-        onPress={() => router.push(`/subscription/upgrade?feature=${feature}`)}
+        style={[styles.upgradeButton, { backgroundColor: isReadOnly ? '#EF4444' : gold }]}
+        onPress={handlePress}
         activeOpacity={0.8}
       >
         <AppText variant="caption" weight="bold" style={{ color: '#FFF' }}>
-          {t('common.upgrade')}
+          {isReadOnly ? t('common.renew') : t('common.upgrade')}
         </AppText>
         <ArrowRight size={14} color="#FFF" strokeWidth={2.5} />
       </TouchableOpacity>

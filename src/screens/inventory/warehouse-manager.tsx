@@ -1,5 +1,6 @@
 import { Fonts } from '@/constants/theme';
 import { useDialog } from '@/context/DialogContext';
+import { useSubscription } from '@/context/SubscriptionContext';
 import { useSettings } from '@/context/SettingsContext';
 import { deleteWarehouse, getWarehouses, insertWarehouse, updateWarehouse } from '@/database/db';
 import * as Haptics from 'expo-haptics';
@@ -27,6 +28,7 @@ interface WarehouseManagerProps {
 
 const WarehouseManagerModal: React.FC<WarehouseManagerProps> = ({ visible, onClose, selectedWarehouseId, onSelectWarehouse }) => {
   const { colors, t } = useSettings();
+  const { isReadOnly } = useSubscription();
   const G = getInventoryGlass(colors);
   const dialog = useDialog();
   const tutorial = useTutorial({ tutorial: warehouseManagerTutorial });
@@ -49,6 +51,10 @@ const WarehouseManagerModal: React.FC<WarehouseManagerProps> = ({ visible, onClo
   }, [visible]);
 
   const handleSave = async () => {
+    if (isReadOnly) {
+      await dialog.alert({ title: t('common.read_only_mode'), message: t('common.read_only_mode'), iconType: 'warning' });
+      return;
+    }
     if (!formName.trim()) {
       await dialog.alert({ title: t('common.required'), message: t('inv.wh_name_required'), iconType: 'warning' });
       return;

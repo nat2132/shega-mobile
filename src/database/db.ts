@@ -428,6 +428,22 @@ export const initDB = () => {
     `);
     console.log('Table "supplier_payments" checked/created.');
 
+    // Saved supplier product orders — reviewable purchase orders generated
+    // from the supplier's linked products. Items are stored as JSON so the
+    // editable line items (qty / price / unit) round-trip exactly.
+    database.execSync(`
+      CREATE TABLE IF NOT EXISTS supplier_orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        supplierId INTEGER NOT NULL,
+        orderNumber TEXT,
+        items TEXT NOT NULL,
+        totalAmount REAL DEFAULT 0,
+        notes TEXT,
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log('Table "supplier_orders" checked/created.');
+
   // Migration: Add warehouseId to items table
   try {
     database.execSync(`ALTER TABLE items ADD COLUMN warehouseId INTEGER REFERENCES warehouses(id);`);
@@ -5050,6 +5066,99 @@ export const insertSupplierPayment = (data: { supplierId: number; amount: number
   } catch (error) {
     console.error('Insert supplier payment error:', error);
     return null;
+  }
+};
+
+// ─── Supplier product orders ─────────────────────────────────────────────
+
+export interface SupplierOrderItem {
+  itemId?: number | null;
+  name: string;
+  unit?: string;
+  currentStock?: number;
+  quantity: number;
+  price: number;
+}
+
+export interface SupplierOrderRow {
+  id: number;
+  supplierId: number;
+  orderNumber: string;
+  items: SupplierOrderItem[];
+  totalAmount: number;
+  notes: string | null;
+  createdAt: string;
+}
+
+let _supplierOrderCounter = 0;
+
+const mapSupplierOrderRow = (r: any): SupplierOrderRow => {
+  let items: SupplierOrderItem[] = [];
+  try {
+    items = JSON.parse(r.items || '[]');
+  } catch {
+    items = [];
+  }
+  return {
+    id: r.id,
+    supplierId: r.supplierId,
+    orderNumber: r.orderNumber || `SO-${String(r.id).padStart(5, '0')}`,
+    items,
+    totalAmount: r.totalAmount || 0,
+    notes: r.notes || null,
+    createdAt: r.createdAt,
+  };
+};
+
+// Saves a supplier product order. The order number (SO-xxxx-NNN) is
+// assigned after insert so it can include the stable row id.
+export const insertSupplierOrder = (data: { supplierId: number; items: SupplierOrderItem[]; notes?: string }) => {
+  try {
+    if (!data.supplierId || !data.items || data.items.length === 0) return null;
+    const database = getDB();
+    const totalAmount = data.items.reduce((sum, it) => sum + ((it.quantity || 0) * (it.price || 0)), 0);
+    const result = database.runSync(
+      'INSERT INTO supplier_orders (supplierId, orderNumber, items, totalAmount, notes, createdAt) VALUES (?, ?, ?, ?, ?, ?)',
+      data.supplierId,
+      '',
+      JSON.stringify(data.items),
+      totalAmount,
+      data.notes?.trim() || null,
+      new Date().toISOString()
+    );
+    const id = result.lastInsertRowId;
+    _supplierOrderCounter += 1;
+    const orderNumber = `SO-${Date.now().toString(36).toUpperCase().slice(-4)}-${String(_supplierOrderCounter).padStart(3, '0')}`;
+    database.runSync('UPDATE supplier_orders SET orderNumber = ? WHERE id = ?', orderNumber, id);
+    return { id, orderNumber, totalAmount };
+  } catch (error) {
+    console.error('Insert supplier order error:', error);
+    return null;
+  }
+};
+
+export const getSupplierOrders = (supplierId: number): SupplierOrderRow[] => {
+  try {
+    const database = getDB();
+    const rows = database.getAllSync<any>(
+      'SELECT * FROM supplier_orders WHERE supplierId = ? ORDER BY createdAt DESC, id DESC',
+      [supplierId]
+    );
+    return rows.map(mapSupplierOrderRow);
+  } catch (error) {
+    console.error('Get supplier orders error:', error);
+    return [];
+  }
+};
+
+export const deleteSupplierOrder = (id: number) => {
+  try {
+    const database = getDB();
+    database.runSync('DELETE FROM supplier_orders WHERE id = ?', id);
+    return true;
+  } catch (error) {
+    console.error('Delete supplier order error:', error);
+    return false;
   }
 };
 

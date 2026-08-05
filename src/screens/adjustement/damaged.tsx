@@ -27,6 +27,7 @@ import { playNice, playBad } from '@/services/soundService';
 import { Fonts } from '@/constants/theme';
 import { searchInventory, insertAdjustment } from '@/database/db';
 import { useSettings } from '@/context/SettingsContext';
+import { useSubscription } from '@/context/SubscriptionContext';
 import { useDialog } from '@/context/DialogContext';
 import BusinessSuccessModal, { BusinessSuccessDetails } from '@/components/BusinessSuccessModal';
 import { CustomDatePicker } from '@/components/CustomDatePicker';
@@ -41,6 +42,7 @@ import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from 
 import { damagedItemTutorial } from '@/tutorials/definitions';
 const DamagedItemForm = ({ onComplete }: { onComplete?: () => void }) => {
   const { colors, calendarType, language, t } = useSettings();
+  const { isReadOnly } = useSubscription();
   const G = getAdjustmentGlass(colors);
   const dialog = useDialog();
   const [searchQuery, setSearchQuery] = useState('');
@@ -103,6 +105,10 @@ const DamagedItemForm = ({ onComplete }: { onComplete?: () => void }) => {
   };
 
   const handleConfirm = async () => {
+    if (isReadOnly) {
+      await dialog.alert({ title: t('common.read_only_mode'), message: t('common.read_only_mode'), iconType: 'warning' });
+      return;
+    }
     if (!selectedItem) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       await dialog.alert({

@@ -4,9 +4,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Dimensions,
 } from 'react-native';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import {
   Crown,
   Shield,
@@ -15,14 +14,13 @@ import {
   Clock,
   Calendar,
   RefreshCw,
-  CreditCard,
   FileText,
   History,
   HeadphonesIcon,
   ArrowRight,
   Star,
   ChevronRight,
-  AlertCircle,
+  AlertTriangle,
 } from 'lucide-react-native';
 import { useSettings } from '@/context/SettingsContext';
 import { useSubscription, PREMIUM_FEATURES, FEATURE_LABELS, PremiumFeature } from '@/context/SubscriptionContext';
@@ -31,8 +29,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-
-const { width } = Dimensions.get('window');
 
 const FEATURE_KEY_MAP: Record<string, string> = {
   reports: 'subscription.feature_reports',
@@ -77,17 +73,16 @@ const PLANS = {
 };
 
   const SubscriptionManageScreen: React.FC = () => {
-  const { colors, theme, t } = useSettings();
+  const { colors, t } = useSettings();
   const {
     subscription,
     isPremium,
     isTrial,
+    isExpired,
+    isExpiringSoon,
+    daysUntilExpiry,
     trialDaysRemaining,
     payments,
-    renewals,
-    auditLog,
-    cancelCurrentSubscription,
-    renewCurrentSubscription,
     refresh,
   } = useSubscription();
   const router = useRouter();
@@ -197,47 +192,94 @@ const PLANS = {
           </LinearGradient>
         </Animated.View>
 
-        {/* Upgrade / Renew Buttons */}
-        {!isPremium && !isTrial && (
-          <Animated.View entering={FadeInDown.delay(200).duration(600)} style={styles.actionRow}>
-            <TouchableOpacity
-              style={styles.upgradeButton}
-              onPress={() => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); router.push('/subscription/plans'); }}
-              activeOpacity={0.9}
-            >
-              <LinearGradient
-                colors={[gold + 'E6', gold, '#B8960C']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.upgradeGradient}
-              >
-                <Crown size={18} color="#FFF" />
-                <AppText variant="heading" weight="bold" style={{ color: '#FFF' }}>
-                  {t('subscription.upgrade')}
-                </AppText>
-                <ArrowRight size={20} color="#FFF" />
-              </LinearGradient>
-            </TouchableOpacity>
-          </Animated.View>
-        )}
+        {isExpired && (
+               <Animated.View entering={FadeInDown.delay(100).duration(500)} style={[styles.expiredBanner, { borderColor: colors.error + '30' }]}>
+                 <View style={styles.expiredBannerIcon}>
+                   <AlertTriangle size={20} color={colors.error} />
+                 </View>
+                 <View style={{ flex: 1 }}>
+                   <AppText variant="body" weight="bold" style={{ color: colors.error }}>
+                     {t('subscription.expired')}
+                   </AppText>
+                   <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }}>
+                     {t('subscription.expired_desc')}
+                   </AppText>
+                 </View>
+               </Animated.View>
+             )}
 
-        {isPremium && subscription?.status === 'active' && (
-          <Animated.View entering={FadeInDown.delay(200).duration(600)} style={styles.actionRow}>
-            <TouchableOpacity
-              style={[styles.renewButton, { backgroundColor: colors.card, borderColor: colors.border }]}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                router.push('/subscription/plans');
-              }}
-              activeOpacity={0.8}
-            >
-              <RefreshCw size={18} color={gold} />
-              <AppText variant="body" weight="bold" style={{ color: gold }}>
-                {t('subscription.renew')}
-              </AppText>
-            </TouchableOpacity>
-          </Animated.View>
-        )}
+             {isExpiringSoon && daysUntilExpiry > 0 && (
+               <Animated.View entering={FadeInDown.delay(100).duration(500)} style={[styles.expiringBanner, { borderColor: '#F59E0B30' }]}>
+                 <View style={styles.expiringBannerIcon}>
+                   <Clock size={20} color="#F59E0B" />
+                 </View>
+                 <View style={{ flex: 1 }}>
+                   <AppText variant="body" weight="bold" style={{ color: '#F59E0B' }}>
+                     {t('subscription.expiring_soon')}
+                   </AppText>
+                   <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }}>
+                     {t('subscription.expiring_banner', { days: String(daysUntilExpiry) })}
+                   </AppText>
+                 </View>
+               </Animated.View>
+             )}
+
+             {isExpired && (
+               <Animated.View entering={FadeInDown.delay(200).duration(600)} style={styles.actionRow}>
+                 <TouchableOpacity
+                   style={[styles.renewButton, { backgroundColor: colors.error }]}
+                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push('/subscription/renewal'); }}
+                   activeOpacity={0.9}
+                 >
+                   <RefreshCw size={18} color="#FFF" />
+                   <AppText variant="heading" weight="bold" style={{ color: '#FFF' }}>
+                     {t('subscription.renew_now')}
+                   </AppText>
+                   <ArrowRight size={20} color="#FFF" />
+                 </TouchableOpacity>
+               </Animated.View>
+             )}
+
+             {!isPremium && !isTrial && !isExpired && (
+               <Animated.View entering={FadeInDown.delay(200).duration(600)} style={styles.actionRow}>
+                 <TouchableOpacity
+                   style={styles.upgradeButton}
+                   onPress={() => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); router.push('/subscription/plans'); }}
+                   activeOpacity={0.9}
+                 >
+                   <LinearGradient
+                     colors={[gold + 'E6', gold, '#B8960C']}
+                     start={{ x: 0, y: 0 }}
+                     end={{ x: 1, y: 1 }}
+                     style={styles.upgradeGradient}
+                   >
+                     <Crown size={18} color="#FFF" />
+                     <AppText variant="heading" weight="bold" style={{ color: '#FFF' }}>
+                       {t('subscription.upgrade')}
+                     </AppText>
+                     <ArrowRight size={20} color="#FFF" />
+                   </LinearGradient>
+                 </TouchableOpacity>
+               </Animated.View>
+             )}
+
+             {isPremium && subscription?.status === 'active' && !isExpired && (
+               <Animated.View entering={FadeInDown.delay(200).duration(600)} style={styles.actionRow}>
+                 <TouchableOpacity
+                   style={[styles.renewButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+                   onPress={() => {
+                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                     router.push('/subscription/plans');
+                   }}
+                   activeOpacity={0.8}
+                 >
+                   <RefreshCw size={18} color={gold} />
+                   <AppText variant="body" weight="bold" style={{ color: gold }}>
+                     {t('subscription.renew')}
+                   </AppText>
+                 </TouchableOpacity>
+               </Animated.View>
+             )}
 
         {/* Pricing Cards */}
         {!isPremium && (
@@ -512,6 +554,42 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     paddingTop: 14,
     marginTop: 4,
+  },
+  expiredBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    backgroundColor: '#EF444410',
+    marginBottom: 12,
+    gap: 12,
+  },
+  expiredBannerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#EF444420',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  expiringBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    backgroundColor: '#F59E0B10',
+    marginBottom: 12,
+    gap: 12,
+  },
+  expiringBannerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F59E0B20',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   actionRow: {
     paddingHorizontal: 16,

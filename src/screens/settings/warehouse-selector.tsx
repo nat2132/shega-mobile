@@ -1,5 +1,6 @@
 import { Fonts } from '@/constants/theme';
 import { useDialog } from '@/context/DialogContext';
+import { useSubscription } from '@/context/SubscriptionContext';
 import { useSettings } from '@/context/SettingsContext';
 import { useWarehouse } from '@/context/WarehouseContext';
 import { getWarehouses, insertWarehouse } from '@/database/db';
@@ -28,6 +29,7 @@ interface WarehouseSelectorProps {
 
 const WarehouseSelectorModal: React.FC<WarehouseSelectorProps> = ({ visible, onComplete }) => {
   const { colors, t } = useSettings();
+  const { isReadOnly } = useSubscription();
   const { activeWarehouseId, setActiveWarehouseId, warehouses, refreshWarehouses } = useWarehouse();
   const G = getSettingsGlass(colors);
   const dialog = useDialog();
@@ -43,6 +45,10 @@ const WarehouseSelectorModal: React.FC<WarehouseSelectorProps> = ({ visible, onC
   }, [visible]);
 
   const handleCreateAndSelect = async () => {
+    if (isReadOnly) {
+      await dialog.alert({ title: t('common.read_only_mode'), message: t('common.read_only_mode'), iconType: 'warning' });
+      return;
+    }
     if (!formName.trim()) {
       await dialog.alert({ title: t('common.required'), message: t('inv.wh_name_required'), iconType: 'warning' });
       return;

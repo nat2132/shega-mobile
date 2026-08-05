@@ -14,19 +14,20 @@ import {
   getInventorySummary,
   getLowStockItems,
   getMovingItemsWithFilters,
-  getRecentItems,
   getSlowMovingItems,
   getTopHighestValueItems,
   getTopSellingItems,
   ItemData,
   updateItem
 } from '@/database/db';
-import { useNotifications } from '@/hooks/useNotifications';
 import { useAutoHideScroll } from '@/hooks/useAutoHideScroll';
+import { useNotifications } from '@/hooks/useNotifications';
+import { TutorialButton, TutorialScrollView, TutorialTarget, useTutorial } from '@/tutorials';
+import { inventoryTutorial } from '@/tutorials/definitions';
 import { formatNumber } from '@/utils/formatNumber';
 import * as Haptics from 'expo-haptics';
 import * as Print from 'expo-print';
-import { router, useFocusEffect } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import {
   BarChart3,
@@ -72,8 +73,6 @@ import { getInventoryGlass } from './glass-inventory';
 import InventoryRecordScreen from './inventory-record';
 import AddAssetFlow from './inventroy-form';
 import ItemDetailsScreen from './item-details';
-import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
-import { inventoryTutorial } from '@/tutorials/definitions';
 
 
 const SparklineChart = React.memo(({ data, loading }: { data?: number[]; loading?: boolean } = {}) => {
@@ -162,7 +161,7 @@ const InventoryLedgerItem = React.memo(({ item, onPress }: { item: ItemData, onP
 
   return (
     <TouchableOpacity
-      style={[styles.ledgerItem, { borderBottomColor: G.border }]}
+      style={[styles.ledgerItem, { backgroundColor: G.bgCard, borderColor: G.border }]}
       onPress={onPress}
       activeOpacity={0.7}
     >
@@ -660,10 +659,10 @@ const InventoryDashboard = () => {
         visible={showAddForm}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowAddForm(false)}
+        onRequestClose={() => { setShowAddForm(false); loadAllData(); }}
       >
         <View style={styles.modalOverlay}>
-          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowAddForm(false)} />
+          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => { setShowAddForm(false); loadAllData(); }} />
           <View style={[styles.bottomSheetContainer, { backgroundColor: G.bg, borderColor: G.border, height: Dimensions.get('window').height * 0.85 }]}>
             <View style={styles.modalHandleRow}>
               <View style={[styles.modalHandle, { backgroundColor: G.borderLight }]} />
@@ -673,7 +672,7 @@ const InventoryDashboard = () => {
                 setShowAddForm(false);
                 loadAllData();
               }} 
-              onClose={() => setShowAddForm(false)}
+              onClose={() => { setShowAddForm(false); loadAllData(); }}
             />
           </View>
         </View>
@@ -1629,13 +1628,16 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bold,
   },
   ledgerList: {
-    gap: 4,
+    paddingBottom: 8,
   },
   ledgerItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 16,
-    borderBottomWidth: 1,
+    paddingHorizontal: 16,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    marginBottom: Spacing.sm,
   },
   ledgerIconCircle: {
     width: 46,

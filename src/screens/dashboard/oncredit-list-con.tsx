@@ -1,32 +1,32 @@
-import { Fonts , BorderRadius, Spacing } from '@/constants/theme';
-import { useSettings } from '@/context/SettingsContext';
+import { AppCard, AppListItem, AppNumber, AppRow, AppText } from '@/components/ui';
+import { BorderRadius, Fonts, Spacing } from '@/constants/theme';
 import { useDialog } from '@/context/DialogContext';
+import { useSettings } from '@/context/SettingsContext';
 import { getOnCreditItems, ItemData, settleItemCredit } from '@/database/db';
 import * as Haptics from 'expo-haptics';
 import {
-    AlertTriangle,
-    BarChart3,
-    Building2,
-    Check,
-    ChevronLeft,
-    ChevronRight,
-    Clock,
-    CreditCard,
-    MapPin,
-    Phone,
-    ShieldAlert,
-    ShieldCheck,
+  AlertTriangle,
+  BarChart3,
+  Building2,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  CreditCard,
+  MapPin,
+  Phone,
+  ShieldAlert,
+  ShieldCheck,
 } from 'lucide-react-native';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-    Modal,
-    ScrollView,
-    StyleSheet,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { AppNumber, AppText, AppListItem, AppRow, AppCard} from '@/components/ui';
 
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { getDashGlass } from './glass-dashboard';
@@ -373,6 +373,7 @@ const NefasSilkScreen = ({ initialItemId }: { initialItemId?: number } = {}) => 
                 gap={Spacing.sm}
                 background={G.bgCard}
                 bordered
+                wrap={false}
                 style={{
                   borderColor: isOverdue ? colors.error + '40' : G.border,
                   borderLeftColor: isOverdue ? colors.error : G.border,
