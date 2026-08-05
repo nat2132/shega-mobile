@@ -41,13 +41,15 @@ export function useDebouncedCallback<T extends (...args: any[]) => void>(
     };
   }, []);
 
-  return useCallback(
-    ((...args: Parameters<T>) => {
+  const debounced = useCallback(
+    (...args: Parameters<T>) => {
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
         fnRef.current(...args);
       }, delay);
-    }) as T,
+    },
     [delay],
   );
+
+  return debounced as T;
 }

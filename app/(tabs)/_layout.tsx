@@ -88,6 +88,12 @@ export default function TabsLayout() {
           }}
         />
         <Tabs.Screen
+          name="suppliers"
+          options={{
+            href: null,
+          }}
+        />
+        <Tabs.Screen
           name="budget"
           options={{
             href: null,

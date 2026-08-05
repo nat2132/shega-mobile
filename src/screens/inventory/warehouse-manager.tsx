@@ -39,14 +39,14 @@ const WarehouseManagerModal: React.FC<WarehouseManagerProps> = ({ visible, onClo
   const [formNotes, setFormNotes] = useState('');
   const [editingId, setEditingId] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (visible) loadWarehouses();
-  }, [visible]);
-
   const loadWarehouses = () => {
     const data = getWarehouses();
     setWarehouses(data);
   };
+
+  useEffect(() => {
+    if (visible) loadWarehouses();
+  }, [visible]);
 
   const handleSave = async () => {
     if (!formName.trim()) {

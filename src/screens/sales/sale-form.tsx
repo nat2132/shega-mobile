@@ -60,20 +60,6 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
   const tutorial = useTutorial({ tutorial: saleFormTutorial });
   const dialog = useDialog();
 
-  useEffect(() => {
-    if (!tutorial.isActive) return;
-    const tid = tutorial.currentStep?.targetId;
-    if (tid === 'sf-customer-info') {
-      setCustomerName('Tigist Desta');
-      setCustomerPhone('0911-234-567');
-      setDueDays('30');
-    } else if (tid === 'sf-pricing') {
-      setGlobalDiscount('5');
-      setTaxType('VAT');
-      setTaxRate('15');
-    }
-  }, [tutorial.isActive, tutorial.currentStep?.targetId]);
-
   const [paymentMethod, setPaymentMethod] = useState<"Cash" | "Transfer" | "">(
     "Cash",
   );
@@ -91,6 +77,20 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
   const [showCustomerSearch, setShowCustomerSearch] = useState(false);
   const [customerSearchQuery, setCustomerSearchQuery] = useState("");
   const [existingCustomers, setExistingCustomers] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!tutorial.isActive) return;
+    const tid = tutorial.currentStep?.targetId;
+    if (tid === 'sf-customer-info') {
+      setCustomerName('Tigist Desta');
+      setCustomerPhone('0911-234-567');
+      setDueDays('30');
+    } else if (tid === 'sf-pricing') {
+      setGlobalDiscount('5');
+      setTaxType('VAT');
+      setTaxRate('15');
+    }
+  }, [tutorial.isActive, tutorial.currentStep?.targetId]);
 
   const draftFormKey = 'sale';
   const draftFormData = useFormDrafts({

@@ -49,11 +49,6 @@ const CreateOrderScreen = () => {
   const { colors, t } = useSettings();
   const ORD_GLASS = useMemo(() => getOrdersGlass(colors), [colors]);
   const tutorial = useTutorial({ tutorial: createOrderTutorial });
-  useEffect(() => {
-    if (tutorial.isActive && tutorial.currentStep?.targetId === 'co-customer') {
-      setCustomerPhone('0911-234-567');
-    }
-  }, [tutorial.isActive, tutorial.currentStep?.targetId]);
   const router = useRouter();
   const { showToast } = useToast();
   const dialog = useDialog();
@@ -66,6 +61,12 @@ const CreateOrderScreen = () => {
   const [customerPhone, setCustomerPhone] = useState("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (tutorial.isActive && tutorial.currentStep?.targetId === 'co-customer') {
+      setCustomerPhone('0911-234-567');
+    }
+  }, [tutorial.isActive, tutorial.currentStep?.targetId]);
 
   const debouncedQuery = useDebounce(searchQuery, 250);
 

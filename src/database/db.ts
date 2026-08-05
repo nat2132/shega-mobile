@@ -353,6 +353,81 @@ export const initDB = () => {
       console.log('Successfully migrated items table: Added supplierId');
     } catch {}
 
+    // Migration: Supplier profile columns on the contacts table. Suppliers are
+    // contacts with category = 'supplier' and carry a richer profile.
+    try {
+      database.execSync(`ALTER TABLE contacts ADD COLUMN companyName TEXT;`);
+      console.log('Successfully migrated contacts table: Added companyName');
+    } catch {}
+    try {
+      database.execSync(`ALTER TABLE contacts ADD COLUMN email TEXT;`);
+      console.log('Successfully migrated contacts table: Added email');
+    } catch {}
+    try {
+      database.execSync(`ALTER TABLE contacts ADD COLUMN address TEXT;`);
+      console.log('Successfully migrated contacts table: Added address');
+    } catch {}
+    try {
+      database.execSync(`ALTER TABLE contacts ADD COLUMN tin TEXT;`);
+      console.log('Successfully migrated contacts table: Added tin');
+    } catch {}
+    try {
+      database.execSync(`ALTER TABLE contacts ADD COLUMN supplierCategory TEXT;`);
+      console.log('Successfully migrated contacts table: Added supplierCategory');
+    } catch {}
+    try {
+      database.execSync(`ALTER TABLE contacts ADD COLUMN paymentType TEXT DEFAULT 'cash';`);
+      console.log('Successfully migrated contacts table: Added paymentType');
+    } catch {}
+    try {
+      database.execSync(`ALTER TABLE contacts ADD COLUMN isActive INTEGER DEFAULT 1;`);
+      console.log('Successfully migrated contacts table: Added isActive');
+    } catch {}
+
+    // Migration: Purchase fields on the stock_movements log so restocks can be
+    // attributed to a supplier and treated as purchases.
+    try {
+      database.execSync(`ALTER TABLE stock_movements ADD COLUMN supplierId INTEGER;`);
+      console.log('Successfully migrated stock_movements table: Added supplierId');
+    } catch {}
+    try {
+      database.execSync(`ALTER TABLE stock_movements ADD COLUMN unitPrice REAL DEFAULT 0;`);
+      console.log('Successfully migrated stock_movements table: Added unitPrice');
+    } catch {}
+    try {
+      database.execSync(`ALTER TABLE stock_movements ADD COLUMN paymentStatus TEXT;`);
+      console.log('Successfully migrated stock_movements table: Added paymentStatus');
+    } catch {}
+    try {
+      database.execSync(`ALTER TABLE stock_movements ADD COLUMN paidAmount REAL DEFAULT 0;`);
+      console.log('Successfully migrated stock_movements table: Added paidAmount');
+    } catch {}
+
+    // Many-to-many link between products and suppliers (one product can be
+    // supplied by several suppliers).
+    database.execSync(`
+      CREATE TABLE IF NOT EXISTS item_suppliers (
+        itemId INTEGER NOT NULL,
+        supplierId INTEGER NOT NULL,
+        PRIMARY KEY (itemId, supplierId)
+      );
+    `);
+    console.log('Table "item_suppliers" checked/created.');
+
+    // Payment history against a supplier's outstanding balance.
+    database.execSync(`
+      CREATE TABLE IF NOT EXISTS supplier_payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        supplierId INTEGER NOT NULL,
+        amount REAL NOT NULL,
+        paidAt TEXT,
+        method TEXT,
+        note TEXT,
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log('Table "supplier_payments" checked/created.');
+
   // Migration: Add warehouseId to items table
   try {
     database.execSync(`ALTER TABLE items ADD COLUMN warehouseId INTEGER REFERENCES warehouses(id);`);
@@ -897,6 +972,9 @@ export interface InsertItemData {
   supplierAccount?: string;
   supplierCallEnabled?: boolean;
   warehouseId?: number | null;
+  supplierId?: number | null;
+  supplierPaymentStatus?: string;
+  supplierPaidAmount?: number;
 }
 
 export const getNextItemId = () => {
@@ -911,14 +989,31 @@ export const getNextItemId = () => {
 };
 
 // Records a stock-add event so the activity feed can show historical
-// additions instead of live (shrinking) stock levels.
-export const logStockMovement = (itemId: number, quantityAdded: number, unit?: string, note?: string) => {
+// additions instead of live (shrinking) stock levels. When a supplierId is
+// provided the movement doubles as a purchase record for that supplier.
+export const logStockMovement = (
+  itemId: number,
+  quantityAdded: number,
+  unit?: string,
+  note?: string,
+  supplierId?: number | null,
+  unitPrice?: number,
+  paymentStatus?: string,
+  paidAmount?: number
+) => {
   try {
     if (!itemId || !quantityAdded || quantityAdded <= 0) return;
     const database = getDB();
     database.runSync(
-      'INSERT INTO stock_movements (itemId, quantityAdded, unit, note) VALUES (?, ?, ?, ?)',
-      itemId, quantityAdded, unit || null, note || null
+      `INSERT INTO stock_movements (itemId, quantityAdded, unit, note, supplierId, unitPrice, paymentStatus, paidAmount) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      itemId,
+      quantityAdded,
+      unit || null,
+      note || null,
+      supplierId || null,
+      unitPrice || 0,
+      paymentStatus || null,
+      paidAmount || 0
     );
   } catch (error) {
     console.error('Log stock movement error:', error);
@@ -938,7 +1033,23 @@ export const insertItem = (data: InsertItemData) => {
     const newId = result.lastInsertRowId;
     // Log the initial stock as a movement so it appears in the activity feed.
     if (newId && (data.totalBaseQuantity || 0) > 0) {
-      logStockMovement(newId, data.totalBaseQuantity, data.baseUnit || data.purchaseUnit || 'pcs', 'Initial stock');
+      logStockMovement(
+        newId,
+        data.totalBaseQuantity,
+        data.baseUnit || data.purchaseUnit || 'pcs',
+        'Initial stock',
+        data.supplierId || null,
+        data.basePurchasePrice || 0,
+        data.supplierPaymentStatus,
+        data.supplierPaidAmount
+      );
+    }
+    // Link the item to its supplier so multi-supplier relationships work.
+    if (newId && data.supplierId) {
+      database.runSync(
+        'INSERT OR IGNORE INTO item_suppliers (itemId, supplierId) VALUES (?, ?)',
+        newId, data.supplierId
+      );
     }
     return newId;
   } catch (error) {
@@ -3262,6 +3373,7 @@ export const updateItem = (id: number, updates: any) => {
 
     // If stock is being increased, log the movement so the activity feed
     // shows the actual added quantity (not the live, shrinking stock level).
+    // When a supplier is attached the movement doubles as a purchase record.
     if (filteredUpdates.totalBaseQuantity !== undefined) {
       const current = database.getFirstSync<{ totalBaseQuantity: number, baseUnit: string }>(
         'SELECT totalBaseQuantity, baseUnit FROM items WHERE id = ?', [id]
@@ -3269,9 +3381,26 @@ export const updateItem = (id: number, updates: any) => {
       if (current) {
         const added = filteredUpdates.totalBaseQuantity - (current.totalBaseQuantity || 0);
         if (added > 0) {
-          logStockMovement(id, added, current.baseUnit || 'pcs', 'Restock');
+          logStockMovement(
+            id,
+            added,
+            current.baseUnit || 'pcs',
+            'Restock',
+            (updates as any).supplierId || null,
+            (updates as any).purchaseUnitPrice || 0,
+            (updates as any).purchasePaymentStatus,
+            (updates as any).purchasePaidAmount
+          );
         }
       }
+    }
+
+    // Keep the item->supplier link table in sync when a supplier is attached.
+    if ((updates as any).supplierId) {
+      database.runSync(
+        'INSERT OR IGNORE INTO item_suppliers (itemId, supplierId) VALUES (?, ?)',
+        id, (updates as any).supplierId
+      );
     }
 
     const setQuery = Object.keys(filteredUpdates).map(k => `${k} = ?`).join(', ');
@@ -4601,6 +4730,367 @@ export const getSuppliers = () => {
     return [];
   }
 };
+
+export interface SupplierRow {
+  id: number;
+  fullName: string;
+  companyName: string | null;
+  phone: string | null;
+  alternatePhone: string | null;
+  accountNumber: string | null;
+  email: string | null;
+  address: string | null;
+  tin: string | null;
+  supplierCategory: string | null;
+  paymentType: string | null;
+  isActive: number;
+  notes: string | null;
+  createdAt: string;
+  totalPurchases: number;
+  purchasePaid: number;
+  paymentsSum: number;
+  lastPurchaseDate: string | null;
+  productCount: number;
+}
+
+export interface InsertSupplierData {
+  fullName: string;
+  phone: string;
+  companyName?: string;
+  alternatePhone?: string;
+  accountNumber?: string;
+  email?: string;
+  address?: string;
+  tin?: string;
+  supplierCategory?: string;
+  paymentType?: 'cash' | 'credit' | 'partial';
+  isActive?: boolean;
+  notes?: string;
+}
+
+const SUPPLIER_STATS_SQL = `
+  SELECT
+    c.id,
+    c.fullName,
+    c.companyName,
+    c.phone,
+    c.alternatePhone,
+    c.accountNumber,
+    c.email,
+    c.address,
+    c.tin,
+    c.supplierCategory,
+    c.paymentType,
+    c.isActive,
+    c.notes,
+    c.createdAt,
+    COALESCE(SUM(sm.quantityAdded * COALESCE(sm.unitPrice, 0)), 0) AS totalPurchases,
+    COALESCE(SUM(COALESCE(sm.paidAmount, 0)), 0) AS purchasePaid,
+    (SELECT COALESCE(SUM(amount), 0) FROM supplier_payments p WHERE p.supplierId = c.id) AS paymentsSum,
+    MAX(sm.createdAt) AS lastPurchaseDate,
+    (SELECT COUNT(*) FROM (
+      SELECT itemId FROM item_suppliers WHERE supplierId = c.id
+      UNION
+      SELECT i.id FROM items i WHERE i.supplierId = c.id
+    )) AS productCount
+  FROM contacts c
+  LEFT JOIN stock_movements sm ON sm.supplierId = c.id
+  WHERE c.category = 'supplier'
+`;
+
+const mapSupplierRow = (r: any): SupplierRow & { outstanding: number; hasDebt: boolean } => {
+  const outstanding = (r.totalPurchases || 0) - (r.purchasePaid || 0) - (r.paymentsSum || 0);
+  return {
+    ...r,
+    totalPurchases: r.totalPurchases || 0,
+    purchasePaid: r.purchasePaid || 0,
+    paymentsSum: r.paymentsSum || 0,
+    productCount: r.productCount || 0,
+    outstanding,
+    hasDebt: outstanding > 0.001,
+  };
+};
+
+export const getSupplierList = (status?: 'all' | 'active' | 'inactive' | 'debt') => {
+  try {
+    const database = getDB();
+    let sql = SUPPLIER_STATS_SQL;
+    if (status === 'active') sql += ` AND c.isActive = 1`;
+    if (status === 'inactive') sql += ` AND c.isActive = 0`;
+    sql += ` GROUP BY c.id`;
+    if (status === 'debt') {
+      sql += ` HAVING (SUM(sm.quantityAdded * COALESCE(sm.unitPrice, 0)) - COALESCE(SUM(COALESCE(sm.paidAmount, 0)), 0) - (SELECT COALESCE(SUM(amount), 0) FROM supplier_payments p WHERE p.supplierId = c.id)) > 0.001`;
+    }
+    sql += ` ORDER BY c.fullName ASC`;
+    const rows = database.getAllSync(sql);
+    return rows.map(mapSupplierRow);
+  } catch (error) {
+    console.error('Get supplier list error:', error);
+    return [];
+  }
+};
+
+export const getSupplierById = (id: number): (SupplierRow & { outstanding: number; hasDebt: boolean }) | null => {
+  try {
+    const database = getDB();
+    const row = database.getFirstSync(`${SUPPLIER_STATS_SQL} AND c.id = ? GROUP BY c.id`, [id]);
+    if (!row) return null;
+    return mapSupplierRow(row);
+  } catch (error) {
+    console.error('Get supplier by id error:', error);
+    return null;
+  }
+};
+
+export const searchSuppliers = (query: string) => {
+  try {
+    const database = getDB();
+    const q = `%${query}%`;
+    const sql = `${SUPPLIER_STATS_SQL} AND (c.fullName LIKE ? OR c.companyName LIKE ? OR c.phone LIKE ?) GROUP BY c.id ORDER BY c.fullName ASC`;
+    const rows = database.getAllSync(sql, [q, q, q]);
+    return rows.map(mapSupplierRow);
+  } catch (error) {
+    console.error('Search suppliers error:', error);
+    return [];
+  }
+};
+
+export const insertSupplier = (data: InsertSupplierData) => {
+  try {
+    const database = getDB();
+    const statement = database.prepareSync(`
+      INSERT INTO contacts (fullName, category, subCategory, phone, alternatePhone, accountNumber, notes,
+        companyName, email, address, tin, supplierCategory, paymentType, isActive)
+      VALUES (?, 'supplier', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const result = statement.executeSync([
+      data.fullName,
+      data.supplierCategory || null,
+      data.phone || null,
+      data.alternatePhone || null,
+      data.accountNumber || null,
+      data.notes || null,
+      data.companyName || null,
+      data.email || null,
+      data.address || null,
+      data.tin || null,
+      data.supplierCategory || null,
+      data.paymentType || 'cash',
+      data.isActive === false ? 0 : 1,
+    ]);
+    return result.lastInsertRowId;
+  } catch (error) {
+    console.error('Insert supplier error:', error);
+    return null;
+  }
+};
+
+const SUPPLIER_UPDATE_COLUMNS = [
+  'fullName', 'companyName', 'phone', 'alternatePhone', 'accountNumber',
+  'email', 'address', 'tin', 'supplierCategory', 'paymentType', 'notes',
+];
+
+export const updateSupplier = (id: number, data: Partial<InsertSupplierData> & { isActive?: boolean }) => {
+  try {
+    const database = getDB();
+    const updates: string[] = [];
+    const params: any[] = [];
+    for (const col of SUPPLIER_UPDATE_COLUMNS) {
+      if ((data as any)[col] !== undefined) {
+        updates.push(`${col} = ?`);
+        params.push((data as any)[col]);
+      }
+    }
+    if (data.isActive !== undefined) {
+      updates.push('isActive = ?');
+      params.push(data.isActive ? 1 : 0);
+    }
+    if (updates.length === 0) return true;
+    params.push(id);
+    database.runSync(`UPDATE contacts SET ${updates.join(', ')} WHERE id = ?`, ...params);
+    return true;
+  } catch (error) {
+    console.error('Update supplier error:', error);
+    return false;
+  }
+};
+
+export const deleteSupplier = (id: number) => {
+  try {
+    const database = getDB();
+    database.runSync('DELETE FROM item_suppliers WHERE supplierId = ?', id);
+    database.runSync('DELETE FROM supplier_payments WHERE supplierId = ?', id);
+    database.runSync('DELETE FROM stock_movements WHERE supplierId = ?', id);
+    database.runSync('DELETE FROM contacts WHERE id = ? AND category = \'supplier\'', id);
+    database.runSync('UPDATE items SET supplierId = NULL WHERE supplierId = ?', id);
+    return true;
+  } catch (error) {
+    console.error('Delete supplier error:', error);
+    return false;
+  }
+};
+
+export interface SupplierPurchase {
+  id: number;
+  orderNumber: string;
+  itemId: number;
+  itemName: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  totalAmount: number;
+  paymentStatus: string | null;
+  paidAmount: number;
+  outstandingAmount: number;
+  createdAt: string;
+}
+
+export const getSupplierPurchases = (supplierId: number): SupplierPurchase[] => {
+  try {
+    const database = getDB();
+    const rows = database.getAllSync(`
+      SELECT
+        sm.id,
+        sm.itemId,
+        COALESCE(i.name, 'Unknown item') AS itemName,
+        sm.quantityAdded AS quantity,
+        COALESCE(sm.unit, 'pcs') AS unit,
+        COALESCE(sm.unitPrice, 0) AS unitPrice,
+        (sm.quantityAdded * COALESCE(sm.unitPrice, 0)) AS totalAmount,
+        COALESCE(sm.paymentStatus, 'Paid') AS paymentStatus,
+        COALESCE(sm.paidAmount, 0) AS paidAmount,
+        ((sm.quantityAdded * COALESCE(sm.unitPrice, 0)) - COALESCE(sm.paidAmount, 0)) AS outstandingAmount,
+        sm.createdAt
+      FROM stock_movements sm
+      LEFT JOIN items i ON sm.itemId = i.id
+      WHERE sm.supplierId = ?
+      ORDER BY sm.createdAt DESC
+    `, [supplierId]);
+    return (rows as any[]).map((r: any) => ({
+      ...r,
+      orderNumber: `PO-${String(r.id).padStart(5, '0')}`,
+      quantity: r.quantity || 0,
+      unitPrice: r.unitPrice || 0,
+      totalAmount: r.totalAmount || 0,
+      paidAmount: r.paidAmount || 0,
+      outstandingAmount: r.outstandingAmount || 0,
+    }));
+  } catch (error) {
+    console.error('Get supplier purchases error:', error);
+    return [];
+  }
+};
+
+export const getSupplierProducts = (supplierId: number) => {
+  try {
+    const database = getDB();
+    return database.getAllSync(`
+      SELECT DISTINCT
+        i.id,
+        i.name,
+        i.categoryId,
+        COALESCE(i.totalBaseQuantity, 0) AS currentStock,
+        i.baseUnit,
+        COALESCE(i.basePurchasePrice, 0) AS lastPurchasePrice,
+        (
+          SELECT MAX(sm.createdAt)
+          FROM stock_movements sm
+          WHERE sm.itemId = i.id AND sm.supplierId = ?
+        ) AS lastPurchaseDate
+      FROM items i
+      WHERE i.id IN (
+        SELECT itemId FROM item_suppliers WHERE supplierId = ?
+        UNION
+        SELECT i2.id FROM items i2 WHERE i2.supplierId = ?
+      )
+      ORDER BY i.name ASC
+    `, [supplierId, supplierId, supplierId]);
+  } catch (error) {
+    console.error('Get supplier products error:', error);
+    return [];
+  }
+};
+
+export interface SupplierPayment {
+  id: number;
+  supplierId: number;
+  amount: number;
+  paidAt: string | null;
+  method: string | null;
+  note: string | null;
+  createdAt: string;
+}
+
+export const getSupplierPayments = (supplierId: number): SupplierPayment[] => {
+  try {
+    const database = getDB();
+    return database.getAllSync<SupplierPayment>(
+      'SELECT * FROM supplier_payments WHERE supplierId = ? ORDER BY COALESCE(paidAt, createdAt) DESC',
+      [supplierId]
+    );
+  } catch (error) {
+    console.error('Get supplier payments error:', error);
+    return [];
+  }
+};
+
+export const insertSupplierPayment = (data: { supplierId: number; amount: number; paidAt?: string; method?: string; note?: string }) => {
+  try {
+    if (!data.supplierId || !data.amount || data.amount <= 0) return null;
+    const database = getDB();
+    const result = database.runSync(
+      'INSERT INTO supplier_payments (supplierId, amount, paidAt, method, note) VALUES (?, ?, ?, ?, ?)',
+      data.supplierId,
+      data.amount,
+      data.paidAt || new Date().toISOString(),
+      data.method || null,
+      data.note || null
+    );
+    return result.lastInsertRowId;
+  } catch (error) {
+    console.error('Insert supplier payment error:', error);
+    return null;
+  }
+};
+
+export const getItemSuppliers = (itemId: number) => {
+  try {
+    const database = getDB();
+    return database.getAllSync(`
+      SELECT c.*
+      FROM item_suppliers isup
+      JOIN contacts c ON c.id = isup.supplierId
+      WHERE isup.itemId = ?
+      ORDER BY c.fullName ASC
+    `, [itemId]);
+  } catch (error) {
+    console.error('Get item suppliers error:', error);
+    return [];
+  }
+};
+
+export const linkItemSupplier = (itemId: number, supplierId: number) => {
+  try {
+    const database = getDB();
+    database.runSync('INSERT OR IGNORE INTO item_suppliers (itemId, supplierId) VALUES (?, ?)', itemId, supplierId);
+    return true;
+  } catch (error) {
+    console.error('Link item supplier error:', error);
+    return false;
+  }
+};
+
+export const unlinkItemSupplier = (itemId: number, supplierId: number) => {
+  try {
+    const database = getDB();
+    database.runSync('DELETE FROM item_suppliers WHERE itemId = ? AND supplierId = ?', itemId, supplierId);
+    return true;
+  } catch (error) {
+    console.error('Unlink item supplier error:', error);
+    return false;
+  }
+};
+
 
 // →→ getSalesGroupedByDateRange →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
 // Returns sales rows with extra computed columns used by SalesRecordScreen

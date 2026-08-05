@@ -19,6 +19,9 @@ export function useBusinessAssistant(): {
 } {
   const { t } = useSettings();
 
+  const [insights, setInsights] = useState<AssistantInsight[]>([]);
+  const [loading, setLoading] = useState(true);
+
   const generateInsights = useCallback(() => {
     try {
       const db = require('@/database/db');
@@ -70,17 +73,74 @@ export function useBusinessAssistant(): {
 
       const budgetAlerts = db.getBudgetAlerts(80);
       if (budgetAlerts?.length > 0) {
-        const names = budgetAlerts.slice(0, 3).map((b: any) => b.category || b.name).join(', ');
+        const exceeded = budgetAlerts.filter((b: any) => b.isExceeded);
+        const nearLimit = budgetAlerts.filter((b: any) => !b.isExceeded);
+        if (exceeded.length > 0) {
+          const names = exceeded.slice(0, 3).map((b: any) => b.category || b.name).join(', ');
+          result.push({
+            id: 'budget-overrun',
+            type: 'alert',
+            priority: 'high',
+            title: t('assistant.budget_alert_title', { count: String(exceeded.length) }),
+            description: exceeded.length <= 3
+              ? t('assistant.budget_alert_desc_few', { names })
+              : t('assistant.budget_alert_desc_many', { names, count: String(exceeded.length - 3) }),
+            icon: 'alert-triangle',
+            action: t('assistant.action_view_budgets'),
+          });
+        }
+        if (nearLimit.length > 0) {
+          const names = nearLimit.slice(0, 3).map((b: any) => b.category || b.name).join(', ');
+          result.push({
+            id: 'budget-near-limit',
+            type: 'info',
+            priority: 'low',
+            title: t('assistant.budget_near_title', { count: String(nearLimit.length) }),
+            description: nearLimit.length <= 3
+              ? t('assistant.budget_near_desc_few', { names })
+              : t('assistant.budget_near_desc_many', { names, count: String(nearLimit.length - 3) }),
+            icon: 'bar-chart',
+            action: t('assistant.action_view_budgets'),
+          });
+        }
+      }
+
+      const orderSummary = db.getOrderSummary();
+      if (orderSummary && orderSummary.active > 0) {
         result.push({
-          id: 'budget-overrun',
+          id: 'order-pending',
           type: 'alert',
           priority: 'high',
-          title: t('assistant.budget_alert_title', { count: String(budgetAlerts.length) }),
-          description: budgetAlerts.length <= 3
-            ? t('assistant.budget_alert_desc_few', { names })
-            : t('assistant.budget_alert_desc_many', { names, count: String(budgetAlerts.length - 3) }),
-          icon: 'alert-triangle',
-          action: t('assistant.action_view_budgets'),
+          title: t('assistant.order_pending_title', { count: String(orderSummary.active) }),
+          description: t('assistant.order_pending_desc', { count: String(orderSummary.active) }),
+          icon: 'shopping-bag',
+          action: t('assistant.action_view_orders'),
+        });
+      }
+
+      const supplierList = db.getSupplierList();
+      const supplierDebtList = (supplierList || []).filter((s: any) => s.hasDebt);
+      if (supplierDebtList.length > 0) {
+        const totalOwed = supplierDebtList.reduce((sum: number, s: any) => sum + (s.outstanding || 0), 0);
+        result.push({
+          id: 'supplier-debt',
+          type: 'alert',
+          priority: 'medium',
+          title: t('assistant.supplier_debt_title', { count: String(supplierDebtList.length) }),
+          description: t('assistant.supplier_debt_desc', { amount: totalOwed.toLocaleString() }),
+          icon: 'truck',
+          action: t('assistant.action_view_suppliers'),
+          value: t('common.etb') + ' ' + totalOwed.toLocaleString(),
+        });
+      } else if (supplierList && supplierList.length > 0) {
+        result.push({
+          id: 'supplier-summary',
+          type: 'info',
+          priority: 'low',
+          title: t('assistant.supplier_summary_title', { count: String(supplierList.length) }),
+          description: t('assistant.supplier_summary_desc'),
+          icon: 'truck',
+          action: t('assistant.action_view_suppliers'),
         });
       }
 
@@ -201,9 +261,6 @@ export function useBusinessAssistant(): {
       setLoading(false);
     }
   }, [t]);
-
-  const [insights, setInsights] = useState<AssistantInsight[]>([]);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => { generateInsights(); }, [generateInsights]);
 

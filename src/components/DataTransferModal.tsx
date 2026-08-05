@@ -148,13 +148,6 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
   const [importResult, setImportResult] = useState<any>(null);
   const [fileName, setFileName] = useState('');
 
-  // Load record counts when modal opens
-  useEffect(() => {
-    if (visible && mode === 'export') {
-      loadCounts();
-    }
-  }, [visible, mode]);
-
   const loadCounts = useCallback(() => {
     try {
       const database = getDB();
@@ -181,6 +174,13 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
       console.error('Failed to load counts:', e);
     }
   }, []);
+
+  // Load record counts when modal opens
+  useEffect(() => {
+    if (visible && mode === 'export') {
+      loadCounts();
+    }
+  }, [visible, mode]);
 
   const reset = () => {
     setStep(1);

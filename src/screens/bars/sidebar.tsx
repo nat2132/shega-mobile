@@ -2,7 +2,7 @@ import React from 'react';
 import { View, TouchableOpacity, Image, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { X, Banknote, SlidersHorizontal, ClipboardList, LogOut, ChevronRight, User as UserIcon, TrendingUp, Users, Crown} from 'lucide-react-native';
+import { X, Banknote, SlidersHorizontal, ClipboardList, LogOut, ChevronRight, User as UserIcon, TrendingUp, Users, Crown, Truck } from 'lucide-react-native';
 import { Fonts , Spacing } from '@/constants/theme';
 import { useSettings, PROFILE_IMAGES } from '@/context/SettingsContext';
 import { useSubscription } from '@/context/SubscriptionContext';
@@ -134,11 +134,17 @@ const MyStoreMenu: React.FC<SidebarProps> = ({ onClose }) => {
                 delay={150}
               />
               <MenuItem 
+                icon={Truck} 
+                label={t('sidebar.suppliers')} 
+                onPress={() => handleRoute('/(tabs)/suppliers')} 
+                delay={200}
+              />
+              <MenuItem 
                 icon={Banknote} 
                 label={t('sidebar.expense_tracker')} 
                 onPress={() => handlePremiumRoute('/expense', 'expense')} 
                 locked={!isFeatureUnlocked('expense')}
-                delay={200}
+                delay={250}
               />
               <MenuItem 
                 icon={SlidersHorizontal} 
@@ -151,20 +157,20 @@ const MyStoreMenu: React.FC<SidebarProps> = ({ onClose }) => {
                 label={t('sidebar.reports_analytics')} 
                 onPress={() => handlePremiumRoute('/summary', 'reports')} 
                 locked={!isFeatureUnlocked('reports')}
-                delay={400}
+                delay={350}
               />
               <MenuItem 
                 icon={TrendingUp} 
                 label={t('sidebar.financial_reports')} 
                 onPress={() => handlePremiumRoute('/reports', 'reports')} 
                 locked={!isFeatureUnlocked('reports')}
-                delay={430}
+                delay={400}
               />
               <MenuItem 
                 icon={Crown} 
                 label={t('subscription.manage')} 
                 onPress={() => handleRoute('/subscription/manage')} 
-                delay={460}
+                delay={450}
               />
 
               <View style={[styles.divider, { backgroundColor: G.border }]} />

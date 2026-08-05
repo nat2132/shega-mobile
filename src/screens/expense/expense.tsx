@@ -25,6 +25,7 @@ import { notifyRecurringMarkedPaid } from '@/services/notificationService';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useAutoHideScroll } from '@/hooks/useAutoHideScroll';
+import { useDialog } from '@/context/DialogContext';
 import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
@@ -120,6 +121,7 @@ const PointerLabel = (items: any) => {
     const [budgetPeriod, setBudgetPeriod] = useState('monthly');
     const [showAdvancedPeriod, setShowAdvancedPeriod] = useState(false);
     const [showRenewal, setShowRenewal] = useState(false);
+    const dialog = useDialog();
 
     const debouncedSearch = useDebounce(searchQuery, 250);
     const [searchResults, setSearchResults] = useState<any[] | null>(null);
@@ -429,7 +431,7 @@ const PointerLabel = (items: any) => {
             </TouchableOpacity>
             {showAdvancedPeriod && (
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-                {['weekly', 'quarterly', 'yearly', 'custom'].map(p => (
+                {['weekly', 'quarterly', 'yearly'].map(p => (
                   <TouchableOpacity key={p}
                     style={[budgetPeriodStyles.chip, { backgroundColor: G.bg, borderColor: G.border }, budgetPeriod === p && { backgroundColor: G.fg }]}
                     onPress={() => { setBudgetPeriod(p); Haptics.selectionAsync(); }}

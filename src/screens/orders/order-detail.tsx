@@ -7,7 +7,7 @@ import {
 } from "react-native";
 import { useFocusEffect, useRouter, useLocalSearchParams } from "expo-router";
 import { useSettings } from "@/context/SettingsContext";
-import { formatDate } from '@/utils/date-utils';
+import { formatDate, parseLocalDate } from '@/utils/date-utils';
 import { useDialog } from "@/context/DialogContext";
 import { useToast } from "@/context/ToastContext";
 import {
@@ -454,7 +454,10 @@ const OrderDetailScreen = () => {
                     weight="medium"
                     style={{ color: ORD_GLASS.fgSecondary }}
                   >
-                    {new Date(entry.changedAt).toLocaleString()}
+                    {(() => {
+                      const d = parseLocalDate(entry.changedAt);
+                      return d ? formatDate(d, calendarType, language) : '';
+                    })()}
                   </AppText>
                 </View>
               </View>

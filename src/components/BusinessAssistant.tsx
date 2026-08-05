@@ -14,6 +14,8 @@ import {
   ChevronDown,
   ChevronUp,
   RefreshCw,
+  ShoppingBag,
+  Truck,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { AppText, AppNumber } from '@/components/ui';
@@ -30,6 +32,8 @@ const ICON_MAP: Record<string, React.ElementType> = {
   'users': Users,
   'credit-card': CreditCard,
   'check-circle': CheckCircle,
+  'shopping-bag': ShoppingBag,
+  'truck': Truck,
 };
 
 const TYPE_COLORS = {

@@ -164,8 +164,7 @@ data.forEach((item: any) => {
       Icon = TrendingDown;
       iconBg = colors.error;
       if (item.isRecurring && item.nextBillingDate) {
-        const nextDate = new Date(item.nextBillingDate);
-        label = `${t('expense.recurring_next')}: ${nextDate.toLocaleDateString()}`;
+        label = `${t('expense.recurring_next')}: ${formatDate(new Date(item.nextBillingDate), calendarType, language)}`;
       } else {
         label = t('expense.not_recurring');
       }

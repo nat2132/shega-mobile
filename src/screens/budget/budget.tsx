@@ -760,7 +760,7 @@ const BudgetOverview = () => {
   );
 };
 
-const PERIOD_OPTIONS = ["daily", "weekly", "monthly", "quarterly", "yearly", "custom"] as const;
+const PERIOD_OPTIONS = ["daily", "weekly", "monthly", "quarterly", "yearly"] as const;
 
 const CreateBudgetModal = ({ colors, t, onClose, onSaved }: { colors: any; t: any; onClose: () => void; onSaved: () => void }) => {
   const G = getBudgetGlass(colors);
@@ -774,7 +774,7 @@ const CreateBudgetModal = ({ colors, t, onClose, onSaved }: { colors: any; t: an
   useTutorialExample('cb-amount', setAmount);
 
   const defaultPeriods = ["monthly"] as const;
-  const advancedPeriods = ["weekly", "quarterly", "yearly", "custom"] as const;
+  const advancedPeriods = ["weekly", "quarterly", "yearly"] as const;
 
   const draftFormKey = 'budget';
   const draftFormData = useFormDrafts({

@@ -202,7 +202,8 @@ const RestockFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?:
     setSupplierPhone(item.supplierPhone || '');
     setSupplierCallEnabled(!!item.supplierCallEnabled);
     setSupplierLog(false);
-    setSelectedSupplier(null);
+    const linked = suppliers.find((s: any) => s.id === item.supplierId);
+    setSelectedSupplier(linked || null);
   };
 
   const handleSave = async () => {
@@ -227,6 +228,13 @@ const RestockFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?:
     if (selectedSupplier) {
       updates.supplierPhone = selectedSupplier.phone || supplierPhone;
       updates.supplierAccount = selectedSupplier.accountNumber || selectedItem.supplierAccount;
+      // Record the restock as a supplier purchase (movement-level fields).
+      updates.supplierId = selectedSupplier.id;
+      const unitPrice = parseFloat(buyingPrice) || selectedItem.basePurchasePrice || 0;
+      const addedQty = qty * (selectedItem.unitsPerPack || 1);
+      updates.purchaseUnitPrice = unitPrice;
+      updates.purchasePaymentStatus = 'Paid';
+      updates.purchasePaidAmount = unitPrice * addedQty;
     }
 
     const success = updateItem(selectedItem.id, updates);
@@ -615,9 +623,10 @@ const AddItemFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?:
       supplierPhone,
       supplierAccount,
       supplierCallEnabled,
+      supplierId: selectedSupplier?.id || null,
       hasPacks,
       recordDate,
-    }), [step, itemName, selectedCategory, companyName, purchaseUnit, baseUnit, unitsPerPack, totalPackQuantity, packPurchasePrice, baseSellingPrice, packSellingPrice, allowSellByPack, expiryDate, qualityGrade, creditToggle, supplierPhone, supplierAccount, supplierCallEnabled, hasPacks, recordDate]),
+    }), [step, itemName, selectedCategory, companyName, purchaseUnit, baseUnit, unitsPerPack, totalPackQuantity, packPurchasePrice, baseSellingPrice, packSellingPrice, allowSellByPack, expiryDate, qualityGrade, creditToggle, supplierPhone, supplierAccount, supplierCallEnabled, selectedSupplier, hasPacks, recordDate]),
     getTitle: useCallback(() => (itemName ? t('draft.inventory_title', { name: itemName }) : t('draft.inventory_default')), [itemName, t]),
     getSubtitle: useCallback(() => t('draft.inventory_subtitle', { step: String(step) }), [step, t]),
     enabled: true,
@@ -746,12 +755,20 @@ const loadCategories = async () => {
         qualityGrade,
         notes,
         isCredit: creditToggle === 'Yes',
+        supplierId: selectedSupplier?.id || null,
         supplierPhone: supplierCallEnabled || creditToggle === 'Yes' ? supplierPhone : null,
         supplierAccount: supplierCallEnabled || creditToggle === 'Yes' ? supplierAccount : null,
         supplierCallEnabled,
         warehouseId: activeWarehouseId || null,
         createdAt: recordDate || undefined,
       };
+      // When a supplier is selected, record the initial purchase against them so
+      // the item appears in their products AND purchases. Credit purchases are
+      // flagged 'Unpaid' so they show as outstanding; cash purchases 'Paid'.
+      if (selectedSupplier) {
+        itemData.supplierPaymentStatus = creditToggle === 'Yes' ? 'Unpaid' : 'Paid';
+        itemData.supplierPaidAmount = creditToggle === 'Yes' ? 0 : totalBaseQuantity * baseCostPrice;
+      }
 
       const insertedId = await insertItem(itemData);
       if (insertedId && hasPacks && allowSellByPack) {
@@ -848,6 +865,7 @@ const loadCategories = async () => {
               setSupplierPhone(d.supplierPhone || '');
               setSupplierAccount(d.supplierAccount || '');
               setSupplierCallEnabled(d.supplierCallEnabled || false);
+              setSelectedSupplier(d.supplierId ? suppliers.find((s: any) => s.id === d.supplierId) || null : null);
               setHasPacks(d.hasPacks || false);
               setRecordDate(d.recordDate || '');
               await draftFormData.remove(draft.id);

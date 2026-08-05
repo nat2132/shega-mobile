@@ -24,6 +24,7 @@ import {
   getFilteredExpenses,
   getContacts,
   getSales,
+  getRecentAdjustments,
 } from '@/database/db';
 import {
   AlertTriangle,

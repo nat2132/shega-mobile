@@ -16,6 +16,7 @@ import {
 } from "@/database/db";
 import { AppNumber, AppText } from "@/components/ui";
 import { Fonts, LightTheme } from "@/constants/theme";
+import { formatDate, parseLocalDate } from "@/utils/date-utils";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import {
@@ -58,10 +59,14 @@ const statusIcons: Record<string, React.ReactNode> = {
 
 const OrderCard = React.memo(
   ({ order, index }: { order: any; index: number }) => {
-    const { colors, t } = useSettings();
+    const { colors, t, calendarType, language } = useSettings();
     const ORD_GLASS = useMemo(() => getOrdersGlass(colors), [colors]);
     const router = useRouter();
     const statusColor = statusColors[order.status] || ORD_GLASS.fgSecondary;
+    const orderDate = useMemo(() => {
+      const d = parseLocalDate(order.createdAt);
+      return d ? formatDate(d, calendarType, language) : '';
+    }, [order.createdAt, calendarType, language]);
 
     return (
       <Animated.View
@@ -91,7 +96,7 @@ const OrderCard = React.memo(
                 style={[styles.orderDate, { color: ORD_GLASS.fgSecondary }]}
                 numberOfLines={1}
               >
-                {new Date(order.createdAt).toLocaleDateString()}
+                {orderDate}
               </AppText>
             </View>
             <View

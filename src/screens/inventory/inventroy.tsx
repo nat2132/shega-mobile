@@ -241,6 +241,16 @@ const InventoryDashboard = () => {
     }
   }, [showFullValue]);
 
+  const loadRecentItems = () => {
+     const options: any = { limit: 100 };
+     if (activeWarehouseId) {
+       options.warehouseId = activeWarehouseId;
+     }
+     const allItems = getFilteredItems(options) as ItemData[];
+     const itemsWithStock = allItems.filter((item: any) => (item.totalBaseQuantity || 0) > 0);
+     setRecentItems(itemsWithStock.slice(0, 5));
+   };
+
   const loadAllData = useCallback(() => {
     loadRecentItems();
     const stats = getInventoryStats(activeWarehouseId);
@@ -280,16 +290,6 @@ const InventoryDashboard = () => {
       loadAllData();
     }, [loadAllData])
   );
-
-const loadRecentItems = () => {
-     const options: any = { limit: 100 };
-     if (activeWarehouseId) {
-       options.warehouseId = activeWarehouseId;
-     }
-     const allItems = getFilteredItems(options) as ItemData[];
-     const itemsWithStock = allItems.filter((item: any) => (item.totalBaseQuantity || 0) > 0);
-     setRecentItems(itemsWithStock.slice(0, 5));
-   };
 
   const onRefresh = useCallback(() => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

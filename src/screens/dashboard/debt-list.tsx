@@ -15,6 +15,7 @@ import {
   TouchableOpacity,} from 'react-native';
 import { useSettings } from '@/context/SettingsContext';
 import { getDebtCustomers, getDebtSales} from '@/database/db';
+import { formatDate, parseLocalDate } from '@/utils/date-utils';
 import { AppNumber, AppText, AppListItem, AppCard} from '@/components/ui';
 
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -23,7 +24,7 @@ import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
 import { debtListTutorial } from '@/tutorials/definitions';
 
 const DebtDetailView = ({ customer, onBack }: { customer: any, onBack: () => void }) => {
-  const { colors, t } = useSettings();
+  const { colors, t, calendarType, language } = useSettings();
   const G = getDashGlass(colors);
   const styles = useMemo(() => createStyles(G), [G]);
   const [debtSales, setDebtSales] = useState<any[]>([]);
@@ -95,7 +96,10 @@ const DebtDetailView = ({ customer, onBack }: { customer: any, onBack: () => voi
                     {`${sale.itemName} × ${sale.quantity}`}
                   </AppText>
                   <AppText variant="caption" weight="medium" style={{ color: G.fgSecondary }} numberOfLines={1}>
-                    {new Date(sale.createdAt).toLocaleDateString()}
+                    {(() => {
+                      const d = parseLocalDate(sale.createdAt);
+                      return d ? formatDate(d, calendarType, language) : '';
+                    })()}
                   </AppText>
                 </View>
                 <AppNumber value={sale.totalPrice} size="body" showCurrency numberOfLines={1} />
