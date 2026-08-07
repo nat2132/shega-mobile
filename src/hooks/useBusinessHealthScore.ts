@@ -21,7 +21,7 @@ const FACTOR_KEYS = [
   'inventory', 'budget', 'customers', 'adjustments',
 ] as const;
 
-export function useBusinessHealthScore(): {
+export function useBusinessHealthScore(enabled = true): {
   health: HealthScoreResult | null;
   loading: boolean;
   refresh: () => void;
@@ -31,6 +31,11 @@ export function useBusinessHealthScore(): {
   const [loading, setLoading] = useState(true);
 
   const calculate = useCallback(() => {
+    if (!enabled) {
+      setHealth(null);
+      setLoading(false);
+      return;
+    }
     try {
       const db = require('@/database/db');
       const stats = db.getDashboardStats();
@@ -141,7 +146,7 @@ export function useBusinessHealthScore(): {
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [t, enabled]);
 
   useEffect(() => { calculate(); }, [calculate]);
 

@@ -12,7 +12,7 @@ export interface AssistantInsight {
   value?: string;
 }
 
-export function useBusinessAssistant(): {
+export function useBusinessAssistant(enabled = true): {
   insights: AssistantInsight[];
   loading: boolean;
   refresh: () => void;
@@ -23,6 +23,11 @@ export function useBusinessAssistant(): {
   const [loading, setLoading] = useState(true);
 
   const generateInsights = useCallback(() => {
+    if (!enabled) {
+      setInsights([]);
+      setLoading(false);
+      return;
+    }
     try {
       const db = require('@/database/db');
       const result: AssistantInsight[] = [];
@@ -260,7 +265,7 @@ export function useBusinessAssistant(): {
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [t, enabled]);
 
   useEffect(() => { generateInsights(); }, [generateInsights]);
 

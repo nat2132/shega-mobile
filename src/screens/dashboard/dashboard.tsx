@@ -52,6 +52,7 @@ import OnCreditItemsScreen from './oncredit-list';
 
 import { BusinessAssistant } from '@/components/BusinessAssistant';
 import { BusinessHealthCard } from '@/components/BusinessHealthCard';
+import PremiumFeatureGate from '@/components/PremiumFeatureGate';
 import { SparklineSkeleton } from '@/components/ChartSkeleton';
 import { AppNumber, AppText } from '@/components/ui';
 import { UniversalSearch } from '@/components/UniversalSearch';
@@ -182,7 +183,7 @@ SparklineChart.displayName = 'SparklineChart';
     const { openSidebar } = useSidebar();
     const { userProfile, colors, calendarType, language, timeSystem, t } = useSettings();
     const { dashboardVisibility, toggleDashboardSection } = useDashboardVisibility();
-    const { refreshTrialDays } = useSubscription();
+    const { refreshTrialDays, isFeatureUnlocked } = useSubscription();
     const tutorial = useTutorial({ tutorial: dashboardTutorial });
     const G = getDashGlass(colors);
     const styles = useMemo(() => createStyles(G), [G]);
@@ -217,8 +218,8 @@ SparklineChart.displayName = 'SparklineChart';
     const [showActivityLedger, setShowActivityLedger] = useState(false);
     const [showUniversalSearch, setShowUniversalSearch] = useState(false);
 
-  const { health: businessHealth, loading: healthLoading, refresh: refreshHealth } = useBusinessHealthScore();
-  const { insights: assistantInsights, loading: assistantLoading, refresh: refreshAssistant } = useBusinessAssistant();
+  const { health: businessHealth, loading: healthLoading, refresh: refreshHealth } = useBusinessHealthScore(isFeatureUnlocked('health_score'));
+  const { insights: assistantInsights, loading: assistantLoading, refresh: refreshAssistant } = useBusinessAssistant(isFeatureUnlocked('ai_assistant'));
 
   const expandedWidth = useSharedValue(56);
   useEffect(() => {
@@ -616,7 +617,9 @@ SparklineChart.displayName = 'SparklineChart';
           {dashboardVisibility.businessHealth && (
             <TutorialTarget id="dash-health">
             <View style={{ paddingHorizontal: DASH_SPACING.gutter }}>
-              <BusinessHealthCard health={businessHealth} loading={healthLoading} />
+              <PremiumFeatureGate feature="health_score" featureName={t('health.title')}>
+                <BusinessHealthCard health={businessHealth} loading={healthLoading} />
+              </PremiumFeatureGate>
             </View>
             </TutorialTarget>
           )}
@@ -751,7 +754,9 @@ SparklineChart.displayName = 'SparklineChart';
           {/* Business Assistant */}
           {dashboardVisibility.businessAssistant && (
             <View style={{ paddingHorizontal: DASH_SPACING.gutter }}>
-              <BusinessAssistant insights={assistantInsights} loading={assistantLoading} />
+              <PremiumFeatureGate feature="ai_assistant" featureName={t('assistant.title')}>
+                <BusinessAssistant insights={assistantInsights} loading={assistantLoading} />
+              </PremiumFeatureGate>
             </View>
           )}
 
