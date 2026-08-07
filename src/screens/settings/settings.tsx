@@ -713,7 +713,8 @@ const SettingsScreen = () => {
         </View>
 
         <View style={styles.footer}>
-           <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.versionText, { color: G.muted }]} numberOfLines={2}>{t('settings.version_info', { version: '1.0.4' })}</AppText>
+           <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.versionText, { color: G.muted }]} numberOfLines={2}>{t('settings.version_info', { version: updateState.currentVersion })}</AppText>
+           <AppText variant="micro" weight="bold" style={[styles.versionText, { color: G.primary, marginTop: 4 }]} numberOfLines={1}>UPDATE TEST v1.0.1</AppText>
         </View>
 
         <View style={{ height: 40 }} />

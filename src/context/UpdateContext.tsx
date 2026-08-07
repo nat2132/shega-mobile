@@ -50,6 +50,8 @@ const initialState: UpdateState = {
 
 const UpdateContext = createContext<UpdateContextType | undefined>(undefined);
 
+const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+
 export const UpdateProvider = ({ children }: { children: React.ReactNode }) => {
   const { colors, t } = useSettings();
   const [state, setState] = useState<UpdateState>(initialState);
@@ -78,7 +80,9 @@ export const UpdateProvider = ({ children }: { children: React.ReactNode }) => {
     });
 
     try {
-      let release = await UpdateService.getCachedRelease().then(c => c?.release ?? null);
+      const cached = await UpdateService.getCachedRelease();
+      const cachedFresh = cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS;
+      let release = (manual || !cachedFresh) ? null : cached ? cached.release : null;
 
       if (!release || manual) {
         release = await UpdateService.fetchLatestRelease();
@@ -270,6 +274,9 @@ export const UpdateProvider = ({ children }: { children: React.ReactNode }) => {
                   </AppText>
                 </View>
 
+                <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.notesHeading, { color: G.muted }]}>
+                  {t('update.whats_new')}
+                </AppText>
                 <ScrollView style={styles.notesScroll} showsVerticalScrollIndicator={false}>
                   <AppText variant="body" weight="medium" style={[styles.notesText, { color: G.muted }]}>
                     {state.releaseNotes}
@@ -476,6 +483,11 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
+  },
+  notesHeading: {
+    width: '100%',
+    alignSelf: 'flex-start',
+    marginBottom: Spacing.sm,
   },
   notesScroll: {
     width: '100%',
