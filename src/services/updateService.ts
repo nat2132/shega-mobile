@@ -45,13 +45,14 @@ function log(...args: unknown[]) {
   console.log(LOG_TAG, ...args);
 }
 
-function getExtra(): { githubOwner: string; githubRepo: string; includePrereleases: boolean } {
+function getExtra(): { githubOwner: string; githubRepo: string; includePrereleases: boolean; githubToken: string } {
   const extra = Constants.expoConfig?.extra as Record<string, unknown> | undefined;
   const update = extra?.update as Record<string, unknown> | undefined;
   return {
-    githubOwner: (update?.githubOwner as string) ?? 'Natoli-0x48',
+    githubOwner: (update?.githubOwner as string) ?? 'nat2132',
     githubRepo: (update?.githubRepo as string) ?? 'shega-mobile',
     includePrereleases: (update?.includePrereleases as boolean) ?? false,
+    githubToken: (update?.githubToken as string) ?? '',
   };
 }
 
@@ -72,14 +73,20 @@ export function compareVersions(current: string, latest: string): number {
 }
 
 export async function fetchLatestRelease(): Promise<GitHubRelease | null> {
-  const { githubOwner, githubRepo } = getExtra();
+  const { githubOwner, githubRepo, githubToken } = getExtra();
   const url = `https://api.github.com/repos/${githubOwner}/${githubRepo}/releases/latest`;
   log('Fetching latest release from', url);
 
+  const headers: Record<string, string> = {
+    Accept: 'application/vnd.github.v3+json',
+    'User-Agent': 'Shega-App',
+  };
+  if (githubToken) {
+    headers.Authorization = `Bearer ${githubToken}`;
+  }
+
   try {
-    const response = await fetch(url, {
-      headers: { Accept: 'application/vnd.github.v3+json', 'User-Agent': 'Shega-App' },
-    });
+    const response = await fetch(url, { headers });
     if (!response.ok) {
       log('GitHub API responded with', response.status);
       if (response.status === 403) throw new Error('GitHub API rate limit exceeded. Try again later.');

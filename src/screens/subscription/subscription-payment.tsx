@@ -2,58 +2,45 @@ import React, { useState } from 'react';
 import {
   View,
   StyleSheet,
-  TouchableOpacity,
-  ScrollView,
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Alert,
+  TouchableOpacity,
+  ScrollView,
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import {
-  Crown,
-  CreditCard,
-  Building2,
-  Phone,
-  Calendar,
   FileText,
   Check,
   ArrowLeft,
-  Info,
-  Copy,
   Smartphone,
+  Copy,
+  Info,
 } from 'lucide-react-native';
 import { useSettings } from '@/context/SettingsContext';
-import { useSubscription } from '@/context/SubscriptionContext';
 import { AppText } from '@/components/ui';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
+import { createPayment } from '@/services/api';
 
 interface SubscriptionPaymentProps {
-  plan: string;
-  durationMonths: number;
-  price: number;
+  planId: number;
   onBack: () => void;
   onSuccess: () => void;
 }
 
 const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
-  plan,
-  durationMonths,
-  price,
+  planId,
   onBack,
   onSuccess,
 }) => {
-  const { colors, theme, t } = useSettings();
-  const { submitPayment } = useSubscription();
+  const { colors, t } = useSettings();
   const gold = '#D4AF37';
 
   const [transactionId, setTransactionId] = useState('');
-  const [businessName, setBusinessName] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
-  const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const telebirrNumber = '+251925319901';
@@ -65,32 +52,31 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
   };
 
   const handleSubmit = async () => {
-    if (!transactionId.trim() || !businessName.trim() || !phoneNumber.trim()) {
+    if (!transactionId.trim()) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setIsSubmitting(true);
     try {
-      await submitPayment({
-        transactionId: transactionId.trim(),
-        businessName: businessName.trim(),
-        phoneNumber: phoneNumber.trim(),
-        planName: `${plan === 'premium' ? t('subscription.plan_premium') : t('subscription.plan_basic')} - ${durationMonths} ${durationMonths > 1 ? t('subscription.duration_months') : t('subscription.duration_month')}`,
-        amount: price,
-        paymentDate,
-        notes: notes.trim() || undefined,
+      await createPayment({
+        plan_id: planId,
+        transaction_id: transactionId.trim(),
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onSuccess();
-    } catch (error) {
+    } catch (error: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        t('subscription.payment_error_title'),
+        error?.message || t('subscription.payment_error_message'),
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const isFormValid = transactionId.trim() && businessName.trim() && phoneNumber.trim();
+  const isFormValid = transactionId.trim().length > 0;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -109,21 +95,6 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
         style={{ flex: 1 }}
       >
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-          <Animated.View entering={FadeInDown.delay(100).duration(600)} style={styles.planSummary}>
-            <View style={[styles.planBadge, { backgroundColor: gold + '20' }]}>
-              <Crown size={20} color={gold} />
-              <AppText variant="body" weight="bold" style={{ color: gold }}>
-                {t('subscription.plan_name', { plan: plan === 'premium' ? t('subscription.plan_premium') : t('subscription.plan_basic') })}
-              </AppText>
-            </View>
-            <AppText variant="display" weight="black" style={{ color: colors.text }}>
-              {price.toLocaleString()} <AppText variant="body" weight="medium" style={{ color: colors.textSecondary }}>{t('subscription.etb')}</AppText>
-            </AppText>
-            <AppText variant="body" weight="medium" style={{ color: colors.textSecondary }}>
-              {durationMonths} {durationMonths > 1 ? t('subscription.duration_months') : t('subscription.duration_month')}
-            </AppText>
-          </Animated.View>
-
           <Animated.View entering={FadeInDown.delay(200).duration(600)} style={[styles.instructionsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.instructionsHeader}>
               <Smartphone size={22} color={gold} />
@@ -171,12 +142,6 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
                     </TouchableOpacity>
                   </View>
                 </View>
-                <View style={styles.infoRow}>
-                  <AppText variant="caption" weight="bold" style={{ color: colors.textSecondary, letterSpacing: 1 }}>
-                    {t('subscription.amount_label')}
-                  </AppText>
-                  <AppText variant="body" weight="bold" style={{ color: gold }}>{price.toLocaleString()} {t('subscription.etb')}</AppText>
-                </View>
               </View>
               <View style={styles.step}>
                 <View style={[styles.stepNumber, { backgroundColor: gold + '20' }]}>
@@ -190,10 +155,6 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
           </Animated.View>
 
           <Animated.View entering={FadeInDown.delay(300).duration(600)} style={styles.formSection}>
-            <AppText variant="title-sm" weight="bold" style={{ color: colors.text, marginBottom: 20 }}>
-              {t('subscription.transaction_details')}
-            </AppText>
-
             <View style={styles.inputGroup}>
               <AppText variant="caption" weight="bold" style={{ color: colors.textSecondary, marginBottom: 8 }}>
                 {t('subscription.transaction_id_required')}
@@ -207,72 +168,6 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
                   value={transactionId}
                   onChangeText={setTransactionId}
                   autoCapitalize="characters"
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <AppText variant="caption" weight="bold" style={{ color: colors.textSecondary, marginBottom: 8 }}>
-                {t('subscription.business_name_required')}
-              </AppText>
-              <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Building2 size={18} color={colors.textSecondary} />
-                <TextInput
-                  style={[styles.input, { color: colors.text }]}
-                  placeholder={t('subscription.business_name_placeholder')}
-                  placeholderTextColor={colors.textSecondary}
-                  value={businessName}
-                  onChangeText={setBusinessName}
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <AppText variant="caption" weight="bold" style={{ color: colors.textSecondary, marginBottom: 8 }}>
-                {t('subscription.phone_number_required')}
-              </AppText>
-              <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Phone size={18} color={colors.textSecondary} />
-                <TextInput
-                  style={[styles.input, { color: colors.text }]}
-                  placeholder={t('subscription.phone_number_placeholder')}
-                  placeholderTextColor={colors.textSecondary}
-                  value={phoneNumber}
-                  onChangeText={setPhoneNumber}
-                  keyboardType="phone-pad"
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <AppText variant="caption" weight="bold" style={{ color: colors.textSecondary, marginBottom: 8 }}>
-                {t('subscription.payment_date')}
-              </AppText>
-              <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Calendar size={18} color={colors.textSecondary} />
-                <TextInput
-                  style={[styles.input, { color: colors.text }]}
-                  placeholder={t('subscription.date_placeholder')}
-                  placeholderTextColor={colors.textSecondary}
-                  value={paymentDate}
-                  onChangeText={setPaymentDate}
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary, marginBottom: 8 }}>
-                {t('subscription.notes_optional')}
-              </AppText>
-              <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border, minHeight: 80 }]}>
-                <TextInput
-                  style={[styles.input, { color: colors.text, minHeight: 80 }]}
-                  placeholder={t('subscription.notes_placeholder')}
-                  placeholderTextColor={colors.textSecondary}
-                  value={notes}
-                  onChangeText={setNotes}
-                  multiline
-                  textAlignVertical="top"
                 />
               </View>
             </View>
@@ -323,9 +218,7 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -333,74 +226,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
   },
-  backButton: {
-    padding: 8,
-  },
-  scrollContent: {
-    paddingHorizontal: 24,
-    paddingBottom: 100,
-  },
-  planSummary: {
-    alignItems: 'center',
-    marginBottom: 24,
-    gap: 8,
-  },
-  planBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  instructionsCard: {
-    padding: 20,
-    borderRadius: 20,
-    borderWidth: 1,
-    marginBottom: 24,
-  },
-  instructionsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 16,
-  },
-  stepsList: {
-    gap: 12,
-  },
-  step: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  stepNumber: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  telebirrInfo: {
-    padding: 16,
-    borderRadius: 14,
-    borderWidth: 1,
-    gap: 12,
-    marginLeft: 36,
-  },
-  infoRow: {
-    gap: 4,
-  },
-  copyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  formSection: {
-    marginBottom: 24,
-  },
-  inputGroup: {
-    marginBottom: 16,
-  },
+  backButton: { padding: 8 },
+  scrollContent: { paddingHorizontal: 24, paddingBottom: 100 },
+  instructionsCard: { padding: 20, borderRadius: 20, borderWidth: 1, marginBottom: 24 },
+  instructionsHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
+  stepsList: { gap: 12 },
+  step: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  stepNumber: { width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  telebirrInfo: { padding: 16, borderRadius: 14, borderWidth: 1, gap: 12, marginLeft: 36 },
+  infoRow: { gap: 4 },
+  copyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  formSection: { marginBottom: 24 },
+  inputGroup: { marginBottom: 16 },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -410,41 +247,11 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
   },
-  input: {
-    flex: 1,
-    fontSize: 15,
-    fontFamily: 'Inter_500Medium',
-  },
-  infoBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    marginBottom: 24,
-  },
-  footer: {
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 36,
-    borderTopWidth: 1,
-  },
-  submitButton: {
-    borderRadius: 20,
-    overflow: 'hidden',
-    elevation: 6,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
-  submitGradient: {
-    flexDirection: 'row',
-    height: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 10,
-  },
+  input: { flex: 1, fontSize: 15, fontFamily: 'Inter_500Medium' },
+  infoBox: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 14, borderWidth: 1, marginBottom: 24 },
+  footer: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 36, borderTopWidth: 1 },
+  submitButton: { borderRadius: 20, overflow: 'hidden', elevation: 6, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
+  submitGradient: { flexDirection: 'row', height: 60, justifyContent: 'center', alignItems: 'center', gap: 10 },
 });
 
 export default SubscriptionPaymentScreen;

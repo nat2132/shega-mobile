@@ -8031,6 +8031,38 @@ export const approveSubscription = (): boolean => {
   }
 };
 
+// Reconciles the local (offline) subscription row with an active subscription
+// confirmed by the backend (admin-approved payment -> license). This unlocks
+// the premium gate on-device without relying on the legacy local-only payment
+// flow. Only ever upgrades the local state; never locks a paying user offline.
+export const syncServerSubscription = (params: {
+  plan: string | null;
+  status: string;
+  expiresAt: string | null;
+}): boolean => {
+  try {
+    if (!params || params.status !== 'active') return false;
+    const database = getDB();
+    const sub = getSubscription();
+    if (!sub) return false;
+    const localPlan =
+      params.plan && params.plan.toLowerCase().includes('premium') ? 'premium' : 'basic';
+    database.runSync(
+      `UPDATE subscriptions
+       SET plan = ?, status = 'active', expiresAt = ?,
+           startedAt = COALESCE(startedAt, datetime('now')),
+           updatedAt = datetime('now')
+       WHERE id = ?`,
+      [localPlan, params.expiresAt, sub.id]
+    );
+    logAudit(sub.id, 'synced_from_server', sub.status, 'active');
+    return true;
+  } catch (error) {
+    console.error('Sync server subscription error:', error);
+    return false;
+  }
+};
+
 export const rejectSubscription = (): boolean => {
   try {
     const database = getDB();

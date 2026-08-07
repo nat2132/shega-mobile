@@ -23,7 +23,8 @@ import { getGlass, DIMENSIONS } from './glass-theme';
 const { W: w } = DIMENSIONS;
 
 interface WelcomeChoiceProps {
-  onRegisterChoose: () => void;
+  onCreateAccount: () => void;
+  onLogin: () => void;
 }
 
 function FloatingOrb({
@@ -79,7 +80,7 @@ function FloatingOrb({
   );
 }
 
-const WelcomeChoiceScreen: React.FC<WelcomeChoiceProps> = ({ onRegisterChoose }) => {
+const WelcomeChoiceScreen: React.FC<WelcomeChoiceProps> = ({ onCreateAccount, onLogin }) => {
   const { colors, t } = useSettings();
   const G = getGlass(colors);
 
@@ -135,11 +136,7 @@ const WelcomeChoiceScreen: React.FC<WelcomeChoiceProps> = ({ onRegisterChoose })
           entering={FadeInDown.delay(250).duration(700).springify().damping(18)}
           style={styles.cardWrapper}
         >
-          <TouchableOpacity
-            style={[styles.card, styles.cardHighlight, { backgroundColor: G.glassCard, borderColor: G.accentGlass }]}
-            onPress={onRegisterChoose}
-            activeOpacity={0.85}
-          >
+          <View style={[styles.card, styles.cardHighlight, { backgroundColor: G.glassCard, borderColor: G.accentGlass }]}>
             <View style={styles.cardHeader}>
               <View style={[styles.iconCircle, { backgroundColor: G.glassCard, borderColor: G.glassBorder }]}>
                 <Store size={28} color={G.textGlassStrong} />
@@ -151,7 +148,7 @@ const WelcomeChoiceScreen: React.FC<WelcomeChoiceProps> = ({ onRegisterChoose })
               numberOfLines={2}
               style={{ color: G.fg, marginBottom: 8 }}
             >
-              {t('onboarding.register_business')}
+              {t('onboarding.welcome_cta_title')}
             </AppText>
             <AppText
               variant="body"
@@ -159,20 +156,28 @@ const WelcomeChoiceScreen: React.FC<WelcomeChoiceProps> = ({ onRegisterChoose })
               numberOfLines={3}
               style={{ color: G.muted, lineHeight: 22, marginBottom: 28 }}
             >
-              {t('onboarding.register_desc')}
+              {t('onboarding.welcome_cta_desc')}
             </AppText>
-            <View style={[styles.cardAction, { backgroundColor: G.accent }]}>
-              <AppText
-                variant="body"
-                weight="bold"
-                numberOfLines={1}
-                style={{ color: G.fg }}
-              >
-                {t('onboarding.get_started')}
+            <TouchableOpacity
+              style={[styles.cardAction, { backgroundColor: G.fg, marginBottom: 12 }]}
+              onPress={onCreateAccount}
+              activeOpacity={0.85}
+            >
+              <AppText variant="body" weight="bold" numberOfLines={1} style={{ color: G.bg }}>
+                {t('onboarding.create_account')}
               </AppText>
-              <ArrowRight size={16} color={G.fg} />
-            </View>
-          </TouchableOpacity>
+              <ArrowRight size={16} color={G.bg} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.cardActionSecondary, { borderColor: G.border, backgroundColor: G.glassCard }]}
+              onPress={onLogin}
+              activeOpacity={0.85}
+            >
+              <AppText variant="body" weight="bold" numberOfLines={1} style={{ color: G.fg }}>
+                {t('onboarding.login')}
+              </AppText>
+            </TouchableOpacity>
+          </View>
         </Animated.View>
       </View>
 
@@ -250,6 +255,15 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 16,
     borderRadius: 999,
+  },
+  cardActionSecondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 16,
+    borderRadius: 999,
+    borderWidth: 1,
   },
 });
 

@@ -1,7 +1,7 @@
 import { Fonts, Spacing } from '@/constants/theme';
 import { useDialog } from '@/context/DialogContext';
 import { PROFILE_IMAGES, useDashboardVisibility, useSettings } from '@/context/SettingsContext';
-import { clearDatabase, enablePremiumForTesting } from '@/database/db';
+import { clearDatabase } from '@/database/db';
 import { useSubscription } from '@/context/SubscriptionContext';
 import * as Haptics from 'expo-haptics';
 import * as SecureStore from 'expo-secure-store';
@@ -701,17 +701,6 @@ const SettingsScreen = () => {
                   icon={HelpCircle} 
                   title={t('support.contact')} 
                   onPress={() => handleOpenSub(setShowSupport)}
-               />
-               <SettingLedgerItem
-                  icon={Zap}
-                  title={'Enable Premium (Testing)'}
-                  subtitle={'Set plan to premium/active'}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                    const ok = enablePremiumForTesting();
-                    refreshSubscription();
-                    Alert.alert(ok ? 'Premium Enabled' : 'Failed', ok ? 'All premium features unlocked for testing.' : 'Could not enable premium.');
-                  }}
                />
               <SettingLedgerItem 
                  icon={Trash2} 

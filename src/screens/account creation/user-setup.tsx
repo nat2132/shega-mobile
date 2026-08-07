@@ -295,7 +295,6 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
   },
   errorText: {
     fontFamily: Fonts.semibold,
-    marginTop: -12,
     marginBottom: 16,
     marginLeft: 16,
     letterSpacing: 0.5,
@@ -502,10 +501,10 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
                      autoCapitalize="words"
                    />
                 </View>
-                {errors.fullName && touched.fullName && (
-                  <AppText style={[styles.errorText, { color: colors.error }]} variant="body-sm" weight="semibold" numberOfLines={2}>{errors.fullName}</AppText>
-                )}
               </View>
+              {errors.fullName && touched.fullName && (
+                <AppText style={[styles.errorText, { color: colors.error }]} variant="body-sm" weight="semibold" numberOfLines={2}>{errors.fullName}</AppText>
+              )}
 
               <View style={[styles.inputNode, { backgroundColor: G.bgCard, borderColor: G.border }, (touched.businessName && errors.businessName) && { borderColor: colors.error }]}>
                  <View style={[styles.inputIcon, { backgroundColor: G.bg }]}>

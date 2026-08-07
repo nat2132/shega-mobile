@@ -1,16 +1,16 @@
-import React, { useMemo, useState } from 'react';
-import { Fonts , Spacing } from '@/constants/theme';
-import { User, ChevronLeft, Check} from 'lucide-react-native';
+import { AppNumber, AppText } from '@/components/ui';
+import { Fonts, Spacing } from '@/constants/theme';
+import { useSettings } from '@/context/SettingsContext';
 import { router } from 'expo-router';
+import { Check, ChevronLeft, User } from 'lucide-react-native';
+import { useMemo, useState } from 'react';
 import {
   StyleSheet,
-  View,
-  TouchableOpacity,
   TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useSettings } from '@/context/SettingsContext';
-import { AppNumber, AppText} from '@/components/ui';
 
 import { getDashGlass } from './glass-dashboard';
 const DebtManagementFlow = () => {

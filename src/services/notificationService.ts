@@ -494,6 +494,96 @@ export const notifyLicenseExpiring = (days: number): AppNotification | null => {
   });
 };
 
+// ---------------------------------------------------------------------------
+// Subscription / Payment status triggers
+// ---------------------------------------------------------------------------
+
+export const notifyPaymentStatus = (data: {
+  status: 'submitted' | 'pending' | 'approved' | 'rejected' | 'expired';
+  planName?: string;
+  reason?: string;
+  days?: number;
+  expiresAt?: string;
+}): AppNotification | null => {
+  const status = data.status;
+  const planName = data.planName || '';
+  let type = 'payment_submitted';
+  let icon = 'send';
+  let priority: 'critical' | 'high' | 'normal' | 'low' = 'low';
+  let titleKey = 'notif.title.payment_submitted';
+  let messageKey = 'notif.message.payment_submitted';
+  let title = 'Payment Submitted';
+  let message = 'Your payment has been submitted and is awaiting verification.';
+  let requiresAction = false;
+
+  switch (status) {
+    case 'pending':
+      type = 'payment_pending';
+      icon = 'clock';
+      priority = 'normal';
+      titleKey = 'notif.title.payment_pending';
+      messageKey = 'notif.message.payment_pending';
+      title = 'Payment Pending';
+      message = 'Your payment is being verified. This can take 1-24 hours.';
+      requiresAction = true;
+      break;
+    case 'approved':
+      type = 'payment_approved';
+      icon = 'check-circle';
+      priority = 'low';
+      titleKey = 'notif.title.payment_approved';
+      messageKey = 'notif.message.payment_approved';
+      title = 'Subscription Activated';
+      message = planName
+        ? `Your ${planName} subscription is now active.`
+        : 'Your subscription is now active.';
+      break;
+    case 'rejected':
+      type = 'payment_rejected';
+      icon = 'alert-triangle';
+      priority = 'high';
+      titleKey = 'notif.title.payment_rejected';
+      messageKey = 'notif.message.payment_rejected';
+      title = 'Payment Rejected';
+      message = data.reason
+        ? `Your payment was rejected: ${data.reason}`
+        : 'Your payment was rejected. Please re-submit with a valid transaction ID.';
+      requiresAction = true;
+      break;
+    case 'expired':
+      type = 'subscription_expired';
+      icon = 'alert-triangle';
+      priority = 'critical';
+      titleKey = 'notif.title.subscription_expired';
+      messageKey = 'notif.message.subscription_expired';
+      title = 'Subscription Expired';
+      message = 'Your subscription has expired. Renew now to restore access.';
+      requiresAction = true;
+      break;
+  }
+
+  return createNotification({
+    type: type as any,
+    category: 'system',
+    priority,
+    title,
+    message,
+    icon: icon as any,
+    deepLink: '/subscription/status',
+    data: {
+      intent: 'subscription',
+      planName,
+      reason: data.reason,
+      days: data.days,
+      expiresAt: data.expiresAt,
+      titleKey,
+      messageKey,
+    },
+    groupKey: `subscription-${status}-${Date.now()}`,
+    requiresAction,
+  });
+};
+
 // â”€â”€ Budget Notification Triggers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const notifyBudgetCreated = (budgetData: {

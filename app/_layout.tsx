@@ -1,5 +1,6 @@
 import SidebarOverlay from '@/components/SidebarOverlay';
 import { AuthProvider } from '@/context/AuthContext';
+import { AccountProvider } from '@/context/AccountContext';
 import { SettingsProvider , useSettings } from '@/context/SettingsContext';
 import { SidebarProvider } from '@/context/SidebarContext';
 import { NavigationIntentProvider } from '@/context/NavigationIntentContext';
@@ -120,6 +121,9 @@ function AppShell({ dbWarning }: { dbWarning?: string | null }) {
             <Stack.Screen name="subscription/upgrade" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="subscription/payment" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="subscription/manage" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="subscription/status" options={{ animation: 'fade' }} />
+            <Stack.Screen name="login" options={{ animation: 'fade' }} />
+            <Stack.Screen name="register" options={{ animation: 'fade' }} />
           </Stack>
           <TutorialOverlay />
           <SidebarOverlay />
@@ -230,6 +234,7 @@ export default function RootLayout() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         {dbReady && (
             <AuthProvider>
+            <AccountProvider>
             <SettingsProvider>
               <SubscriptionProvider>
                 <WarehouseProvider>
@@ -251,6 +256,7 @@ export default function RootLayout() {
                 </WarehouseProvider>
               </SubscriptionProvider>
             </SettingsProvider>
+            </AccountProvider>
             </AuthProvider>
         )}
       </GestureHandlerRootView>

@@ -11,9 +11,9 @@
       "supportsTablet": true
     },
     "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./src/assets/images/shega.png",
+        "adaptiveIcon": {
+          "backgroundColor": "#E6F4FE",
+          "foregroundImage": "./src/assets/images/logo.png",
         "backgroundImage": "./src/assets/images/android-icon-background.png",
         "monochromeImage": "./src/assets/images/android-icon-monochrome.png"
       },
@@ -29,7 +29,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./src/assets/images/splash-icon.png",
+          "image": "./src/assets/images/logo.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
@@ -59,9 +59,10 @@
         "projectId": "3c2ed669-c717-450f-a697-692503f950de"
       },
       "update": {
-        "githubOwner": "Natoli-0x48",
+        "githubOwner": "nat2132",
         "githubRepo": "shega-mobile",
-        "includePrereleases": false
+        "includePrereleases": false,
+        "githubToken": ""
       }
     }
   }

@@ -13,7 +13,12 @@ import {
   User,
   Building2,
   BadgeCheck,
-  Sparkles
+  Sparkles,
+  LogOut,
+  Mail,
+  Crown,
+  RefreshCw,
+  ChevronRight
 } from 'lucide-react-native';
 import Animated, {
   FadeInDown,
@@ -30,8 +35,11 @@ import { AppText} from '@/components/ui';
 import { getSettingsGlass } from './glass-settings';
 import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
 import { profileSettingsTutorial } from '@/tutorials/definitions';
+import { useAccount } from '@/context/AccountContext';
+import { SubscriptionStatusInfo } from '@/services/api';
 const EditProfileScreen = () => {
   const { userProfile, setUserProfile, t, colors } = useSettings();
+  const { user: accountUser, subscription, isLoggedIn, logout } = useAccount();
   const G = getSettingsGlass(colors);
   const dialog = useDialog();
   const [name, setName] = useState(userProfile.name);
@@ -220,7 +228,77 @@ const EditProfileScreen = () => {
         
         <AppText variant="caption" weight="medium" style={[styles.footerText, { color: G.fgSecondary }]} numberOfLines={3}>{t('settings.profile_footer')}</AppText>
       </Animated.View>
-      
+
+      {/* Account section */}
+      <Animated.View entering={FadeInDown.delay(700)} style={styles.formContainer}>
+        <View style={[styles.formCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+          <AppText variant="caption" weight="bold" style={[styles.formLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('account.account_info').toUpperCase()}</AppText>
+
+          {isLoggedIn && accountUser ? (
+            <>
+              <View style={styles.accountRow}>
+                <User size={14} color={G.fgSecondary} />
+                <AppText variant="caption" weight="bold" style={[styles.nodeLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('profile.name')}</AppText>
+                <AppText variant="body" weight="bold" style={[styles.accountValue, { color: G.fg }]} numberOfLines={2}>{accountUser.name}</AppText>
+              </View>
+              <View style={styles.accountRow}>
+                <Mail size={14} color={G.fgSecondary} />
+                <AppText variant="caption" weight="bold" style={[styles.nodeLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('account.email')}</AppText>
+                <AppText variant="body" weight="bold" style={[styles.accountValue, { color: G.fg }]} numberOfLines={1}>{accountUser.email}</AppText>
+              </View>
+              {accountUser.business_name ? (
+                <View style={styles.accountRow}>
+                  <Building2 size={14} color={G.fgSecondary} />
+                  <AppText variant="caption" weight="bold" style={[styles.nodeLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('profile.business')}</AppText>
+                  <AppText variant="body" weight="bold" style={[styles.accountValue, { color: G.fg }]} numberOfLines={1}>{accountUser.business_name}</AppText>
+                </View>
+              ) : null}
+
+              <View style={[styles.divider, { borderColor: G.border }]} />
+
+              <View style={styles.accountRow}>
+                <Crown size={14} color={colors.primary} />
+                <AppText variant="caption" weight="bold" style={[styles.nodeLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('account.plan')}</AppText>
+                <AppText variant="body" weight="bold" style={[styles.accountValue, { color: G.fg }]} numberOfLines={1}>{planLabel(subscription, t)}</AppText>
+              </View>
+              <View style={styles.accountRow}>
+                <BadgeCheck size={14} color={colors.primary} />
+                <AppText variant="caption" weight="bold" style={[styles.nodeLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('account.status')}</AppText>
+                <View style={[styles.statusPill, { backgroundColor: statusColor(subscription, colors) + '18' }]}>
+                  <AppText variant="caption" weight="bold" style={{ color: statusColor(subscription, colors) }} numberOfLines={1}>
+                    {statusLabel(subscription, t)}
+                  </AppText>
+                </View>
+              </View>
+              {subscription?.expires_at ? (
+                <View style={styles.accountRow}>
+                  <RefreshCw size={14} color={G.fgSecondary} />
+                  <AppText variant="caption" weight="bold" style={[styles.nodeLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('account.expiry')}</AppText>
+                  <AppText variant="body" weight="bold" style={[styles.accountValue, { color: G.fg }]} numberOfLines={1}>
+                    {formatDate(subscription.expires_at)}
+                  </AppText>
+                </View>
+              ) : null}
+
+              <TouchableOpacity onPress={() => router.replace('/subscription/plans')} style={styles.accountLink} activeOpacity={0.7}>
+                <Crown size={18} color={colors.primary} />
+                <AppText variant="body" weight="bold" style={{ color: colors.primary, flex: 1 }}>{t('account.manage_plan')}</AppText>
+                <ChevronRight size={18} color={G.fgSecondary} />
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => { logout(); }} style={[styles.logoutButton, { borderColor: colors.error }]} activeOpacity={0.8}>
+                <LogOut size={18} color={colors.error} />
+                <AppText variant="body" weight="bold" style={{ color: colors.error }}>{t('account.logout')}</AppText>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <AppText variant="body" weight="medium" style={[styles.emptyAccount, { color: G.fgSecondary }]} numberOfLines={2}>
+              {t('account.no_subscription')}
+            </AppText>
+          )}
+        </View>
+      </Animated.View>
+
       <View style={{ height: 60 }} />
     </TutorialScrollView>
       <View style={{ position: 'absolute', top: 50, right: 20, zIndex: 100 }}>
@@ -229,6 +307,40 @@ const EditProfileScreen = () => {
     </View>
   );
 };
+
+function planLabel(s: SubscriptionStatusInfo | null, t: (k: string, p?: any) => string): string {
+  if (!s || !s.status || s.status === 'none') return t('subscription.plan_none');
+  return s.plan_name || s.plan || t('subscription.plan_premium');
+}
+
+function statusLabel(s: SubscriptionStatusInfo | null, t: (k: string, p?: any) => string): string {
+  if (!s || !s.status || s.status === 'none') return t('subscription.plan_none');
+  switch (s.status) {
+    case 'active': return t('subscription.active');
+    case 'pending': return t('subscription.pending');
+    case 'rejected': return t('subscription.rejected');
+    case 'expired': return t('subscription.expired');
+    default: return s.status;
+  }
+}
+
+function statusColor(s: SubscriptionStatusInfo | null, colors: any): string {
+  if (!s) return colors.textSecondary ?? '#999999';
+  switch (s.status) {
+    case 'active': return colors.success ?? '#22C55E';
+    case 'pending': return colors.warning ?? '#F59E0B';
+    case 'rejected': return colors.danger ?? '#EF4444';
+    case 'expired': return colors.danger ?? '#EF4444';
+    default: return colors.textSecondary ?? '#999999';
+  }
+}
+
+function formatDate(iso?: string): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
 
 const styles = StyleSheet.create({
   container: { alignItems: 'center' },
@@ -258,6 +370,13 @@ const styles = StyleSheet.create({
   saveButtonText: { fontSize: 16, fontFamily: Fonts.bold },
   footerText: { textAlign: 'center', marginTop: 25, fontSize: 11, fontFamily: Fonts.medium, opacity: 0.6 },
   glowWash: { position: 'absolute' },
+  accountRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
+  accountValue: { flex: 1, textAlign: 'right', fontSize: 14 },
+  divider: { borderTopWidth: StyleSheet.hairlineWidth, marginVertical: 18 },
+  statusPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
+  accountLink: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'transparent' },
+  logoutButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 16, borderRadius: 20, borderWidth: 1, marginTop: 30 },
+  emptyAccount: { textAlign: 'center', paddingVertical: 12 },
 });
 
 export default EditProfileScreen;

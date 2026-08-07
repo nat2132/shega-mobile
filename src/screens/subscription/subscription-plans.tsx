@@ -4,7 +4,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Dimensions,
 } from 'react-native';
 import Animated, {
   FadeInDown,
@@ -14,85 +13,54 @@ import {
   Crown,
   Check,
   ArrowRight,
-  Zap,
-  Shield,
   Star,
-  Sparkles,
 } from 'lucide-react-native';
 import { useSettings } from '@/context/SettingsContext';
 import { AppText } from '@/components/ui';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-const { width } = Dimensions.get('window');
+import { Plan } from '@/services/api';
 
 interface SubscriptionPlansProps {
-  onSelectPlan: (plan: string, durationMonths: number, price: number) => void;
+  plans: Plan[] | null;
+  onSelectPlan: (plan: Plan) => void;
   onBack: () => void;
 }
 
-const PLANS = {
-  basic: {
-    nameKey: 'subscription.plan_basic',
-    icon: Shield,
-    color: '#6366F1',
-    gradient: ['#6366F1', '#4F46E5'] as const,
-    prices: [
-      { labelKey: 'subscription.month_1', months: 1, price: 1999 },
-      { labelKey: 'subscription.months_3', months: 3, price: 2499 },
-    ],
-    featureKeys: [
-      'subscription.feature_inventory',
-      'subscription.feature_sales_tracking',
-      'subscription.feature_contact_mgmt',
-      'subscription.feature_stock_adj',
-    ],
-  },
-  premium: {
-    nameKey: 'subscription.plan_premium',
-    icon: Crown,
-    color: '#D4AF37',
-    gradient: ['#F0D060', '#D4AF37', '#B8960C'] as const,
-    prices: [
-      { labelKey: 'subscription.month_1', months: 1, price: 2499 },
-      { labelKey: 'subscription.months_3', months: 3, price: 5499 },
-    ],
-    featureKeys: [
-      'subscription.feature_everything_basic',
-      'subscription.feature_reports',
-      'subscription.feature_dashboard',
-      'subscription.feature_pdf',
-      'subscription.feature_csv',
-      'subscription.feature_expense',
-      'subscription.feature_budget',
-      'subscription.feature_debt',
-      'subscription.feature_orders',
-      'subscription.feature_purchase_orders',
-      'subscription.feature_multi_warehouse',
-      'subscription.feature_ai',
-      'subscription.feature_health',
-      'subscription.feature_biometrics',
-      'subscription.feature_themes',
-      'subscription.feature_suppliers',
-    ],
-  },
-};
-
-const SubscriptionPlansScreen: React.FC<SubscriptionPlansProps> = ({ onSelectPlan, onBack }) => {
-  const { colors, theme, t } = useSettings();
-  const [selectedPlan, setSelectedPlan] = useState<'basic' | 'premium'>('premium');
-  const [selectedPrice, setSelectedPrice] = useState(PLANS.premium.prices[0]);
-  const isDark = theme !== 'light';
+const SubscriptionPlansScreen: React.FC<SubscriptionPlansProps> = ({ plans, onSelectPlan, onBack }) => {
+  const { colors, t } = useSettings();
   const gold = '#D4AF37';
+  const basicColor = '#6366F1';
 
-  const plan = PLANS[selectedPlan];
-  const isPremium = selectedPlan === 'premium';
+  // Group fetched plans by plan name (basic / premium).
+  const grouped = usePlanGroups(plans);
+  const groups = Object.values(grouped);
+
+  const [selectedPlan, setSelectedPlan] = useState<string>(groups[0]?.name ?? 'premium');
+  const [selectedPrice, setSelectedPrice] = useState<Plan | null>(groups[0]?.items[0] ?? null);
+
+  const activeGroup = groups.find((g) => g.name === selectedPlan);
+
+  const handleSelectPrice = (g: { name: string; items: Plan[] }) => {
+    if (g.name === selectedPlan) return;
+    setSelectedPlan(g.name);
+    setSelectedPrice(g.items[0]);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const handlePrice = (plan: Plan) => {
+    setSelectedPrice(plan);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
 
   const handleSelect = () => {
+    if (!selectedPrice) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    onSelectPlan(selectedPlan, selectedPrice.months, selectedPrice.price);
+    onSelectPlan(selectedPrice);
   };
+
+  const isPremium = selectedPlan === 'premium';
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -114,113 +82,107 @@ const SubscriptionPlansScreen: React.FC<SubscriptionPlansProps> = ({ onSelectPla
           </AppText>
         </Animated.View>
 
-        <View style={styles.planToggle}>
-          <TouchableOpacity
-            style={[
-              styles.toggleOption,
-              selectedPlan === 'basic' && { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-            onPress={() => { setSelectedPlan('basic'); setSelectedPrice(PLANS.basic.prices[0]); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-          >
-            <Shield size={18} color={selectedPlan === 'basic' ? colors.text : colors.textSecondary} />
-            <AppText variant="body" weight={selectedPlan === 'basic' ? 'bold' : 'medium'} style={{ color: selectedPlan === 'basic' ? colors.text : colors.textSecondary }}>
-              {t(PLANS.basic.nameKey)}
+        {plans === null ? (
+          <View style={styles.loading}>
+            <AppText variant="body" weight="medium" style={{ color: colors.textSecondary }}>
+              {t('subscription.loading_plans')}
             </AppText>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.toggleOption,
-              isPremium && { backgroundColor: gold + '20', borderColor: gold },
-            ]}
-            onPress={() => { setSelectedPlan('premium'); setSelectedPrice(PLANS.premium.prices[0]); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-          >
-            <Crown size={18} color={isPremium ? gold : colors.textSecondary} />
-            <AppText variant="body" weight={isPremium ? 'bold' : 'medium'} style={{ color: isPremium ? gold : colors.textSecondary }}>
-              {t(PLANS.premium.nameKey)}
-            </AppText>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.pricingRow}>
-          {plan.prices.map((p, idx) => (
-            <Animated.View
-              key={p.labelKey}
-              entering={FadeInDown.delay(200 + idx * 100).duration(600)}
-              style={{ flex: 1 }}
-            >
-              <TouchableOpacity
-                style={[
-                  styles.priceCard,
-                  {
-                    backgroundColor: selectedPrice.months === p.months ? colors.card : colors.surface,
-                    borderColor: selectedPrice.months === p.months ? plan.color : colors.border,
-                  },
-                ]}
-                onPress={() => { setSelectedPrice(p); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-                activeOpacity={0.8}
-              >
-                {isPremium && idx === 1 && (
-                  <View style={styles.bestValueBadge}>
-                    <Star size={12} color="#FFF" />
-                    <AppText variant="micro" weight="bold" style={{ color: '#FFF' }}>{t('subscription.best_value')}</AppText>
-                  </View>
-                )}
-                <AppText variant="caption" weight="bold" transform="uppercase" style={{ color: colors.textSecondary, letterSpacing: 1 }}>
-                  {t(p.labelKey)}
-                </AppText>
-                <AppText variant="display" weight="black" style={[styles.price, { color: colors.text }]}>
-                  {p.price.toLocaleString()}
-                </AppText>
-                <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }}>
-                  {t('subscription.etb')}
-                </AppText>
-                {selectedPrice.months === p.months && (
-                  <View style={[styles.selectedDot, { backgroundColor: plan.color }]}>
-                    <Check size={14} color="#FFF" strokeWidth={3} />
-                  </View>
-                )}
-              </TouchableOpacity>
-            </Animated.View>
-          ))}
-        </View>
-
-        <Animated.View entering={FadeInDown.delay(400).duration(600)} style={styles.featuresSection}>
-          <AppText variant="title" weight="bold" style={{ color: colors.text, marginBottom: 16 }}>
-            {t('subscription.plan_features', { plan: t(plan.nameKey) })}
-          </AppText>
-          {plan.featureKeys.map((featureKey, idx) => (
-            <View key={idx} style={styles.featureRow}>
-              <View style={[styles.featureCheck, { backgroundColor: plan.color + '20' }]}>
-                {isPremium ? (
-                  <Sparkles size={14} color={plan.color} strokeWidth={2.5} />
-                ) : (
-                  <Check size={14} color={plan.color} strokeWidth={3} />
-                )}
-              </View>
-              <AppText variant="body" weight="medium" style={{ color: colors.text, flex: 1 }}>
-                {t(featureKey)}
-              </AppText>
+          </View>
+        ) : (
+          <>
+            <View style={styles.planToggle}>
+              {groups.map((g) => {
+                const isSelected = g.name === selectedPlan;
+                const isP = g.name === 'premium';
+                return (
+                  <TouchableOpacity
+                    key={g.name}
+                    style={[
+                      styles.toggleOption,
+                      isP && isSelected && { backgroundColor: gold + '20', borderColor: gold },
+                      !isP && isSelected && { backgroundColor: colors.card, borderColor: colors.border },
+                    ]}
+                    onPress={() => handleSelectPrice(g)}
+                  >
+                    {isP ? <Crown size={18} color={isSelected ? gold : colors.textSecondary} /> : null}
+                    <AppText variant="body" weight={isSelected ? 'bold' : 'medium'} style={{ color: isP && isSelected ? gold : colors.textSecondary }}>
+                      {cap(g.name)}
+                    </AppText>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
-          ))}
-        </Animated.View>
+
+            <View style={styles.pricingRow}>
+              {(activeGroup?.items ?? []).map((p, idx) => {
+                const color = isPremium ? gold : basicColor;
+                const selected = selectedPrice?.id === p.id;
+                return (
+                  <Animated.View
+                    key={`${p.name}-${p.id}`}
+                    entering={FadeInDown.delay(200 + idx * 100).duration(600)}
+                    style={{ flex: 1 }}
+                  >
+                    <TouchableOpacity
+                      style={[
+                        styles.priceCard,
+                        {
+                          backgroundColor: selected ? colors.card : colors.surface,
+                          borderColor: selected ? color : colors.border,
+                        },
+                      ]}
+                      onPress={() => handlePrice(p)}
+                      activeOpacity={0.8}
+                    >
+                      {isPremium && idx === (activeGroup?.items ?? []).length - 1 && idx > 0 && (
+                        <View style={styles.bestValueBadge}>
+                          <Star size={12} color="#FFF" />
+                          <AppText variant="micro" weight="bold" style={{ color: '#FFF' }}>{t('subscription.best_value')}</AppText>
+                        </View>
+                      )}
+                      <AppText variant="caption" weight="bold" style={{ color: colors.textSecondary }}>
+                        {p.duration_months} {p.duration_months > 1 ? t('subscription.duration_months') : t('subscription.duration_month')}
+                      </AppText>
+                      <AppText variant="display" weight="black" style={[styles.price, { color: colors.text }]}>
+                        {formatPrice(p.price)}
+                      </AppText>
+                      <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }}>
+                        {t('subscription.etb')}
+                      </AppText>
+                      <AppText variant="micro" weight="medium" numberOfLines={2} style={{ color: colors.textSecondary, marginTop: 4 }}>
+                        {p.features?.slice(0, 2).join(' · ') || ''}
+                      </AppText>
+                      {selected && (
+                        <View style={[styles.selectedDot, { backgroundColor: color }]}>
+                          <Check size={14} color="#FFF" strokeWidth={3} />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  </Animated.View>
+                );
+              })}
+            </View>
+          </>
+        )}
       </ScrollView>
 
       <Animated.View entering={FadeIn.delay(500).duration(600)} style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
         <View style={styles.footerPriceRow}>
           <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }}>
-            {t(selectedPrice.labelKey)}
+            {selectedPrice ? `${cap(selectedPrice.name)} · ${selectedPrice.duration_months} month(s)` : ''}
           </AppText>
           <AppText variant="display-lg" weight="black" style={{ color: colors.text }}>
-            {selectedPrice.price.toLocaleString()} <AppText variant="body" weight="medium" style={{ color: colors.textSecondary }}>{t('subscription.etb')}</AppText>
+            {selectedPrice ? formatPrice(selectedPrice.price) : '—'} <AppText variant="body" weight="medium" style={{ color: colors.textSecondary }}>{t('subscription.etb')}</AppText>
           </AppText>
         </View>
         <TouchableOpacity
-          style={[styles.subscribeButton, { shadowColor: plan.color }]}
+          style={[styles.subscribeButton, { shadowColor: isPremium ? gold : basicColor }]}
           onPress={handleSelect}
+          disabled={!selectedPrice}
           activeOpacity={0.9}
         >
           <LinearGradient
-            colors={plan.gradient}
+            colors={isPremium ? ['#F0D060', '#D4AF37', '#B8960C'] : ['#6366F1', '#4F46E5']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.subscribeGradient}
@@ -236,31 +198,32 @@ const SubscriptionPlansScreen: React.FC<SubscriptionPlansProps> = ({ onSelectPla
   );
 };
 
+function usePlanGroups(plans: Plan[] | null) {
+  const groups: Record<string, { name: string; items: Plan[] }> = {};
+  (plans ?? []).forEach((p) => {
+    if (!groups[p.name]) groups[p.name] = { name: p.name, items: [] };
+    groups[p.name].items.push(p);
+  });
+  // Sort premium last for toggle ordering.
+  return groups;
+}
+
+function cap(s: string): string {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+}
+
+function formatPrice(n?: number): string {
+  return (n ?? 0).toLocaleString();
+}
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 180,
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-  },
-  backButton: {
-    padding: 8,
-    alignSelf: 'flex-start',
-  },
-  titleSection: {
-    paddingHorizontal: 32,
-    marginBottom: 28,
-  },
-  planToggle: {
-    flexDirection: 'row',
-    marginHorizontal: 32,
-    gap: 12,
-    marginBottom: 24,
-  },
+  container: { flex: 1 },
+  scrollContent: { paddingBottom: 180 },
+  header: { paddingHorizontal: 20, paddingVertical: 12 },
+  backButton: { padding: 8, alignSelf: 'flex-start' },
+  titleSection: { paddingHorizontal: 32, marginBottom: 28 },
+  loading: { paddingVertical: 60, alignItems: 'center' },
+  planToggle: { flexDirection: 'row', marginHorizontal: 32, gap: 12, marginBottom: 24 },
   toggleOption: {
     flex: 1,
     flexDirection: 'row',
@@ -272,12 +235,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: 'transparent',
   },
-  pricingRow: {
-    flexDirection: 'row',
-    marginHorizontal: 24,
-    gap: 12,
-    marginBottom: 32,
-  },
+  pricingRow: { flexDirection: 'row', marginHorizontal: 24, gap: 12, marginBottom: 32 },
   priceCard: {
     flex: 1,
     padding: 20,
@@ -299,10 +257,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderBottomLeftRadius: 12,
   },
-  price: {
-    marginTop: 8,
-    marginBottom: 4,
-  },
+  price: { marginTop: 8, marginBottom: 4 },
   selectedDot: {
     position: 'absolute',
     top: 10,
@@ -310,22 +265,6 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  featuresSection: {
-    paddingHorizontal: 32,
-  },
-  featureRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 12,
-  },
-  featureCheck: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -340,30 +279,10 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     gap: 16,
   },
-  footerPriceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  subscribeButton: {
-    borderRadius: 20,
-    overflow: 'hidden',
-    elevation: 6,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
-  subscribeGradient: {
-    flexDirection: 'row',
-    height: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 10,
-  },
-  subscribeText: {
-    color: '#FFF',
-    letterSpacing: 1,
-  },
+  footerPriceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  subscribeButton: { borderRadius: 20, overflow: 'hidden', elevation: 6, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
+  subscribeGradient: { flexDirection: 'row', height: 60, justifyContent: 'center', alignItems: 'center', gap: 10 },
+  subscribeText: { color: '#FFF', letterSpacing: 1 },
 });
 
 export default SubscriptionPlansScreen;
