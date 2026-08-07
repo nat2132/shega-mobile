@@ -35,8 +35,8 @@ const SubscriptionPlansScreen: React.FC<SubscriptionPlansProps> = ({ plans, onSe
 
   const OPTIONS = [
     { key: 'trial', title: t('subscription.free_trial'), sub: t('subscription.free_trial_desc'), onPress: onStartTrial, url: Gift, accent: true },
-    ...(month1 ? [{ key: 'm1', title: `${t('subscription.duration_month')} ${t('subscription.subscription')}`, sub: formatPrice(month1.price) + ' ' + t('subscription.etb'), onPress: () => onSelectPlan(month1), url: null, accent: false }] : []),
-    ...(month3 ? [{ key: 'm3', title: `${t('subscription.duration_months')} ${t('subscription.subscription')}`, sub: formatPrice(month3.price) + ' ' + t('subscription.etb'), onPress: () => onSelectPlan(month3), url: null, accent: false }] : []),
+    ...(month1 ? [{ key: 'm1', title: t('subscription.month_1'), sub: formatPrice(month1.price) + ' ' + t('subscription.etb'), onPress: () => onSelectPlan(month1), url: null, accent: false }] : []),
+    ...(month3 ? [{ key: 'm3', title: t('subscription.months_3'), sub: formatPrice(month3.price) + ' ' + t('subscription.etb'), onPress: () => onSelectPlan(month3), url: null, accent: false }] : []),
   ];
 
   return (
@@ -52,7 +52,7 @@ const SubscriptionPlansScreen: React.FC<SubscriptionPlansProps> = ({ plans, onSe
 
         <Animated.View entering={FadeInDown.delay(100).duration(600)} style={styles.titleSection}>
           <AppText variant="display" weight="black" align="center" style={{ color: colors.text, marginBottom: 8 }}>
-            {t('subscription.plans')}
+            {t('subscription.plan_premium')}
           </AppText>
           <AppText variant="body-lg" weight="medium" align="center" style={{ color: colors.textSecondary }}>
             {t('subscription.unlock_power')}

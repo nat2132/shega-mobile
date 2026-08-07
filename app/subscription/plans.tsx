@@ -8,8 +8,8 @@ import * as Haptics from 'expo-haptics';
 // Fallback plans if the backend is unreachable or empty — exactly 1 month and
 // 3 months, single tier, device_limit 1 (no "N devices").
 const FALLBACK_PLANS: Plan[] = [
-  { id: 1, name: 'subscription', display_name: 'Subscription', price: 2999, duration_months: 1, features: [] },
-  { id: 2, name: 'subscription', display_name: 'Subscription', price: 6999, duration_months: 3, features: [] },
+  { id: 1, name: 'subscription', display_name: 'Subscription', price: 2499, duration_months: 1, features: [] },
+  { id: 2, name: 'subscription', display_name: 'Subscription', price: 5499, duration_months: 3, features: [] },
 ];
 
 export default function SubscriptionPlans() {

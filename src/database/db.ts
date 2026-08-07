@@ -7942,8 +7942,8 @@ export const getSubscription = (): SubscriptionData | null => {
 
 const VALID_PLANS: Record<string, { months: number; price: number }[]> = {
   subscription: [
-    { months: 1, price: 2999 },
-    { months: 3, price: 6999 },
+    { months: 1, price: 2499 },
+    { months: 3, price: 5499 },
   ],
 };
 
