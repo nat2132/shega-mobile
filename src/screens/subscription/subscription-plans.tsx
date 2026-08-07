@@ -14,6 +14,7 @@ import {
   Check,
   ArrowRight,
   Star,
+  Gift,
 } from 'lucide-react-native';
 import { useSettings } from '@/context/SettingsContext';
 import { AppText } from '@/components/ui';
@@ -26,9 +27,10 @@ interface SubscriptionPlansProps {
   plans: Plan[] | null;
   onSelectPlan: (plan: Plan) => void;
   onBack: () => void;
+  onStartTrial?: () => void;
 }
 
-const SubscriptionPlansScreen: React.FC<SubscriptionPlansProps> = ({ plans, onSelectPlan, onBack }) => {
+const SubscriptionPlansScreen: React.FC<SubscriptionPlansProps> = ({ plans, onSelectPlan, onBack, onStartTrial }) => {
   const { colors, t } = useSettings();
   const gold = '#D4AF37';
   const basicColor = '#6366F1';
@@ -162,6 +164,31 @@ const SubscriptionPlansScreen: React.FC<SubscriptionPlansProps> = ({ plans, onSe
                 );
               })}
             </View>
+
+            <View style={styles.trialSection}>
+              <View style={[styles.trialDivider, { backgroundColor: colors.border }]} />
+              <TouchableOpacity
+                style={[styles.trialCard, { backgroundColor: colors.card, borderColor: gold }]}
+                onPress={onStartTrial}
+                activeOpacity={0.85}
+              >
+                <View style={[styles.trialIcon, { backgroundColor: gold + '20' }]}>
+                  <Gift size={26} color={gold} />
+                </View>
+                <View style={styles.trialBody}>
+                  <AppText variant="heading" weight="bold" style={{ color: colors.text }}>
+                    {t('subscription.free_trial')}
+                  </AppText>
+                  <AppText variant="body-sm" weight="medium" style={{ color: colors.textSecondary }} numberOfLines={2}>
+                    {t('subscription.free_trial_desc')}
+                  </AppText>
+                </View>
+                <ArrowRight size={22} color={gold} strokeWidth={2.5} />
+              </TouchableOpacity>
+              <AppText variant="micro" weight="medium" align="center" style={{ color: colors.textSecondary }}>
+                {t('subscription.free_trial_note')}
+              </AppText>
+            </View>
           </>
         )}
       </ScrollView>
@@ -236,6 +263,24 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   pricingRow: { flexDirection: 'row', marginHorizontal: 24, gap: 12, marginBottom: 32 },
+  trialSection: { marginHorizontal: 24, gap: 12 },
+  trialDivider: { height: 1, marginBottom: 4 },
+  trialCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    padding: 18,
+    borderRadius: 20,
+    borderWidth: 1.5,
+  },
+  trialIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  trialBody: { flex: 1, gap: 2 },
   priceCard: {
     flex: 1,
     padding: 20,

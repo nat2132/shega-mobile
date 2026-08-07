@@ -8031,6 +8031,34 @@ export const approveSubscription = (): boolean => {
   }
 };
 
+// Starts (or restarts) the local 7-day free trial. Grants a 7-day premium
+// trial locally. Safe to call at any time — it resets an expired/cancelled
+// subscription back to a fresh trial.
+export const startFreeTrial = (): boolean => {
+  try {
+    const database = getDB();
+    const sub = getSubscription();
+    const trialEnd = new Date();
+    trialEnd.setDate(trialEnd.getDate() + 7);
+    if (sub) {
+      database.runSync(
+        "UPDATE subscriptions SET plan = 'premium', status = 'trial', trialStartedAt = datetime('now'), trialEndsAt = ?, startedAt = datetime('now'), expiresAt = ?, durationMonths = 0, price = NULL, updatedAt = datetime('now') WHERE id = ?",
+        [trialEnd.toISOString(), trialEnd.toISOString(), sub.id]
+      );
+      logAudit(sub.id, 'trial_started', sub.status, 'trial');
+    } else {
+      database.runSync(
+        "INSERT INTO subscriptions (plan, status, trialStartedAt, trialEndsAt, startedAt, expiresAt, durationMonths) VALUES ('premium', 'trial', datetime('now'), ?, datetime('now'), ?, 0)",
+        [trialEnd.toISOString(), trialEnd.toISOString()]
+      );
+    }
+    return true;
+  } catch (error) {
+    console.error('Start free trial error:', error);
+    return false;
+  }
+};
+
 // Reconciles the local (offline) subscription row with an active subscription
 // confirmed by the backend (admin-approved payment -> license). This unlocks
 // the premium gate on-device without relying on the legacy local-only payment

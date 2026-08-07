@@ -111,6 +111,7 @@ function AppShell({ dbWarning }: { dbWarning?: string | null }) {
         <TutorialProvider>
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="index" options={{ animation: 'fade' }} />
+            <Stack.Screen name="language-select" options={{ animation: 'fade' }} />
             <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
             <Stack.Screen name="inventory-onboarding" options={{ animation: 'fade' }} />
             <Stack.Screen name="sales-onboarding" options={{ animation: 'fade' }} />

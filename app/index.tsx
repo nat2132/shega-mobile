@@ -12,8 +12,18 @@ export default function Index() {
       const token = await getStoredToken();
 
       if (!token) {
+        // First launch: let the user pick their app language before any
+        // onboarding or login UX appears. settings_language is only written by
+        // the settings provider once a language is chosen.
+        let fromFirstRun = true;
+        try {
+          const saved = await SecureStore.getItemAsync('settings_language');
+          if (saved) fromFirstRun = false;
+        } catch {
+          fromFirstRun = true;
+        }
         // Show login/register flow.
-        target = '/welcome-choice';
+        target = fromFirstRun ? '/language-select' : '/welcome-choice';
       } else {
         // 2. Local device lock (PIN) still applies for in-app security.
         const pin = await SecureStore.getItemAsync('user_pin');
