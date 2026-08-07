@@ -7941,13 +7941,9 @@ export const getSubscription = (): SubscriptionData | null => {
 };
 
 const VALID_PLANS: Record<string, { months: number; price: number }[]> = {
-  basic: [
-    { months: 1, price: 1999 },
-    { months: 3, price: 2499 },
-  ],
-  premium: [
-    { months: 1, price: 2499 },
-    { months: 3, price: 5499 },
+  subscription: [
+    { months: 1, price: 2999 },
+    { months: 3, price: 6999 },
   ],
 };
 
@@ -8313,7 +8309,7 @@ export const isPremiumFeatureUnlocked = (feature: string): boolean => {
     if (!sub) return false;
     if (sub.status === 'trial') return true;
     if (sub.status !== 'active') return false;
-    return sub.plan === 'premium';
+    return sub.plan === 'premium' || sub.plan === 'subscription';
   } catch (error) {
     console.error('Is premium feature unlocked error:', error);
     return false;

@@ -1180,6 +1180,7 @@ const translations: Record<Language, Record<string, string>> = {
     'subscription.month_1': '1 Month',
     'subscription.months_3': '3 Months',
     'subscription.duration_month': 'Month',
+    'subscription.subscription': 'Subscription',
     'subscription.duration_months': 'Months',
     'subscription.trial_active': 'Trial Active',
     'subscription.pending_payment': 'Pending Payment',
