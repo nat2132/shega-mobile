@@ -30,8 +30,12 @@ const SubscriptionPlansScreen: React.FC<SubscriptionPlansProps> = ({ plans, onSe
   const { colors, t } = useSettings();
 
   // Exactly three subscriptions: 7-day free trial, 1 month, 3 months.
-  const month1 = (plans ?? []).find((p) => p.duration_months === 1);
-  const month3 = (plans ?? []).find((p) => p.duration_months === 3);
+  // Prefer the Premium tier when it exists (this screen is the upgrade path),
+  // falling back to whichever plans the backend returned.
+  const paidPlans = (plans ?? []).filter((p) => /premium/i.test(p.name));
+  const pool = paidPlans.length > 0 ? paidPlans : (plans ?? []);
+  const month1 = pool.find((p) => p.duration_months === 1);
+  const month3 = pool.find((p) => p.duration_months === 3);
 
   const OPTIONS = [
     { key: 'trial', title: t('subscription.free_trial'), sub: t('subscription.free_trial_desc'), onPress: onStartTrial, url: Gift, accent: true },

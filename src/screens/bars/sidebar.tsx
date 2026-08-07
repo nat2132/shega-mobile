@@ -6,6 +6,7 @@ import { X, Banknote, SlidersHorizontal, ClipboardList, LogOut, ChevronRight, Us
 import { Fonts , Spacing } from '@/constants/theme';
 import { useSettings, PROFILE_IMAGES } from '@/context/SettingsContext';
 import { useSubscription } from '@/context/SubscriptionContext';
+import { useAccount } from '@/context/AccountContext';
 import { AppText, AppListItem } from '@/components/ui';
 
 import { getBarsGlass } from './glass-bars';
@@ -18,8 +19,17 @@ const MyStoreMenu: React.FC<SidebarProps> = ({ onClose }) => {
   const router = useRouter();
   const { userProfile, t, theme, colors } = useSettings();
   const { isTrial, trialDaysRemaining, isPremium, isFeatureUnlocked } = useSubscription();
+  const { logout } = useAccount();
   const G = getBarsGlass(colors);
   const gold = '#D4AF37';
+
+  const handleExitSession = () => {
+    if (onClose) onClose();
+    setTimeout(async () => {
+      await logout();
+      router.replace('/login');
+    }, 150);
+  };
 
   const handleRoute = (routePath: string) => {
     if (onClose) onClose();
@@ -179,7 +189,7 @@ const MyStoreMenu: React.FC<SidebarProps> = ({ onClose }) => {
               <MenuItem 
                 icon={LogOut} 
                 label={t('sidebar.exit_session')} 
-                onPress={onClose} 
+                onPress={handleExitSession} 
                 delay={500}
               />
             </View>

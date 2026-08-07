@@ -3,6 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import PremiumFeatureLockScreen from '../../src/screens/subscription/premium-feature-lock';
 import { FEATURE_LABELS, PremiumFeature } from '@/context/SubscriptionContext';
 import { useSettings } from '@/context/SettingsContext';
+import { safeBackOrFallback } from '@/services/navigation';
 
 const FEATURE_KEY_MAP: Record<string, string> = {
   reports: 'subscription.feature_reports',
@@ -41,7 +42,7 @@ export default function PremiumUpgrade() {
         return v !== k ? v : b;
       })}
       onUpgrade={() => router.replace('/subscription/plans')}
-      onBack={() => router.back()}
+      onBack={() => safeBackOrFallback('/(tabs)/dashboard')}
     />
   );
 }

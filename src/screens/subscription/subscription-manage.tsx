@@ -29,6 +29,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { safeGoBack } from '@/services/navigation';
 
 const FEATURE_KEY_MAP: Record<string, string> = {
   reports: 'subscription.feature_reports',
@@ -123,7 +124,7 @@ const PLANS = {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => safeGoBack()} style={styles.backButton}>
           <AppText variant="body" weight="semibold" style={{ color: colors.textSecondary }}>
             {t('subscription.back')}
           </AppText>
