@@ -10,6 +10,7 @@ import {
     ItemData
 } from '@/database/db';
 import { getEthiopianMonthNames, toEthiopianDate } from '@/utils/date-utils';
+import { translateWarehouseName } from '@/utils/warehouse-labels';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import {
@@ -414,7 +415,7 @@ const InventoryCard = React.memo(({ item, onPress, warehouses }: { item: ItemDat
       {warehouse && (
         <View style={styles.whLabelRow}>
           <Warehouse size={10} color={G.fgSecondary} />
-          <AppText variant="micro" weight="bold" shrink={false} style={[styles.whLabelText, { color: G.fgSecondary }]} numberOfLines={1}>{warehouse.name}</AppText>
+          <AppText variant="micro" weight="bold" shrink={false} style={[styles.whLabelText, { color: G.fgSecondary }]} numberOfLines={1}>{translateWarehouseName(t, warehouse.name)}</AppText>
         </View>
       )}
     </TouchableOpacity>

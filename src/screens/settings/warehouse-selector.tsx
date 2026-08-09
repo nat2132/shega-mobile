@@ -4,6 +4,7 @@ import { useSubscription } from '@/context/SubscriptionContext';
 import { useSettings } from '@/context/SettingsContext';
 import { useWarehouse } from '@/context/WarehouseContext';
 import { getWarehouses, insertWarehouse } from '@/database/db';
+import { translateWarehouseName, translateWarehouseLocation } from '@/utils/warehouse-labels';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { Building2, Check, Plus, Warehouse } from 'lucide-react-native';
@@ -98,8 +99,8 @@ const WarehouseSelectorModal: React.FC<WarehouseSelectorProps> = ({ visible, onC
                         <Building2 size={18} color={colors.success} />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <AppText variant="body" weight="bold" style={[styles.whName, { color: G.fg }]} numberOfLines={1}>{wh.name}</AppText>
-                        {wh.location && <AppText variant="caption" weight="medium" style={[styles.whSub, { color: G.fgSecondary }]} numberOfLines={1}>{wh.location}</AppText>}
+                        <AppText variant="body" weight="bold" style={[styles.whName, { color: G.fg }]} numberOfLines={1}>{translateWarehouseName(t, wh.name)}</AppText>
+                        {wh.location && <AppText variant="caption" weight="medium" style={[styles.whSub, { color: G.fgSecondary }]} numberOfLines={1}>{translateWarehouseLocation(t, wh.location)}</AppText>}
                       </View>
                       <Check size={18} color={colors.success} />
                     </TouchableOpacity>

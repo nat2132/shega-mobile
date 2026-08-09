@@ -25,6 +25,7 @@ import { useNotifications } from '@/hooks/useNotifications';
 import { TutorialButton, TutorialScrollView, TutorialTarget, useTutorial } from '@/tutorials';
 import { inventoryTutorial } from '@/tutorials/definitions';
 import { formatNumber } from '@/utils/formatNumber';
+import { translateWarehouseName } from '@/utils/warehouse-labels';
 import * as Haptics from 'expo-haptics';
 import * as Print from 'expo-print';
 import { useFocusEffect } from 'expo-router';
@@ -374,7 +375,11 @@ const InventoryDashboard = () => {
                 </View>
                 <View style={{ flex: 1, marginLeft: 10 }}>
                   <AppText variant="caption" weight="bold" style={{ fontSize: 11, fontFamily: Fonts.bold, color: G.fg }} numberOfLines={1}>
-                    {warehouses.find(w => w.id === activeWarehouseId)?.name || t('inv.all_warehouses')}
+                    {(() => {
+                      const wh = warehouses.find(w => w.id === activeWarehouseId);
+                      if (!wh) return t('inv.all_warehouses');
+                      return translateWarehouseName(t, wh.name);
+                    })()}
                   </AppText>
                   <AppText variant="micro" weight="medium" style={{ fontSize: 10, fontFamily: Fonts.medium, color: G.muted }} numberOfLines={1}>
                     {t('inv.filtered_view')}

@@ -57,6 +57,7 @@ import { BottomSheet } from '@/components/BottomSheet';
 import { AppListItem, AppText } from '@/components/ui';
 import PremiumFeatureGate from '@/components/PremiumFeatureGate';
 import { useWarehouse } from '@/context/WarehouseContext';
+import { translateWarehouseName, translateWarehouseLocation } from '@/utils/warehouse-labels';
 import DateTimeSettings from './date-time';
 import NotificationSettingsScreen from './notification';
 import ProfileSettingsScreen from './profile-settings';
@@ -557,8 +558,8 @@ const SettingsScreen = () => {
           <View style={[styles.ledgerGroup, { backgroundColor: G.bgCard, borderColor: G.border }]}>
             <SettingLedgerItem
               icon={Warehouse}
-              title={activeWarehouse ? activeWarehouse.name : t('inv.all_warehouses')}
-              subtitle={activeWarehouse ? (activeWarehouse.location || t('data.warehouse_count', { count: warehouses.length.toString() })) : t('inv.all_warehouses_sub')}
+              title={activeWarehouse ? translateWarehouseName(t, activeWarehouse.name) : t('inv.all_warehouses')}
+              subtitle={activeWarehouse ? (translateWarehouseLocation(t, activeWarehouse.location) || t('data.warehouse_count', { count: warehouses.length.toString() })) : t('inv.all_warehouses_sub')}
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowWarehouse(true); }}
             />
           </View>

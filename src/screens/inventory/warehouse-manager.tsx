@@ -3,6 +3,7 @@ import { useDialog } from '@/context/DialogContext';
 import { useSubscription } from '@/context/SubscriptionContext';
 import { useSettings } from '@/context/SettingsContext';
 import { deleteWarehouse, getWarehouses, insertWarehouse, updateWarehouse } from '@/database/db';
+import { translateWarehouseName, translateWarehouseLocation } from '@/utils/warehouse-labels';
 import * as Haptics from 'expo-haptics';
 import { Building2, Check, Plus, Trash2, Warehouse } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
@@ -96,7 +97,7 @@ const WarehouseManagerModal: React.FC<WarehouseManagerProps> = ({ visible, onClo
   const handleDelete = async (wh: any) => {
     const ok = await dialog.confirm({
       title: t('inv.delete_warehouse_title'),
-      message: t('inv.delete_warehouse_msg', { name: wh.name }),
+      message: t('inv.delete_warehouse_msg', { name: translateWarehouseName(t, wh.name) }),
       confirmText: t('common.delete'),
       cancelText: t('common.cancel'),
       iconType: 'danger',
@@ -165,8 +166,8 @@ const WarehouseManagerModal: React.FC<WarehouseManagerProps> = ({ visible, onClo
                         <Building2 size={16} color={colors.success} />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <AppText variant="body" weight="bold" style={[styles.whName, { color: G.fg }]} numberOfLines={1}>{wh.name}</AppText>
-                        {wh.location && <AppText variant="caption" weight="medium" style={[styles.whSub, { color: G.fgSecondary }]} numberOfLines={1}>{wh.location}</AppText>}
+                        <AppText variant="body" weight="bold" style={[styles.whName, { color: G.fg }]} numberOfLines={1}>{translateWarehouseName(t, wh.name)}</AppText>
+                        {wh.location && <AppText variant="caption" weight="medium" style={[styles.whSub, { color: G.fgSecondary }]} numberOfLines={1}>{translateWarehouseLocation(t, wh.location)}</AppText>}
                       </View>
                       <TouchableOpacity onPress={() => handleEdit(wh)} style={styles.actionBtn}>
                         <Building2 size={14} color={G.fgSecondary} />
