@@ -208,7 +208,7 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
   return (
     <KeyboardAvoidingView 
       style={[styles.container, { backgroundColor: G.bg }]} 
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
       <View style={{ position: 'absolute', top: -80, right: -50, width: 220, height: 220, borderRadius: 110, backgroundColor: G.mutedLight, opacity: 0.4, pointerEvents: 'none' }} />

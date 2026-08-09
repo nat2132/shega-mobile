@@ -339,109 +339,113 @@ const RestockFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?:
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: G.bg }]}>
-      {/* Ambient glow washes */}
-      <View style={[styles.glowWash1, { backgroundColor: G.mutedLight }]} />
-      <View style={[styles.glowWash2, { backgroundColor: G.mutedLight }]} />
-      <View style={[styles.glowWash3, { backgroundColor: G.mutedLight }]} />
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => setSelectedItem(null)} style={[styles.closeBtn, { borderColor: G.border }]}>
-          <X size={20} color={G.fg} />
-        </TouchableOpacity>
-        <View style={{ flex: 1 }}>
-          <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.fgSecondary }} numberOfLines={1}>{t('form.restock_item')}</AppText>
-          <AppText variant="title" weight="bold" style={{ color: G.fg, marginTop: 2 }} numberOfLines={1}>{selectedItem.name}</AppText>
-        </View>
-        <View style={{ width: 40 }} />
-      </View>
-
-      <TutorialScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        {draftFormDataRestock.showDrafts && (
-          <DraftSection
-            drafts={draftFormDataRestock.drafts}
-            onRestore={async (draft: Draft) => {
-              const d = draft.data;
-              setSearchQuery(d.searchQuery || '');
-              setBuyingPrice(d.buyingPrice || '');
-              setUnitSellingPrice(d.unitSellingPrice || '');
-              setBulkSellingPrice(d.bulkSellingPrice || '');
-              setRestockQty(d.restockQty || '1');
-              setSupplierPhone(d.supplierPhone || '');
-              setSupplierCallEnabled(d.supplierCallEnabled || false);
-              setCreditToggle(d.creditToggle || 'No');
-              if (d.selectedItem) setSelectedItem(d.selectedItem);
-              if (d.selectedSupplier) setSelectedSupplier(d.selectedSupplier);
-              await draftFormDataRestock.remove(draft.id);
-            }}
-            onDelete={async (id: string) => {
-              await draftFormDataRestock.remove(id);
-            }}
-          />
-        )}
-        <Animated.View entering={FadeInDown} style={styles.formCard}>
-          {/* Prices */}
-          <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.cardTitle, { color: G.fgSecondary }]} numberOfLines={1}>{t('form.financial_strategy')}</AppText>
-
-          <View style={styles.row}>
-            <View style={{ flex: 1, marginRight: 15 }}>
-              <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('form.unit_cost')}</AppText>
-              <TextInput
-                style={[styles.input, { color: G.fg, borderColor: G.border, fontFamily: Fonts.bold }]}
-                placeholder="0.00"
-                value={buyingPrice}
-                onChangeText={setBuyingPrice}
-                keyboardType="numeric"
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('form.unit_selling_price')}</AppText>
-              <TextInput
-                style={[styles.input, { color: G.fg, borderColor: G.border, fontFamily: Fonts.bold }]}
-                placeholder="0.00"
-                value={unitSellingPrice}
-                onChangeText={setUnitSellingPrice}
-                keyboardType="numeric"
-              />
-            </View>
-          </View>
-
-          {selectedItem.unitsPerPack > 1 && (
-            <View style={styles.inputNode}>
-              <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('form.bulk_selling_price')}</AppText>
-              <TextInput
-                style={[styles.input, { color: G.fg, borderColor: G.border, fontFamily: Fonts.bold }]}
-                placeholder="0.00"
-                value={bulkSellingPrice}
-                onChangeText={setBulkSellingPrice}
-                keyboardType="numeric"
-              />
-            </View>
-          )}
-
-          {/* Quantity */}
-          <View style={styles.inputNode}>
-            <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('form.initial_stock', { unit: selectedItem.purchaseUnit || selectedItem.baseUnit || 'pcs' })}</AppText>
-            <TextInput
-              style={[styles.input, { color: G.fg, borderColor: G.border, fontFamily: Fonts.bold, fontSize: 18 }]}
-              value={restockQty}
-              onChangeText={setRestockQty}
-              keyboardType="numeric"
-            />
-          </View>
-
-          {/* Supplier */}
-          <TouchableOpacity
-            style={[styles.intelligenceBlock, { backgroundColor: G.bgCard, borderColor: G.border, flexDirection: 'row', alignItems: 'center' }]}
-            onPress={() => { setShowSupplierModal(true); }}
-          >
-            <Truck size={20} color={colors.primary} />
-            <View style={{ flex: 1, marginLeft: 10 }}>
-              <AppText variant="body" weight="bold" style={[styles.blockTitle, { color: G.fg }]} numberOfLines={2}>{t('form.supplier_label')}</AppText>
-              <AppText variant="body-sm" weight="medium" style={[styles.blockSub, { color: G.fgSecondary }]} numberOfLines={2}>
-                {selectedSupplier ? selectedSupplier.fullName : t('form.tap_select_supplier')}
-              </AppText>
-            </View>
-            <ChevronDown size={18} color={G.fgSecondary} />
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        {/* Ambient glow washes */}
+        <View style={[styles.glowWash1, { backgroundColor: G.mutedLight }]} />
+        <View style={[styles.glowWash2, { backgroundColor: G.mutedLight }]} />
+        <View style={[styles.glowWash3, { backgroundColor: G.mutedLight }]} />
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => setSelectedItem(null)} style={[styles.closeBtn, { borderColor: G.border }]}>
+            <X size={20} color={G.fg} />
           </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.fgSecondary }} numberOfLines={1}>{t('form.restock_item')}</AppText>
+            <AppText variant="title" weight="bold" style={{ color: G.fg, marginTop: 2 }} numberOfLines={1}>{selectedItem.name}</AppText>
+          </View>
+          <View style={{ width: 40 }} />
+        </View>
+
+        <TutorialScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          {draftFormDataRestock.showDrafts && (
+            <DraftSection
+              drafts={draftFormDataRestock.drafts}
+              onRestore={async (draft: Draft) => {
+                const d = draft.data;
+                setSearchQuery(d.searchQuery || '');
+                setBuyingPrice(d.buyingPrice || '');
+                setUnitSellingPrice(d.unitSellingPrice || '');
+                setBulkSellingPrice(d.bulkSellingPrice || '');
+                setRestockQty(d.restockQty || '1');
+                setSupplierPhone(d.supplierPhone || '');
+                setSupplierCallEnabled(d.supplierCallEnabled || false);
+                setCreditToggle(d.creditToggle || 'No');
+                if (d.selectedItem) setSelectedItem(d.selectedItem);
+                if (d.selectedSupplier) setSelectedSupplier(d.selectedSupplier);
+                await draftFormDataRestock.remove(draft.id);
+              }}
+              onDelete={async (id: string) => {
+                await draftFormDataRestock.remove(id);
+              }}
+            />
+          )}
+          <Animated.View entering={FadeInDown} style={styles.formCard}>
+            {/* Prices */}
+            <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.cardTitle, { color: G.fgSecondary }]} numberOfLines={1}>{t('form.financial_strategy')}</AppText>
+
+            <View style={styles.row}>
+              <View style={{ flex: 1, marginRight: 15 }}>
+                <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('form.unit_cost')}</AppText>
+                <TextInput
+                  style={[styles.input, { color: G.fg, borderColor: G.border, fontFamily: Fonts.bold }]}
+                  placeholder="0.00"
+                  value={buyingPrice}
+                  onChangeText={setBuyingPrice}
+                  keyboardType="numeric"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('form.unit_selling_price')}</AppText>
+                <TextInput
+                  style={[styles.input, { color: G.fg, borderColor: G.border, fontFamily: Fonts.bold }]}
+                  placeholder="0.00"
+                  value={unitSellingPrice}
+                  onChangeText={setUnitSellingPrice}
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
+
+            {selectedItem.unitsPerPack > 1 && (
+              <View style={styles.inputNode}>
+                <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('form.bulk_selling_price')}</AppText>
+                <TextInput
+                  style={[styles.input, { color: G.fg, borderColor: G.border, fontFamily: Fonts.bold }]}
+                  placeholder="0.00"
+                  value={bulkSellingPrice}
+                  onChangeText={setBulkSellingPrice}
+                  keyboardType="numeric"
+                />
+              </View>
+            )}
+
+            {/* Quantity */}
+            <View style={styles.inputNode}>
+              <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('form.initial_stock', { unit: selectedItem.purchaseUnit || selectedItem.baseUnit || 'pcs' })}</AppText>
+              <TextInput
+                style={[styles.input, { color: G.fg, borderColor: G.border, fontFamily: Fonts.bold, fontSize: 18 }]}
+                value={restockQty}
+                onChangeText={setRestockQty}
+                keyboardType="numeric"
+              />
+            </View>
+
+            {/* Supplier */}
+            <TouchableOpacity
+              style={[styles.intelligenceBlock, { backgroundColor: G.bgCard, borderColor: G.border, flexDirection: 'row', alignItems: 'center' }]}
+              onPress={() => { setShowSupplierModal(true); }}
+            >
+              <Truck size={20} color={colors.primary} />
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <AppText variant="body" weight="bold" style={[styles.blockTitle, { color: G.fg }]} numberOfLines={2}>{t('form.supplier_label')}</AppText>
+                <AppText variant="body-sm" weight="medium" style={[styles.blockSub, { color: G.fgSecondary }]} numberOfLines={2}>
+                  {selectedSupplier ? selectedSupplier.fullName : t('form.tap_select_supplier')}
+                </AppText>
+              </View>
+              <ChevronDown size={18} color={G.fgSecondary} />
+            </TouchableOpacity>
 
           {/* Call supplier on price change */}
           <View style={[styles.intelligenceBlock, { backgroundColor: G.bgCard, borderColor: G.border }]}>
@@ -578,6 +582,7 @@ const RestockFlow = ({ onSuccess, onClose }: { onSuccess?: () => void, onClose?:
           </View>
         </Pressable>
       </Modal>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
@@ -883,7 +888,7 @@ const loadCategories = async () => {
 
       <KeyboardAvoidingView 
         style={{ flex: 1 }} 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
       <TutorialScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -1322,165 +1327,167 @@ const loadCategories = async () => {
       />
 
       <Modal visible={showCategoryModal} transparent animationType="slide">
-        <Pressable style={styles.modalOverlay} onPress={() => setShowCategoryModal(false)}>
-          <View style={[styles.categorySheet, { backgroundColor: G.bg }]}>
-            <View style={styles.modalHandleRow}>
-              <View style={[styles.modalHandle, { backgroundColor: G.border }]} />
-            </View>
-            <View style={styles.modalHeader}>
-               <AppText variant="title" weight="bold" style={[styles.modalTitle, { color: G.fg }]} numberOfLines={2}>{t('form.category_intel')}</AppText>
-               <TouchableOpacity onPress={() => setShowNewCategory(!showNewCategory)}>
-                  <Plus size={24} color={G.fg} />
-               </TouchableOpacity>
-            </View>
-            
-            {showNewCategory && (
-              <View style={styles.newCatInput}>
-                 <TextInput 
-                    style={[styles.input, { flex: 1, marginRight: 10, borderColor: G.border, color: G.fg }]}
-                    placeholder={t('form.new_domain')}
-                    value={newCategoryName}
-                    onChangeText={setNewCategoryName}
-                 />
-                  <TouchableOpacity
-                    style={[styles.addBtn, { backgroundColor: G.fg }]}
-                    onPress={async () => {
-                      const name = newCategoryName.trim();
-                      if (!name) return;
-                      const exists = categories.some(c => c.name.toLowerCase() === name.toLowerCase());
-                      if (exists) {
-                        await dialog.alert({ title: t('common.error'), message: t('form.category_exists'), iconType: 'danger' });
-                        return;
-                      }
-                      const newCat = { id: Date.now(), name, icon: '\uD83D\uDCE6' };
-                      setCategories([...categories, newCat]);
-                      setSelectedCategory(newCat);
-                      setNewCategoryName('');
-                      setShowNewCategory(false);
-                      setShowCategoryModal(false);
-                    }}
-                  >
-                   <Check size={20} color={G.bg} />
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <Pressable style={styles.modalOverlay} onPress={() => setShowCategoryModal(false)}>
+            <View style={[styles.categorySheet, { backgroundColor: G.bg }]}>
+              <View style={styles.modalHandleRow}>
+                <View style={[styles.modalHandle, { backgroundColor: G.border }]} />
+              </View>
+              <View style={styles.modalHeader}>
+                 <AppText variant="title" weight="bold" style={[styles.modalTitle, { color: G.fg }]} numberOfLines={2}>{t('form.category_intel')}</AppText>
+                 <TouchableOpacity onPress={() => setShowNewCategory(!showNewCategory)}>
+                    <Plus size={24} color={G.fg} />
                  </TouchableOpacity>
               </View>
-            )}
+              
+              {showNewCategory && (
+                <View style={styles.newCatInput}>
+                   <TextInput 
+                      style={[styles.input, { flex: 1, marginRight: 10, borderColor: G.border, color: G.fg }]}
+                      placeholder={t('form.new_domain')}
+                      value={newCategoryName}
+                      onChangeText={setNewCategoryName}
+                   />
+                    <TouchableOpacity
+                      style={[styles.addBtn, { backgroundColor: G.fg }]}
+                      onPress={async () => {
+                        const name = newCategoryName.trim();
+                        if (!name) return;
+                        const exists = categories.some(c => c.name.toLowerCase() === name.toLowerCase());
+                        if (exists) {
+                          await dialog.alert({ title: t('common.error'), message: t('form.category_exists'), iconType: 'danger' });
+                          return;
+                        }
+                        const newCat = { id: Date.now(), name, icon: '\uD83D\uDCE6' };
+                        setCategories([...categories, newCat]);
+                        setSelectedCategory(newCat);
+                        setNewCategoryName('');
+                        setShowNewCategory(false);
+                        setShowCategoryModal(false);
+                      }}
+                    >
+                     <Check size={20} color={G.bg} />
+                   </TouchableOpacity>
+                </View>
+              )}
 
-            <ScrollView contentContainerStyle={styles.catScroll}>
-              {categories.map(cat => (
-                <TouchableOpacity 
-                  key={cat.id} 
-                  style={[styles.catItem, { borderColor: G.border }]}
-                  onPress={() => { setSelectedCategory(cat); setShowCategoryModal(false); Haptics.selectionAsync(); }}
-                >
-                  <AppText variant="heading" shrink={false} style={styles.catIcon}>{cat.icon}</AppText>
-                  <AppText variant="body" weight="bold" style={[styles.catName, { color: G.fg }]} numberOfLines={2}>{cat.name.includes('category.') ? t(cat.name) : cat.name}</AppText>
-                  {selectedCategory?.id === cat.id && <Check size={18} color={colors.primary} />}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        </Pressable>
+              <ScrollView contentContainerStyle={styles.catScroll}>
+                {categories.map(cat => (
+                  <TouchableOpacity 
+                    key={cat.id} 
+                    style={[styles.catItem, { borderColor: G.border }]}
+                    onPress={() => { setSelectedCategory(cat); setShowCategoryModal(false); Haptics.selectionAsync(); }}
+                  >
+                    <AppText variant="heading" shrink={false} style={styles.catIcon}>{cat.icon}</AppText>
+                    <AppText variant="body" weight="bold" style={[styles.catName, { color: G.fg }]} numberOfLines={2}>{cat.name.includes('category.') ? t(cat.name) : cat.name}</AppText>
+                    {selectedCategory?.id === cat.id && <Check size={18} color={colors.primary} />}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Supplier Selection Modal */}
       <Modal visible={showSupplierModal} transparent animationType="slide">
-        <Pressable style={styles.modalOverlay} onPress={() => { setShowSupplierModal(false); setShowNewSupplierForm(false); }}>
-          <Pressable style={[styles.categorySheet, { backgroundColor: G.bg }]}>
-            <View style={styles.modalHandleRow}>
-              <View style={[styles.modalHandle, { backgroundColor: G.border }]} />
-            </View>
-            
-            <View style={styles.modalHeader}>
-               <AppText variant="title" weight="bold" style={[styles.modalTitle, { color: G.fg }]} numberOfLines={2}>{t('inv.select_supplier')}</AppText>
-              <TouchableOpacity onPress={() => { setShowNewSupplierForm(!showNewSupplierForm); }}>
-                <Plus size={24} color={G.fg} />
-              </TouchableOpacity>
-            </View>
-
-            {/* New Supplier Form */}
-            {showNewSupplierForm && (
-              <View style={{ paddingHorizontal: 25, marginBottom: 20, gap: 12 }}>
-                <TextInput
-                  style={[styles.input, { color: G.fg, borderColor: G.border }]}
-                  placeholder={t('common.supplier_name_ph')}
-                  placeholderTextColor={G.fgSecondary}
-                  value={newSupplierName}
-                  onChangeText={setNewSupplierName}
-                />
-                <TextInput
-                  style={[styles.input, { color: G.fg, borderColor: G.border }]}
-                  placeholder={t('contacts.phone_ph')}
-                  placeholderTextColor={G.fgSecondary}
-                  value={newSupplierPhone}
-                  onChangeText={setNewSupplierPhone}
-                  keyboardType="phone-pad"
-                />
-                <TextInput
-                  style={[styles.input, { color: G.fg, borderColor: G.border }]}
-                  placeholder={t('common.account_number_ph')}
-                  placeholderTextColor={G.fgSecondary}
-                  value={newSupplierAccount}
-                  onChangeText={setNewSupplierAccount}
-                  keyboardType="numeric"
-                />
-                <TouchableOpacity
-                  style={[styles.addBtn, { backgroundColor: G.fg, alignSelf: 'flex-end' }]}
-                  onPress={async () => {
-                    if (!newSupplierName.trim()) {
-                      await dialog.alert({ title: t('common.error'), message: t('form.supplier_name_required'), iconType: 'danger' });
-                      return;
-                    }
-                    const id = await insertContact({
-                      fullName: newSupplierName.trim(),
-                      category: 'supplier',
-                      phone: newSupplierPhone.trim() || undefined,
-                      accountNumber: newSupplierAccount.trim() || undefined,
-                      notes: newSupplierNotes.trim() || undefined,
-                    });
-                    if (id) {
-                      const newSup = { id: Number(id), fullName: newSupplierName.trim(), phone: newSupplierPhone.trim(), accountNumber: newSupplierAccount.trim(), category: 'supplier' };
-                      setSuppliers([...suppliers, newSup]);
-                      setSelectedSupplier(newSup);
-                      setSupplierPhone(newSupplierPhone.trim());
-                      setSupplierAccount(newSupplierAccount.trim());
-                      setShowSupplierModal(false);
-                      setShowNewSupplierForm(false);
-                      setNewSupplierName('');
-                      setNewSupplierPhone('');
-                      setNewSupplierAccount('');
-                    }
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                    playNice();
-                  }}
-                >
-                  <Check size={20} color={G.bg} />
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <Pressable style={styles.modalOverlay} onPress={() => { setShowSupplierModal(false); setShowNewSupplierForm(false); }}>
+            <Pressable style={[styles.categorySheet, { backgroundColor: G.bg }]}>
+              <View style={styles.modalHandleRow}>
+                <View style={[styles.modalHandle, { backgroundColor: G.border }]} />
+              </View>
+              
+              <View style={styles.modalHeader}>
+                 <AppText variant="title" weight="bold" style={[styles.modalTitle, { color: G.fg }]} numberOfLines={2}>{t('inv.select_supplier')}</AppText>
+                <TouchableOpacity onPress={() => { setShowNewSupplierForm(!showNewSupplierForm); }}>
+                  <Plus size={24} color={G.fg} />
                 </TouchableOpacity>
               </View>
-            )}
 
-            <ScrollView contentContainerStyle={styles.catScroll}>
-              {suppliers.length === 0 && !showNewSupplierForm && (
-                <View style={{ padding: 30, alignItems: 'center' }}>
-                   <AppText variant="body" weight="medium" align="center" style={[styles.catName, { color: G.fgSecondary }]} numberOfLines={2}>{t('inv.no_suppliers_add')}</AppText>
+              {/* New Supplier Form */}
+              {showNewSupplierForm && (
+                <View style={{ paddingHorizontal: 25, marginBottom: 20, gap: 12 }}>
+                  <TextInput
+                    style={[styles.input, { color: G.fg, borderColor: G.border }]}
+                    placeholder={t('common.supplier_name_ph')}
+                    placeholderTextColor={G.fgSecondary}
+                    value={newSupplierName}
+                    onChangeText={setNewSupplierName}
+                  />
+                  <TextInput
+                    style={[styles.input, { color: G.fg, borderColor: G.border }]}
+                    placeholder={t('contacts.phone_ph')}
+                    placeholderTextColor={G.fgSecondary}
+                    value={newSupplierPhone}
+                    onChangeText={setNewSupplierPhone}
+                    keyboardType="phone-pad"
+                  />
+                  <TextInput
+                    style={[styles.input, { color: G.fg, borderColor: G.border }]}
+                    placeholder={t('common.account_number_ph')}
+                    placeholderTextColor={G.fgSecondary}
+                    value={newSupplierAccount}
+                    onChangeText={setNewSupplierAccount}
+                    keyboardType="numeric"
+                  />
+                  <TouchableOpacity
+                    style={[styles.addBtn, { backgroundColor: G.fg, alignSelf: 'flex-end' }]}
+                    onPress={async () => {
+                      if (!newSupplierName.trim()) {
+                        await dialog.alert({ title: t('common.error'), message: t('form.supplier_name_required'), iconType: 'danger' });
+                        return;
+                      }
+                      const id = await insertContact({
+                        fullName: newSupplierName.trim(),
+                        category: 'supplier',
+                        phone: newSupplierPhone.trim() || undefined,
+                        accountNumber: newSupplierAccount.trim() || undefined,
+                        notes: newSupplierNotes.trim() || undefined,
+                      });
+                      if (id) {
+                        const newSup = { id: Number(id), fullName: newSupplierName.trim(), phone: newSupplierPhone.trim(), accountNumber: newSupplierAccount.trim(), category: 'supplier' };
+                        setSuppliers([...suppliers, newSup]);
+                        setSelectedSupplier(newSup);
+                        setSupplierPhone(newSupplierPhone.trim());
+                        setSupplierAccount(newSupplierAccount.trim());
+                        setShowSupplierModal(false);
+                        setShowNewSupplierForm(false);
+                        setNewSupplierName('');
+                        setNewSupplierPhone('');
+                        setNewSupplierAccount('');
+                      }
+                    }}
+                  >
+                    <Check size={20} color={G.bg} />
+                  </TouchableOpacity>
                 </View>
               )}
-              {suppliers.map((sup) => (
-                <TouchableOpacity
-                  key={sup.id}
-                  style={[styles.catItem, { borderColor: G.border }]}
-                  onPress={() => { setSelectedSupplier(sup); setSupplierPhone(sup.phone || ''); setSupplierAccount(sup.accountNumber || ''); setShowSupplierModal(false); Haptics.selectionAsync(); }}
-                >
-                  <Truck size={20} color={colors.primary} />
-                    <View style={{ marginLeft: 12, flex: 1 }}>
-                      <AppText variant="body" weight="bold" style={[styles.catName, { color: G.fg }]} numberOfLines={1}>{sup.fullName}</AppText>
-                      {sup.phone && <AppText variant="caption" weight="medium" style={{ color: G.fgSecondary }} numberOfLines={1}>{sup.phone}</AppText>}
-                  </View>
-                  {selectedSupplier?.id === sup.id && <Check size={18} color={colors.primary} />}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+
+              <ScrollView contentContainerStyle={styles.catScroll}>
+                {suppliers.map(sup => (
+                  <TouchableOpacity 
+                    key={sup.id} 
+                    style={[styles.catItem, { borderColor: G.border }]}
+                    onPress={() => { 
+                      setSelectedSupplier(sup); 
+                      setSupplierPhone(sup.phone || ''); 
+                      setSupplierAccount(sup.accountNumber || ''); 
+                      setShowSupplierModal(false); 
+                      Haptics.selectionAsync(); 
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                        <AppText variant="body" weight="bold" style={[styles.catName, { color: G.fg }]} numberOfLines={1}>{sup.fullName}</AppText>
+                        {sup.phone && <AppText variant="caption" weight="medium" style={{ color: G.fgSecondary }} numberOfLines={1}>{sup.phone}</AppText>}
+                    </View>
+                    {selectedSupplier?.id === sup.id && <Check size={18} color={colors.primary} />}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </Pressable>
           </Pressable>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );

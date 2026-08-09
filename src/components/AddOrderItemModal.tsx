@@ -6,7 +6,8 @@ import {
   Modal,
   TextInput,
   Platform,
-  KeyboardAvoidingView
+  KeyboardAvoidingView,
+  ScrollView
 } from 'react-native';
 import { Plus, X, Sparkles, Minus } from 'lucide-react-native';
 
@@ -78,11 +79,12 @@ export const AddOrderItemModal: React.FC<AddOrderItemModalProps> = ({ visible, o
       <View style={styles.overlay}>
         <TouchableOpacity style={[styles.backdrop, { backgroundColor: 'rgba(0,0,0,0.50)' }]} activeOpacity={1} onPress={handleClose} />
 
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
           <Animated.View
             entering={SlideInDown.springify().damping(28).stiffness(250)}
             style={[styles.sheet, { backgroundColor: colors.background, borderTopColor: colors.border }]}
           >
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" bounces={false}>
             <View style={{ position: 'absolute', top: 16, right: 70, zIndex: 100 }}>
               <TutorialButton tutorialId="add-order-item" screenName={t('common.add')} />
             </View>
@@ -204,6 +206,7 @@ export const AddOrderItemModal: React.FC<AddOrderItemModalProps> = ({ visible, o
               </TouchableOpacity>
               </TutorialTarget>
             </View>
+            </ScrollView>
           </Animated.View>
         </KeyboardAvoidingView>
       </View>

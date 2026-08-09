@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Linking,
   Modal,
   Platform,
@@ -705,56 +706,61 @@ export default function SupplierDetails({
 
       {/* Record payment */}
       <Modal visible={showPayment} transparent animationType="fade">
-        <View style={styles.payOverlay}>
-          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setShowPayment(false)} />
-          <View style={[styles.paySheet, { backgroundColor: G.bgCard, borderColor: G.border }]}>
-            <AppText variant="title" weight="bold" style={[styles.payTitle, { color: G.fg }]} numberOfLines={1}>
-              {t('suppliers.record_payment')}
-            </AppText>
-            <TextInput
-              style={[styles.payInput, { color: G.fg, borderColor: G.border, backgroundColor: G.bg }]}
-              value={payAmount}
-              onChangeText={setPayAmount}
-              placeholder={t('suppliers.payment_amount_ph')}
-              placeholderTextColor={G.muted}
-              keyboardType="decimal-pad"
-            />
-            <View style={styles.chipRow}>
-              {['cash', 'credit', 'mobile', 'bank'].map((m) => {
-                const isSel = payMethod === m;
-                return (
-                  <TouchableOpacity
-                    key={m}
-                    onPress={() => { Haptics.selectionAsync(); setPayMethod(m); }}
-                    style={[styles.chip, { backgroundColor: isSel ? colors.primary : G.bg, borderColor: isSel ? colors.primary : G.border }]}
-                    activeOpacity={0.75}
-                  >
-                    <AppText variant="body-sm" weight="bold" shrink={false} style={{ color: isSel ? colors.background : G.muted }} numberOfLines={1}>
-                      {t('suppliers.payment_' + m)}
-                    </AppText>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            <TextInput
-              style={[styles.payInput, { color: G.fg, borderColor: G.border, backgroundColor: G.bg }]}
-              value={payNote}
-              onChangeText={setPayNote}
-              placeholder={t('suppliers.payment_note_ph')}
-              placeholderTextColor={G.muted}
-            />
-            <TouchableOpacity
-              onPress={handleSavePayment}
-              disabled={savingPay}
-              style={[styles.paySaveBtn, { backgroundColor: savingPay ? G.muted : colors.primary }]}
-              activeOpacity={0.8}
-            >
-              <AppText variant="label" weight="bold" style={{ color: colors.background }} numberOfLines={1}>
-                {savingPay ? t('common.loading') : t('common.save')}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.payOverlay}>
+            <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setShowPayment(false)} />
+            <View style={[styles.paySheet, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+              <AppText variant="title" weight="bold" style={[styles.payTitle, { color: G.fg }]} numberOfLines={1}>
+                {t('suppliers.record_payment')}
               </AppText>
-            </TouchableOpacity>
+              <TextInput
+                style={[styles.payInput, { color: G.fg, borderColor: G.border, backgroundColor: G.bg }]}
+                value={payAmount}
+                onChangeText={setPayAmount}
+                placeholder={t('suppliers.payment_amount_ph')}
+                placeholderTextColor={G.muted}
+                keyboardType="decimal-pad"
+              />
+              <View style={styles.chipRow}>
+                {['cash', 'credit', 'mobile', 'bank'].map((m) => {
+                  const isSel = payMethod === m;
+                  return (
+                    <TouchableOpacity
+                      key={m}
+                      onPress={() => { Haptics.selectionAsync(); setPayMethod(m); }}
+                      style={[styles.chip, { backgroundColor: isSel ? colors.primary : G.bg, borderColor: isSel ? colors.primary : G.border }]}
+                      activeOpacity={0.75}
+                    >
+                      <AppText variant="body-sm" weight="bold" shrink={false} style={{ color: isSel ? colors.background : G.muted }} numberOfLines={1}>
+                        {t('suppliers.payment_' + m)}
+                      </AppText>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <TextInput
+                style={[styles.payInput, { color: G.fg, borderColor: G.border, backgroundColor: G.bg }]}
+                value={payNote}
+                onChangeText={setPayNote}
+                placeholder={t('suppliers.payment_note_ph')}
+                placeholderTextColor={G.muted}
+              />
+              <TouchableOpacity
+                onPress={handleSavePayment}
+                disabled={savingPay}
+                style={[styles.paySaveBtn, { backgroundColor: savingPay ? G.muted : colors.primary }]}
+                activeOpacity={0.8}
+              >
+                <AppText variant="label" weight="bold" style={{ color: colors.background }} numberOfLines={1}>
+                  {savingPay ? t('common.loading') : t('common.save')}
+                </AppText>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Product order editor */}

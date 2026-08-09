@@ -11,6 +11,8 @@ import React, { useEffect, useState } from 'react';
 import {
   Dimensions,
   Modal,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   TextInput,
@@ -69,7 +71,8 @@ const WarehouseSelectorModal: React.FC<WarehouseSelectorProps> = ({ visible, onC
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onComplete}>
-      <View style={styles.overlay}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <View style={styles.overlay}>
         <Animated.View entering={FadeIn.duration(400)} style={styles.container}>
           <View style={[styles.card, { backgroundColor: G.bgCard, borderColor: G.border }]}>
             <View style={[styles.iconCircle, { backgroundColor: colors.primary + '20' }]}>
@@ -111,6 +114,7 @@ const WarehouseSelectorModal: React.FC<WarehouseSelectorProps> = ({ visible, onC
                 </TouchableOpacity>
               </ScrollView>
             ) : (
+              <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
               <View style={styles.formSection}>
                 <AppText variant="body" weight="bold" style={[styles.formTitle, { color: G.fg }]} numberOfLines={1}>{t('inv.new_warehouse')}</AppText>
 
@@ -182,10 +186,12 @@ const WarehouseSelectorModal: React.FC<WarehouseSelectorProps> = ({ visible, onC
                   </TouchableOpacity>
                 </View>
               </View>
+              </ScrollView>
             )}
           </View>
         </Animated.View>
       </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };

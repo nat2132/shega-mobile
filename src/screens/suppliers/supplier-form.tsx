@@ -120,10 +120,10 @@ export default function SupplierForm({ supplier, onClose, onSaved }: SupplierFor
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
           {/* ── Section: Basic Info ── */}
           <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.sectionTitle, { color: G.muted }]} numberOfLines={2}>

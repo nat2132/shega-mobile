@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -396,7 +396,7 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
       {/* Ambient glow washes */}
       <View style={{ position: 'absolute', top: -80, left: -40, width: 200, height: 200, borderRadius: 100, backgroundColor: G.mutedLight, opacity: 0.12 }} />
       <View style={{ position: 'absolute', bottom: -40, right: -60, width: 180, height: 180, borderRadius: 90, backgroundColor: G.mutedLight, opacity: 0.08 }} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
         <TutorialScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {draftFormData.showDrafts && (
             <DraftSection

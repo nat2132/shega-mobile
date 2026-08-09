@@ -7,6 +7,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -100,7 +101,8 @@ const ForgotPinScreen: React.FC<ForgotPinScreenProps> = ({ onVerified, onBack })
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.content}
       >
-        <Animated.View entering={FadeIn.duration(800)} style={styles.innerContent}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <Animated.View entering={FadeIn.duration(800)} style={styles.innerContent}>
           <View style={styles.iconNode}>
             <View style={[styles.shieldRing, { backgroundColor: G.border, borderColor: G.border }]}>
               <KeyRound size={40} color={G.fg} strokeWidth={1.5} />
@@ -182,6 +184,7 @@ const ForgotPinScreen: React.FC<ForgotPinScreenProps> = ({ onVerified, onBack })
             </Animated.View>
           )}
         </Animated.View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

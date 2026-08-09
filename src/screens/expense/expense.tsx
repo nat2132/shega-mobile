@@ -48,7 +48,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Dimensions,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   TextInput,
@@ -378,60 +380,42 @@ const PointerLabel = (items: any) => {
 
   if (showBudgetSetup) {
     return (
-      <View style={[styles.screenWrapper, { backgroundColor: G.bg }]}>
-        <View style={[styles.topBar, { paddingHorizontal: 24, paddingTop: 60 }]}>
-          <TouchableOpacity onPress={() => setShowBudgetSetup(false)} activeOpacity={0.7}>
-            <X size={24} color={G.fg} />
-          </TouchableOpacity>
-          <AppText variant="body" weight="bold" style={{ color: G.fg }}>{t('budget.create_budget') || 'Create Budget'}</AppText>
-          <View style={{ width: 24 }} />
-        </View>
-        <ScrollView contentContainerStyle={{ padding: 24, flexGrow: 1 }}>
-          <View style={[styles.budgetGateCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
-            <AppText variant="title" weight="bold" style={{ color: G.fg, marginBottom: 4 }}>{t('budget.setup_budget') || 'Set Up Your Budget'}</AppText>
-            <AppText variant="body-sm" style={{ color: G.fgSecondary, marginBottom: 24 }}>{t('budget.set_spending_plan') || 'Define your monthly spending plan'}</AppText>
-
-            <AppText variant="caption" weight="bold" transform="uppercase" style={{ color: G.fgSecondary, marginBottom: 6 }}>{t('common.name') || 'Name'}</AppText>
-            <TextInput
-              style={[styles.budgetGateInput, { color: G.fg, borderColor: G.border, backgroundColor: G.bg }]}
-              placeholder="e.g. Monthly Operations"
-              placeholderTextColor={G.fgSecondary}
-              value={budgetNameInput}
-              onChangeText={setBudgetNameInput}
-            />
-
-            <AppText variant="caption" weight="bold" transform="uppercase" style={{ color: G.fgSecondary, marginTop: 16, marginBottom: 6 }}>{t('budget.total_amount') || 'Total Budget Amount'} (ETB)</AppText>
-            <TextInput
-              style={[styles.budgetGateInput, { color: G.fg, borderColor: G.border, backgroundColor: G.bg }]}
-              placeholder="e.g. 50000"
-              placeholderTextColor={G.fgSecondary}
-              value={budgetAmountInput}
-              onChangeText={setBudgetAmountInput}
-              keyboardType="numeric"
-            />
-
-            <AppText variant="caption" weight="bold" transform="uppercase" style={{ color: G.fgSecondary, marginTop: 16, marginBottom: 6 }}>{t('budget.period_label') || 'Period'}</AppText>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {['monthly'].map(p => (
-                <TouchableOpacity key={p}
-                  style={[budgetPeriodStyles.chip, { backgroundColor: G.bg, borderColor: G.border }, budgetPeriod === p && { backgroundColor: G.fg }]}
-                  onPress={() => { setBudgetPeriod(p); Haptics.selectionAsync(); }}
-                >
-                  <AppText variant="body-sm" weight="bold" style={{ color: budgetPeriod === p ? G.bg : G.fg, textTransform: 'capitalize' }}>{t(`budget.${p}`)}</AppText>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <TouchableOpacity
-              style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}
-              onPress={() => { setShowAdvancedPeriod(!showAdvancedPeriod); Haptics.selectionAsync(); }}
-            >
-              <AppText variant="caption" weight="bold" style={{ color: G.fgSecondary }}>
-                {showAdvancedPeriod ? (t('common.hide') || 'Hide') : (t('common.advanced') || 'Advanced')}
-              </AppText>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <View style={[styles.screenWrapper, { backgroundColor: G.bg }]}>
+          <View style={[styles.topBar, { paddingHorizontal: 24, paddingTop: 60 }]}>
+            <TouchableOpacity onPress={() => setShowBudgetSetup(false)} activeOpacity={0.7}>
+              <X size={24} color={G.fg} />
             </TouchableOpacity>
-            {showAdvancedPeriod && (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-                {['weekly', 'quarterly', 'yearly'].map(p => (
+            <AppText variant="body" weight="bold" style={{ color: G.fg }}>{t('budget.create_budget') || 'Create Budget'}</AppText>
+            <View style={{ width: 24 }} />
+          </View>
+          <ScrollView contentContainerStyle={{ padding: 24, flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <View style={[styles.budgetGateCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+              <AppText variant="title" weight="bold" style={{ color: G.fg, marginBottom: 4 }}>{t('budget.setup_budget') || 'Set Up Your Budget'}</AppText>
+              <AppText variant="body-sm" style={{ color: G.fgSecondary, marginBottom: 24 }}>{t('budget.set_spending_plan') || 'Define your monthly spending plan'}</AppText>
+
+              <AppText variant="caption" weight="bold" transform="uppercase" style={{ color: G.fgSecondary, marginBottom: 6 }}>{t('common.name') || 'Name'}</AppText>
+              <TextInput
+                style={[styles.budgetGateInput, { color: G.fg, borderColor: G.border, backgroundColor: G.bg }]}
+                placeholder="e.g. Monthly Operations"
+                placeholderTextColor={G.fgSecondary}
+                value={budgetNameInput}
+                onChangeText={setBudgetNameInput}
+              />
+
+              <AppText variant="caption" weight="bold" transform="uppercase" style={{ color: G.fgSecondary, marginTop: 16, marginBottom: 6 }}>{t('budget.total_amount') || 'Total Budget Amount'} (ETB)</AppText>
+              <TextInput
+                style={[styles.budgetGateInput, { color: G.fg, borderColor: G.border, backgroundColor: G.bg }]}
+                placeholder="e.g. 50000"
+                placeholderTextColor={G.fgSecondary}
+                value={budgetAmountInput}
+                onChangeText={setBudgetAmountInput}
+                keyboardType="numeric"
+              />
+
+              <AppText variant="caption" weight="bold" transform="uppercase" style={{ color: G.fgSecondary, marginTop: 16, marginBottom: 6 }}>{t('budget.period_label') || 'Period'}</AppText>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {['monthly'].map(p => (
                   <TouchableOpacity key={p}
                     style={[budgetPeriodStyles.chip, { backgroundColor: G.bg, borderColor: G.border }, budgetPeriod === p && { backgroundColor: G.fg }]}
                     onPress={() => { setBudgetPeriod(p); Haptics.selectionAsync(); }}
@@ -440,26 +424,46 @@ const PointerLabel = (items: any) => {
                   </TouchableOpacity>
                 ))}
               </View>
-            )}
-
-            <TouchableOpacity
-              style={[styles.budgetGateBtn, { backgroundColor: G.fg, marginTop: 24, opacity: budgetSetupLoading ? 0.6 : 1 }]}
-              onPress={handleCreateBudget}
-              disabled={budgetSetupLoading}
-              activeOpacity={0.8}
-            >
-              {budgetSetupLoading ? (
-                <ActivityIndicator color={G.bg} />
-              ) : (
-                <Check size={20} color={G.bg} />
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}
+                onPress={() => { setShowAdvancedPeriod(!showAdvancedPeriod); Haptics.selectionAsync(); }}
+              >
+                <AppText variant="caption" weight="bold" style={{ color: G.fgSecondary }}>
+                  {showAdvancedPeriod ? (t('common.hide') || 'Hide') : (t('common.advanced') || 'Advanced')}
+                </AppText>
+              </TouchableOpacity>
+              {showAdvancedPeriod && (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                  {['weekly', 'quarterly', 'yearly'].map(p => (
+                    <TouchableOpacity key={p}
+                      style={[budgetPeriodStyles.chip, { backgroundColor: G.bg, borderColor: G.border }, budgetPeriod === p && { backgroundColor: G.fg }]}
+                      onPress={() => { setBudgetPeriod(p); Haptics.selectionAsync(); }}
+                    >
+                      <AppText variant="body-sm" weight="bold" style={{ color: budgetPeriod === p ? G.bg : G.fg, textTransform: 'capitalize' }}>{t(`budget.${p}`)}</AppText>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               )}
-              <AppText variant="body" weight="bold" style={{ color: G.bg, marginLeft: 8 }}>
-                {budgetSetupLoading ? (t('common.creating') || 'Creating...') : (t('common.create') || 'Create')}
-              </AppText>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </View>
+
+              <TouchableOpacity
+                style={[styles.budgetGateBtn, { backgroundColor: G.fg, marginTop: 24, opacity: budgetSetupLoading ? 0.6 : 1 }]}
+                onPress={handleCreateBudget}
+                disabled={budgetSetupLoading}
+                activeOpacity={0.8}
+              >
+                {budgetSetupLoading ? (
+                  <ActivityIndicator color={G.bg} />
+                ) : (
+                  <Check size={20} color={G.bg} />
+                )}
+                <AppText variant="body" weight="bold" style={{ color: G.bg, marginLeft: 8 }}>
+                  {budgetSetupLoading ? (t('common.creating') || 'Creating...') : (t('common.create') || 'Create')}
+                </AppText>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
     );
   }
 

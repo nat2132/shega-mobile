@@ -837,27 +837,25 @@ SparklineChart.displayName = 'SparklineChart';
         animationType="slide"
         onRequestClose={() => setActiveModal(null)}
       >
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setActiveModal(null)}>
-          <View style={styles.modalBackdrop} />
-          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
-            <View style={styles.bottomSheetContainer}>
-              <View style={styles.modalHeader}>
-                <View style={styles.modalHandle} />
-                <TouchableOpacity onPress={() => setActiveModal(null)} style={styles.closeBtn}>
-                  <AppText variant="title" shrink={false} style={styles.closeBtnText}>{'✕'}</AppText>
-                </TouchableOpacity>
-              </View>
-              <AppText variant="heading" weight="bold" style={styles.sheetTitle} numberOfLines={2}>
-                {activeModal === 'lowStock' ? t('dashboard.low_stock') : activeModal === 'onCreditCustomers' ? t('dashboard.credit_customers') : t('dashboard.credit_items')}
-              </AppText>
-              <View style={{ height: 400 }}>
-                {activeModal === 'lowStock' && <LowStockItemsScreen />}
-                {activeModal === 'onCreditCustomers' && <OnCreditCustomersScreen />}
-                {activeModal === 'onCreditItems' && <OnCreditItemsScreen />}
-              </View>
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setActiveModal(null)} />
+          <View style={styles.bottomSheetContainer}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHandle} />
+              <TouchableOpacity onPress={() => setActiveModal(null)} style={styles.closeBtn}>
+                <AppText variant="title" shrink={false} style={styles.closeBtnText}>{'✕'}</AppText>
+              </TouchableOpacity>
             </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
+            <AppText variant="heading" weight="bold" style={styles.sheetTitle} numberOfLines={2}>
+              {activeModal === 'lowStock' ? t('dashboard.low_stock') : activeModal === 'onCreditCustomers' ? t('dashboard.credit_customers') : t('dashboard.credit_items')}
+            </AppText>
+            <View style={{ height: 400 }}>
+              {activeModal === 'lowStock' && <LowStockItemsScreen />}
+              {activeModal === 'onCreditCustomers' && <OnCreditCustomersScreen />}
+              {activeModal === 'onCreditItems' && <OnCreditItemsScreen />}
+            </View>
+          </View>
+        </View>
       </Modal>
 
       <Modal

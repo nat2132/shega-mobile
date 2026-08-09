@@ -1,4 +1,4 @@
-import { AppCard, AppListItem, AppNumber, AppRow, AppText } from '@/components/ui';
+import { AppNumber, AppRow, AppText } from '@/components/ui';
 import { BorderRadius, Fonts, Spacing } from '@/constants/theme';
 import { useDialog } from '@/context/DialogContext';
 import { useSettings } from '@/context/SettingsContext';
@@ -30,6 +30,14 @@ import {
 
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { getDashGlass } from './glass-dashboard';
+
+export const pluralizeUnit = (quantity: number, unit?: string): string => {
+  const u = (unit || 'pcs').trim();
+  if (quantity > 1) {
+    return u.toLowerCase().endsWith('s') ? u : `${u}s`;
+  }
+  return u.length > 3 && u.toLowerCase().endsWith('s') ? u.slice(0, -1) : u;
+};
 // →→→ Settlement Modal →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
 
 interface SettlementModalProps {
@@ -102,7 +110,6 @@ const SettlementModal: React.FC<SettlementModalProps> = ({ visible, item, onClos
       <View style={modalStyles.overlay}>
         <TouchableOpacity style={modalStyles.backdrop} activeOpacity={1} onPress={onClose} />
         <View style={[modalStyles.sheet, { backgroundColor: G.bg, overflow: 'hidden' }]}>
-          <View style={{ position: 'absolute', top: -40, left: -20, width: 140, height: 140, borderRadius: 70, backgroundColor: G.mutedLight, opacity: 0.2 }} />
           {/* Handle */}
           <View style={modalStyles.handleRow}>
             <View style={[modalStyles.handle, { backgroundColor: G.border }]} />
@@ -168,7 +175,7 @@ const SettlementModal: React.FC<SettlementModalProps> = ({ visible, item, onClos
 
 // →→→ Detail View →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
 
-const CreditItemDetail = ({
+export const CreditItemDetail = ({
   item,
   onBack,
   onSettled,
@@ -184,8 +191,6 @@ const CreditItemDetail = ({
 
   return (
     <View style={[detailStyles.container, { backgroundColor: G.bg }]}>
-      <View style={{ position: 'absolute', top: -60, left: -20, width: 160, height: 160, borderRadius: 80, backgroundColor: G.mutedLight, opacity: 0.25 }} />
-      <View style={{ position: 'absolute', bottom: -60, right: -40, width: 200, height: 200, borderRadius: 100, backgroundColor: G.mutedLight, opacity: 0.15 }} />
       {/* Header */}
       <View style={detailStyles.header}>
         <TouchableOpacity onPress={onBack} style={[detailStyles.backBtn, { backgroundColor: G.bgCard, borderColor: G.border }]}>
@@ -201,7 +206,7 @@ const CreditItemDetail = ({
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={detailStyles.scroll}>
+      <ScrollView showsVerticalScrollIndicator={false} style={detailStyles.scrollView} contentContainerStyle={detailStyles.scroll}>
         <Animated.View entering={FadeInDown.duration(500)}>
           {/* Blueprint Card */}
           <View style={[detailStyles.card, { backgroundColor: G.bgCard, borderColor: G.border }]}>
@@ -344,9 +349,8 @@ const NefasSilkScreen = ({ initialItemId }: { initialItemId?: number } = {}) => 
 
   return (
     <View style={[listStyles.container, { backgroundColor: G.bg }]}>
-      <View style={{ position: 'absolute', top: -80, left: -30, width: 180, height: 180, borderRadius: 90, backgroundColor: G.mutedLight, opacity: 0.3 }} />
-      <View style={{ position: 'absolute', bottom: -50, right: -20, width: 160, height: 160, borderRadius: 80, backgroundColor: G.mutedLight, opacity: 0.2 }} />
       <ScrollView
+        style={listStyles.scroll}
         contentContainerStyle={listStyles.content}
         showsVerticalScrollIndicator={false}
       >
@@ -368,58 +372,58 @@ const NefasSilkScreen = ({ initialItemId }: { initialItemId?: number } = {}) => 
 
           return (
             <Animated.View key={item.id} entering={FadeInDown.delay(idx * 50).duration(500)}>
-              <AppCard
-                padding={Spacing.md}
-                gap={Spacing.sm}
-                background={G.bgCard}
-                bordered
-                wrap={false}
-                style={{
-                  borderColor: isOverdue ? colors.error + '40' : G.border,
-                  borderLeftColor: isOverdue ? colors.error : G.border,
-                  borderLeftWidth: isOverdue ? 3 : 1,
-                  borderRadius: BorderRadius.lg,
-                  marginBottom: Spacing.md,
-                  overflow: 'hidden',
-                }}
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => setSelectedItem(item)}
+                style={[
+                  listStyles.card,
+                  {
+                    backgroundColor: G.bgCard,
+                    borderColor: isOverdue ? colors.error + '40' : G.border,
+                    borderLeftColor: isOverdue ? colors.error : G.border,
+                    borderLeftWidth: isOverdue ? 3 : 1,
+                    borderRadius: BorderRadius.lg,
+                    marginBottom: Spacing.md,
+                    overflow: 'hidden',
+                  },
+                ]}
               >
-                <AppListItem
-                  left={
-                    <View style={[listStyles.iconBox, { backgroundColor: G.fg + '06' }]}>
-                      <Building2 size={22} color={G.fg} />
+                <View style={listStyles.headerRow}>
+                  <View style={[listStyles.iconBox, { backgroundColor: G.fg + '06' }]}>
+                    <Building2 size={22} color={G.fg} />
+                  </View>
+                  <View style={listStyles.infoArea}>
+                    <AppText variant="title-sm" weight="bold" numberOfLines={2} style={[listStyles.itemTitle, { color: G.fg }]}>
+                      {item.name}
+                    </AppText>
+                    <AppText variant="body-sm" weight="medium" numberOfLines={1} style={[listStyles.itemSub, { color: G.fgSecondary }]}>
+                      {item.companyName || t('dash.general_source')}
+                    </AppText>
+                  </View>
+                  <View style={listStyles.headerRight}>
+                    <View style={listStyles.qtyRow}>
+                      <AppNumber value={item.totalBaseQuantity || 0} size="body" color={G.fg} numberOfLines={1} />
+                      <AppText variant="caption" weight="medium" shrink={false} numberOfLines={1} style={listStyles.unitSmall}>
+                        {' '}{pluralizeUnit(item.totalBaseQuantity || 0, item.baseUnit)}
+                      </AppText>
                     </View>
-                  }
-                  title={item.name}
-                  subtitle={item.companyName || t('dash.general_source')}
-                  titleMaxLines={2}
-                  subtitleMaxLines={1}
-                  right={
-                    <View style={listStyles.statArea}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                        <AppNumber value={item.totalBaseQuantity || 0} size="body" color={G.fg} numberOfLines={1} />
-                        <AppText variant="caption" weight="medium" style={listStyles.unitSmall}> {item.baseUnit || 'pcs'}</AppText>
+                    {isOverdue ? (
+                      <View style={[listStyles.badge, { backgroundColor: colors.error + '15' }]}>
+                        <AlertTriangle size={10} color={colors.error} />
+                        <AppText variant="micro" weight="bold" transform="uppercase" shrink={false} style={[listStyles.badgeText, { color: colors.error }]} numberOfLines={1}>
+                          {t('dash.overdue')}
+                        </AppText>
                       </View>
-                      {isOverdue ? (
-                        <View style={[listStyles.badge, { backgroundColor: colors.error + '15' }]}>
-                          <AlertTriangle size={10} color={colors.error} />
-                          <AppText variant="micro" weight="bold" transform="uppercase" shrink={false} style={[listStyles.badgeText, { color: colors.error }]} numberOfLines={1}>
-                            {t('dash.overdue')}
-                          </AppText>
-                        </View>
-                      ) : (
-                        <View style={[listStyles.badge, { backgroundColor: colors.primary + '15' }]}>
-                          <ShieldAlert size={10} color={colors.primary} />
-                          <AppText variant="micro" weight="bold" transform="uppercase" shrink={false} style={[listStyles.badgeText, { color: colors.primary }]} numberOfLines={1}>
-                            {t('dash.on_credit')}
-                          </AppText>
-                        </View>
-                      )}
-                    </View>
-                  }
-                  onPress={() => setSelectedItem(item)}
-                  noBorder
-                  padding={0}
-                />
+                    ) : (
+                      <View style={[listStyles.badge, { backgroundColor: colors.primary + '15' }]}>
+                        <ShieldAlert size={10} color={colors.primary} />
+                        <AppText variant="micro" weight="bold" transform="uppercase" shrink={false} style={[listStyles.badgeText, { color: colors.primary }]} numberOfLines={1}>
+                          {t('dash.on_credit')}
+                        </AppText>
+                      </View>
+                    )}
+                  </View>
+                </View>
 
                 {/* Credit Amount Footer */}
                 <View style={[listStyles.cardFooter, { backgroundColor: G.fg + '03', borderTopColor: G.border }]}>
@@ -432,7 +436,7 @@ const NefasSilkScreen = ({ initialItemId }: { initialItemId?: number } = {}) => 
                   </View>
                   <ChevronRight size={15} color={G.border} />
                 </View>
-              </AppCard>
+              </TouchableOpacity>
             </Animated.View>
           );
         })}
@@ -459,26 +463,26 @@ const NefasSilkScreen = ({ initialItemId }: { initialItemId?: number } = {}) => 
 // →→→ Styles →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
 
 const createListStyles = (G: any) => StyleSheet.create({
-  container: { flex: 1 },
-  content: { paddingHorizontal: 25, paddingTop: 20, paddingBottom: 40 },
+  container: { width: '100%', flexGrow: 0, flexShrink: 1 },
+  content: { paddingHorizontal: 25, paddingTop: 20, paddingBottom: 16 },
   headerNode: { marginBottom: 25 },
   headerSub: { fontSize: 11, fontFamily: Fonts.bold, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 4 },
   headerTitle: { fontSize: 26, fontFamily: Fonts.bold },
-  card: { borderRadius: 22, borderWidth: 1, marginBottom: 14, overflow: 'hidden' },
+  scroll: { flexGrow: 0, flexShrink: 1 },
+  card: { flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'flex-start', flexWrap: 'nowrap', padding: Spacing.md, gap: Spacing.sm, borderWidth: 1 },
   creditFooterRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   creditFooterLabel: { fontSize: 11, fontFamily: Fonts.medium },
-  creditFooterAmount: { fontSize: 13, fontFamily: Fonts.bold },
-  cardMain: { flexDirection: 'row', alignItems: 'center', padding: 16 },
   iconBox: { width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-  infoArea: { flex: 1, marginLeft: 14 },
-  itemName: { fontSize: 16, fontFamily: Fonts.bold, marginBottom: 2 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' },
+  infoArea: { flex: 1, minWidth: 0, marginLeft: 12 },
+  itemTitle: { fontSize: 15, fontFamily: Fonts.bold, marginBottom: 2, overflow: 'hidden' },
   itemSub: { fontSize: 12, fontFamily: Fonts.medium },
-  statArea: { alignItems: 'flex-end' },
-  qtyText: { fontSize: 15, fontFamily: Fonts.bold, marginBottom: 4 },
+  headerRight: { alignItems: 'flex-end', marginLeft: 8, flexShrink: 0, maxWidth: '45%' },
+  qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginBottom: 4 },
   unitSmall: { fontSize: 11, fontFamily: Fonts.medium, opacity: 0.6 },
   badge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8, gap: 4 },
   badgeText: { fontSize: 9, fontFamily: Fonts.bold },
-  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: 1 },
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: 1, marginHorizontal: -Spacing.md },
   footerText: { fontSize: 11, fontFamily: Fonts.medium, fontStyle: 'italic', flex: 1, marginRight: 8 },
   empty: { alignItems: 'center', paddingVertical: 80 },
   emptyIcon: { width: 72, height: 72, borderRadius: 36, justifyContent: 'center', alignItems: 'center', marginBottom: 18 },
@@ -487,12 +491,13 @@ const createListStyles = (G: any) => StyleSheet.create({
 });
 
 const createDetailStyles = (G: any) => StyleSheet.create({
-  container: { flex: 1 },
+  container: { width: '100%', flexGrow: 0, flexShrink: 1 },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 25, paddingTop: 20, paddingBottom: 20 },
   backBtn: { width: 42, height: 42, borderRadius: 21, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
   headerSub: { fontSize: 11, fontFamily: Fonts.bold, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 2 },
   headerTitle: { fontSize: 22, fontFamily: Fonts.bold },
-  scroll: { paddingHorizontal: 25, paddingBottom: 40 },
+  scrollView: { flexGrow: 0, flexShrink: 1 },
+  scroll: { paddingHorizontal: 25, paddingBottom: 24 },
   card: { borderRadius: 28, borderWidth: 1, padding: 22, overflow: 'hidden' },
   cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
   iconBox: { width: 56, height: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },

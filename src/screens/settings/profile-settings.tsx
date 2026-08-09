@@ -5,6 +5,8 @@ import {
   Image,
   TextInput,
   TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import {
   Check,
@@ -102,10 +104,12 @@ const EditProfileScreen = () => {
         <View style={[styles.glowWash, { backgroundColor: G.mutedLight, top: -80, left: -60, width: 200, height: 200, borderRadius: 100 }]} />
         <View style={[styles.glowWash, { backgroundColor: G.mutedLight, bottom: -40, right: -30, width: 160, height: 160, borderRadius: 80 }]} />
       </View>
-      <TutorialScrollView 
-        contentContainerStyle={styles.container} 
-        showsVerticalScrollIndicator={false}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <TutorialScrollView 
+          contentContainerStyle={styles.container} 
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
       {/* Elite Profile Banner */}
       <TutorialTarget id="pset-header">
       <View style={styles.bannerContainer}>
@@ -300,7 +304,8 @@ const EditProfileScreen = () => {
       </Animated.View>
 
       <View style={{ height: 60 }} />
-    </TutorialScrollView>
+      </TutorialScrollView>
+      </KeyboardAvoidingView>
       <View style={{ position: 'absolute', top: 50, right: 20, zIndex: 100 }}>
         <TutorialButton tutorialId="profile-settings" screenName={t('settings.profile')} />
       </View>

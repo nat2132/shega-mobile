@@ -304,7 +304,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
       </View>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        enabled={false}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <TutorialScrollView
           contentContainerStyle={styles.scrollContent}

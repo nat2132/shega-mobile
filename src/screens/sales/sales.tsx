@@ -1117,6 +1117,8 @@ const SalesDashboard = () => {
                     colors.border;
                   const rankTextColor =
                     idx < 3 ? '#000000' : colors.textSecondary;
+                  const unitKey = "form." + (item.baseUnit || "pieces").toLowerCase();
+                  const unitLabel = t(unitKey) === unitKey && item.baseUnit ? item.baseUnit : t(unitKey);
                   return (
                     <View
                       key={idx}
@@ -1169,9 +1171,7 @@ const SalesDashboard = () => {
                       >
                         {t("common.item_sold_count", {
                           count: item.totalQty,
-                          unit: t(
-                            "form." + (item.baseUnit || "pieces").toLowerCase(),
-                          ),
+                          unit: unitLabel,
                         })}
                       </AppText>
                     </View>
@@ -3458,7 +3458,7 @@ const SalesDashboard = () => {
         onRequestClose={() => setShowSaleFlow(false)}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={{ flex: 1 }}
         >
           <View style={styles.modalOverlay}>

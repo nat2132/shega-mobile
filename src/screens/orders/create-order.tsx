@@ -184,7 +184,7 @@ const CreateOrderScreen = () => {
       <View style={styles.glowCenter} />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       >
         <TutorialTarget id="co-header">

@@ -1,10 +1,10 @@
-﻿import { Fonts } from '@/constants/theme';
+import { Fonts } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
 import { useDialog } from '@/context/DialogContext';
 import * as SecureStore from 'expo-secure-store';
 import { Eye, EyeOff, Lock, Shield, Trash2 } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { AppText, AppCard, AppButton, AppListItem, AppRow } from '@/components/ui';
 import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
 import { securitySettingsTutorial } from '@/tutorials/definitions';
@@ -115,7 +115,8 @@ const SecuritySettings = () => {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.container, { backgroundColor: colors.background }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
       <TutorialTarget id="sec-header">
       <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.header, { color: colors.textSecondary }]} numberOfLines={2}>{t('settings.security_settings')}</AppText>
       <AppText variant="display" weight="bold" style={[styles.subHeader, { color: colors.text }]} numberOfLines={2}>{hasPin ? t('security.change_pin') : t('settings.security')}</AppText>
@@ -188,7 +189,8 @@ const SecuritySettings = () => {
       <View style={{ position: 'absolute', top: 50, right: 20, zIndex: 100 }}>
         <TutorialButton tutorialId="security-settings" screenName={t('settings.security_settings')} />
       </View>
-    </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 

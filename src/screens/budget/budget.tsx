@@ -35,7 +35,9 @@ import { useCallback, useEffect, useState } from "react";
 import {
   Dimensions,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   TextInput,
@@ -518,16 +520,21 @@ const BudgetOverview = () => {
 
       {/* Create Budget Modal */}
       <Modal visible={showCreateModal} transparent animationType="slide" onRequestClose={() => setShowCreateModal(false)}>
-        <View style={s.modalOverlay}>
-          <TouchableOpacity style={s.modalBackdrop} activeOpacity={1} onPress={() => setShowCreateModal(false)} />
-          <CreateBudgetModal
-            colors={colors}
-            t={t}
-            onClose={() => setShowCreateModal(false)}
-            onSaved={() => { setShowCreateModal(false); loadData(); }}
-            isReadOnly={isReadOnly}
-          />
-        </View>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <View style={s.modalOverlay}>
+            <TouchableOpacity style={s.modalBackdrop} activeOpacity={1} onPress={() => setShowCreateModal(false)} />
+            <CreateBudgetModal
+              colors={colors}
+              t={t}
+              onClose={() => setShowCreateModal(false)}
+              onSaved={() => { setShowCreateModal(false); loadData(); }}
+              isReadOnly={isReadOnly}
+            />
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Budget Detail Modal */}

@@ -9,22 +9,26 @@ import {
 import {
   FlatList,
   StyleSheet,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { useSettings } from '@/context/SettingsContext';
 import { getOnCreditItems, ItemData } from '@/database/db';
-import { AppNumber, AppText, AppListItem, AppCard} from '@/components/ui';
+import { AppNumber, AppText } from '@/components/ui';
 
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { getDashGlass } from './glass-dashboard';
+import { CreditItemDetail, pluralizeUnit } from './oncredit-list-con';
 import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
 import { oncreditListTutorial } from '@/tutorials/definitions';
 const OnCreditRow = React.memo(({
   item,
   index,
+  onPress,
 }: {
   item: ItemData;
   index: number;
+  onPress: () => void;
 }) => {
   const { colors, t } = useSettings();
   const G = getDashGlass(colors);
@@ -41,45 +45,47 @@ const OnCreditRow = React.memo(({
 
   return (
     <Animated.View key={index} entering={FadeInDown.delay(Math.min(index, 6) * 50).duration(500)}>
-      <AppCard
-        padding={Spacing.md}
-        gap={Spacing.md}
-        background={G.bgCard}
-        bordered
-        style={{
-          borderColor: G.border,
-          borderRadius: BorderRadius.lg,
-          marginBottom: Spacing.md,
-          overflow: 'hidden',
-        }}
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={onPress}
+        style={[
+          styles.card,
+          {
+            backgroundColor: G.bgCard,
+            borderColor: G.border,
+            borderRadius: BorderRadius.lg,
+            marginBottom: Spacing.md,
+            overflow: 'hidden',
+          },
+        ]}
       >
-        <AppListItem
-          left={
-            <View style={[styles.iconNode, { backgroundColor: G.fg + '05' }]}>
-              <Building2 size={22} color={G.fg} />
+        <View style={styles.headerRow}>
+          <View style={[styles.iconNode, { backgroundColor: G.fg + '05' }]}>
+            <Building2 size={22} color={G.fg} />
+          </View>
+          <View style={styles.infoArea}>
+            <AppText variant="title-sm" weight="bold" numberOfLines={2} style={[styles.itemTitle, { color: G.fg }]}>
+              {item.name}
+            </AppText>
+            <AppText variant="body-sm" weight="medium" numberOfLines={1} style={[styles.itemSub, { color: G.fgSecondary }]}>
+              {item.companyName || t('dash.general_source')}
+            </AppText>
+          </View>
+          <View style={styles.headerRight}>
+            <View style={styles.qtyRow}>
+              <AppNumber value={item.totalBaseQuantity || 0} size="title-sm" color={G.fg} numberOfLines={1} />
+              <AppText variant="caption" weight="medium" shrink={false} numberOfLines={1} style={styles.unitSmall}>
+                {' '}{pluralizeUnit(item.totalBaseQuantity || 0, item.baseUnit)}
+              </AppText>
             </View>
-          }
-          title={item.name}
-          subtitle={item.companyName || t('dash.general_source')}
-          titleMaxLines={2}
-          subtitleMaxLines={1}
-          right={
-            <View style={styles.statArea}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                <AppNumber value={item.totalBaseQuantity} size="title-sm" color={G.fg} numberOfLines={1} />
-                <AppText variant="caption" weight="medium" style={styles.unitSmall}>{item.baseUnit || 'pcs'}</AppText>
-              </View>
-              <View style={[styles.statusBadgeSmall, { backgroundColor: colors.primary + '15' }]}>
-                <ShieldAlert size={10} color={colors.primary} />
-                <AppText variant="micro" weight="bold" transform="uppercase" shrink={false} style={[styles.statusBadgeText, { color: colors.primary }]} numberOfLines={1}>
-                  {t('dash.on_credit')}
-                </AppText>
-              </View>
+            <View style={[styles.statusBadgeSmall, { backgroundColor: colors.primary + '15' }]}>
+              <ShieldAlert size={10} color={colors.primary} />
+              <AppText variant="micro" weight="bold" transform="uppercase" shrink={false} style={[styles.statusBadgeText, { color: colors.primary }]} numberOfLines={1}>
+                {t('dash.on_credit')}
+              </AppText>
             </View>
-          }
-          noBorder
-          padding={0}
-        />
+          </View>
+        </View>
         <View style={[styles.creditFooter, { borderTopColor: G.border }]}>
           <View style={styles.creditRow}>
             <CreditCard size={14} color={G.fgSecondary} />
@@ -87,7 +93,7 @@ const OnCreditRow = React.memo(({
             <AppNumber value={creditAmount} size="body" showCurrency color={colors.error} numberOfLines={1} />
           </View>
         </View>
-      </AppCard>
+      </TouchableOpacity>
     </Animated.View>
   );
 });
@@ -99,6 +105,7 @@ const OnCreditItemsScreen = () => {
   const styles = useMemo(() => createStyles(G), [G]);
   const tutorial = useTutorial({ tutorial: oncreditListTutorial });
   const [items, setItems] = useState<ItemData[]>([]);
+  const [selectedItem, setSelectedItem] = useState<ItemData | null>(null);
 
   const loadData = async () => {
     const data = await getOnCreditItems() as ItemData[];
@@ -110,10 +117,23 @@ const OnCreditItemsScreen = () => {
   }, []);
 
   const renderItem = useCallback(({ item, index }: { item: ItemData; index: number }) => (
-    <OnCreditRow item={item} index={index} />
+    <OnCreditRow item={item} index={index} onPress={() => setSelectedItem(item)} />
   ), []);
 
   const keyExtractor = useCallback((item: ItemData, index: number) => `oc-${item.id}-${index}`, []);
+
+  if (selectedItem) {
+    return (
+      <CreditItemDetail
+        item={selectedItem}
+        onBack={() => setSelectedItem(null)}
+        onSettled={() => {
+          setSelectedItem(null);
+          loadData();
+        }}
+      />
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: G.bg }]}>
@@ -168,21 +188,20 @@ const createStyles = (G: any) => StyleSheet.create({
   headerNode: { marginBottom: 25 },
   headerSub: { fontSize: 11, fontFamily: Fonts.semibold, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 4 },
   headerTitle: { fontSize: 24, fontFamily: Fonts.bold },
-  nodeCard: { borderRadius: 24, borderWidth: 1, marginBottom: 16, overflow: 'hidden' },
-  cardMain: { flexDirection: 'row', alignItems: 'center', padding: 18 },
+  card: { flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'flex-start', flexWrap: 'nowrap', padding: Spacing.md, gap: Spacing.md, borderWidth: 1 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' },
   iconNode: { width: 52, height: 52, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
-  infoArea: { flex: 1, marginLeft: 16 },
-  itemName: { fontSize: 17, fontFamily: Fonts.bold, marginBottom: 2 },
+  infoArea: { flex: 1, minWidth: 0, marginLeft: 12 },
+  itemTitle: { fontSize: 15, fontFamily: Fonts.bold, marginBottom: 2, overflow: 'hidden' },
   itemSub: { fontSize: 13, fontFamily: Fonts.medium },
-  statArea: { alignItems: 'flex-end' },
-  qtyText: { fontSize: 16, fontFamily: Fonts.bold },
+  headerRight: { alignItems: 'flex-end', marginLeft: 8, flexShrink: 0, maxWidth: '45%' },
+  qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginBottom: 4 },
   unitSmall: { fontSize: 11, opacity: 0.6 },
-  statusBadgeSmall: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, marginTop: 4, gap: 4 },
+  statusBadgeSmall: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, gap: 4 },
   statusBadgeText: { fontSize: 10, fontFamily: Fonts.bold, textTransform: 'uppercase' },
-  creditFooter: { borderTopWidth: 1, paddingHorizontal: 18, paddingVertical: 12 },
+  creditFooter: { borderTopWidth: 1, paddingHorizontal: 18, paddingVertical: 12, marginHorizontal: -Spacing.md },
   creditRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   creditLabel: { flex: 1, fontSize: 12, fontFamily: Fonts.medium },
-  creditAmount: { fontSize: 15, fontFamily: Fonts.bold },
   emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 100 },
   emptyIconCircle: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
   emptyTitle: { fontSize: 20, fontFamily: Fonts.bold },

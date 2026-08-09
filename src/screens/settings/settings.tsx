@@ -9,7 +9,9 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Switch,
@@ -341,44 +343,49 @@ const ResetModal = ({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={resetStyles.overlay}>
-        <View style={[resetStyles.box, { backgroundColor: G.bgCard, borderColor: G.border, borderWidth: 1 }]}>
-          <View style={[resetStyles.iconCircle, { borderColor: G.muted, backgroundColor: G.accentGlass }]}>
-            <Trash2 size={28} color={G.fg} />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
+        <View style={resetStyles.overlay}>
+          <View style={[resetStyles.box, { backgroundColor: G.bgCard, borderColor: G.border, borderWidth: 1 }]}>
+            <View style={[resetStyles.iconCircle, { borderColor: G.muted, backgroundColor: G.accentGlass }]}>
+              <Trash2 size={28} color={G.fg} />
+            </View>
+            <AppText variant="title" weight="bold" style={[resetStyles.title, { color: G.fg }]} numberOfLines={2}>{t('settings.reset_title')}</AppText>
+            <AppText variant="body" weight="medium" style={[resetStyles.message, { color: G.muted }]} numberOfLines={4}>
+              {t('settings.reset_msg')}{'\n'}
+              {pin ? t('settings.reset_confirm_pin') : ''}
+            </AppText>
+
+            {pin ? (
+              <TextInput
+                style={[resetStyles.pinInput, { color: G.fg, borderColor: G.border, backgroundColor: G.bgCard }]}
+                value={enteredPin}
+                onChangeText={setEnteredPin}
+                placeholder={t('security.current_pin')}
+                secureTextEntry
+                keyboardType="number-pad"
+                maxLength={4}
+                placeholderTextColor={G.muted}
+              />
+            ) : null}
+
+            <TouchableOpacity
+              style={[resetStyles.confirmBtn, { backgroundColor: G.fg }]}
+              onPress={handleReset}
+              disabled={loading}
+            >
+              {loading
+                ? <ActivityIndicator color={G.bg} />
+                : <AppText variant="body" weight="bold" style={[resetStyles.confirmBtnText, { color: G.bg }]} numberOfLines={1}>{t('settings.reset_btn')}</AppText>}
+            </TouchableOpacity>
+            <TouchableOpacity style={resetStyles.cancelBtn} onPress={onClose}>
+              <AppText variant="body" weight="bold" style={[resetStyles.cancelBtnText, { color: G.muted }]} numberOfLines={1}>{t('common.cancel')}</AppText>
+            </TouchableOpacity>
           </View>
-          <AppText variant="title" weight="bold" style={[resetStyles.title, { color: G.fg }]} numberOfLines={2}>{t('settings.reset_title')}</AppText>
-          <AppText variant="body" weight="medium" style={[resetStyles.message, { color: G.muted }]} numberOfLines={4}>
-            {t('settings.reset_msg')}{'\n'}
-            {pin ? t('settings.reset_confirm_pin') : ''}
-          </AppText>
-
-          {pin ? (
-            <TextInput
-              style={[resetStyles.pinInput, { color: G.fg, borderColor: G.border, backgroundColor: G.bgCard }]}
-              value={enteredPin}
-              onChangeText={setEnteredPin}
-              placeholder={t('security.current_pin')}
-              secureTextEntry
-              keyboardType="number-pad"
-              maxLength={4}
-              placeholderTextColor={G.muted}
-            />
-          ) : null}
-
-          <TouchableOpacity
-            style={[resetStyles.confirmBtn, { backgroundColor: G.fg }]}
-            onPress={handleReset}
-            disabled={loading}
-          >
-            {loading
-              ? <ActivityIndicator color={G.bg} />
-              : <AppText variant="body" weight="bold" style={[resetStyles.confirmBtnText, { color: G.bg }]} numberOfLines={1}>{t('settings.reset_btn')}</AppText>}
-          </TouchableOpacity>
-          <TouchableOpacity style={resetStyles.cancelBtn} onPress={onClose}>
-            <AppText variant="body" weight="bold" style={[resetStyles.cancelBtnText, { color: G.muted }]} numberOfLines={1}>{t('common.cancel')}</AppText>
-          </TouchableOpacity>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };

@@ -192,7 +192,7 @@ const DamagedItemForm = ({ onComplete }: { onComplete?: () => void }) => {
   const warningColor = colors.warning;
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0} style={[styles.container, { backgroundColor: G.bg }]}>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0} style={[styles.container, { backgroundColor: G.bg }]}>
       <View style={{ position: 'absolute', top: -60, right: -60, width: 200, height: 200, borderRadius: 100, backgroundColor: G.mutedLight, opacity: 0.4, pointerEvents: 'none' }} />
       <View style={{ position: 'absolute', top: 150, left: -80, width: 220, height: 220, borderRadius: 110, backgroundColor: G.mutedLight, opacity: 0.25, pointerEvents: 'none' }} />
       <View style={{ position: 'absolute', bottom: 100, right: -40, width: 180, height: 180, borderRadius: 90, backgroundColor: G.mutedLight, opacity: 0.2, pointerEvents: 'none' }} />

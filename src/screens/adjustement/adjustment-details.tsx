@@ -349,7 +349,7 @@ const AdjustmentDetailsScreen: React.FC<AdjustmentDetailsProps> = ({ adjustment,
   };
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={detailStyles.container}>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={detailStyles.container}>
       <View style={{ position: 'absolute', top: -60, right: -60, width: 200, height: 200, borderRadius: 100, backgroundColor: G.mutedLight, opacity: 0.4, pointerEvents: 'none' }} />
       <View style={{ position: 'absolute', top: 150, left: -80, width: 220, height: 220, borderRadius: 110, backgroundColor: G.mutedLight, opacity: 0.25, pointerEvents: 'none' }} />
       <View style={{ position: 'absolute', bottom: 100, right: -40, width: 180, height: 180, borderRadius: 90, backgroundColor: G.mutedLight, opacity: 0.2, pointerEvents: 'none' }} />

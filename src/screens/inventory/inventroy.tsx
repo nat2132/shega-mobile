@@ -51,7 +51,9 @@ import {
   Dimensions,
   FlatList,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -895,198 +897,199 @@ const InventoryDashboard = () => {
         animationType="slide"
         onRequestClose={() => setShowOrderModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowOrderModal(false)} />
-          <View style={[styles.bottomSheetContainer, { backgroundColor: G.bg, height: '90%', borderColor: G.border }]}>
-            <View style={styles.modalHandleRow}>
-              <View style={[styles.modalHandle, { backgroundColor: G.borderLight }]} />
-            </View>
-            <View style={{ paddingHorizontal: 25, flex: 1 }}>
-              <View style={styles.orderHeader}>
-                <View>
-                  <AppText variant="heading" weight="bold" style={[styles.sheetTitle, { color: G.fg, marginBottom: 2 }]} numberOfLines={2}>{t('inventory.create_order')}</AppText>
-                  <AppText variant="body-sm" weight="medium" style={[styles.orderSub, { color: G.muted }]} numberOfLines={1}>{t('inventory.order_items_count', { count: orderItems.length.toString() })}</AppText>
-                </View>
-                <TouchableOpacity onPress={() => setShowOrderModal(false)}>
-                   <X size={24} color={G.muted} />
-                </TouchableOpacity>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <View style={styles.modalOverlay}>
+            <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowOrderModal(false)} />
+            <View style={[styles.bottomSheetContainer, { backgroundColor: G.bg, height: '90%', borderColor: G.border }]}>
+              <View style={styles.modalHandleRow}>
+                <View style={[styles.modalHandle, { backgroundColor: G.borderLight }]} />
               </View>
+              <View style={{ paddingHorizontal: 25, flex: 1 }}>
+                <View style={styles.orderHeader}>
+                  <View>
+                    <AppText variant="heading" weight="bold" style={[styles.sheetTitle, { color: G.fg, marginBottom: 2 }]} numberOfLines={2}>{t('inventory.create_order')}</AppText>
+                    <AppText variant="body-sm" weight="medium" style={[styles.orderSub, { color: G.muted }]} numberOfLines={1}>{t('inventory.order_items_count', { count: orderItems.length.toString() })}</AppText>
+                  </View>
+                  <TouchableOpacity onPress={() => setShowOrderModal(false)}>
+                     <X size={24} color={G.muted} />
+                  </TouchableOpacity>
+                </View>
 
-              <ScrollView style={{ flex: 1, marginTop: 20 }} showsVerticalScrollIndicator={false}>
-                {orderItems.map((item, idx) => (
-                  <View key={item.id} style={[styles.orderItemCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
-                     <View style={{ flex: 1 }}>
-                      <AppText variant="body-lg" weight="bold" style={[styles.orderItemName, { color: G.fg }]} numberOfLines={1}>{item.name}</AppText>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <AppText variant="caption" weight="medium" style={[styles.orderItemStock, { color: G.muted }]} numberOfLines={1}>{t('inv.current_stock')}: </AppText>
-                        <AppNumber value={item.totalBaseQuantity} size="caption" />
-                        <AppText variant="caption" weight="medium" style={[styles.orderItemStock, { color: G.muted }]} numberOfLines={1}> {item.baseUnit}</AppText>
+                <ScrollView style={{ flex: 1, marginTop: 20 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                  {orderItems.map((item, idx) => (
+                    <View key={item.id} style={[styles.orderItemCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+                       <View style={{ flex: 1 }}>
+                        <AppText variant="body-lg" weight="bold" style={[styles.orderItemName, { color: G.fg }]} numberOfLines={1}>{item.name}</AppText>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <AppText variant="caption" weight="medium" style={[styles.orderItemStock, { color: G.muted }]} numberOfLines={1}>{t('inv.current_stock')}: </AppText>
+                          <AppNumber value={item.totalBaseQuantity} size="caption" />
+                          <AppText variant="caption" weight="medium" style={[styles.orderItemStock, { color: G.muted }]} numberOfLines={1}> {item.baseUnit}</AppText>
+                        </View>
                       </View>
-                    </View>
-                    <View style={styles.qtyControl}>
+                      <View style={styles.qtyControl}>
+                        <TouchableOpacity 
+                          style={[styles.qtyBtn, { backgroundColor: G.accentGlass }]} 
+                          onPress={() => {
+                            const newItems = [...orderItems];
+                            newItems[idx].orderQty = Math.max(0, newItems[idx].orderQty - 1);
+                            setOrderItems(newItems);
+                          }}
+                        >
+                          <AppText variant="body" weight="bold" style={{ color: G.fg, fontSize: 18 }} numberOfLines={1}>-</AppText>
+                        </TouchableOpacity>
+                        <AppNumber value={item.orderQty} size="body" style={styles.qtyVal} />
+                        <TouchableOpacity 
+                          style={[styles.qtyBtn, { backgroundColor: G.accentGlass }]} 
+                          onPress={() => {
+                            const newItems = [...orderItems];
+                            newItems[idx].orderQty += 1;
+                            setOrderItems(newItems);
+                          }}
+                        >
+                          <AppText variant="body" weight="bold" style={{ color: G.fg, fontSize: 18 }} numberOfLines={1}>+</AppText>
+                        </TouchableOpacity>
+                      </View>
                       <TouchableOpacity 
-                        style={[styles.qtyBtn, { backgroundColor: G.accentGlass }]} 
-                        onPress={() => {
-                          const newItems = [...orderItems];
-                          newItems[idx].orderQty = Math.max(0, newItems[idx].orderQty - 1);
-                          setOrderItems(newItems);
-                        }}
+                        style={{ marginLeft: 15 }} 
+                        onPress={() => setOrderItems(orderItems.filter((_, i) => i !== idx))}
                       >
-                        <AppText variant="body" weight="bold" style={{ color: G.fg, fontSize: 18 }} numberOfLines={1}>-</AppText>
-                      </TouchableOpacity>
-                      <AppNumber value={item.orderQty} size="body" style={styles.qtyVal} />
-                      <TouchableOpacity 
-                        style={[styles.qtyBtn, { backgroundColor: G.accentGlass }]} 
-                        onPress={() => {
-                          const newItems = [...orderItems];
-                          newItems[idx].orderQty += 1;
-                          setOrderItems(newItems);
-                        }}
-                      >
-                        <AppText variant="body" weight="bold" style={{ color: G.fg, fontSize: 18 }} numberOfLines={1}>+</AppText>
+                        <TrashIcon size={18} color={G.muted} />
                       </TouchableOpacity>
                     </View>
-                    <TouchableOpacity 
-                      style={{ marginLeft: 15 }} 
-                      onPress={() => setOrderItems(orderItems.filter((_, i) => i !== idx))}
+                  ))}
+                  {orderItems.length === 0 && (
+                    <View style={{ alignItems: 'center', marginTop: 50 }}>
+                      <View style={[styles.emptyIconCircle, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+                        <Package size={36} color={G.muted} />
+                      </View>
+                      <AppText variant="body" weight="medium" style={[styles.emptyText, { color: G.muted, marginTop: 15 }]} numberOfLines={2}>{t('inventory.no_order_items')}</AppText>
+                    </View>
+                  )}
+                </ScrollView>
+
+                {/* Custom Order Section */}
+                <View style={[styles.customOrderSection, { borderTopColor: G.border }]}>
+                  <AppText variant="body-lg" weight="bold" style={[styles.customOrderTitle, { color: G.fg }]} numberOfLines={1}>{t('inventory.custom_order')}</AppText>
+                  <View style={styles.customOrderRow}>
+                    <TextInput
+                      style={[styles.customOrderInput, { color: G.fg, borderColor: G.border, backgroundColor: G.bgCard, flex: 2, marginRight: 8 }]}
+                      placeholder={t('inv.item_name_ph')}
+                      placeholderTextColor={G.muted}
+                      value={customOrderName}
+                      onChangeText={setCustomOrderName}
+                    />
+                    <TextInput
+                      style={[styles.customOrderInput, { color: G.fg, borderColor: G.border, backgroundColor: G.bgCard, flex: 1, marginRight: 8 }]}
+                      placeholder={t('inv.qty_ph')}
+                      placeholderTextColor={G.muted}
+                      value={customOrderQty}
+                      onChangeText={setCustomOrderQty}
+                      keyboardType="numeric"
+                    />
+                    <TouchableOpacity
+                      style={[styles.customOrderAddBtn, { backgroundColor: G.fg }]}
+                      onPress={() => {
+                        if (customOrderName.trim() && Number(customOrderQty) > 0) {
+                          setOrderItems([...orderItems, {
+                            id: Date.now(),
+                            name: customOrderName.trim(),
+                            totalBaseQuantity: 0,
+                            baseUnit: 'pcs',
+                            orderQty: Number(customOrderQty),
+                            notes: customOrderNotes.trim(),
+                            isCustom: true
+                          }]);
+                          setCustomOrderName('');
+                          setCustomOrderQty('1');
+                          setCustomOrderNotes('');
+                        }
+                      }}
                     >
-                      <TrashIcon size={18} color={G.muted} />
+                      <Plus size={18} color={G.bg} />
                     </TouchableOpacity>
                   </View>
-                ))}
-                {orderItems.length === 0 && (
-                  <View style={{ alignItems: 'center', marginTop: 50 }}>
-                    <View style={[styles.emptyIconCircle, { backgroundColor: G.bgCard, borderColor: G.border }]}>
-                      <Package size={36} color={G.muted} />
-                    </View>
-                    <AppText variant="body" weight="medium" style={[styles.emptyText, { color: G.muted, marginTop: 15 }]} numberOfLines={2}>{t('inventory.no_order_items')}</AppText>
-                  </View>
-                )}
-              </ScrollView>
+                  <TextInput
+                    style={[styles.customOrderInput, { color: G.fg, borderColor: G.border, backgroundColor: G.bgCard, marginTop: 8 }]}
+                    placeholder={t('inv.notes_optional')}
+                    placeholderTextColor={G.muted}
+                    value={customOrderNotes}
+                    onChangeText={setCustomOrderNotes}
+                  />
+                </View>
 
-              {/* Custom Order Section */}
-              <View style={[styles.customOrderSection, { borderTopColor: G.border }]}>
-                <AppText variant="body-lg" weight="bold" style={[styles.customOrderTitle, { color: G.fg }]} numberOfLines={1}>{t('inventory.custom_order')}</AppText>
-                <View style={styles.customOrderRow}>
-                  <TextInput
-                    style={[styles.customOrderInput, { color: G.fg, borderColor: G.border, backgroundColor: G.bgCard, flex: 2, marginRight: 8 }]}
-                    placeholder={t('inv.item_name_ph')}
-                    placeholderTextColor={G.muted}
-                    value={customOrderName}
-                    onChangeText={setCustomOrderName}
-                  />
-                  <TextInput
-                    style={[styles.customOrderInput, { color: G.fg, borderColor: G.border, backgroundColor: G.bgCard, flex: 1, marginRight: 8 }]}
-                    placeholder={t('inv.qty_ph')}
-                    placeholderTextColor={G.muted}
-                    value={customOrderQty}
-                    onChangeText={setCustomOrderQty}
-                    keyboardType="numeric"
-                  />
-                  <TouchableOpacity
-                    style={[styles.customOrderAddBtn, { backgroundColor: G.fg }]}
-                    onPress={() => {
-                      if (customOrderName.trim() && Number(customOrderQty) > 0) {
-                        setOrderItems([...orderItems, {
-                          id: Date.now(),
-                          name: customOrderName.trim(),
-                          totalBaseQuantity: 0,
-                          baseUnit: 'pcs',
-                          orderQty: Number(customOrderQty),
-                          notes: customOrderNotes.trim(),
-                          isCustom: true
-                        }]);
-                        setCustomOrderName('');
-                        setCustomOrderQty('1');
-                        setCustomOrderNotes('');
+                <View style={{ paddingVertical: 20 }}>
+                  <TouchableOpacity 
+                    disabled={orderItems.length === 0}
+                    style={[styles.orderSubmitBtn, { backgroundColor: G.fg, opacity: orderItems.length === 0 ? 0.5 : 1 }]}
+                    onPress={async () => {
+                      const allItems = orderItems.map(item => 
+                        item.isCustom 
+                          ? `${item.name} - Qty: ${item.orderQty}${item.notes ? ` (${item.notes})` : ''}`
+                          : `${item.name} - Stock: ${item.totalBaseQuantity} ${item.baseUnit}, Order: ${item.orderQty} ${item.baseUnit}`
+                      ).join('\n');
+                      
+                      try {
+                        const html = `
+                          <html>
+                            <head>
+                              <style>
+                                body { font-family: Helvetica; padding: 20px; }
+                                h1 { text-align: center; color: #333; }
+                                p { color: #666; }
+                                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                                th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+                                th { background-color: #f2f2f2; }
+                              </style>
+                            </head>
+                            <body>
+                              <h1>Product Order Request</h1>
+                              <p>Date: ${new Date().toLocaleDateString()}</p>
+                              <table>
+                                <thead>
+                                  <tr>
+                                    <th>#</th>
+                                    <th>Item Name</th>
+                                    <th>Order Quantity</th>
+                                    <th>Notes</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  ${orderItems.map((item, idx) => `
+                                    <tr>
+                                      <td>${idx + 1}</td>
+                                      <td>${item.name}</td>
+                                      <td>${item.orderQty}</td>
+                                      <td>${item.notes || (item.isCustom ? '' : `${item.totalBaseQuantity} ${item.baseUnit} in stock`)}</td>
+                                    </tr>
+                                  `).join('')}
+                                </tbody>
+                              </table>
+                            </body>
+                          </html>
+                        `;
+                        const { uri } = await Print.printToFileAsync({ html });
+                        await Sharing.shareAsync(uri);
+                        setShowOrderModal(false);
+                      } catch (e) {
+                        console.error('Export error:', e);
+                        // Fallback: share as text
+                        try {
+                          await Sharing.shareAsync(`data:text/plain;base64,${btoa(allItems)}`);
+                        } catch (e2) {
+                          console.error('Fallback export error:', e2);
+                          await dialog.alert({ title: t('common.error'), message: t('inventory.export_failed'), iconType: 'danger' });
+                        }
                       }
                     }}
                   >
-                    <Plus size={18} color={G.bg} />
+                    <Download size={20} color={G.bg} style={{ marginRight: 10 }} />
+                    <AppText variant="body" weight="bold" style={[styles.orderSubmitText, { color: G.bg }]} numberOfLines={1}>{t('inventory.export_order')}</AppText>
                   </TouchableOpacity>
                 </View>
-                <TextInput
-                  style={[styles.customOrderInput, { color: G.fg, borderColor: G.border, backgroundColor: G.bgCard, marginTop: 8 }]}
-                  placeholder={t('inv.notes_optional')}
-                  placeholderTextColor={G.muted}
-                  value={customOrderNotes}
-                  onChangeText={setCustomOrderNotes}
-                />
-              </View>
-
-              <View style={{ paddingVertical: 20 }}>
-                <TouchableOpacity 
-                  disabled={orderItems.length === 0}
-                  style={[styles.orderSubmitBtn, { backgroundColor: G.fg, opacity: orderItems.length === 0 ? 0.5 : 1 }]}
-                  onPress={async () => {
-                    const allItems = orderItems.map(item => 
-                      item.isCustom 
-                        ? `${item.name} - Qty: ${item.orderQty}${item.notes ? ` (${item.notes})` : ''}`
-                        : `${item.name} - Stock: ${item.totalBaseQuantity} ${item.baseUnit}, Order: ${item.orderQty} ${item.baseUnit}`
-                    ).join('\n');
-                    
-                    try {
-                      const html = `
-                        <html>
-                          <head>
-                            <style>
-                              body { font-family: Helvetica; padding: 20px; }
-                              h1 { text-align: center; color: #333; }
-                              p { color: #666; }
-                              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                              th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-                              th { background-color: #f2f2f2; color: #333; }
-                            </style>
-                          </head>
-                          <body>
-                            <h1>Product Order List</h1>
-                            <p>Date: ${new Date().toLocaleDateString()}</p>
-                            <p>Total Items: ${orderItems.length}</p>
-                            <table>
-                              <thead>
-                                <tr>
-                                  <th>#</th>
-                                  <th>Item Name</th>
-                                  <th>Order Quantity</th>
-                                  <th>Notes</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                ${orderItems.map((item, idx) => `
-                                  <tr>
-                                    <td>${idx + 1}</td>
-                                    <td>${item.name}</td>
-                                    <td>${item.orderQty}</td>
-                                    <td>${item.notes || (item.isCustom ? '' : `${item.totalBaseQuantity} ${item.baseUnit} in stock`)}</td>
-                                  </tr>
-                                `).join('')}
-                              </tbody>
-                            </table>
-                          </body>
-                        </html>
-                      `;
-                      const { uri } = await Print.printToFileAsync({ html });
-                      await Sharing.shareAsync(uri);
-                      setShowOrderModal(false);
-                    } catch (e) {
-                      console.error('Export error:', e);
-                      // Fallback: share as text
-                      try {
-                        await Sharing.shareAsync(`data:text/plain;base64,${btoa(allItems)}`);
-                      } catch (e2) {
-                        console.error('Fallback export error:', e2);
-                        await dialog.alert({ title: t('common.error'), message: t('inventory.export_failed'), iconType: 'danger' });
-                      }
-                    }
-                  }}
-                >
-                  <Download size={20} color={G.bg} style={{ marginRight: 10 }} />
-                  <AppText variant="body" weight="bold" style={[styles.orderSubmitText, { color: G.bg }]} numberOfLines={1}>{t('inventory.export_order')}</AppText>
-                </TouchableOpacity>
               </View>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Top 10 Highest Value Items Modal */}
@@ -1259,7 +1262,7 @@ const InventoryDashboard = () => {
       >
         <View style={styles.modalOverlay}>
           <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowOnCreditModal(false)} />
-          <View style={[styles.bottomSheetContainer, { backgroundColor: G.bg, height: Dimensions.get('window').height * 0.90, borderColor: G.border }]}>
+          <View style={[styles.bottomSheetContainer, { backgroundColor: G.bg, borderColor: G.border, paddingBottom: 0 }]}>
             <View style={styles.modalHandleRow}>
               <View style={[styles.modalHandle, { backgroundColor: G.borderLight }]} />
             </View>
