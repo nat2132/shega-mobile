@@ -81,7 +81,7 @@ const normalizeReminderTime = (value: string): string => {
 };
 
 const AddExpenseScreen = ({ onSaveSuccess, editingTemplate }: { onSaveSuccess?: () => void; editingTemplate?: any }) => {
-  const { colors, t, calendarType, language } = useSettings();
+  const { colors, t, calendarType, language, notifications } = useSettings();
   const { isReadOnly } = useSubscription();
   const G = getExpenseGlass(colors);
   const dialog = useDialog();
@@ -387,13 +387,15 @@ const AddExpenseScreen = ({ onSaveSuccess, editingTemplate }: { onSaveSuccess?: 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       playNice();
       await draftFormData.clearCurrent();
-      notifyExpenseRecorded({
-        id: id as number,
-        name: description.trim() || category.trim(),
-        amount: amountNum,
-        category: category.trim(),
-      });
-      if (amountNum >= 50000) {
+      if (notifications.expense !== false) {
+        notifyExpenseRecorded({
+          id: id as number,
+          name: description.trim() || category.trim(),
+          amount: amountNum,
+          category: category.trim(),
+        });
+      }
+      if (amountNum >= 50000 && notifications.largeExpense !== false) {
         notifyLargeExpense({
           id: id as number,
           name: description.trim() || category.trim(),
@@ -408,14 +410,16 @@ const AddExpenseScreen = ({ onSaveSuccess, editingTemplate }: { onSaveSuccess?: 
           if (status && status.status === 'exceeded' && status.remaining < 0) {
             const budgets = getBudgets({ status: 'active' });
             const budget = (budgets as any[]).find((b: any) => status.budgetName && b.name === status.budgetName);
-            notifyExpensePushedBudgetOverLimit({
-              expenseId: id as number,
-              expenseName: description.trim() || category.trim(),
-              categoryName: category.trim(),
-              budgetName: status.budgetName,
-              budgetId: budget?.id || 0,
-              excess: Math.abs(status.remaining),
-            });
+            if (notifications.budget !== false) {
+              notifyExpensePushedBudgetOverLimit({
+                expenseId: id as number,
+                expenseName: description.trim() || category.trim(),
+                categoryName: category.trim(),
+                budgetName: status.budgetName,
+                budgetId: budget?.id || 0,
+                excess: Math.abs(status.remaining),
+              });
+            }
           }
         } catch {}
       }
@@ -423,7 +427,7 @@ const AddExpenseScreen = ({ onSaveSuccess, editingTemplate }: { onSaveSuccess?: 
       // Record the over-budget event for analytics + recalculate the remaining
       // balance immediately, then fire any newly crossed guard-rail thresholds
       // (50% / 75% / 90% / 100% / over budget).
-      try {
+try {
         if (budgetIdToCheck && budgetLimit && budgetLimit.exceeds) {
           const after = getBudgetLimitOverview(budgetIdToCheck);
           recordBudgetOverage({
@@ -439,7 +443,7 @@ const AddExpenseScreen = ({ onSaveSuccess, editingTemplate }: { onSaveSuccess?: 
             percentOver: after?.percentUsed ?? 0,
           });
         }
-        checkBudgetThresholds();
+        if (notifications.budget !== false) checkBudgetThresholds();
       } catch {}
 
       setSuccessDetails({

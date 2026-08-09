@@ -1393,6 +1393,8 @@ export const runAllNotificationChecks = (settings?: NotificationGate): AppNotifi
   }
   if (settings?.budget !== false) {
     all.push(...checkBudgetThresholds());
+  }
+  if (settings?.budgetStatus !== false) {
     all.push(...checkExpiredBudgets());
     all.push(...checkEndingBudgets());
     all.push(...checkNoActiveBudget());

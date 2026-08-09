@@ -16,14 +16,20 @@ import {
   deleteOldNotifications,
   cleanupExpiredNotifications,
   getActiveReminders,
+  getReminderById,
   ScheduledReminder,
   snoozeReminder,
   updateReminderStatus,
+  updateReminderNotificationId,
   deleteReminder,
   getAllPreferences,
   NotificationPreferences,
   setPreference,
 } from '@/database/notifications';
+import {
+  cancelScheduledNotification,
+  scheduleOneShotPush,
+} from '@/services/reminderDelivery';
 import { runAllNotificationChecks } from '@/services/notificationService';
 import { useToast } from './ToastContext';
 import { useSettings } from './SettingsContext';
@@ -139,18 +145,41 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
   }, [refresh, showToast]);
 
   const snoozeReminderById = useCallback(async (id: number, minutes: number) => {
-    snoozeReminder(id, minutes);
+    const reminder = getReminderById(id);
+    if (reminder) {
+      await cancelScheduledNotification(reminder.notificationId);
+      const newFireAt = new Date(Date.now() + minutes * 60_000);
+      const oneShotId = await scheduleOneShotPush(
+        newFireAt,
+        reminder.title,
+        reminder.body || '',
+        '/(tabs)/notifications/reminders',
+        true,
+      );
+      snoozeReminder(id, minutes);
+      updateReminderNotificationId(id, oneShotId);
+    } else {
+      snoozeReminder(id, minutes);
+    }
     showToast({ title: t('toast.reminder_snoozed'), message: t('toast.reminder_snoozed_desc', { minutes: String(minutes) }), type: 'info' });
     await refresh();
   }, [refresh, showToast]);
 
   const completeReminder = useCallback(async (id: number) => {
+    const reminder = getReminderById(id);
+    if (reminder) {
+      await cancelScheduledNotification(reminder.notificationId);
+    }
     updateReminderStatus(id, 'completed');
     showToast({ title: t('toast.reminder_completed'), message: t('toast.reminder_completed_desc'), type: 'success' });
     await refresh();
   }, [refresh, showToast]);
 
   const removeReminder = useCallback(async (id: number) => {
+    const reminder = getReminderById(id);
+    if (reminder) {
+      await cancelScheduledNotification(reminder.notificationId);
+    }
     deleteReminder(id);
     showToast({ title: t('toast.reminder_removed'), message: t('toast.reminder_removed_desc'), type: 'info' });
     await refresh();

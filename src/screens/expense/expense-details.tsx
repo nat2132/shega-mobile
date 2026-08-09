@@ -38,7 +38,7 @@ import { expenseDetailsTutorial } from '@/tutorials/definitions';
 import { getExpenseGlass } from './glass-expense';
 
 const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => void }) => {
-  const { colors, calendarType, language, t } = useSettings();
+  const { colors, calendarType, language, t, notifications } = useSettings();
   const G = getExpenseGlass(colors);
   const tutorial = useTutorial({ tutorial: expenseDetailsTutorial });
   const [isEditing, setIsEditing] = useState(false);
@@ -68,13 +68,15 @@ const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => vo
     playNice();
     const success = updateExpense(expense.id, editForm);
     if (success) {
-      notifyExpenseEdited({
-        id: expense.id,
-        name: editForm.name || expense.name,
-        amount: Number(editForm.amount) || expense.amount,
-        category: editForm.category || expense.category,
-        oldAmount: expense.amount,
-      });
+      if (notifications.expense !== false) {
+        notifyExpenseEdited({
+          id: expense.id,
+          name: editForm.name || expense.name,
+          amount: Number(editForm.amount) || expense.amount,
+          category: editForm.category || expense.category,
+          oldAmount: expense.amount,
+        });
+      }
       setIsEditing(false);
       if (onClose) onClose();
     } else {
@@ -100,11 +102,13 @@ const ExpenseDetails = ({ expense, onClose }: { expense: any, onClose?: () => vo
     const deletedCategory = expense.category;
     const success = deleteExpense(expense.id);
     if (success) {
-      notifyExpenseDeleted({
-        name: deletedName,
-        amount: deletedAmount,
-        category: deletedCategory,
-      });
+      if (notifications.expense !== false) {
+        notifyExpenseDeleted({
+          name: deletedName,
+          amount: deletedAmount,
+          category: deletedCategory,
+        });
+      }
       setShowDeleteConfirm(false);
       if (onClose) onClose();
     } else {

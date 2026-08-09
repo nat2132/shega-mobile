@@ -261,24 +261,24 @@ const ReminderHistoryScreen: React.FC = () => {
 
   const handleSnooze = async (r: ScheduledReminder) => {
     await dialog.choose({
-      title: t('dialog.snooze_reminder'),
+      title: t('notif.snooze'),
       message: r.title,
-      cancelText: t('dialog.cancel'),
+      cancelText: t('common.cancel'),
       choices: [
-        { label: t('snooze.15min'), onPress: () => snoozeReminderById(r.id, 15) },
-        { label: t('snooze.1hour'), onPress: () => snoozeReminderById(r.id, 60) },
-        { label: t('snooze.tomorrow'), onPress: () => snoozeReminderById(r.id, 60 * 24) },
-        { label: t('snooze.next_week'), onPress: () => snoozeReminderById(r.id, 60 * 24 * 7) },
+        { label: t('notif.snooze_15'), onPress: () => snoozeReminderById(r.id, 15) },
+        { label: t('notif.snooze_1h'), onPress: () => snoozeReminderById(r.id, 60) },
+        { label: t('notif.snooze_tomorrow'), onPress: () => snoozeReminderById(r.id, 60 * 24) },
+        { label: t('notif.snooze_week'), onPress: () => snoozeReminderById(r.id, 60 * 24 * 7) },
       ],
     });
   };
 
   const handleComplete = async (r: ScheduledReminder) => {
     const ok = await dialog.confirm({
-      title: t('dialog.mark_complete'),
+      title: t('notif.mark_complete'),
       message: r.title,
-      confirmText: t('dialog.complete'),
-      cancelText: t('dialog.cancel'),
+      confirmText: t('notif.complete'),
+      cancelText: t('common.cancel'),
     });
     if (ok) {
       completeReminder(r.id);
@@ -287,10 +287,10 @@ const ReminderHistoryScreen: React.FC = () => {
 
   const handleRemove = async (r: ScheduledReminder) => {
     const ok = await dialog.confirm({
-      title: t('dialog.remove_reminder'),
-      message: t('dialog.remove_reminder_desc', { title: r.title }),
-      confirmText: t('dialog.remove'),
-      cancelText: t('dialog.cancel'),
+      title: t('notif.remove_reminder'),
+      message: t('notif.remove_confirm'),
+      confirmText: t('notif.remove'),
+      cancelText: t('common.cancel'),
       destructive: true,
     });
     if (ok) {

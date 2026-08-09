@@ -356,6 +356,60 @@ export const getReminderById = (id: number): ScheduledReminder | null => {
   }
 };
 
+// Finds the reminder row that mirrors a recurring expense template's push.
+export const getReminderByTemplate = (templateId: number): ScheduledReminder | null => {
+  try {
+    const database = getDB();
+    const row = database.getFirstSync(
+      `SELECT * FROM scheduled_reminders WHERE type = 'recurring' AND refId = ?`,
+      [templateId],
+    ) as any;
+    if (!row) return null;
+    return row as ScheduledReminder;
+  } catch {
+    return null;
+  }
+};
+
+export const getRecurringReminders = (): ScheduledReminder[] => {
+  try {
+    const database = getDB();
+    const rows = database.getAllSync(
+      `SELECT * FROM scheduled_reminders WHERE type = 'recurring'`,
+    ) as any[];
+    return rows as ScheduledReminder[];
+  } catch {
+    return [];
+  }
+};
+
+export const updateReminderNotificationId = (id: number, notificationId: string | null): boolean => {
+  try {
+    const database = getDB();
+    database.runSync(
+      'UPDATE scheduled_reminders SET notificationId = ? WHERE id = ?',
+      [notificationId, id],
+    );
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export const resetReminderToPending = (id: number, notificationId: string | null): boolean => {
+  try {
+    const database = getDB();
+    database.runSync(
+      `UPDATE scheduled_reminders SET status = 'pending', snoozedUntil = NULL, notificationId = ?
+       WHERE id = ?`,
+      [notificationId, id],
+    );
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 export const getDueReminders = (): ScheduledReminder[] => {
   try {
     const database = getDB();
@@ -376,7 +430,7 @@ export const getActiveReminders = (): ScheduledReminder[] => {
   try {
     const database = getDB();
     const rows = database.getAllSync(
-      `SELECT * FROM scheduled_reminders WHERE status = 'pending' ORDER BY triggerAt ASC`,
+      `SELECT * FROM scheduled_reminders WHERE status IN ('pending', 'snoozed') ORDER BY triggerAt ASC`,
     ) as any[];
     return rows as ScheduledReminder[];
   } catch {
