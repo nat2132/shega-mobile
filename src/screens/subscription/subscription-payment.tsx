@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -24,7 +24,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
-import { createPayment } from '@/services/api';
+import { createPayment, handleApiError, isRateLimited } from '@/services/api';
 
 interface SubscriptionPaymentProps {
   planId: number;
@@ -42,9 +42,22 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
 
   const [transactionId, setTransactionId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [rateLimitedUntil, setRateLimitedUntil] = useState<number | null>(null);
 
   const telebirrNumber = '+251925319901';
   const telebirrName = 'Aselefech';
+
+  // Auto-clear the rate-limited state once the server's retry window elapses.
+  useEffect(() => {
+    if (rateLimitedUntil == null) return;
+    const remaining = rateLimitedUntil - Date.now();
+    if (remaining <= 0) {
+      setRateLimitedUntil(null);
+      return;
+    }
+    const id = setTimeout(() => setRateLimitedUntil(null), remaining);
+    return () => clearTimeout(id);
+  }, [rateLimitedUntil]);
 
   const copyToClipboard = async (text: string) => {
     await Clipboard.setStringAsync(text);
@@ -54,6 +67,9 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
   const handleSubmit = async () => {
     if (!transactionId.trim()) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
+    if (rateLimitedUntil != null && rateLimitedUntil > Date.now()) {
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -66,10 +82,15 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onSuccess();
     } catch (error: any) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      const handled = handleApiError(error);
+      if (isRateLimited(error) && error.retryAfter) {
+        setRateLimitedUntil(Date.now() + error.retryAfter * 1000);
+      } else {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
       Alert.alert(
         t('subscription.payment_error_title'),
-        error?.message || t('subscription.payment_error_message'),
+        handled.message || t('subscription.payment_error_message'),
       );
     } finally {
       setIsSubmitting(false);
@@ -186,10 +207,21 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
         <TouchableOpacity
           style={[
             styles.submitButton,
-            { opacity: isFormValid && !isSubmitting ? 1 : 0.5 },
+            {
+              opacity:
+                rateLimitedUntil != null && rateLimitedUntil > Date.now()
+                  ? 0.5
+                  : isFormValid && !isSubmitting
+                  ? 1
+                  : 0.5,
+            },
           ]}
           onPress={handleSubmit}
-          disabled={!isFormValid || isSubmitting}
+          disabled={
+            !isFormValid ||
+            isSubmitting ||
+            (rateLimitedUntil != null && rateLimitedUntil > Date.now())
+          }
           activeOpacity={0.9}
         >
           <LinearGradient
@@ -198,11 +230,15 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
             end={{ x: 1, y: 1 }}
             style={styles.submitGradient}
           >
-            {isSubmitting ? (
-              <AppText variant="heading" weight="bold" style={{ color: '#FFF' }}>
-                {t('subscription.submitting')}
-              </AppText>
-            ) : (
+             {isSubmitting ? (
+                <AppText variant="heading" weight="bold" style={{ color: '#FFF' }}>
+                  {t('subscription.submitting')}
+                </AppText>
+              ) : rateLimitedUntil != null && rateLimitedUntil > Date.now() ? (
+                <AppText variant="heading" weight="bold" style={{ color: '#FFF' }}>
+                  {t('subscription.rate_limited')}
+                </AppText>
+              ) : (
               <>
                 <Check size={20} color="#FFF" strokeWidth={3} />
                 <AppText variant="heading" weight="bold" style={{ color: '#FFF' }}>

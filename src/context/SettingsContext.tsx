@@ -1137,6 +1137,7 @@ const translations: Record<Language, Record<string, string>> = {
     'subscription.loading_plans': 'Loading plans...',
     'subscription.payment_error_title': 'Payment Submission Failed',
     'subscription.payment_error_message': 'We could not submit your payment. Please check your connection and try again.',
+    'subscription.rate_limited': 'Too many submissions. Please wait before trying again.',
     'onboarding.create_account': 'Create Account',
     'onboarding.login': 'Login',
     'subscription.features': 'Features',

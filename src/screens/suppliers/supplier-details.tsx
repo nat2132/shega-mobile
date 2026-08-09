@@ -282,39 +282,53 @@ export default function SupplierDetails({
     opts: { orderNumber?: string; notes?: string | null; createdAt?: string | null; total?: number } = {},
   ) => {
     if (exportingOrder || items.length === 0) return;
-    setExportingOrder(true);
-    try {
-      const total = opts.total ?? items.reduce((s, it) => s + (it.quantity || 0) * (it.price || 0), 0);
-      const ok = await generateSupplierOrderPDF(
-        {
-          orderNumber: opts.orderNumber,
-          supplier: {
-            fullName: supplier?.fullName,
-            companyName: supplier?.companyName,
-            phone: supplier?.phone,
-            address: supplier?.address,
-          },
-          items,
-          totalAmount: total,
-          notes: opts.notes,
-          createdAt: opts.createdAt,
-        },
-        { businessName: userProfile.businessName, storeName: '' },
-        language,
-        'share',
-        calendarType === 'ethiopian' ? 'ethiopian' : 'device',
-      );
-      if (ok) {
-        playNice();
-        showToast({ title: t('suppliers.exported'), message: t('suppliers.exported_desc'), type: 'success' });
-      } else {
+
+    const buildOrder = () => ({
+      orderNumber: opts.orderNumber,
+      supplier: {
+        fullName: supplier?.fullName,
+        companyName: supplier?.companyName,
+        phone: supplier?.phone,
+        address: supplier?.address,
+      },
+      items,
+      totalAmount: opts.total ?? items.reduce((s, it) => s + (it.quantity || 0) * (it.price || 0), 0),
+      notes: opts.notes,
+      createdAt: opts.createdAt,
+    });
+
+    const runExport = async (action: 'share' | 'save') => {
+      setExportingOrder(true);
+      try {
+        const ok = await generateSupplierOrderPDF(
+          buildOrder(),
+          { businessName: userProfile.businessName, storeName: '' },
+          language,
+          action,
+          calendarType === 'ethiopian' ? 'ethiopian' : 'device',
+        );
+        if (ok) {
+          playNice();
+          showToast({ title: t('suppliers.exported'), message: t('suppliers.exported_desc'), type: 'success' });
+        } else {
+          showToast(t('suppliers.export_failed'), 'error');
+        }
+      } catch {
         showToast(t('suppliers.export_failed'), 'error');
+      } finally {
+        setExportingOrder(false);
       }
-    } catch {
-      showToast(t('suppliers.export_failed'), 'error');
-    } finally {
-      setExportingOrder(false);
-    }
+    };
+
+    await dialog.choose({
+      title: t('suppliers.export_pdf'),
+      message: '',
+      cancelText: t('common.cancel'),
+      choices: [
+        { label: t('common.share_pdf'), onPress: () => runExport('share') },
+        { label: t('common.save_device'), onPress: () => runExport('save') },
+      ],
+    });
   };
 
   const handleDeleteOrder = async (order: SupplierOrderRow) => {

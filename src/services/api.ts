@@ -160,10 +160,26 @@ interface HttpOptions {
 export class ApiError extends Error {
   status: number;
   detail?: string;
-  constructor(status: number, message: string, detail?: string) {
+  retryAfter?: number; // seconds, when a 429 carries a Retry-After header
+  constructor(status: number, message: string, detail?: string, retryAfter?: number) {
     super(message);
     this.status = status;
     this.detail = detail;
+    this.retryAfter = retryAfter;
+  }
+}
+
+export class RateLimitError extends ApiError {
+  /**
+   * Thrown for HTTP 429 (Too Many Requests). `retryAfter` (in seconds) comes
+   * from the `Retry-After` response header when the server provides one.
+   *
+   * Recommended handling: disable the triggering UI control, start a countdown,
+   * and re-enable / retry the action once `retryAfter` has elapsed.
+   */
+  constructor(message: string, retryAfter?: number) {
+    super(429, message, undefined, retryAfter);
+    this.name = 'RateLimitError';
   }
 }
 
@@ -238,6 +254,29 @@ async function request<T = unknown>(path: string, options: HttpOptions = {}): Pr
     if (refreshed) {
       return request<T>(path, { ...options, retried: true });
     }
+  }
+
+  // 401 token refresh handled above. 429 (rate limit) is surfaced as a typed
+  // RateLimitError so callers can back off for the hinted period instead of the
+  // request being retried immediately (which only makes throttling worse).
+  if (response.status === 429) {
+    let retryAfter: number | undefined;
+    const retryHeader = response.headers.get('Retry-After');
+    if (retryHeader) {
+      const asNum = Number(retryHeader);
+      if (!Number.isNaN(asNum)) {
+        retryAfter = asNum;
+      } else {
+        const parsed = Date.parse(retryHeader);
+        if (!Number.isNaN(parsed)) {
+          retryAfter = Math.max(1, Math.ceil((parsed - Date.now()) / 1000));
+        }
+      }
+    }
+    const msg =
+      extractErrorMessage(data) ||
+      'Too many requests. Please wait before trying again.';
+    throw new RateLimitError(msg, retryAfter);
   }
 
   if (!response.ok) {
@@ -326,3 +365,44 @@ export const fetchLicenseStatus = (): Promise<LicenseStatusInfo> =>
 
 export const verifyLicense = (payload: { license_key: string }): Promise<LicenseStatusInfo> =>
   request<LicenseStatusInfo>('/api/license/verify/', { method: 'POST', body: payload, auth: true });
+
+// ---------------------------------------------------------------------------
+// Error handling helpers
+// ---------------------------------------------------------------------------
+
+/** Type guard: narrow an unknown thrown value to a RateLimitError. */
+export const isRateLimited = (error: unknown): error is RateLimitError =>
+  error instanceof RateLimitError;
+
+/** Human-readable wait hint, e.g. "1 minute" or "30 seconds". */
+export const formatRetryAfter = (seconds?: number): string => {
+  if (!seconds || !Number.isFinite(seconds) || seconds < 1) return '';
+  if (seconds < 60) {
+    return `${Math.round(seconds)} second${Math.round(seconds) === 1 ? '' : 's'}`;
+  }
+  const minutes = Math.round(seconds / 60);
+  return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+};
+
+/**
+ * Convert any thrown value into a friendly, display-ready message + optional
+ * retry hint. Use this in UI catch blocks so 429s render a countdown instead of
+ * a generic "request failed".
+ */
+export const handleApiError = (error: unknown): { message: string; retryAfter?: number; status: number } => {
+  if (error instanceof RateLimitError) {
+    const wait = error.retryAfter;
+    const hint = formatRetryAfter(wait);
+    const message = hint
+      ? `${error.message} Try again in ${hint}.`
+      : error.message || 'Too many requests. Please try again shortly.';
+    return { message, retryAfter: wait, status: 429 };
+  }
+  if (error instanceof ApiError) {
+    return { message: error.message, status: error.status };
+  }
+  if (error instanceof Error) {
+    return { message: error.message, status: 0 };
+  }
+  return { message: 'Something went wrong. Please try again.', status: 0 };
+};

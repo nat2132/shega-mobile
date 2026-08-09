@@ -1,6 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import {
-  getSubscription,
   checkAndExpireSubscription,
   updateSubscriptionPlan,
   verifySubscriptionPayment,
@@ -12,9 +11,12 @@ import {
   getSubscriptionPayments,
   getSubscriptionRenewals,
   getSubscriptionAuditLog,
-  approveSubscription,
+  syncServerSubscription,
+  rejectSubscription,
+  expireSubscription,
   SubscriptionData,
 } from '@/database/db';
+import { fetchSubscriptionStatus, isRateLimited } from '@/services/api';
 
 export const PREMIUM_FEATURES = [
   'reports',
@@ -139,6 +141,7 @@ interface SubscriptionContextType {
   isExpiringSoon: boolean;
   daysUntilExpiry: number;
   refresh: () => Promise<void>;
+  syncWithServer: () => Promise<void>;
   selectPlan: (plan: string, durationMonths: number, price: number) => Promise<boolean>;
   submitPayment: (data: {
     transactionId: string;
@@ -170,7 +173,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [renewals, setRenewals] = useState<any[]>([]);
   const [auditLog, setAuditLog] = useState<any[]>([]);
 
-  const refresh = useCallback(async () => {
+   const refresh = useCallback(async () => {
     try {
       const sub = checkAndExpireSubscription();
       setSubscription(sub);
@@ -184,6 +187,37 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setIsLoading(false);
     }
   }, []);
+
+  // Best-effort reconciliation with the backend. The local DB is the source of
+  // truth (offline-first), but once an admin approves a pending payment we want
+  // the premium gate to flip immediately. Failures (no network, 401, 429) are
+  // swallowed so the app keeps working offline using local state.
+  const syncWithServer = useCallback(async () => {
+    try {
+      const serverStatus = await fetchSubscriptionStatus();
+      const serverState = (serverStatus?.status || '').toLowerCase();
+
+      if (serverState === 'active') {
+        syncServerSubscription({
+          plan: serverStatus.plan_name || serverStatus.plan || null,
+          status: 'active',
+          expiresAt: serverStatus.expires_at || null,
+        });
+      } else if (serverState === 'rejected') {
+        rejectSubscription();
+      } else if (serverState === 'expired') {
+        expireSubscription();
+      }
+      // 'pending' / 'none' leave local state untouched here.
+      await refresh();
+    } catch (error: any) {
+      // Swallow offline / 401 / 429: keep relying on the local cache. We do
+      // surface a transient 429 hint to the UI via state so callers can back off.
+      if (isRateLimited(error)) {
+        console.warn('[Subscription] sync throttled; backing off.');
+      }
+    }
+  }, [refresh]);
 
   useEffect(() => {
     refresh();
@@ -275,6 +309,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         isExpiringSoon,
         daysUntilExpiry,
         refresh,
+        syncWithServer,
         selectPlan,
         submitPayment,
         cancelCurrentSubscription,

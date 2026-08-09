@@ -263,28 +263,33 @@ const generateFilename = (title: string): string => {
 
 const triggerShare = async (html: string, title: string, action: 'share' | 'save' = 'share') => {
   try {
-    const { uri } = await Print.printToFileAsync({ html });
+    const { base64 } = await Print.printToFileAsync({ html, base64: true });
     const filename = generateFilename(title);
-    
+    // printToFileAsync writes to the host cache (unreadable in Expo Go / by
+    // expo-sharing), so write the returned bytes into the app's own documents
+    // directory and share from there.
+    const shareUri = `${FileSystem.documentDirectory}${filename}.pdf`;
+    await FileSystem.writeAsStringAsync(shareUri, base64 as string, { encoding: FileSystem.EncodingType.Base64 });
+
     if (action === 'save' && Platform.OS === 'android') {
       const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
       if (permissions.granted) {
-        const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
         const createdUri = await FileSystem.StorageAccessFramework.createFileAsync(
           permissions.directoryUri,
           filename,
           'application/pdf'
         );
-        await FileSystem.writeAsStringAsync(createdUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+        const fileBase64 = await FileSystem.readAsStringAsync(shareUri, { encoding: FileSystem.EncodingType.Base64 });
+        await FileSystem.writeAsStringAsync(createdUri, fileBase64, { encoding: FileSystem.EncodingType.Base64 });
         return true;
       }
       return false; // Permission denied
     }
 
     if (Platform.OS === 'ios') {
-      await Sharing.shareAsync(uri, { UTI: 'com.adobe.pdf' });
+      await Sharing.shareAsync(shareUri, { UTI: 'com.adobe.pdf' });
     } else {
-      await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: title });
+      await Sharing.shareAsync(shareUri, { mimeType: 'application/pdf', dialogTitle: title });
     }
     return true;
   } catch (error) {

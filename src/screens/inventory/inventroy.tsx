@@ -29,6 +29,7 @@ import * as Haptics from 'expo-haptics';
 import * as Print from 'expo-print';
 import { useFocusEffect } from 'expo-router';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
 import {
   BarChart3,
   Download,
@@ -1067,8 +1068,12 @@ const InventoryDashboard = () => {
                             </body>
                           </html>
                         `;
-                        const { uri } = await Print.printToFileAsync({ html });
-                        await Sharing.shareAsync(uri);
+                        const { base64 } = await Print.printToFileAsync({ html, base64: true });
+                        // printToFileAsync writes to host cache (unreadable in Expo Go) —
+                        // write the returned bytes into the app documents dir and share from there.
+                        const shareUri = `${FileSystem.documentDirectory}order_${Date.now()}.pdf`;
+                        await FileSystem.writeAsStringAsync(shareUri, base64 as string, { encoding: FileSystem.EncodingType.Base64 });
+                        await Sharing.shareAsync(shareUri, { mimeType: 'application/pdf', dialogTitle: t('inventory.export_order') });
                         setShowOrderModal(false);
                       } catch (e) {
                         console.error('Export error:', e);
