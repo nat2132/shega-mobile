@@ -80,7 +80,7 @@ export default function SupplierDetails({
   supplierId: number;
   onClose: () => void;
 }) {
-  const { colors, t, calendarType, language } = useSettings();
+  const { colors, t, calendarType, language, userProfile } = useSettings();
   const { isReadOnly } = useSubscription();
   const G = getSuppliersGlass(colors);
   const dialog = useDialog();
@@ -299,9 +299,10 @@ export default function SupplierDetails({
           notes: opts.notes,
           createdAt: opts.createdAt,
         },
-        null,
+        { businessName: userProfile.businessName, storeName: '' },
         language,
         'share',
+        calendarType === 'ethiopian' ? 'ethiopian' : 'device',
       );
       if (ok) {
         playNice();

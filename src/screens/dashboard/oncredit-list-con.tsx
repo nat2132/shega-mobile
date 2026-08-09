@@ -57,7 +57,7 @@ const SettlementModal: React.FC<SettlementModalProps> = ({ visible, item, onClos
 
   if (!item) return null;
 
-  const totalCredit = item.packPurchasePrice || item.basePurchasePrice || 0;
+  const totalCredit = item.creditAmount || item.packPurchasePrice || item.basePurchasePrice || 0;
 
   const handleConfirm = async () => {
     if (paymentType === 'full') {
@@ -252,6 +252,17 @@ export const CreditItemDetail = ({
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
                 <BarChart3 size={14} color={G.fgSecondary} />
+                <AppText variant="body" numberOfLines={2} style={{ color: G.fgSecondary }}>{t('dash.credit_qty')}</AppText>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <AppNumber value={item.creditQuantity || 0} size="body" numberOfLines={1} />
+                <AppText variant="body" numberOfLines={1} style={{ color: G.fgSecondary }}> {pluralizeUnit(item.creditQuantity || 0, item.baseUnit)}</AppText>
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                <BarChart3 size={14} color={G.fgSecondary} />
                 <AppText variant="body" numberOfLines={2} style={{ color: G.fgSecondary }}>{t('dash.pack_purchase_price')}</AppText>
               </View>
               <AppNumber value={item.packPurchasePrice || 0} size="body" showCurrency numberOfLines={1} />
@@ -402,9 +413,9 @@ const NefasSilkScreen = ({ initialItemId }: { initialItemId?: number } = {}) => 
                   </View>
                   <View style={listStyles.headerRight}>
                     <View style={listStyles.qtyRow}>
-                      <AppNumber value={item.totalBaseQuantity || 0} size="body" color={G.fg} numberOfLines={1} />
+                      <AppNumber value={item.creditQuantity || 0} size="body" color={G.fg} numberOfLines={1} />
                       <AppText variant="caption" weight="medium" shrink={false} numberOfLines={1} style={listStyles.unitSmall}>
-                        {' '}{pluralizeUnit(item.totalBaseQuantity || 0, item.baseUnit)}
+                        {' '}{pluralizeUnit(item.creditQuantity || 0, item.baseUnit)}
                       </AppText>
                     </View>
                     {isOverdue ? (
@@ -432,7 +443,7 @@ const NefasSilkScreen = ({ initialItemId }: { initialItemId?: number } = {}) => 
                     <AppText variant="caption" weight="medium" style={[listStyles.creditFooterLabel, { color: G.fgSecondary }]} numberOfLines={1}>
                       {t('dash.total_credit')}
                     </AppText>
-                    <AppNumber value={(item.packPurchasePrice || 0) * (item.totalPackQuantity || 1) || (item.basePurchasePrice || 0) * (item.totalBaseQuantity || 1) || 0} size="body-sm" showCurrency color={colors.error} numberOfLines={1} />
+                    <AppNumber value={item.creditAmount || 0} size="body-sm" showCurrency color={colors.error} numberOfLines={1} />
                   </View>
                   <ChevronRight size={15} color={G.border} />
                 </View>

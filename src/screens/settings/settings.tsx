@@ -55,6 +55,7 @@ import {
 import { DataTransferModal } from '@/components/DataTransferModal';
 import { BottomSheet } from '@/components/BottomSheet';
 import { AppListItem, AppText } from '@/components/ui';
+import PremiumFeatureGate from '@/components/PremiumFeatureGate';
 import { useWarehouse } from '@/context/WarehouseContext';
 import DateTimeSettings from './date-time';
 import NotificationSettingsScreen from './notification';
@@ -638,11 +639,8 @@ const SettingsScreen = () => {
             <View style={{ flex: 1 }} />
             <Palette size={20} color={G.muted} />
           </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.paletteScrollContent}
-          >
+          <PremiumFeatureGate feature="themes" featureName={t('settings.palette')}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.paletteScrollContent}>
             {THEME_OPTIONS.map((item) => (
               <ThemeCard
                 key={item.id}
@@ -652,6 +650,7 @@ const SettingsScreen = () => {
               />
             ))}
           </ScrollView>
+          </PremiumFeatureGate>
         </View>
         </TutorialTarget>
 
@@ -671,12 +670,14 @@ const SettingsScreen = () => {
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowExportModal(true); }}
              />
              </TutorialTarget>
+             <PremiumFeatureGate feature="csv_import" featureName={t('settings.import_data')}>
              <SettingLedgerItem 
                 icon={CloudDownload} 
                 title={t('settings.import_data')} 
                 subtitle={t('settings.import_desc')}
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowImportModal(true); }}
              />
+             </PremiumFeatureGate>
               <View style={[styles.soundRow, { borderBottomColor: G.border }]}>
                 <View style={[styles.ledgerIconBox, { backgroundColor: G.accentGlass }]}>
                   <Volume2 size={18} color={G.fg} strokeWidth={2.5} />

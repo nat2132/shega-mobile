@@ -315,6 +315,7 @@ const BudgetOverview = () => {
         {/* Budget Switcher */}
         <Animated.View entering={FadeInDown.duration(500)} style={s.budgetSwitcher}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 24, paddingBottom: 12 }}>
+            {allBudgets.length > 1 && (
             <TouchableOpacity
               style={[s.switcherChip, { backgroundColor: selectedBudgetId === null ? G.fg : G.bgCard, borderColor: G.border }]}
               onPress={() => handleSwitchBudget(null)}
@@ -323,6 +324,7 @@ const BudgetOverview = () => {
                 {t('budget.all_budgets')}
               </AppText>
             </TouchableOpacity>
+            )}
             {allBudgets.map((b) => (
               <TouchableOpacity
                 key={b.id}

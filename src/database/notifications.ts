@@ -153,7 +153,7 @@ export const hasActiveNotificationByGroupKey = (groupKey: string): boolean => {
   try {
     const database = getDB();
     const row = database.getFirstSync<{ count: number }>(
-      'SELECT COUNT(*) as count FROM notifications WHERE groupKey = ? AND isDismissed = 0 AND isResolved = 0',
+      'SELECT COUNT(*) as count FROM notifications WHERE groupKey = ? AND isResolved = 0',
       [groupKey],
     );
     return (row?.count || 0) > 0;

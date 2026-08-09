@@ -4,6 +4,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Linking,
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import {
@@ -30,6 +31,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { safeGoBack } from '@/services/navigation';
+import { fetchSubscriptionStatus } from '@/services/api';
+import { syncServerSubscription } from '@/database/db';
+import { useToast } from '@/context/ToastContext';
 
 const FEATURE_KEY_MAP: Record<string, string> = {
   reports: 'subscription.feature_reports',
@@ -87,12 +91,41 @@ const PLANS = {
     refresh,
   } = useSubscription();
   const router = useRouter();
+  const { showToast } = useToast();
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const gold = '#D4AF37';
 
   const toggleSection = (section: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setExpandedSection(expandedSection === section ? null : section);
+  };
+
+  const handleRestorePurchase = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      const sub = await fetchSubscriptionStatus();
+      if (sub.status === 'active') {
+        syncServerSubscription({
+          plan: sub.plan_name || sub.plan || null,
+          status: sub.status,
+          expiresAt: sub.expires_at || null,
+        });
+        await refresh();
+        showToast({ title: t('subscription.restore_success'), message: t('subscription.restore_success_desc'), type: 'success' });
+      } else {
+        showToast({ title: t('subscription.restore_none'), message: t('subscription.restore_none_desc'), type: 'info' });
+      }
+    } catch (error) {
+      console.error('Restore purchase error:', error);
+      showToast({ title: t('subscription.restore_error'), message: t('subscription.restore_error_desc'), type: 'error' });
+    }
+  };
+
+  const handleContactSupport = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Linking.openURL('mailto:ssshegas@gmail.com').catch(() => {
+      showToast({ title: t('subscription.support_error'), message: t('subscription.support_error_desc'), type: 'error' });
+    });
   };
 
   const statusConfig: Record<string, { labelKey: string; color: string }> = {
@@ -454,10 +487,7 @@ const PLANS = {
         <Animated.View entering={FadeInDown.delay(600).duration(600)} style={styles.footerActions}>
           <TouchableOpacity
             style={[styles.footerAction, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              refresh();
-            }}
+            onPress={handleRestorePurchase}
           >
             <RefreshCw size={18} color={colors.textSecondary} />
             <AppText variant="body" weight="medium" style={{ color: colors.text }}>
@@ -467,9 +497,7 @@ const PLANS = {
 
           <TouchableOpacity
             style={[styles.footerAction, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            }}
+            onPress={handleContactSupport}
           >
             <HeadphonesIcon size={18} color={colors.textSecondary} />
             <AppText variant="body" weight="medium" style={{ color: colors.text }}>

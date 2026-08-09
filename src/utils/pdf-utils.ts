@@ -492,7 +492,8 @@ export const generateSupplierOrderPDF = async (
   },
   business: any,
   language: Lang = 'en',
-  action: 'share' | 'save' = 'share'
+  action: 'share' | 'save' = 'share',
+  timeSystem: 'device' | 'ethiopian' = 'device'
 ) => {
   const trans = pdfTranslations[language];
   const so = trans.supplierOrder;
@@ -522,16 +523,16 @@ export const generateSupplierOrderPDF = async (
         <div class="shega-stamp">
           <img src="${SHEGA_LOGO}" alt="Shega" />
         </div>
-        <div class="header">
-          <div class="business-info">
-            <div class="business-name">${escHtml(business?.businessName || trans.common.shegaStore)}</div>
+        <div class="header" style="flex-direction: column; align-items: center; text-align: center;">
+          <div class="business-info" style="text-align: center;">
+            <div class="business-name" style="font-size: 22px; font-weight: 700; color: #111827; margin-bottom: 3px;">${escHtml(business?.businessName || trans.common.shegaStore)}</div>
             <div class="business-sub">${escHtml(business?.storeName || trans.common.mainBranch)}</div>
           </div>
-          <div class="doc-meta">
+          <div class="doc-meta" style="text-align: center; margin-top: 8px;">
             <div class="doc-title" style="color: #3B82F6;">${escHtml(so.title)}</div>
             ${order.orderNumber
               ? `<div class="doc-date">${escHtml(so.orderNo)}: ${escHtml(order.orderNumber)}</div>`
-              : `<div class="doc-date">${escHtml(so.date)}: ${escHtml(formatReceiptDateTime(order.createdAt || new Date().toISOString(), language, 'device'))}</div>`}
+              : `<div class="doc-date">${escHtml(so.date)}: ${escHtml(formatReceiptDateTime(order.createdAt || new Date().toISOString(), language, timeSystem))}</div>`}
           </div>
         </div>
 
@@ -543,7 +544,7 @@ export const generateSupplierOrderPDF = async (
             ${sup.address ? `<div class="info-row"><span class="label">${escHtml(so.address)}:</span><span class="value">${escHtml(sup.address)}</span></div>` : ''}
           </div>
           <div class="info-column">
-            <div class="info-row"><span class="label">${escHtml(so.date)}:</span><span class="value">${escHtml(formatReceiptDateTime(order.createdAt || new Date().toISOString(), language, 'device'))}</span></div>
+            <div class="info-row"><span class="label">${escHtml(so.date)}:</span><span class="value">${escHtml(formatReceiptDateTime(order.createdAt || new Date().toISOString(), language, timeSystem))}</span></div>
             <div class="info-row"><span class="label">${escHtml(trans.reports.itemCount)}:</span><span class="value">${(order.items || []).length}</span></div>
           </div>
         </div>

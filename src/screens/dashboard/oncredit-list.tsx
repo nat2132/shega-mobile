@@ -34,6 +34,7 @@ const OnCreditRow = React.memo(({
   const G = getDashGlass(colors);
   const styles = useMemo(() => createStyles(G), [G]);
   const creditAmount = React.useMemo(() => {
+    if (item.creditAmount) return item.creditAmount;
     if (item.packPurchasePrice && item.totalPackQuantity) {
       return item.packPurchasePrice * item.totalPackQuantity;
     }
@@ -73,9 +74,9 @@ const OnCreditRow = React.memo(({
           </View>
           <View style={styles.headerRight}>
             <View style={styles.qtyRow}>
-              <AppNumber value={item.totalBaseQuantity || 0} size="title-sm" color={G.fg} numberOfLines={1} />
+              <AppNumber value={item.creditQuantity || 0} size="title-sm" color={G.fg} numberOfLines={1} />
               <AppText variant="caption" weight="medium" shrink={false} numberOfLines={1} style={styles.unitSmall}>
-                {' '}{pluralizeUnit(item.totalBaseQuantity || 0, item.baseUnit)}
+                {' '}{pluralizeUnit(item.creditQuantity || 0, item.baseUnit)}
               </AppText>
             </View>
             <View style={[styles.statusBadgeSmall, { backgroundColor: colors.primary + '15' }]}>

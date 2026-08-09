@@ -25,6 +25,7 @@ import {
   getItemsDueForSupplierCheck,
   updateItem,
   getItemById,
+  getItemSuppliers,
   getBudgetDashboard,
   getMonthlyBudgetSummary,
   getBudgetWithCategoryProgress,
@@ -172,6 +173,20 @@ export const checkUnpaidSuppliers = (): AppNotification[] => {
 // whose purchase price was adjusted in the last 7 days. The user is asked
 // "should we call the supplier?" with quick actions wired in
 // NotificationDetailSheet (Call / Remind later / Dismiss).
+// Resolve the best human-readable supplier name for an item, falling back
+// from linked supplier contacts (fullName/companyName) down to the item's
+// own supplier columns and finally a generic label.
+const supplierDisplayName = (item: any): string => {
+  try {
+    const suppliers: any[] = item?.id ? getItemSuppliers(item.id) : [];
+    const linked = suppliers[0];
+    if (linked && (linked.fullName || linked.companyName)) {
+      return linked.fullName || linked.companyName;
+    }
+  } catch {}
+  return item?.companyName || item?.supplierName || '';
+};
+
 export const checkSupplierPriceChanges = (): AppNotification[] => {
   try {
     const items = getItemsWithRecentPriceChanges(7);
@@ -186,19 +201,20 @@ export const checkSupplierPriceChanges = (): AppNotification[] => {
       const phone = it.supplierPhone || '';
       const item = getItemById(it.itemId) as any;
       if (!item) return;
+      const supplierName = supplierDisplayName({ ...item, ...it }) || 'supplier';
       const notif = createNotification({
         type: 'supplier_call_price_change',
         category: 'supplier',
         priority: 'high',
         title: `Call supplier about ${it.itemName}?`,
-        message: `Price ${direction} by ${sign}${delta.toFixed(2)} (${sign}${pct}%) this week. Tap to call ${it.companyName || 'supplier'}.`,
+        message: `Price ${direction} by ${sign}${delta.toFixed(2)} (${sign}${pct}%) this week. Tap to call ${supplierName}.`,
         icon: 'truck',
         deepLink: `/inventory/item-details/${it.itemId}`,
         data: {
           itemId: it.itemId,
           itemName: it.itemName,
           supplierPhone: phone,
-          supplierName: it.companyName || '',
+          supplierName,
           changeType: it.changeType,
           oldValue: oldVal,
           newValue: newVal,
@@ -229,19 +245,20 @@ export const checkSupplierPeriodicReview = (): AppNotification[] => {
     const items = getItemsDueForSupplierCheck(7);
     const created: AppNotification[] = [];
     items.forEach((it: any) => {
+      const supplierName = supplierDisplayName(it) || 'your supplier';
       const notif = createNotification({
         type: 'supplier_call_review',
         category: 'supplier',
         priority: 'normal',
         title: 'Weekly supplier check',
-        message: `It's been 7 days since the last call to ${it.companyName || 'your supplier'} for ${it.itemName}. Want to call them to confirm price and stock?`,
+        message: `It's been 7 days since the last call to ${supplierName} for ${it.itemName}. Want to call them to confirm price and stock?`,
         icon: 'truck',
         deepLink: `/inventory/item-details/${it.itemId}`,
         data: {
           itemId: it.itemId,
           itemName: it.itemName,
           supplierPhone: it.supplierPhone || '',
-          supplierName: it.companyName || '',
+          supplierName,
           titleKey: 'notif.title.weekly_supplier_check',
           messageKey: 'notif.message.weekly_supplier_check',
         },

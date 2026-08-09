@@ -43,6 +43,7 @@ import {
   EyeOff,
   AlertTriangle,
   Copy,
+  PenLine,
 } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -102,6 +103,7 @@ const PointerLabel = (items: any) => {
     const [transactions, setTransactions] = useState<any[]>([]);
     const [overdueItems, setOverdueItems] = useState<any[]>([]);
     const [showExpenseForm, setShowExpenseForm] = useState(false);
+    const [editingTemplate, setEditingTemplate] = useState<any>(null);
     const [showExpenseList, setShowExpenseList] = useState(false);
     const [showExpenseDetails, setShowExpenseDetails] = useState(false);
     const [selectedExpense, setSelectedExpense] = useState<any>(null);
@@ -536,6 +538,7 @@ const PointerLabel = (items: any) => {
           {/* Budget Selector */}
           {allBudgets.length > 0 && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 24 }}>
+              {allBudgets.length > 1 && (
               <TouchableOpacity
                 style={[styles.budgetChip, { backgroundColor: expenseBudgetId === null ? G.fg : G.bgCard, borderColor: G.border }]}
                 onPress={() => setExpenseBudgetId(null)}
@@ -544,6 +547,7 @@ const PointerLabel = (items: any) => {
                   {t('budget.all_budgets')}
                 </AppText>
               </TouchableOpacity>
+              )}
               {allBudgets.map((b) => (
                 <TouchableOpacity
                   key={b.id}
@@ -687,6 +691,11 @@ const PointerLabel = (items: any) => {
                   initialSpacing={20}
                   endSpacing={20}
                   hideDataPoints
+                  xAxisLabelTextStyle={{ color: G.muted, fontSize: 10, fontFamily: Fonts.medium }}
+                  yAxisTextStyle={{ color: G.muted, fontSize: 10, fontFamily: Fonts.medium }}
+                  rulesColor={G.border}
+                  xAxisColor={G.border}
+                  yAxisColor={G.border}
                   pointerConfig={pointerConfig}
                   width={chartWidth}
                 />
@@ -746,20 +755,40 @@ const PointerLabel = (items: any) => {
               {t('expense.recurring_expenses')}
             </AppText>
             {recurringTemplates.slice(0, 3).map((tmpl: any) => (
-              <View key={tmpl.id} style={[styles.overdueItem, { backgroundColor: G.bgCard, borderColor: G.border }]}>
-                <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  <Calendar size={16} color={G.muted} />
-                  <View>
-                    <AppText variant="body-sm" weight="bold" style={{ color: G.fg }}>{tmpl.name}</AppText>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
-                      <AppText variant="caption" style={{ color: G.muted }}>{tmpl.category} · </AppText>
-                      <AppNumber value={tmpl.amount} size="caption" prefix={t('common.etb') + ' '} />
-                      <AppText variant="caption" style={{ color: G.muted }}> · {tmpl.frequency}</AppText>
+                  <View key={tmpl.id} style={[styles.overdueItem, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+                    <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 10 }}>
+                      <Calendar size={16} color={G.muted} />
+                      <View style={{ flex: 1 }}>
+                        <AppText variant="body-sm" weight="bold" style={{ color: G.fg }}>{tmpl.name}</AppText>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+                          <AppText variant="caption" style={{ color: G.muted }}>{tmpl.category} · </AppText>
+                          <AppNumber value={tmpl.amount} size="caption" prefix={t('common.etb') + ' '} />
+                          <AppText variant="caption" style={{ color: G.muted }}> · {tmpl.frequency}</AppText>
+                          {tmpl.reminderTime ? (
+                            <AppText variant="caption" style={{ color: G.muted }}>
+                              {' · '}
+                              {(() => {
+                                const [h, m] = String(tmpl.reminderTime).split(':').map(Number);
+                                if (!Number.isFinite(h)) return tmpl.reminderTime;
+                                const hh = ((h % 24) + 24) % 24;
+                                const s = hh >= 12 ? 'PM' : 'AM';
+                                const h12 = hh % 12 === 0 ? 12 : hh % 12;
+                                return `${h12}:${String(Number.isFinite(m) ? m : 0).padStart(2, '0')} ${s}`;
+                              })()}
+                            </AppText>
+                          ) : null}
+                        </View>
+                      </View>
                     </View>
+                    <TouchableOpacity
+                      style={[styles.payBtn, { backgroundColor: G.accentGlass }]}
+                      onPress={() => { setEditingTemplate(tmpl); setShowExpenseForm(true); }}
+                      hitSlop={8}
+                    >
+                      <PenLine size={14} color={G.fg} />
+                    </TouchableOpacity>
                   </View>
-                </View>
-              </View>
-            ))}
+                ))}
           </Animated.View>
         )}
 
@@ -827,7 +856,7 @@ const PointerLabel = (items: any) => {
               <AppText variant="body" weight="bold" style={{ color: G.muted, marginTop: 12 }}>
                 {t('expense.no_expenses')}
               </AppText>
-              <TouchableOpacity style={[styles.emptyAddBtn, { backgroundColor: G.fg, marginTop: 16 }]} onPress={() => setShowExpenseForm(true)}>
+              <TouchableOpacity style={[styles.emptyAddBtn, { backgroundColor: G.fg, marginTop: 16 }]} onPress={() => { setEditingTemplate(null); setShowExpenseForm(true); }}>
                 <Plus size={20} color={G.bg} />
                 <AppText variant="body" weight="bold" style={{ color: G.bg, marginLeft: 8 }}>
                   {t('expense.record_expense')}
@@ -848,7 +877,7 @@ const PointerLabel = (items: any) => {
             {isBarExpanded && (
               <Animated.View entering={FadeIn.delay(100)} exiting={FadeOut.duration(100)}>
                 <TutorialTarget id="exp-add-btn">
-                <TouchableOpacity style={styles.dockBtn} onPress={() => { setShowExpenseForm(true); setIsBarExpanded(false); }}>
+                <TouchableOpacity style={styles.dockBtn} onPress={() => { setEditingTemplate(null); setShowExpenseForm(true); setIsBarExpanded(false); }}>
                   <Plus size={22} color={G.muted} />
                 </TouchableOpacity>
                 </TutorialTarget>
@@ -875,12 +904,15 @@ const PointerLabel = (items: any) => {
       </Animated.View>
 
       {/* Expense Form Modal */}
-      <Modal visible={showExpenseForm} transparent animationType="slide" onRequestClose={() => setShowExpenseForm(false)}>
+      <Modal visible={showExpenseForm} transparent animationType="slide" onRequestClose={() => { setShowExpenseForm(false); setEditingTemplate(null); }}>
         <View style={styles.modalOverlay}>
-          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowExpenseForm(false)} />
+          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => { setShowExpenseForm(false); setEditingTemplate(null); }} />
           <View style={[styles.bottomSheet, { backgroundColor: G.bg, borderTopWidth: 1, borderTopColor: G.border, height: Dimensions.get('window').height * 0.92 }]}>
             <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: G.mutedLight }]} /></View>
-            <ExpenseFormScreen onSaveSuccess={() => { setShowExpenseForm(false); loadAllData(); }} />
+            <ExpenseFormScreen
+              editingTemplate={editingTemplate}
+              onSaveSuccess={() => { setShowExpenseForm(false); setEditingTemplate(null); loadAllData(); }}
+            />
           </View>
         </View>
       </Modal>

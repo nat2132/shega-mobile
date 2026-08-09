@@ -784,6 +784,7 @@ export const initDB = () => {
       frequency TEXT NOT NULL CHECK(frequency IN ('Daily','Weekly','Monthly','Quarterly','Yearly')),
       startDate TEXT NOT NULL,
       endDate TEXT,
+      reminderTime TEXT,
       budgetCategoryId INTEGER,
       isActive INTEGER DEFAULT 1,
       lastIncurred TEXT,
@@ -792,6 +793,12 @@ export const initDB = () => {
     );
   `);
   console.log('Table "recurring_expense_templates" checked/created.');
+
+  // Migration for recurring_expense_templates table: reminderTime
+  try {
+    database.execSync(`ALTER TABLE recurring_expense_templates ADD COLUMN reminderTime TEXT;`);
+    console.log('Successfully migrated recurring_expense_templates table: Added reminderTime');
+  } catch {}
 
   // →→ Subscription tables →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
   database.execSync(`
@@ -963,6 +970,8 @@ export interface ItemData {
   supplierCallEnabled: boolean;
   lastPriceCheckAt: string | null;
   createdAt: string;
+  creditQuantity?: number;
+  creditAmount?: number;
 }
 
 export interface InsertItemData {
@@ -2783,13 +2792,32 @@ export const settleItemCredit = (itemId: number) => {
 export const getOnCreditItems = () => {
   try {
     const database = getDB();
-    return database.getAllSync(`
-      SELECT items.*, categories.name as categoryName 
-      FROM items 
+    const rows = database.getAllSync<any>(`
+      SELECT
+        items.*,
+        categories.name as categoryName,
+        COALESCE(SUM(CASE WHEN sm.paymentStatus IN ('Unpaid', 'Partial') THEN sm.quantityAdded ELSE 0 END), 0) as creditQuantity,
+        COALESCE(SUM(CASE WHEN sm.paymentStatus IN ('Unpaid', 'Partial') THEN sm.quantityAdded * COALESCE(sm.unitPrice, 0) - COALESCE(sm.paidAmount, 0) ELSE 0 END), 0) as creditAmount
+      FROM items
       LEFT JOIN categories ON items.categoryId = categories.id
+      LEFT JOIN stock_movements sm ON sm.itemId = items.id
       WHERE isCredit = 1
-      ORDER BY createdAt DESC
+      GROUP BY items.id
+      ORDER BY items.createdAt DESC
     `);
+    return rows.map((r: any) => {
+      let creditQuantity = Number(r.creditQuantity || 0);
+      let creditAmount = Number(r.creditAmount || 0);
+      // Fallback for items flagged on-credit that predate movement-level
+      // payment tracking: derive the snapshot from the stored purchase fields
+      // so the held quantity/amount stay fixed regardless of live stock.
+      if (creditQuantity <= 0) creditQuantity = Number(r.totalBaseQuantity || 0);
+      if (creditAmount <= 0) {
+        creditAmount = Number(r.packPurchasePrice || 0) * creditQuantity
+          || Number(r.basePurchasePrice || 0) * creditQuantity;
+      }
+      return { ...r, creditQuantity, creditAmount };
+    });
   } catch (error) {
     console.error('Get on credit items error:', error);
     return [];
@@ -3009,9 +3037,9 @@ export const getSalesChartData = (period: 'W' | 'M' | 'Y', offset: number = 0, c
 
 const CHART_LABELS: Record<string, string[]> = {
   en_days: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
-  am_days: ['ሰንዠት', 'እሑድ', 'ማክሰኞ', 'ረቡዕ', 'ሙስ', 'ዓርብ', 'ቅዳሜ'],
+  am_days: ['እሑድ', 'ሰኞ', 'ማክሰኞ', 'ረቡዕ', 'ሐሙስ', 'ዓርብ', 'ቅዳሜ'],
   om_days: ['Dil', 'Wii', 'Qib', 'Roob', 'Kam', 'Jum', 'San'],
-  ti_days: ['ሰንበት', 'እሑድ', 'ሰኑ', 'ማክሰኞ', 'ረቡዕ', 'ሐሙስ', 'ዓርቢ'],
+  ti_days: ['ሰንበት', 'ሰኑን', 'ሠሉስ', 'ረቡዕ', 'ሐሙስ', 'ዓርቢ', 'ቀዳም'],
   en_months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
   am_months: ['ጃንዩ', 'ፌብሩ', 'ማርች', 'ኤፕሪል', 'ሜይ', 'ጁን', 'ጁላይ', 'ኦገስ', 'ሴፕቴምበር', 'ኦክቶበር', 'ኖቬምበር', 'ዲሴምበር'],
   om_months: ['Ama', 'Gur', 'Bit', 'Ebl', 'Caa', 'Wax', 'Ado', 'Hag', 'Ful', 'Onk', 'Sad', 'Mud'],
@@ -4384,6 +4412,7 @@ export const getPaymentMethodBreakdown = (startDate?: string, endDate?: string) 
     }
 
     conditions.push("s.paymentStatus != 'Order'");
+    conditions.push("s.paymentMethod IS NOT NULL AND TRIM(s.paymentMethod) != ''");
 
     let where = '';
     if (conditions.length > 0) {
@@ -6548,14 +6577,15 @@ export const insertRecurringTemplate = (data: {
   name: string; category: string; amount: number;
   frequency: 'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Yearly';
   startDate: string; endDate?: string; budgetCategoryId?: number;
+  reminderTime?: string;
 }) => {
   try {
     const database = getDB();
     const result = database.runSync(
-      `INSERT INTO recurring_expense_templates (name, category, amount, frequency, startDate, endDate, budgetCategoryId)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO recurring_expense_templates (name, category, amount, frequency, startDate, endDate, reminderTime, budgetCategoryId)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       data.name, data.category, data.amount, data.frequency, data.startDate,
-      data.endDate || null, data.budgetCategoryId || null
+      data.endDate || null, data.reminderTime || null, data.budgetCategoryId || null
     );
     return result.lastInsertRowId;
   } catch (error) {
@@ -6567,7 +6597,7 @@ export const insertRecurringTemplate = (data: {
 export const updateRecurringTemplate = (id: number, data: {
   name?: string; category?: string; amount?: number;
   frequency?: string; startDate?: string; endDate?: string;
-  budgetCategoryId?: number; isActive?: number;
+  budgetCategoryId?: number; isActive?: number; reminderTime?: string;
 }) => {
   try {
     const database = getDB();
@@ -8079,6 +8109,12 @@ export const syncServerSubscription = (params: {
        WHERE id = ?`,
       [localPlan, params.expiresAt, sub.id]
     );
+    database.runSync(
+      `UPDATE subscription_payments
+       SET status = 'verified', verifiedAt = datetime('now')
+       WHERE subscriptionId = ? AND status = 'pending_verification'`,
+      [sub.id]
+    );
     logAudit(sub.id, 'synced_from_server', sub.status, 'active');
     return true;
   } catch (error) {
@@ -8300,6 +8336,7 @@ const VALID_PREMIUM_FEATURES = new Set([
   'reports', 'dashboard_overview', 'pdf_download', 'csv_import', 'csv_export',
   'expense', 'budget', 'debt', 'orders', 'purchase_orders', 'multi_warehouse',
   'ai_assistant', 'health_score', 'biometrics', 'themes', 'supplier_reminders',
+  'supplier_management',
 ]);
 
 export const isPremiumFeatureUnlocked = (feature: string): boolean => {

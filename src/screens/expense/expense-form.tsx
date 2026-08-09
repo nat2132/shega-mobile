@@ -19,12 +19,14 @@ import {
   Wallet,
   Repeat,
   Plus,
+  Clock,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { playNice, playBad } from '@/services/soundService';
 import {
   insertExpense,
   insertRecurringTemplate,
+  updateRecurringTemplate,
   autoLinkExpenseToBudget,
   getBudgetStatusForCategory,
   getBudgets,
@@ -53,11 +55,37 @@ import { expenseFormTutorial } from '@/tutorials/definitions';
 
 const FREQUENT_CATEGORIES_KEY = 'frequent_expense_categories';
 
-const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => {
+// Convert a 24h "HH:MM" string to a localized 12-hour label like "8:00 AM".
+const to12Hour = (value: string): string => {
+  const [hRaw, mRaw] = String(value).split(':').map(Number);
+  if (!Number.isFinite(hRaw)) return value;
+  const h = ((hRaw % 24) + 24) % 24;
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  const mins = Number.isFinite(mRaw) ? String(mRaw).padStart(2, '0') : '00';
+  return `${h12}:${mins} ${suffix}`;
+};
+
+// Accept both "8:00 AM" / "20:00" style input and normalize to "HH:MM".
+const normalizeReminderTime = (value: string): string => {
+  const trimmed = String(value).trim().toUpperCase();
+  const match = trimmed.match(/^(\d{1,2})(?::(\d{1,2}))?\s*(AM|PM)?$/);
+  if (!match) return value;
+  let h = parseInt(match[1], 10);
+  const m = match[2] ? Math.min(Math.max(parseInt(match[2], 10), 0), 59) : 0;
+  const meridian = match[3];
+  if (meridian === 'PM' && h < 12) h += 12;
+  if (meridian === 'AM' && h === 12) h = 0;
+  if (h < 0 || h > 23) return value;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+};
+
+const AddExpenseScreen = ({ onSaveSuccess, editingTemplate }: { onSaveSuccess?: () => void; editingTemplate?: any }) => {
   const { colors, t, calendarType, language } = useSettings();
   const { isReadOnly } = useSubscription();
   const G = getExpenseGlass(colors);
   const dialog = useDialog();
+  const isEditingTemplate = !!editingTemplate;
 
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
@@ -81,6 +109,8 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
   });
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
+  const [recurReminderTime, setRecurReminderTime] = useState('08:00');
+  const [reminderTimeDraft, setReminderTimeDraft] = useState('8:00 AM');
   const [successDetails, setSuccessDetails] = useState<BusinessSuccessDetails | null>(null);
   const [customCategoryInput, setCustomCategoryInput] = useState('');
 
@@ -98,7 +128,8 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
       recurFrequency,
       recurStartDate,
       recurEndDate,
-    }), [amount, category, date, description, selectedBudgetId, isRecurring, recurFrequency, recurStartDate, recurEndDate]),
+      recurReminderTime,
+    }), [amount, category, date, description, selectedBudgetId, isRecurring, recurFrequency, recurStartDate, recurEndDate, recurReminderTime]),
     getTitle: useCallback(() => (category ? t('draft.expense_title', { category }) : t('draft.expense_default')), [category, t]),
     getSubtitle: useCallback(() => (amount ? t('draft.expense_subtitle', { amount }) : t('draft.expense_no_amount')), [amount, t]),
     enabled: !successDetails,
@@ -115,6 +146,21 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
     } catch {}
     setBudgets(getBudgets({ status: 'active' }));
   }, []);
+
+  useEffect(() => {
+    if (!editingTemplate) return;
+    setAmount(String(editingTemplate.amount ?? ''));
+    setCategory(editingTemplate.category || '');
+    setDescription(editingTemplate.name || editingTemplate.category || '');
+    setIsRecurring(true);
+    setRecurFrequency((['Daily', 'Weekly', 'Monthly', 'Yearly'].includes(editingTemplate.frequency) ? editingTemplate.frequency : 'Monthly') as any);
+    setRecurStartDate(editingTemplate.startDate || toLocalDateString(new Date()));
+    if (editingTemplate.endDate) setRecurEndDate(editingTemplate.endDate);
+    if (editingTemplate.reminderTime) {
+      setRecurReminderTime(editingTemplate.reminderTime);
+      setReminderTimeDraft(to12Hour(editingTemplate.reminderTime));
+    }
+  }, [editingTemplate]);
 
   useEffect(() => {
     const d = new Date(recurStartDate);
@@ -277,6 +323,31 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
     saveFrequentCategory(category.trim());
 
     if (isRecurring) {
+      if (isEditingTemplate && editingTemplate?.id) {
+        updateRecurringTemplate(editingTemplate.id, {
+          name: description.trim() || category.trim(),
+          category: category.trim(),
+          amount: amountNum,
+          frequency: recurFrequency,
+          startDate: recurStartDate,
+          endDate: recurEndDate || undefined,
+          reminderTime: recurReminderTime,
+        });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        playNice();
+        await draftFormData.clearCurrent();
+        setSuccessDetails({
+          title: t('expense.recurring_updated') || 'Recurring Expense Updated',
+          subtitle: `${recurFrequency} · ${formatDate(new Date(recurStartDate), calendarType, language)}`,
+          mainLabel: t('expense.magnitude'),
+          mainValue: `${amountNum.toLocaleString()} ${t('common.etb')}`,
+          secondaryLabel: t('common.category'),
+          secondaryValue: category.trim(),
+          iconType: 'expense',
+          itemName: description.trim() || category.trim()
+        });
+        return;
+      }
       insertRecurringTemplate({
         name: description.trim() || category.trim(),
         category: category.trim(),
@@ -284,6 +355,7 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
         frequency: recurFrequency as any,
         startDate: recurStartDate,
         endDate: recurEndDate || undefined,
+        reminderTime: recurReminderTime,
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       playNice();
@@ -412,6 +484,7 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
                 setRecurFrequency(d.recurFrequency || 'Monthly');
                 setRecurStartDate(d.recurStartDate || '');
                 setRecurEndDate(d.recurEndDate || '');
+                setRecurReminderTime(d.recurReminderTime || '08:00');
                 await draftFormData.remove(draft.id);
               }}
               onDelete={async (id) => {
@@ -425,7 +498,7 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
                 {t('expense.capital_management')}
               </AppText>
               <AppText variant="title" weight="bold" style={[styles.headerTitle, { color: G.fg }]}>
-                {t('expense.new_expense')}
+                {isEditingTemplate ? (t('expense.edit_recurring') || 'Edit Recurring Expense') : t('expense.new_expense')}
               </AppText>
             </View>
           </TutorialTarget>
@@ -714,6 +787,43 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
                     </View>
                   </View>
 
+                  {/* Reminder Time */}
+                  <View style={[styles.fieldCard, { backgroundColor: G.bgCard, borderColor: G.border, marginBottom: 8, overflow: 'hidden' }]}>
+                    <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: G.fgSecondary, marginBottom: 10 }]}>{t('expense.reminder_time')}</AppText>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                      {['06:00', '07:00', '08:00', '09:00', '12:00', '15:00', '18:00', '19:00'].map(time => (
+                        <TouchableOpacity key={time}
+                          style={[styles.chip, { backgroundColor: G.bgCard, borderColor: G.border, paddingVertical: 8, paddingHorizontal: 14 }, recurReminderTime === time && { backgroundColor: G.fg }]}
+                          onPress={() => { setRecurReminderTime(time); setReminderTimeDraft(to12Hour(time)); Haptics.selectionAsync(); }}
+                        >
+                          <AppText variant="body-sm" weight="bold" style={{ color: recurReminderTime === time ? G.bg : G.fg }}>{to12Hour(time)}</AppText>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+                      <Clock size={16} color={G.fgSecondary} />
+                      <TextInput
+                        style={[styles.customCatInput, { backgroundColor: G.bgCard, borderColor: G.border, color: G.fg, flex: 1, height: 42, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, fontSize: 14, fontFamily: Fonts.medium, marginLeft: 8 }]}
+                        value={reminderTimeDraft}
+                        onChangeText={(v) => {
+                          setReminderTimeDraft(v);
+                          const normalized = normalizeReminderTime(v);
+                          if (normalized !== recurReminderTime) setRecurReminderTime(normalized);
+                        }}
+                        onBlur={() => {
+                          setRecurReminderTime(normalizeReminderTime(reminderTimeDraft));
+                          setReminderTimeDraft(to12Hour(normalizeReminderTime(reminderTimeDraft)));
+                        }}
+                        placeholder="8:00 AM"
+                        placeholderTextColor={G.fgSecondary}
+                        autoCapitalize="none"
+                      />
+                    </View>
+                    <AppText variant="caption" weight="medium" style={{ color: G.fgSecondary, marginTop: 6 }}>
+                      {t('expense.reminder_time_hint')}
+                    </AppText>
+                  </View>
+
                   <View style={{ flexDirection: 'row', gap: 10 }}>
                     <TouchableOpacity
                       style={[styles.dateField, { backgroundColor: G.bgCard, borderColor: G.border, flex: 1 }]}
@@ -748,7 +858,7 @@ const AddExpenseScreen = ({ onSaveSuccess }: { onSaveSuccess?: () => void }) => 
             >
               <ShieldCheck size={22} color={G.bg} />
               <AppText variant="body" weight="bold" style={[styles.saveBtnText, { color: G.bg }]}>
-                {isRecurring ? t('expense.save_schedule') : t('expense.commit_ledger')}
+                {isRecurring ? (isEditingTemplate ? (t('expense.update_schedule') || 'Update Schedule') : t('expense.save_schedule')) : t('expense.commit_ledger')}
               </AppText>
             </TouchableOpacity>
           </TutorialTarget>
