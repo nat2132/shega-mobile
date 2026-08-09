@@ -512,7 +512,6 @@ export const generateSupplierOrderPDF = async (
     return `
     <tr>
       <td>${escHtml(item.name || 'Product')}</td>
-      <td style="text-align: center;">${formatNumber(item.currentStock || 0)} ${escHtml(unit)}</td>
       <td style="text-align: center;">${formatNumber(qty)} ${escHtml(unit)}</td>
       <td style="text-align: right;">${formatNumber(price)} ${trans.common.etb}</td>
       <td style="text-align: right; font-weight: 600;">${formatNumber(lineTotal)} ${trans.common.etb}</td>
@@ -558,7 +557,6 @@ export const generateSupplierOrderPDF = async (
           <thead>
             <tr>
               <th>${escHtml(so.item)}</th>
-              <th style="text-align: center;">${escHtml(so.currentStock)}</th>
               <th style="text-align: center;">${escHtml(so.orderQty)}</th>
               <th style="text-align: right;">${escHtml(so.unitPrice)}</th>
               <th style="text-align: right;">${escHtml(so.lineTotal)}</th>
