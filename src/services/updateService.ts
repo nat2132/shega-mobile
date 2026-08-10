@@ -4,6 +4,7 @@ import {
 } from 'expo-file-system';
 import Constants from 'expo-constants';
 import * as Sharing from 'expo-sharing';
+import { assertInternetConnection } from './connectivity';
 
 const LOG_TAG = '[UpdateService]';
 
@@ -77,6 +78,8 @@ export async function fetchLatestRelease(): Promise<GitHubRelease | null> {
   const url = `https://api.github.com/repos/${githubOwner}/${githubRepo}/releases/latest`;
   log('Fetching latest release from', url);
 
+  await assertInternetConnection();
+
   const headers: Record<string, string> = {
     Accept: 'application/vnd.github.v3+json',
     'User-Agent': 'Shega-App',
@@ -139,6 +142,8 @@ export async function downloadApk(
 ): Promise<string> {
   const dest = new ExpoFile(Paths.cache, asset.name);
   log('Downloading to:', dest.uri);
+
+  await assertInternetConnection();
 
   const task = ExpoFile.createDownloadTask(
     asset.browser_download_url,

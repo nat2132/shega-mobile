@@ -25,6 +25,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import { createPayment, handleApiError, isRateLimited } from '@/services/api';
+import { isOfflineError, OFFLINE_MESSAGE } from '@/services/connectivity';
 
 interface SubscriptionPaymentProps {
   planId: number;
@@ -83,6 +84,11 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
       onSuccess();
     } catch (error: any) {
       const handled = handleApiError(error);
+      if (isOfflineError(error)) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Alert.alert(t('subscription.payment_error_title'), handled.message || OFFLINE_MESSAGE);
+        return;
+      }
       if (isRateLimited(error) && error.retryAfter) {
         setRateLimitedUntil(Date.now() + error.retryAfter * 1000);
       } else {

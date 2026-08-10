@@ -32,6 +32,7 @@ import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { safeGoBack } from '@/services/navigation';
 import { fetchSubscriptionStatus } from '@/services/api';
+import { isOfflineError, OFFLINE_MESSAGE } from '@/services/connectivity';
 import { syncServerSubscription } from '@/database/db';
 import { useToast } from '@/context/ToastContext';
 
@@ -118,7 +119,11 @@ const PLANS = {
       }
     } catch (error) {
       console.error('Restore purchase error:', error);
-      showToast({ title: t('subscription.restore_error'), message: t('subscription.restore_error_desc'), type: 'error' });
+      showToast({
+        title: t('subscription.restore_error'),
+        message: isOfflineError(error) ? OFFLINE_MESSAGE : t('subscription.restore_error_desc'),
+        type: 'error',
+      });
     }
   };
 

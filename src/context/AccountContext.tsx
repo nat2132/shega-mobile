@@ -15,6 +15,7 @@ import {
   LicenseStatusInfo,
 } from '@/services/api';
 import { syncServerSubscription } from '@/database/db';
+import { assertInternetConnection, isOfflineError } from '@/services/connectivity';
 
 interface AccountContextState {
   isLoading: boolean;
@@ -92,6 +93,9 @@ export const AccountProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [user, refreshStatus]);
 
   const login = useCallback(async (email: string, password: string): Promise<boolean> => {
+    // Fail fast with a clear connection message instead of a generic auth
+    // error before any network request is fired.
+    await assertInternetConnection();
     try {
       const res = await loginUser({ email, password });
       const token = res.access || res.token;
@@ -108,6 +112,7 @@ export const AccountProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return true;
     } catch (e) {
       console.error('[Account] Login error', e);
+      if (isOfflineError(e)) throw e;
       return false;
     }
   }, []);
@@ -118,6 +123,7 @@ export const AccountProvider: React.FC<{ children: React.ReactNode }> = ({ child
     business_name: string;
     password: string;
   }): Promise<boolean> => {
+    await assertInternetConnection();
     try {
       const res = await registerUser(payload);
       const token = res.token || res.access;
@@ -136,6 +142,7 @@ export const AccountProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return true;
     } catch (e) {
       console.error('[Account] Register error', e);
+      if (isOfflineError(e)) throw e;
       return false;
     }
   }, []);

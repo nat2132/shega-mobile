@@ -1,6 +1,7 @@
 import { AppText } from '@/components/ui';
 import { useAccount } from '@/context/AccountContext';
 import { AccountUser, fetchMyPayment, PaymentInfo } from '@/services/api';
+import { isOfflineError, OFFLINE_MESSAGE } from '@/services/connectivity';
 import { notifyPaymentStatus } from '@/services/notificationService';
 import { RefreshCw } from 'lucide-react-native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -27,14 +28,17 @@ export default function PaymentStatusScreen({ onContinue, onRenew, user }: Payme
   const { subscription, refreshStatus } = useAccount();
   const [payment, setPayment] = useState<PaymentInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [offline, setOffline] = useState(false);
   const notifiedRef = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setOffline(false);
     try {
       const p = await fetchMyPayment();
       setPayment(p);
-    } catch {
+    } catch (e) {
+      if (isOfflineError(e)) setOffline(true);
       setPayment(null);
     }
     await refreshStatus();
@@ -98,6 +102,18 @@ export default function PaymentStatusScreen({ onContinue, onRenew, user }: Payme
           </View>
         ) : (
           <>
+            {offline ? (
+              <View style={[styles.offlineBanner, { backgroundColor: warning + '1A', borderColor: warning }]}>
+                <AppText variant="body-sm" weight="semibold" style={{ color: fg, textAlign: 'center', lineHeight: 20 }}>
+                  {OFFLINE_MESSAGE}
+                </AppText>
+                <TouchableOpacity onPress={load} style={[styles.retryBtn, { backgroundColor: warning }]}>
+                  <AppText variant="label" weight="bold" style={{ color: bg }}>
+                    Retry
+                  </AppText>
+                </TouchableOpacity>
+              </View>
+            ) : null}
             <View style={[styles.statusCard, { backgroundColor: card, borderColor: border }]}>
               <View style={[styles.statusIcon, { backgroundColor: badgeColor + '20' }]}>
                 <View style={[styles.statusDot, { backgroundColor: badgeColor }]} />
@@ -194,6 +210,21 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 1,
     marginBottom: 20,
+  },
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 20,
+  },
+  retryBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
   },
   statusIcon: {
     width: 64,

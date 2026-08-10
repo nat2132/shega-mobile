@@ -5,6 +5,7 @@
 // https://api.yourdomain.com/api) before shipping.
 
 import * as SecureStore from 'expo-secure-store';
+import { assertInternetConnection, isOfflineError, OfflineError, checkInternetConnection, OFFLINE_MESSAGE } from './connectivity';
 
 // Production base URL for the Shega Django backend deployed on Render.
 // Override via EXPO_PUBLIC_API_URL (e.g. for local development against a
@@ -195,6 +196,7 @@ export async function refreshAccessToken(): Promise<boolean> {
     try {
       const refresh = await getStoredRefreshToken();
       if (!refresh) return false;
+      await assertInternetConnection();
       const res = await fetch(`${API_BASE_URL}/api/auth/refresh/`, {
         method: 'POST',
         headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
@@ -228,6 +230,10 @@ async function request<T = unknown>(path: string, options: HttpOptions = {}): Pr
     if (token) headers.Authorization = `Bearer ${token}`;
   }
 
+  // Never fire a doomed request while the device is offline — surface a clear
+  // connection message instead of hammering the (unreachable) server.
+  await assertInternetConnection();
+
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
@@ -236,6 +242,15 @@ async function request<T = unknown>(path: string, options: HttpOptions = {}): Pr
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch (e) {
+    // A dropped fetch is either a lost connection mid-request or a genuinely
+    // unreachable host. Confirm reachability so we show the connection error
+    // (allowing retry) rather than a misleading server error.
+    try {
+      const reachable = await checkInternetConnection(true);
+      if (!reachable) throw new OfflineError();
+    } catch (offlineErr) {
+      if (isOfflineError(offlineErr)) throw offlineErr;
+    }
     throw new ApiError(0, 'Unable to reach the server. Check your connection and try again.', String(e));
   }
 
@@ -390,6 +405,9 @@ export const formatRetryAfter = (seconds?: number): string => {
  * a generic "request failed".
  */
 export const handleApiError = (error: unknown): { message: string; retryAfter?: number; status: number } => {
+  if (isOfflineError(error)) {
+    return { message: error.message || OFFLINE_MESSAGE, status: 0 };
+  }
   if (error instanceof RateLimitError) {
     const wait = error.retryAfter;
     const hint = formatRetryAfter(wait);

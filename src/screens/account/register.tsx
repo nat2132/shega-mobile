@@ -1,7 +1,9 @@
 import { Fonts } from '@/constants/theme';
 import { useAccount } from '@/context/AccountContext';
 import { AppText } from '@/components/ui';
+import { isOfflineError, OFFLINE_MESSAGE } from '@/services/connectivity';
 import { Image } from 'expo-image';
+import { Eye, EyeOff } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -26,6 +28,8 @@ export default function RegisterScreen({ onBack, onSuccess }: RegisterScreenProp
   const [businessName, setBusinessName] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldError, setFieldError] = useState<string | null>(null);
@@ -65,7 +69,7 @@ export default function RegisterScreen({ onBack, onSuccess }: RegisterScreenProp
         setError('Registration failed. The email may already be in use.');
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unable to create your account. Try again.');
+      setError(isOfflineError(e) ? OFFLINE_MESSAGE : e instanceof Error ? e.message : 'Unable to create your account. Try again.');
     } finally {
       setLoading(false);
     }
@@ -137,25 +141,51 @@ export default function RegisterScreen({ onBack, onSuccess }: RegisterScreenProp
             />
 
             <Label color={fgSecondary}>Password</Label>
-            <TextInput
-              style={[styles.input, { color: fg, borderColor: border, backgroundColor: card }]}
-              placeholder="At least 6 characters"
-              placeholderTextColor={fgSecondary}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
+            <View style={styles.passwordWrapper}>
+              <TextInput
+                style={[styles.input, { color: fg, borderColor: border, backgroundColor: card }, styles.passwordInput]}
+                placeholder="At least 6 characters"
+                placeholderTextColor={fgSecondary}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword((v) => !v)}
+                style={styles.eyeButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                {showPassword ? (
+                  <EyeOff size={20} color={fgSecondary} />
+                ) : (
+                  <Eye size={20} color={fgSecondary} />
+                )}
+              </TouchableOpacity>
+            </View>
 
             <Label color={fgSecondary}>Confirm Password</Label>
-            <TextInput
-              style={[styles.input, { color: fg, borderColor: border, backgroundColor: card }]}
-              placeholder="Re-enter your password"
-              placeholderTextColor={fgSecondary}
-              value={confirm}
-              onChangeText={setConfirm}
-              secureTextEntry
-              onSubmitEditing={handleSubmit}
-            />
+            <View style={styles.passwordWrapper}>
+              <TextInput
+                style={[styles.input, { color: fg, borderColor: border, backgroundColor: card }, styles.passwordInput]}
+                placeholder="Re-enter your password"
+                placeholderTextColor={fgSecondary}
+                value={confirm}
+                onChangeText={setConfirm}
+                secureTextEntry={!showConfirm}
+                onSubmitEditing={handleSubmit}
+              />
+              <TouchableOpacity
+                onPress={() => setShowConfirm((v) => !v)}
+                style={styles.eyeButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                {showConfirm ? (
+                  <EyeOff size={20} color={fgSecondary} />
+                ) : (
+                  <Eye size={20} color={fgSecondary} />
+                )}
+              </TouchableOpacity>
+            </View>
 
             {showError ? (
               <AppText variant="body-sm" weight="semibold" style={[styles.error, { color: errorColor }]}>
@@ -206,6 +236,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: Fonts.medium,
     marginBottom: 16,
+  },
+  passwordWrapper: { position: 'relative', marginBottom: 16 },
+  passwordInput: { marginBottom: 0, paddingRight: 48 },
+  eyeButton: {
+    position: 'absolute',
+    right: 14,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
   },
   primaryBtn: {
     height: 60,

@@ -11,6 +11,7 @@ export interface CSVColumn {
   type: 'string' | 'number' | 'date' | 'boolean';
   defaultValue?: any;
   validate?: (value: any) => string | null;  // returns error message or null
+  aliases?: string[];                            // alternate header names that should map here
 }
 
 export interface CSVModuleSpec {
@@ -27,18 +28,18 @@ export const CSV_SPECS: Record<string, CSVModuleSpec> = {
     name: 'Inventory Items',
     description: 'Products, materials, and stock items',
     columns: [
-      { key: 'name', label: 'Name', required: true, type: 'string' },
+      { key: 'name', label: 'Name', required: true, type: 'string', aliases: ['item name', 'item', 'product', 'productname', 'sku'] },
       { key: 'categoryName', label: 'Category', required: false, type: 'string', defaultValue: '' },
-      { key: 'companyName', label: 'Brand/Company', required: false, type: 'string', defaultValue: '' },
+      { key: 'companyName', label: 'Brand/Company', required: false, type: 'string', defaultValue: '', aliases: ['brand', 'brand/company', 'company', 'manufacturer'] },
       { key: 'purchaseUnit', label: 'Purchase Unit', required: false, type: 'string', defaultValue: 'pcs' },
       { key: 'baseUnit', label: 'Base Unit', required: false, type: 'string', defaultValue: 'pcs' },
-      { key: 'unitsPerPack', label: 'Units Per Pack', required: false, type: 'number', defaultValue: 1 },
-      { key: 'totalPackQuantity', label: 'Pack Quantity', required: false, type: 'number', defaultValue: 0 },
-      { key: 'totalBaseQuantity', label: 'Stock Quantity', required: true, type: 'number' },
-      { key: 'packPurchasePrice', label: 'Pack Cost', required: false, type: 'number', defaultValue: 0 },
-      { key: 'basePurchasePrice', label: 'Unit Cost', required: true, type: 'number' },
-      { key: 'baseSellingPrice', label: 'Unit Selling Price', required: true, type: 'number' },
-      { key: 'packSellingPrice', label: 'Pack Selling Price', required: false, type: 'number', defaultValue: 0 },
+      { key: 'unitsPerPack', label: 'Units Per Pack', required: false, type: 'number', defaultValue: 1, aliases: ['per pack', 'pack size', 'unitsperpack'] },
+      { key: 'totalPackQuantity', label: 'Pack Quantity', required: false, type: 'number', defaultValue: 0, aliases: ['pack qty', 'packquantity', 'packs'] },
+      { key: 'totalBaseQuantity', label: 'Stock Quantity', required: true, type: 'number', aliases: ['stock', 'stockqty', 'openingstock', 'closingstock', 'quantityonhand', 'onhand', 'currentstock', 'openingbalance', 'available'] },
+      { key: 'packPurchasePrice', label: 'Pack Cost', required: false, type: 'number', defaultValue: 0, aliases: ['packcost', 'pack purchase price', 'packcostprice'] },
+      { key: 'basePurchasePrice', label: 'Unit Cost', required: true, type: 'number', aliases: ['unitcost', 'costprice', 'purchaseprice', 'buycost', 'vendorcost', 'vendorprice', 'cost', 'purchase rate', 'purchasedprice'] },
+      { key: 'baseSellingPrice', label: 'Unit Selling Price', required: true, type: 'number', aliases: ['unitsellingprice', 'saleprice', 'sellingprice', 'retailprice', 'marketprice', 'mrp', 'selling price', 'sale price'] },
+      { key: 'packSellingPrice', label: 'Pack Selling Price', required: false, type: 'number', defaultValue: 0, aliases: ['packsp', 'pack selling', 'pack sell price'] },
       { key: 'expiryDate', label: 'Expiry Date', required: false, type: 'date', defaultValue: null },
       { key: 'qualityGrade', label: 'Quality Grade', required: false, type: 'string', defaultValue: 'grade1' },
       { key: 'notes', label: 'Notes', required: false, type: 'string', defaultValue: '' },
@@ -250,10 +251,34 @@ export interface MappingResult {
   mappings: { csvColumn: string; dbField: string }[];
   unmappedCSV: string[];
   missingRequired: string[];
+  missingRequiredLabels: string[];
+}
+
+/**
+ * Normalize a header/alias token for comparison: lower-case, collapse
+ * whitespace/_/-/ and strip every non-alphanumeric character. This means
+ * "Unit Selling Price", "unit_selling_price" and "Unit-Selling Price" all
+ * normalize to the same token.
+ */
+function normalizeToken(token: string): string {
+  return token
+    .toLowerCase()
+    .replace(/[\s_-]+/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+/** Look up the human-readable label for a database field key in a spec. */
+export function getColumnLabel(spec: CSVModuleSpec, key: string): string {
+  return spec.columns.find((c) => c.key === key)?.label ?? key;
 }
 
 /**
  * Auto-map CSV headers to database fields using fuzzy matching.
+ *
+ * A CSV header matches a column if, after normalization, it equals the
+ * column's key, its label, or any declared alias; or if it is a substring
+ * of / contained by the (label, key) token (additive, never stricter than
+ * the original behaviour).
  */
 export function autoMapColumns(csvHeaders: string[], spec: CSVModuleSpec): MappingResult {
   const mappings: { csvColumn: string; dbField: string }[] = [];
@@ -261,16 +286,25 @@ export function autoMapColumns(csvHeaders: string[], spec: CSVModuleSpec): Mappi
   const mappedDB = new Set<string>();
 
   for (const csvCol of csvHeaders) {
-    const normalized = csvCol.toLowerCase().replace(/[\s_-]+/g, '').replace(/[^a-z0-9]/g, '');
+    const normalized = normalizeToken(csvCol);
     let matched = false;
 
     for (const col of spec.columns) {
-      const colNorm = col.key.toLowerCase().replace(/[\s_-]+/g, '');
-      const labelNorm = col.label.toLowerCase().replace(/[\s_-]+/g, '');
+      const colNorm = normalizeToken(col.key);
+      const labelNorm = normalizeToken(col.label);
+      const aliasNorms = (col.aliases ?? []).map(normalizeToken);
 
-      if (normalized === colNorm || normalized === labelNorm ||
-          normalized.includes(colNorm) || colNorm.includes(normalized) ||
-          normalized.includes(labelNorm) || labelNorm.includes(normalized)) {
+      const exactMatch =
+        normalized === colNorm ||
+        normalized === labelNorm ||
+        aliasNorms.includes(normalized);
+      const containsMatch =
+        normalized.includes(colNorm) ||
+        colNorm.includes(normalized) ||
+        normalized.includes(labelNorm) ||
+        labelNorm.includes(normalized);
+
+      if (exactMatch || containsMatch) {
         mappings.push({ csvColumn: csvCol, dbField: col.key });
         mappedDB.add(col.key);
         matched = true;
@@ -283,9 +317,10 @@ export function autoMapColumns(csvHeaders: string[], spec: CSVModuleSpec): Mappi
     }
   }
 
-  const missingRequired = spec.requiredColumns.filter(c => !mappedDB.has(c));
+  const missingRequired = spec.requiredColumns.filter((c) => !mappedDB.has(c));
+  const missingRequiredLabels = missingRequired.map((k) => getColumnLabel(spec, k));
 
-  return { mappings, unmappedCSV, missingRequired };
+  return { mappings, unmappedCSV, missingRequired, missingRequiredLabels };
 }
 
 // â”€â”€â”€ Validation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

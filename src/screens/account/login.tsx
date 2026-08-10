@@ -1,7 +1,9 @@
 import { Fonts } from '@/constants/theme';
 import { useAccount } from '@/context/AccountContext';
 import { AppText } from '@/components/ui';
+import { isOfflineError, OFFLINE_MESSAGE } from '@/services/connectivity';
 import { Image } from 'expo-image';
+import { Eye, EyeOff } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -23,6 +25,7 @@ export default function LoginScreen({ onCreateAccount, onSuccess }: LoginScreenP
   const { login } = useAccount();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,8 +42,8 @@ export default function LoginScreen({ onCreateAccount, onSuccess }: LoginScreenP
       } else {
         setError('Invalid email or password.');
       }
-    } catch {
-      setError('Unable to log in. Try again.');
+    } catch (e) {
+      setError(isOfflineError(e) ? OFFLINE_MESSAGE : 'Unable to log in. Try again.');
     } finally {
       setLoading(false);
     }
@@ -88,15 +91,28 @@ export default function LoginScreen({ onCreateAccount, onSuccess }: LoginScreenP
             <AppText variant="caption" weight="bold" style={[styles.label, { color: fgSecondary }]}>
               Password
             </AppText>
-            <TextInput
-              style={[styles.input, { color: fg, borderColor: border, backgroundColor: card }]}
-              placeholder="Enter your password"
-              placeholderTextColor={fgSecondary}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              onSubmitEditing={handleLogin}
-            />
+            <View style={styles.passwordWrapper}>
+              <TextInput
+                style={[styles.input, { color: fg, borderColor: border, backgroundColor: card }, styles.passwordInput]}
+                placeholder="Enter your password"
+                placeholderTextColor={fgSecondary}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                onSubmitEditing={handleLogin}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword((v) => !v)}
+                style={styles.eyeButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                {showPassword ? (
+                  <EyeOff size={20} color={fgSecondary} />
+                ) : (
+                  <Eye size={20} color={fgSecondary} />
+                )}
+              </TouchableOpacity>
+            </View>
 
             {error ? (
               <AppText variant="body-sm" weight="semibold" style={[styles.error, { color: error }]}>
@@ -149,6 +165,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: Fonts.medium,
     marginBottom: 20,
+  },
+  passwordWrapper: { position: 'relative', marginBottom: 20 },
+  passwordInput: { marginBottom: 0, paddingRight: 48 },
+  eyeButton: {
+    position: 'absolute',
+    right: 14,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
   },
   primaryBtn: {
     height: 60,

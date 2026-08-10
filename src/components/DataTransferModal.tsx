@@ -2,7 +2,7 @@
  * DataTransferModal
  * Handles Export (DB backup or CSV per data type) and Import (DB restore or CSV).
  * CSV import includes: auto column mapping, validation, preview, error reporting.
- * Export includes: all modules, record counts, format guide, and native sharing.
+ * Export saves files directly to Downloads (Android) / system save (iOS).
  */
 import { Fonts } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
@@ -19,7 +19,7 @@ import {
 } from '@/database/db';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
+import { saveFileToDownloads } from '@/utils/save-file';
 import {
     AlertTriangle,
     CheckCircle2,
@@ -41,7 +41,6 @@ import {
     RotateCcw,
     Wrench,
     FileText,
-    Share2,
 } from 'lucide-react-native';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -252,7 +251,15 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
       }
       const dest = `${FileSystem.cacheDirectory}shegabe_backup_${new Date().toISOString().split('T')[0]}_${Date.now()}.db`;
       await FileSystem.copyAsync({ from: dbPath, to: dest });
-      await Sharing.shareAsync(dest, { mimeType: 'application/octet-stream', dialogTitle: t('data.export_backup_title') });
+      const saved = await saveFileToDownloads({
+        fileName: dest.split('/').pop() || 'shegabe_backup.db',
+        mimeType: 'application/octet-stream',
+        copyFromUri: dest,
+      });
+      if (!saved) {
+        showToast(t('data.operation_failed'), 'error');
+        return;
+      }
       showToast({ title: t('data.backup_exported'), message: t('data.backup_exported_msg'), type: 'success' });
       handleClose();
       onSuccess('export');
@@ -276,7 +283,15 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
       const filename = `${spec.name.replace(/\s+/g, '_')}_Export_${new Date().toISOString().split('T')[0]}.csv`;
       const dest = `${FileSystem.cacheDirectory}${filename}`;
       await FileSystem.writeAsStringAsync(dest, csv, { encoding: FileSystem.EncodingType.UTF8 });
-      await Sharing.shareAsync(dest, { mimeType: 'text/csv', dialogTitle: `Export ${spec.name}` });
+      const saved = await saveFileToDownloads({
+        fileName: filename,
+        mimeType: 'text/csv',
+        copyFromUri: dest,
+      });
+      if (!saved) {
+        showToast(t('data.operation_failed'), 'error');
+        return;
+      }
       showToast({ title: t('dt.export_complete'), message: t('dt.records_exported', { count: String(data.length) }), type: 'success' });
       handleClose();
       onSuccess('export');
@@ -401,9 +416,16 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
     const spec = CSV_SPECS[dataType];
     const csv = generateCSV(spec.columns);
     const filename = `${spec.name.replace(/\s+/g, '_')}_Template.csv`;
-    const dest = `${FileSystem.cacheDirectory}${filename}`;
-    await FileSystem.writeAsStringAsync(dest, csv, { encoding: FileSystem.EncodingType.UTF8 });
-    await Sharing.shareAsync(dest, { mimeType: 'text/csv', dialogTitle: t('dt.download_template') });
+    const saved = await saveFileToDownloads({
+      fileName: filename,
+      mimeType: 'text/csv',
+      contents: csv,
+    });
+    if (!saved) {
+      showToast(t('data.operation_failed'), 'error');
+      return;
+    }
+    showToast({ title: t('dt.download_template'), message: filename, type: 'success' });
   };
 
   // ——— Module metadata ————————————————————————————————————————————————
@@ -595,8 +617,8 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
                 <TouchableOpacity style={[s.primaryBtn, { backgroundColor: loading ? colors.border : colors.primary }]} onPress={handleExportDB} disabled={loading} activeOpacity={0.8}>
                   {loading ? <ActivityIndicator color="#FFF" /> : (
                     <>
-                      <Share2 size={20} color="#FFF" style={{ marginRight: 8 }} />
-                      <AppText variant="body" weight="bold" style={{ color: '#FFF' }}>{t('dt.export_share')}</AppText>
+                      <Download size={20} color="#FFF" style={{ marginRight: 8 }} />
+                      <AppText variant="body" weight="bold" style={{ color: '#FFF' }}>{t('dt.export_download')}</AppText>
                     </>
                   )}
                 </TouchableOpacity>
@@ -656,7 +678,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
                 <TouchableOpacity style={[s.primaryBtn, { backgroundColor: loading ? colors.border : colors.success }]} onPress={handleExportCSV} disabled={loading} activeOpacity={0.8}>
                   {loading ? <ActivityIndicator color="#FFF" /> : (
                     <>
-                      <Share2 size={20} color="#FFF" style={{ marginRight: 8 }} />
+                      <Download size={20} color="#FFF" style={{ marginRight: 8 }} />
                       <AppText variant="body" weight="bold" style={{ color: '#FFF' }}>{t('dt.export_type', { type: t(DATA_TYPE_LABELS[dataType]) })}</AppText>
                     </>
                   )}
@@ -701,7 +723,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
                   </AppText>
 
                   {[
-                    { label: t('dt.required_columns'), value: CSV_SPECS[dataType].requiredColumns.join(', ') },
+                    { label: t('dt.required_columns'), value: CSV_SPECS[dataType].requiredColumns.map(k => CSV_SPECS[dataType].columns.find(c => c.key === k)?.label || k).join(', ') },
                     { label: t('dt.date_format'), value: t('dt.date_format_example') },
                     { label: t('dt.boolean_format'), value: t('dt.boolean_format_example') },
                     { label: t('dt.numbers'), value: t('dt.numbers_example') },
@@ -753,7 +775,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
                     <AlertTriangle size={18} color={colors.error} />
                     <View style={{ flex: 1 }}>
                       <AppText variant="body-sm" weight="bold" style={{ color: colors.error }}>{t('dt.missing_fields')}</AppText>
-                      <AppText variant="caption" weight="medium" style={{ color: colors.error, marginTop: 4 }}>{mapping.missingRequired.join(', ')}</AppText>
+                       <AppText variant="caption" weight="medium" style={{ color: colors.error, marginTop: 4 }}>{mapping.missingRequiredLabels.join(', ')}</AppText>
                     </View>
                   </View>
                 )}
