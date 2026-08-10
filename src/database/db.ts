@@ -1000,6 +1000,8 @@ export interface InsertItemData {
   supplierId?: number | null;
   supplierPaymentStatus?: string;
   supplierPaidAmount?: number;
+  dueDate?: string;
+  lastPriceCheckAt?: string;
 }
 
 export const getNextItemId = () => {
@@ -1049,11 +1051,11 @@ export const insertItem = (data: InsertItemData) => {
   try {
     const database = getDB();
     const statement = database.prepareSync(`
-      INSERT INTO items (name, categoryId, companyName, purchaseUnit, baseUnit, unitsPerPack, totalPackQuantity, totalBaseQuantity, packPurchasePrice, basePurchasePrice, baseSellingPrice, packSellingPrice, allowSellByBaseUnit, allowSellByPackUnit, expiryDate, qualityGrade, notes, isCredit, supplierPhone, supplierAccount, supplierCallEnabled, warehouseId, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
+      INSERT INTO items (name, categoryId, companyName, purchaseUnit, baseUnit, unitsPerPack, totalPackQuantity, totalBaseQuantity, packPurchasePrice, basePurchasePrice, baseSellingPrice, packSellingPrice, allowSellByBaseUnit, allowSellByPackUnit, expiryDate, qualityGrade, notes, isCredit, supplierPhone, supplierAccount, supplierCallEnabled, warehouseId, dueDate, lastPriceCheckAt, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
     `);
     const result = statement.executeSync([
-      data.name, data.categoryId, data.companyName || null, data.purchaseUnit || 'pcs', data.baseUnit || 'pcs', data.unitsPerPack || 0, data.totalPackQuantity || 0, data.totalBaseQuantity || 0, data.packPurchasePrice || 0, data.basePurchasePrice || 0, data.baseSellingPrice || 0, data.packSellingPrice || 0, data.allowSellByBaseUnit ? 1 : 0, data.allowSellByPackUnit ? 1 : 0, data.expiryDate || null, data.qualityGrade || null, data.notes || null, data.isCredit ? 1 : 0, data.supplierPhone || null, data.supplierAccount || null, data.supplierCallEnabled ? 1 : 0, data.warehouseId ?? null, null
+      data.name, data.categoryId, data.companyName || null, data.purchaseUnit || 'pcs', data.baseUnit || 'pcs', data.unitsPerPack || 0, data.totalPackQuantity || 0, data.totalBaseQuantity || 0, data.packPurchasePrice || 0, data.basePurchasePrice || 0, data.baseSellingPrice || 0, data.packSellingPrice || 0, data.allowSellByBaseUnit ? 1 : 0, data.allowSellByPackUnit ? 1 : 0, data.expiryDate || null, data.qualityGrade || null, data.notes || null, data.isCredit ? 1 : 0, data.supplierPhone || null, data.supplierAccount || null, data.supplierCallEnabled ? 1 : 0, data.warehouseId ?? null, data.dueDate || null, data.lastPriceCheckAt || null, null
     ]);
     const newId = result.lastInsertRowId;
     // Log the initial stock as a movement so it appears in the activity feed.
@@ -1381,14 +1383,20 @@ export const insertSale = (saleData: {
   packId?: number;
   batchId?: string;
   dueDate?: string;
+  notes?: string;
+  paidAmount?: number;
+  orderNumber?: string;
+  convertedAt?: string;
+  cancelledAt?: string;
+  createdAt?: string;
 }) => {
   const database = getDB();
   beginTransaction(database);
   try {
     // Insert the sale record
     const statement = database.prepareSync(`
-      INSERT INTO sales (itemId, quantity, unit, unitType, discount, vat, taxType, totalPrice, paymentMethod, paymentStatus, customerName, customerPhone, packId, batchId, dueDate)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO sales (itemId, quantity, unit, unitType, discount, vat, taxType, totalPrice, paymentMethod, paymentStatus, customerName, customerPhone, packId, batchId, dueDate, notes, paidAmount, orderNumber, convertedAt, cancelledAt, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
     `);
     const result = statement.executeSync([
       saleData.itemId, saleData.quantity, saleData.unit, saleData.unitType,
@@ -1396,7 +1404,10 @@ export const insertSale = (saleData: {
       saleData.paymentMethod || null, saleData.paymentStatus || 'Paid',
       saleData.customerName || null, saleData.customerPhone || null,
       saleData.packId || null, saleData.batchId || null,
-      saleData.dueDate || null
+      saleData.dueDate || null, saleData.notes || null,
+      saleData.paidAmount ?? (saleData.paymentStatus === 'Paid' ? saleData.totalPrice : null),
+      saleData.orderNumber || null, saleData.convertedAt || null,
+      saleData.cancelledAt || null, saleData.createdAt || null
     ]);
 
     // Update inventory quantities
@@ -1840,18 +1851,19 @@ export const getActivityFeed = (options: { search?: string, date?: string, limit
 
 // --- Expense Functions ---
 
-export const insertExpense = (expense: { name: string; amount: number; category: string; date?: string; isRecurring?: boolean; frequency?: string; nextBillingDate?: string; budgetCategoryId?: number; budgetId?: number }) => {
+export const insertExpense = (expense: { name: string; amount: number; category: string; date?: string; isRecurring?: boolean; frequency?: string; nextBillingDate?: string; budgetCategoryId?: number; budgetId?: number; paymentStatus?: string; isOverdue?: boolean; overdueDays?: number }) => {
   try {
     const database = getDB();
     const today = toLocalDateString(new Date());
     const statement = database.prepareSync(`
-      INSERT INTO expenses (name, amount, category, date, isRecurring, frequency, nextBillingDate, budgetCategoryId, budgetId, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
+      INSERT INTO expenses (name, amount, category, date, isRecurring, frequency, nextBillingDate, budgetCategoryId, budgetId, paymentStatus, isOverdue, overdueDays, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
     `);
     const result = statement.executeSync([
       expense.name, expense.amount, expense.category || 'General', expense.date || today,
       expense.isRecurring ? 1 : 0, expense.frequency || null, expense.nextBillingDate || null,
-      expense.budgetCategoryId || null, expense.budgetId || null, null
+      expense.budgetCategoryId || null, expense.budgetId || null,
+      expense.paymentStatus || 'pending', expense.isOverdue ? 1 : 0, expense.overdueDays || 0, null
     ]);
     return result.lastInsertRowId;
   } catch (error) {
@@ -4660,14 +4672,22 @@ export interface InsertContactData {
   alternatePhone?: string;
   accountNumber?: string;
   notes?: string;
+  companyName?: string;
+  email?: string;
+  address?: string;
+  tin?: string;
+  supplierCategory?: string;
+  paymentType?: string;
+  isActive?: boolean;
 }
 
 export const insertContact = (data: InsertContactData) => {
   try {
     const database = getDB();
     const statement = database.prepareSync(`
-      INSERT INTO contacts (fullName, category, subCategory, phone, alternatePhone, accountNumber, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO contacts (fullName, category, subCategory, phone, alternatePhone, accountNumber, notes,
+        companyName, email, address, tin, supplierCategory, paymentType, isActive)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const result = statement.executeSync([
       data.fullName,
@@ -4676,7 +4696,14 @@ export const insertContact = (data: InsertContactData) => {
       data.phone || null,
       data.alternatePhone || null,
       data.accountNumber || null,
-      data.notes || null
+      data.notes || null,
+      data.companyName || null,
+      data.email || null,
+      data.address || null,
+      data.tin || null,
+      data.supplierCategory || null,
+      data.paymentType || 'cash',
+      data.isActive === false ? 0 : 1
     ]);
     return result.lastInsertRowId;
   } catch (error) {
@@ -4731,7 +4758,7 @@ export const getContactById = (id: number) => {
 export const updateContact = (id: number, data: Partial<InsertContactData>) => {
   try {
     const database = getDB();
-    const validColumns = ['fullName', 'category', 'subCategory', 'phone', 'alternatePhone', 'accountNumber', 'notes'];
+    const validColumns = ['fullName', 'category', 'subCategory', 'phone', 'alternatePhone', 'accountNumber', 'notes', 'companyName', 'email', 'address', 'tin', 'supplierCategory', 'paymentType'];
     const updates: string[] = [];
     const params: any[] = [];
 

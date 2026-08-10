@@ -145,10 +145,17 @@ export async function downloadApk(
 
   await assertInternetConnection();
 
+  const headers: Record<string, string> = {};
+  const { githubToken } = getExtra();
+  if (githubToken) {
+    headers.Authorization = `Bearer ${githubToken}`;
+  }
+
   const task = ExpoFile.createDownloadTask(
     asset.browser_download_url,
     dest,
     {
+      headers,
       onProgress: (data: { bytesWritten: number; totalBytes: number }) => {
         const totalBytes = data.totalBytes;
         const bytesWritten = data.bytesWritten;
@@ -287,5 +294,5 @@ export async function shouldAutoCheck(): Promise<boolean> {
 }
 
 export function getCurrentAppVersion(): string {
-  return Constants.expoConfig?.version ?? '1.0.0';
+  return Constants.expoConfig?.version ?? '1.0.2';
 }

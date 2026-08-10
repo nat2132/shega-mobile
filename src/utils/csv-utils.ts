@@ -119,6 +119,13 @@ export const CSV_SPECS: Record<string, CSVModuleSpec> = {
       { key: 'phone', label: 'Phone', required: false, type: 'string', defaultValue: '' },
       { key: 'alternatePhone', label: 'Alternate Phone', required: false, type: 'string', defaultValue: '' },
       { key: 'accountNumber', label: 'Account Number', required: false, type: 'string', defaultValue: '' },
+      { key: 'companyName', label: 'Company Name', required: false, type: 'string', defaultValue: '', aliases: ['brand', 'company', 'business'] },
+      { key: 'email', label: 'Email', required: false, type: 'string', defaultValue: '' },
+      { key: 'address', label: 'Address', required: false, type: 'string', defaultValue: '' },
+      { key: 'tin', label: 'TIN', required: false, type: 'string', defaultValue: '' },
+      { key: 'supplierCategory', label: 'Supplier Category', required: false, type: 'string', defaultValue: '' },
+      { key: 'paymentType', label: 'Payment Type', required: false, type: 'string', defaultValue: 'cash', aliases: ['payment'] },
+      { key: 'isActive', label: 'Active', required: false, type: 'boolean', defaultValue: true },
       { key: 'notes', label: 'Notes', required: false, type: 'string', defaultValue: '' },
     ],
     requiredColumns: ['fullName', 'category'],
@@ -174,6 +181,10 @@ export const CSV_SPECS: Record<string, CSVModuleSpec> = {
       { key: 'unitType', label: 'Unit Type', required: false, type: 'string', defaultValue: 'base' },
       { key: 'totalRefund', label: 'Total Refund', required: true, type: 'number' },
       { key: 'reason', label: 'Reason', required: false, type: 'string', defaultValue: '' },
+      { key: 'itemCondition', label: 'Item Condition', required: false, type: 'string', defaultValue: 'Resellable' },
+      { key: 'refundType', label: 'Refund Type', required: false, type: 'string', defaultValue: 'Full Refund' },
+      { key: 'notes', label: 'Notes', required: false, type: 'string', defaultValue: '' },
+      { key: 'returnDate', label: 'Return Date', required: false, type: 'date', defaultValue: null },
     ],
     requiredColumns: ['itemName', 'quantity', 'totalRefund'],
   },
@@ -584,6 +595,10 @@ export async function importItems(data: any[]): Promise<ImportResult> {
         supplierPhone: row.supplierPhone === '' ? null : (row.supplierPhone || null),
         supplierAccount: row.supplierAccount === '' ? null : (row.supplierAccount || null),
         supplierCallEnabled: row.supplierCallEnabled === true || row.supplierCallEnabled === 'true' || row.supplierCallEnabled === '1',
+        lastPriceCheckAt: row.lastPriceCheckAt === '' ? null : (row.lastPriceCheckAt || null),
+        dueDate: row.dueDate === '' ? null : (row.dueDate || null),
+        supplierId: row.supplierId ? Number(row.supplierId) : null,
+        warehouseId: row.warehouseId ? Number(row.warehouseId) : null,
       };
 
       const id = await insertItem(insertData);
@@ -650,6 +665,14 @@ export function importSales(data: any[]): ImportResult {
         customerName: row.customerName || null,
         customerPhone: row.customerPhone || null,
         batchId: row.batchId || null,
+        notes: row.notes || null,
+        dueDate: row.dueDate || null,
+        paidAmount: row.paidAmount !== undefined && row.paidAmount !== '' ? Number(row.paidAmount) : undefined,
+        taxType: row.taxType || 'VAT',
+        orderNumber: row.orderNumber || null,
+        convertedAt: row.convertedAt || null,
+        cancelledAt: row.cancelledAt || null,
+        createdAt: row.createdAt || null,
       });
 
       if (saleId) {
@@ -696,6 +719,9 @@ export function importExpenses(data: any[]): ImportResult {
         frequency: row.frequency || 'monthly',
         nextBillingDate: row.nextBillingDate ? new Date(row.nextBillingDate).toISOString() : undefined,
         budgetCategoryId: row.budgetCategoryId ? Number(row.budgetCategoryId) : undefined,
+        paymentStatus: row.paymentStatus || 'pending',
+        isOverdue: row.isOverdue === true || row.isOverdue === 'true' || row.isOverdue === '1',
+        overdueDays: row.overdueDays !== undefined && row.overdueDays !== '' ? Number(row.overdueDays) : undefined,
       });
 
       if (expenseId) {
@@ -809,6 +835,13 @@ export function importContacts(data: any[]): ImportResult {
         alternatePhone: row.alternatePhone === '' ? null : (row.alternatePhone || null),
         accountNumber: row.accountNumber === '' ? null : (row.accountNumber || null),
         notes: row.notes === '' ? null : (row.notes || null),
+        companyName: row.companyName === '' ? null : (row.companyName || null),
+        email: row.email === '' ? null : (row.email || null),
+        address: row.address === '' ? null : (row.address || null),
+        tin: row.tin === '' ? null : (row.tin || null),
+        supplierCategory: row.supplierCategory === '' ? null : (row.supplierCategory || null),
+        paymentType: row.paymentType === '' ? 'cash' : (row.paymentType || 'cash'),
+        isActive: row.isActive === '' ? true : (row.isActive === true || row.isActive === 'true' || row.isActive === '1'),
       });
 
       if (id) {
@@ -1009,7 +1042,7 @@ export function importReturns(data: any[]): ImportResult {
         continue;
       }
 
-      const statement = database.prepareSync('INSERT INTO returns (saleId, itemId, quantity, unit, unitType, totalRefund, reason) VALUES (?, ?, ?, ?, ?, ?, ?)');
+      const statement = database.prepareSync('INSERT INTO returns (saleId, itemId, quantity, unit, unitType, totalRefund, reason, itemCondition, refundType, notes, returnDate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
       const res = statement.executeSync([
         row.saleId ? Number(row.saleId) : null,
         matchedItem.id,
@@ -1018,6 +1051,10 @@ export function importReturns(data: any[]): ImportResult {
         row.unitType || 'base',
         Number(row.totalRefund) || 0,
         row.reason || null,
+        row.itemCondition || 'Resellable',
+        row.refundType || 'Full Refund',
+        row.notes || null,
+        row.returnDate || null,
       ]);
 
       if (res.lastInsertRowId) {
