@@ -109,6 +109,7 @@ const translations: Record<Language, Record<string, string>> = {
 
     // Common
     'common.save': 'Save Changes',
+    'common.ok': 'OK',
     'common.cancel': 'Cancel',
     'common.confirm': 'Confirm',
     'common.search': 'Search',
@@ -3589,6 +3590,7 @@ const translations: Record<Language, Record<string, string>> = {
 
     // Common
     'common.save': 'ለውጦችን አስቀምጥ',
+    'common.ok': 'እሺ',
     'common.save_changes': 'ለውጦችን አስቀምጥ',
     'common.cancel': 'ሰርዝ',
     'common.confirm': 'አረጋግጥ',
@@ -6592,6 +6594,7 @@ const translations: Record<Language, Record<string, string>> = {
     'tabs.summary': 'Cuunfa',
     'tabs.settings': 'Sajantii',
     'common.save': 'Ol kaa\'i',
+    'common.ok': 'Tole',
     'common.cancel': 'Haquu',
     'common.confirm': 'Mirkanaa\'i',
     'common.search': 'Barbaadi',
@@ -9987,6 +9990,7 @@ const translations: Record<Language, Record<string, string>> = {
     'tabs.summary': 'ማጠቃለያ',
     'tabs.settings': 'ቅንጅቶች',
     'common.save': 'ለውጥታት ኣቀምጥ',
+    'common.ok': 'ዕሉይ፥ እሺ',
     'common.cancel': 'ሰርዝ',
     'common.confirm': 'ምርጽኣት',
     'common.search': 'ድለይ',
