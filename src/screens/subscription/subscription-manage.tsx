@@ -52,6 +52,7 @@ const FEATURE_KEY_MAP: Record<string, string> = {
   biometrics: 'subscription.feature_biometrics',
   themes: 'subscription.feature_themes',
   supplier_reminders: 'subscription.feature_suppliers',
+  supplier_management: 'subscription.feature_supplier_management',
 };
 
 const PLANS = {

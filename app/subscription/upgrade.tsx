@@ -22,6 +22,7 @@ const FEATURE_KEY_MAP: Record<string, string> = {
   biometrics: 'subscription.feature_biometrics',
   themes: 'subscription.feature_themes',
   supplier_reminders: 'subscription.feature_suppliers',
+  supplier_management: 'subscription.feature_supplier_management',
 };
 
 export default function PremiumUpgrade() {
@@ -35,7 +36,7 @@ export default function PremiumUpgrade() {
   return (
     <PremiumFeatureLockScreen
       featureName={t(featureKey) || featureData.name}
-      description={t(featureKey + '_desc') || featureData.description}
+      description={featureKey ? (t(featureKey + '_desc') !== featureKey + '_desc' ? t(featureKey + '_desc') : featureData.description) : featureData.description}
       benefits={(featureData.benefits || []).map((b, i) => {
         const k = featureKey + '_benefit_' + i;
         const v = t(k);
