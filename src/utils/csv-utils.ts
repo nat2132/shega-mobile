@@ -211,7 +211,7 @@ export function parseCSV(content: string): { headers: string[]; rows: Record<str
       } else {
         inQuotes = !inQuotes;
       }
-    } else if ((ch === ',' || ch === '\n' || ch === '\r') && !inQuotes) {
+    } else if ((ch === '\n' || ch === '\r') && !inQuotes) {
       lines.push(current);
       current = '';
       if (ch === '\r' && content[i + 1] === '\n') i++;
