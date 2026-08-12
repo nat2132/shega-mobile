@@ -294,5 +294,5 @@ export async function shouldAutoCheck(): Promise<boolean> {
 }
 
 export function getCurrentAppVersion(): string {
-  return Constants.expoConfig?.version ?? '1.0.2';
+  return Constants.expoConfig?.version ?? '1.0.4';
 }

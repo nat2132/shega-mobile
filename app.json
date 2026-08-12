@@ -2,7 +2,7 @@
   "expo": {
     "name": "Shega",
     "slug": "Shega",
-    "version": "1.0.2",
+    "version": "1.0.4",
     "orientation": "portrait",
     "icon": "./src/assets/images/logo.png",
     "scheme": "shega",
@@ -12,7 +12,7 @@
     },
     "android": {
       "softwareKeyboardLayoutMode": "resize",
-      "versionCode": 3,
+      "versionCode": 4,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./src/assets/images/logo.png",
