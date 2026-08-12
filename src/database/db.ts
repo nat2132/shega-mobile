@@ -2556,7 +2556,7 @@ export const getDebtCustomers = () => {
       SELECT 
         TRIM(customerName) as customerName, 
         customerPhone, 
-        IFNULL(SUM(totalPrice - paidAmount), 0) as oweAmount,
+        IFNULL(SUM(totalPrice - COALESCE(paidAmount, 0)), 0) as oweAmount,
         MAX(createdAt) as lastBorrowed,
         MIN(dueDate) as earliestDue,
         COUNT(*) as totalDebts
@@ -2735,10 +2735,10 @@ export const getDebtSummary = () => {
       overdueAmount: number | null;
     }>(`
       SELECT
-        COALESCE(SUM(totalPrice - paidAmount), 0) as totalOwed,
+        COALESCE(SUM(totalPrice - COALESCE(paidAmount, 0)), 0) as totalOwed,
         COUNT(DISTINCT customerName) as debtorCount,
         SUM(CASE WHEN dueDate IS NOT NULL AND dueDate < date('now') THEN 1 ELSE 0 END) as overdueCount,
-        COALESCE(SUM(CASE WHEN dueDate IS NOT NULL AND dueDate < date('now') THEN (totalPrice - paidAmount) ELSE 0 END), 0) as overdueAmount
+        COALESCE(SUM(CASE WHEN dueDate IS NOT NULL AND dueDate < date('now') THEN (totalPrice - COALESCE(paidAmount, 0)) ELSE 0 END), 0) as overdueAmount
       FROM sales
       WHERE paymentStatus = 'Debt'
     `);
