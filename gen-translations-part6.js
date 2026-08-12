@@ -11,7 +11,7 @@ const translations = [
 "search.uncategorized | ምድብ ያልተመደበ",
 "search.damaged | የተጎዳ",
 "assistant.best_selling_title | በጣም የተሸጡ",
-"assistant.slow_moving_title | ዘገምተኛ እንቅስቃሴ",
+"assistant.slow_moving_title | በዝግታ የሚንቀሳቀስ",
 "tutorial.adjustment-history.title | የማስተካከያ ታሪክ",
 "tutorial.collect-payments.steps.cp-commit.desc | ክፍያውን ለማስተካከል ዝርዝሮቹን ይገምግሙ እና ያረጋግጡ። የደንበኛው የዱቤ ሂሳብ ወዲያውኑ ይዘምናል።",
 "tutorial.contact-details.title | የእውቂያ ዝርዝሮች",

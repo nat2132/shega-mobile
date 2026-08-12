@@ -1,15 +1,17 @@
-import { fetchSubscriptionStatus, fetchLicenseStatus } from './api';
+import { fetchSubscriptionStatusCached, fetchLicenseStatusCached } from './api';
 
 // Decides where to route a user right after a successful login/registration,
 // based on their current backend subscription + license state.
 //
-// Returns a route path. Callers should router.replace() with it.
+// Uses the persistent status cache so cold starts skip the network entirely
+// within the cache TTLs. Returns a route path. Callers should router.replace()
+// with it.
 export async function resolvePostAuthRoute(): Promise<string> {
   try {
-    const sub = await fetchSubscriptionStatus();
+    const sub = await fetchSubscriptionStatusCached();
     if (sub.status === 'active') {
       try {
-        const lic = await fetchLicenseStatus();
+        const lic = await fetchLicenseStatusCached();
         if (lic.valid) {
           return '/(tabs)/dashboard';
         }

@@ -24,6 +24,37 @@ const TOKEN_KEY = 'shega_access_token';
 const REFRESH_TOKEN_KEY = 'shega_refresh_token';
 const USER_KEY = 'shega_user';
 
+// ── Persistent status cache ────────────────────────────────────────────────
+// Cold starts re-run the subscription/license gate, which means a connectivity
+// probe + two backend calls before we can route. Caching the (non-failing)
+// results with a modest TTL lets most launches skip that network entirely.
+
+const SUB_STATUS_CACHE_KEY = 'shega_cache_subscription_status';
+const LICENSE_STATUS_CACHE_KEY = 'shega_cache_license_status';
+const SUB_STATUS_TTL_MS = 30 * 60 * 1000; // 30 min
+const LICENSE_STATUS_TTL_MS = 60 * 60 * 1000; // 1 h
+
+async function readStatusCache<T>(key: string, ttlMs: number): Promise<T | null> {
+  try {
+    const raw = await SecureStore.getItemAsync(key);
+    if (!raw) return null;
+    const entry = JSON.parse(raw) as { at?: number; value?: T } | null;
+    if (!entry || typeof entry.at !== 'number' || !entry.value) return null;
+    if (Date.now() - entry.at > ttlMs) return null;
+    return entry.value;
+  } catch {
+    return null;
+  }
+}
+
+async function writeStatusCache<T>(key: string, value: T): Promise<void> {
+  try {
+    await SecureStore.setItemAsync(key, JSON.stringify({ at: Date.now(), value }));
+  } catch (e) {
+    console.warn('[API] status cache write failed', e);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Secure token + user persistence
 // ---------------------------------------------------------------------------
@@ -371,12 +402,30 @@ export const fetchMyPayment = (): Promise<PaymentInfo> =>
 export const fetchSubscriptionStatus = (): Promise<SubscriptionStatusInfo> =>
   request<SubscriptionStatusInfo>('/api/subscription/status/', { auth: true });
 
+// Cached variants — used for the cold-start routing gate so launches within the
+// TTL skip the connectivity probe + network round trips entirely.
+export const fetchSubscriptionStatusCached = async (): Promise<SubscriptionStatusInfo> => {
+  const cached = await readStatusCache<SubscriptionStatusInfo>(SUB_STATUS_CACHE_KEY, SUB_STATUS_TTL_MS);
+  if (cached) return cached;
+  const fresh = await fetchSubscriptionStatus();
+  await writeStatusCache(SUB_STATUS_CACHE_KEY, fresh);
+  return fresh;
+};
+
 // ---------------------------------------------------------------------------
 // License
 // ---------------------------------------------------------------------------
 
 export const fetchLicenseStatus = (): Promise<LicenseStatusInfo> =>
   request<LicenseStatusInfo>('/api/license/status/', { auth: true });
+
+export const fetchLicenseStatusCached = async (): Promise<LicenseStatusInfo> => {
+  const cached = await readStatusCache<LicenseStatusInfo>(LICENSE_STATUS_CACHE_KEY, LICENSE_STATUS_TTL_MS);
+  if (cached) return cached;
+  const fresh = await fetchLicenseStatus();
+  await writeStatusCache(LICENSE_STATUS_CACHE_KEY, fresh);
+  return fresh;
+};
 
 export const verifyLicense = (payload: { license_key: string }): Promise<LicenseStatusInfo> =>
   request<LicenseStatusInfo>('/api/license/verify/', { method: 'POST', body: payload, auth: true });

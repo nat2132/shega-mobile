@@ -181,7 +181,6 @@ export default function RootLayout() {
   const [dbError, setDbError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!loaded && !error) return;
     let cancelled = false;
     (async () => {
       try {
@@ -212,17 +211,31 @@ export default function RootLayout() {
           setDbReady(true);
           setDbError(e instanceof Error ? e.message : 'Database failed to initialize');
         }
-      } finally {
-        // ALWAYS hide the splash, even on failure, so the app never hangs.
-        try {
-          SplashScreen.hideAsync();
-        } catch {}
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [loaded, error]);
+  }, []);
+
+  // Hide the native splash only once BOTH fonts and DB are ready, so we never
+  // flash a blank frame between the two.
+  useEffect(() => {
+    if (loaded && dbReady) {
+      try {
+        SplashScreen.hideAsync();
+      } catch {}
+    }
+  }, [loaded, dbReady]);
+
+  // If fonts outright fail to load, unblock anyway.
+  useEffect(() => {
+    if (error) {
+      try {
+        SplashScreen.hideAsync();
+      } catch {}
+    }
+  }, [error]);
 
   if (!loaded && !error) {
     return null;

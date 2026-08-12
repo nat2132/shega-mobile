@@ -69,8 +69,8 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [globalDiscount, setGlobalDiscount] = useState("0");
-  const [taxType, setTaxType] = useState<"VAT" | "TOT" | "Other" | "None">("VAT");
-  const [taxRate, setTaxRate] = useState("15");
+  const [taxType, setTaxType] = useState<"VAT" | "TOT" | "Other" | "None">("None");
+  const [taxRate, setTaxRate] = useState("0");
   const [recordDate, setRecordDate] = useState("");
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [dueDays, setDueDays] = useState("5");
@@ -321,8 +321,8 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                 setCustomerName(d.customerName || '');
                 setCustomerPhone(d.customerPhone || '');
                 setGlobalDiscount(d.globalDiscount || '0');
-                setTaxType(d.taxType || 'VAT');
-                setTaxRate(d.taxRate || '15');
+                setTaxType(d.taxType || 'None');
+                setTaxRate(d.taxRate || '0');
                 setRecordDate(d.recordDate || '');
                 setDueDays(d.dueDays || '5');
                 await draftFormData.remove(draft.id);
@@ -773,18 +773,15 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                     {customerPhone.length}/20
                   </AppText>
                 </View>
-                <View style={styles.inputNode}>
-                  <View style={styles.nodeHeader}>
-                    <Calendar size={14} color={SALES_GLASS.fgSecondary} />
+                <View style={[styles.adjRow, { marginTop: 12 }]}>
+                  <View style={styles.adjLabelCol}>
+                    <Calendar size={16} color={SALES_GLASS.fgSecondary} />
                     <AppText
                       variant="caption"
                       weight="bold"
                       transform="uppercase"
-                      style={[
-                        styles.nodeLabel,
-                        { color: SALES_GLASS.fgSecondary },
-                      ]}
-                      numberOfLines={1}
+                      style={[styles.adjLabel, { color: SALES_GLASS.fgSecondary }]}
+                      numberOfLines={2}
                     >
                       {t("sale.due_in_days")}
                     </AppText>
@@ -799,7 +796,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                     ]}
                   >
                     <TextInput
-                      style={[styles.adjInput, { color: SALES_GLASS.fg }]}
+                      style={[styles.adjInput, { color: SALES_GLASS.fg, textAlign: "right" }]}
                       placeholder="5"
                       placeholderTextColor={SALES_GLASS.fgSecondary}
                       keyboardType="numeric"
@@ -1045,7 +1042,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                         ]}
                         numberOfLines={1}
                       >
-                        {type}
+                        {t(`sale.tax.${type.toLowerCase()}`)}
                       </AppText>
                     </TouchableOpacity>
                   ))}
@@ -1153,7 +1150,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                   style={[styles.vLabel, { color: SALES_GLASS.fgSecondary }]}
                   numberOfLines={1}
                 >
-                  {taxType === "None" ? t("sale.tax_type") : `${taxType} (${taxRate}%)`}
+                  {taxType === "None" ? t("sale.tax_type") : `${t(`sale.tax.${taxType.toLowerCase()}`)} (${taxRate}%)`}
                 </AppText>
                 <AppNumber
                   value={taxAmount}

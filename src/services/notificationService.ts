@@ -122,7 +122,7 @@ export const checkOutstandingDebts = (): AppNotification[] => {
         deepLink: '/(tabs)/sales-hub',
         data: {
           customerName: debt.customerName,
-          amount: debt.oweAmount,
+          amount: debt.oweAmount ?? 0,
           intent: 'collect_payments',
           titleKey: 'notif.title.outstanding_debt',
           messageKey: 'notif.message.outstanding_debt',

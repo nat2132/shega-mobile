@@ -1,51 +1,75 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { router } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import StartupSplashScreen from '../src/screens/onboarding/startup-splash';
 import { getStoredToken } from '../src/services/api';
 
+type StartupPhase = 'loading' | 'account' | 'security' | 'subscription';
+
 export default function Index() {
-  const onStartupFinish = async () => {
-    let target: string;
-    try {
-      // 1. Is the user logged in (backend JWT)?
-      const token = await getStoredToken();
+  const [phase, setPhase] = useState<StartupPhase>('loading');
+  const [ready, setReady] = useState(false);
+  const targetRef = useRef<string>('');
 
-      if (!token) {
-        // First launch: let the user pick their app language before any
-        // onboarding or login UX appears. settings_language is only written by
-        // the settings provider once a language is chosen.
-        let fromFirstRun = true;
-        try {
-          const saved = await SecureStore.getItemAsync('settings_language');
-          if (saved) fromFirstRun = false;
-        } catch {
-          fromFirstRun = true;
-        }
-        // Show login/register flow.
-        target = fromFirstRun ? '/language-select' : '/welcome-choice';
-      } else {
-        // 2. Local device lock (PIN) still applies for in-app security.
-        const pin = await SecureStore.getItemAsync('user_pin');
-        const setupComplete = await SecureStore.getItemAsync('user_setupComplete');
-        if (pin) {
-          target = '/verify-pin';
+  // Resolve the startup route up-front. The splash stays visible (with a
+  // spinner + phase label) until this finishes, instead of blindly navigating
+  // after a fixed timer and leaving the user staring at a completed bar while
+  // the (network) checks still run invisibly.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      let target: string;
+      try {
+        // 1. Is the user logged in (backend JWT)?
+        setPhase('account');
+        const token = await getStoredToken();
+
+        if (!token) {
+          // First launch: let the user pick their app language before any
+          // onboarding or login UX appears. settings_language is only written
+          // by the settings provider once a language is chosen.
+          let fromFirstRun = true;
+          try {
+            const saved = await SecureStore.getItemAsync('settings_language');
+            if (saved) fromFirstRun = false;
+          } catch {
+            fromFirstRun = true;
+          }
+          // Show login/register flow.
+          target = fromFirstRun ? '/language-select' : '/welcome-choice';
         } else {
-          // 3. Check subscription + license gate.
-          const { resolvePostAuthRoute } = await import('../src/services/postAuthRouter');
-          target = await resolvePostAuthRoute();
-          if (!target) target = setupComplete === 'true' ? '/(tabs)/dashboard' : '/subscription/plans';
+          // 2. Local device lock (PIN) still applies for in-app security.
+          setPhase('security');
+          const pin = await SecureStore.getItemAsync('user_pin');
+          const setupComplete = await SecureStore.getItemAsync('user_setupComplete');
+          if (pin) {
+            target = '/verify-pin';
+          } else {
+            // 3. Check subscription + license gate.
+            setPhase('subscription');
+            const { resolvePostAuthRoute } = await import('../src/services/postAuthRouter');
+            target = await resolvePostAuthRoute();
+            if (!target) target = setupComplete === 'true' ? '/(tabs)/dashboard' : '/subscription/plans';
+          }
         }
+        if (cancelled) return;
+        targetRef.current = target;
+        console.log('[SHEGA-INDEX] startup routing →', target, { hasLogin: !!token });
+      } catch (error) {
+        // Never let startup die on this — fall back to login/register.
+        console.error('[SHEGA-INDEX] startup check failed, routing to welcome:', error);
+        if (cancelled) return;
+        targetRef.current = '/welcome-choice';
       }
-      console.log('[SHEGA-INDEX] startup routing →', target, { hasLogin: !!token });
-    } catch (error) {
-      // Never let startup die on this — fall back to login/register.
-      console.error('[SHEGA-INDEX] startup check failed, routing to welcome:', error);
-      target = '/welcome-choice';
-    }
+      if (!cancelled) setReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-    // Defer navigation until after the splash has fully painted so the
-    // router replaces don't race the first frame.
+  const onStartupFinish = () => {
+    const target = targetRef.current;
     setTimeout(() => {
       try {
         router.replace(target as any);
@@ -60,5 +84,7 @@ export default function Index() {
     }, 0);
   };
 
-  return <StartupSplashScreen onNext={onStartupFinish} />;
+  const loadingLabelKey = phase === 'loading' ? undefined : `startup.${phase}`;
+
+  return <StartupSplashScreen loading={!ready} loadingLabelKey={loadingLabelKey} onNext={onStartupFinish} />;
 }

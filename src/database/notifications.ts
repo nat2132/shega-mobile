@@ -120,10 +120,37 @@ export const createNotification = (
   input: CreateNotificationInput,
 ): AppNotification | null => {
   try {
-    if (input.groupKey && hasActiveNotificationByGroupKey(input.groupKey)) {
-      return null;
-    }
     const database = getDB();
+    if (input.groupKey) {
+      const existing = database.getFirstSync<{ id: number }>(
+        'SELECT id FROM notifications WHERE groupKey = ? AND isResolved = 0 ORDER BY id DESC LIMIT 1',
+        [input.groupKey],
+      );
+      if (existing) {
+        // Same active alert already exists — refresh its content (message,
+        // interpolation params, priority, etc.) so stale placeholders/buggy
+        // values self-heal without resetting the user's read/resolved state.
+        database.prepareSync(
+          `UPDATE notifications
+             SET type = ?, category = ?, priority = ?, title = ?, message = ?,
+                 icon = ?, deepLink = ?, data = ?, requiresAction = ?, expiresAt = ?
+           WHERE id = ?`,
+        ).executeSync([
+          input.type,
+          input.category,
+          input.priority || 'normal',
+          input.title,
+          input.message,
+          input.icon || 'bell',
+          input.deepLink || null,
+          input.data ? JSON.stringify(input.data) : null,
+          input.requiresAction ? 1 : 0,
+          input.expiresAt || null,
+          existing.id,
+        ]);
+        return getNotificationById(existing.id);
+      }
+    }
     const result = database.prepareSync(
       `INSERT INTO notifications
         (type, category, priority, title, message, icon, deepLink, data, groupKey, requiresAction, expiresAt)

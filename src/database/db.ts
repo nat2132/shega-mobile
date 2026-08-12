@@ -2556,7 +2556,7 @@ export const getDebtCustomers = () => {
       SELECT 
         TRIM(customerName) as customerName, 
         customerPhone, 
-        SUM(totalPrice - paidAmount) as oweAmount,
+        IFNULL(SUM(totalPrice - paidAmount), 0) as oweAmount,
         MAX(createdAt) as lastBorrowed,
         MIN(dueDate) as earliestDue,
         COUNT(*) as totalDebts

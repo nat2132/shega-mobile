@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
-import React, { useCallback, useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useCallback, useEffect, useRef } from 'react';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { AppText } from '@/components/ui';
 import Animated, {
   Easing,
@@ -19,12 +19,17 @@ import { DIMENSIONS, getGlass } from './glass-theme';
 const { W } = DIMENSIONS;
 const LOGO_SIZE = 100;
 const DURATION = 2500;
+// Hard cap: if real startup work (PIN check, subscription/license network
+// probe…) ever hangs, never leave the user stuck on the splash.
+const SAFETY_TIMEOUT = 15000;
 
 interface StartupSplashScreenProps {
   onNext?: () => void;
+  loading?: boolean;
+  loadingLabelKey?: string;
 }
 
-function StaticSplash({ colors, t }: { colors: any; t: (k: string) => string }) {
+function StaticSplash({ colors, t, loadingLabel }: { colors: any; t: (k: string) => string; loadingLabel?: string }) {
   const G = getGlass(colors);
   return (
     <View style={[styles.container, { backgroundColor: G.bg }]}>
@@ -42,6 +47,14 @@ function StaticSplash({ colors, t }: { colors: any; t: (k: string) => string }) 
           </AppText>
         </View>
       </View>
+      {loadingLabel ? (
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator size="small" color={G.fgSecondary} />
+          <AppText variant="caption" weight="medium" style={[styles.loadingText, { color: G.fgSecondary }]}>
+            {loadingLabel}
+          </AppText>
+        </View>
+      ) : null}
       <View style={[styles.progressLayer, { backgroundColor: G.progressTrack }]} pointerEvents="none">
         <View style={[{ backgroundColor: G.progressFill, height: '100%', borderRadius: 1 }]} />
       </View>
@@ -49,7 +62,7 @@ function StaticSplash({ colors, t }: { colors: any; t: (k: string) => string }) 
   );
 }
 
-function AnimatedSplash({ colors, t }: { colors: any; t: (k: string) => string }) {
+function AnimatedSplash({ colors, t, loadingLabel }: { colors: any; t: (k: string) => string; loadingLabel?: string }) {
   const G = getGlass(colors);
 
   const logoScale = useSharedValue(0.4);
@@ -119,6 +132,15 @@ function AnimatedSplash({ colors, t }: { colors: any; t: (k: string) => string }
         </Animated.View>
       </Animated.View>
 
+      {loadingLabel ? (
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator size="small" color={G.fgSecondary} />
+          <AppText variant="caption" weight="medium" style={[styles.loadingText, { color: G.fgSecondary }]}>
+            {loadingLabel}
+          </AppText>
+        </View>
+      ) : null}
+
       <View style={[styles.progressLayer, { backgroundColor: G.progressTrack }]} pointerEvents="none">
         <Animated.View style={[{ backgroundColor: G.progressFill, height: '100%', borderRadius: 1 }, progressAnimatedStyle]} />
       </View>
@@ -126,24 +148,54 @@ function AnimatedSplash({ colors, t }: { colors: any; t: (k: string) => string }
   );
 }
 
-export default function StartupSplashScreen({ onNext }: StartupSplashScreenProps) {
+export default function StartupSplashScreen({ onNext, loading = true, loadingLabelKey }: StartupSplashScreenProps) {
   const { colors, t } = useSettings();
 
   const onNextCallback = useCallback(() => onNext?.(), [onNext]);
 
-  // Navigation is owned here (not by the animated subtree) so it ALWAYS runs
-  // after DURATION even if Reanimated fails to initialize and we fall back to
-  // the static splash.
-  useEffect(() => {
-    const timer = setTimeout(onNextCallback, DURATION);
-    return () => clearTimeout(timer);
+  // Latest loading flag, readable inside callbacks without re-creating them.
+  const loadingRef = useRef(loading);
+  loadingRef.current = loading;
+
+  const minElapsed = useRef(false);
+  const advanced = useRef(false);
+
+  const maybeAdvance = useCallback(() => {
+    if (advanced.current) return;
+    // Stay until BOTH the minimum brand time has elapsed AND the startup work
+    // (token/PIN/subscription checks) is done — the splash is a loading screen.
+    if (!minElapsed.current || loadingRef.current) return;
+    advanced.current = true;
+    onNextCallback();
   }, [onNextCallback]);
+
+  // Minimum brand time — keeps the logo animation visible long enough.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      minElapsed.current = true;
+      maybeAdvance();
+    }, DURATION);
+    return () => clearTimeout(timer);
+  }, [maybeAdvance]);
+
+  // Leave the instant real startup work finishes (after the minimum time).
+  useEffect(() => {
+    if (!loading) maybeAdvance();
+  }, [loading, maybeAdvance]);
+
+  // Hard cap: never strand the user on the splash if startup hangs.
+  useEffect(() => {
+    const timer = setTimeout(maybeAdvance, SAFETY_TIMEOUT);
+    return () => clearTimeout(timer);
+  }, [maybeAdvance]);
+
+  const loadingLabel = loadingLabelKey ? t(loadingLabelKey) : t('startup.loading');
 
   return (
     <ErrorBoundary
-      fallback={() => <StaticSplash colors={colors} t={t} />}
+      fallback={() => <StaticSplash colors={colors} t={t} loadingLabel={loadingLabel} />}
     >
-      <AnimatedSplash colors={colors} t={t} />
+      <AnimatedSplash colors={colors} t={t} loadingLabel={loadingLabel} />
     </ErrorBoundary>
   );
 }
@@ -196,5 +248,19 @@ const styles = StyleSheet.create({
     height: 3,
     borderRadius: 1.5,
     overflow: 'hidden',
+  },
+  loadingWrap: {
+    position: 'absolute',
+    bottom: 105,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 40,
+  },
+  loadingText: {
+    maxWidth: '80%',
   },
 });

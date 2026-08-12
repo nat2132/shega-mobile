@@ -17,12 +17,21 @@
 //     so the app picks up connectivity the moment the user comes back online.
 
 import { AppState } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
 
 // Points app connectivity probes here. This is a standard reachability
 // endpoint (returns HTTP 204) that carries no app/business data and no secrets.
 const PROBE_URL = 'https://www.gstatic.com/generate_204';
 const PROBE_TIMEOUT_MS = 5000;
 const CACHE_TTL_MS = 15_000;
+
+// Persistent cache: lets a cold start reuse the last-known connectivity state
+// instead of re-probing the network on every launch. "Online" is trusted for
+// a couple of minutes, "offline" only briefly so a stale failure never blocks
+// the app for long.
+const PERSIST_KEY = 'shega_net_cache';
+const ONLINE_TTL_MS = 120_000;
+const OFFLINE_TTL_MS = 30_000;
 
 export const OFFLINE_MESSAGE =
   'Internet connection is required for this action. Please connect to the internet and try again.';
@@ -46,18 +55,56 @@ async function doProbe(): Promise<boolean> {
   });
 }
 
+// ── Persistent (cross-launch) cache helpers ────────────────────────────────
+
+let persistent: { at: number; value: boolean } | null = null;
+
+/** Last-known connectivity persisted to SecureStore, read lazily once. */
+async function readPersistent(): Promise<{ at: number; value: boolean } | null> {
+  if (persistent) return persistent;
+  try {
+    const raw = await SecureStore.getItemAsync(PERSIST_KEY);
+    if (!raw) return null;
+    const entry = JSON.parse(raw) as { at?: number; value?: boolean } | null;
+    if (!entry || typeof entry.value !== 'boolean' || typeof entry.at !== 'number') return null;
+    persistent = { at: entry.at, value: entry.value };
+    return persistent;
+  } catch {
+    return null;
+  }
+}
+
+/** Best-effort persist of the latest probe result (doesn't await the write). */
+function persistResult(value: boolean): void {
+  const at = Date.now();
+  persistent = { at, value };
+  SecureStore.setItemAsync(PERSIST_KEY, JSON.stringify({ at, value })).catch(() => {});
+}
+
 /**
  * Returns whether we currently believe the device has working internet access.
- * `force` bypasses the short TTL cache for on-demand manual actions.
+ * `force` bypasses both the short in-memory cache and the persistent cache for
+ * on-demand manual actions (live status indicators, retries).
  */
 export async function checkInternetConnection(force = false): Promise<boolean> {
   if (!force && cache && Date.now() - cache.at < CACHE_TTL_MS) {
     return cache.value;
   }
+  if (!force) {
+    const persisted = await readPersistent();
+    if (persisted) {
+      const ttl = persisted.value ? ONLINE_TTL_MS : OFFLINE_TTL_MS;
+      if (Date.now() - persisted.at < ttl) {
+        cache = { at: Date.now(), value: persisted.value };
+        return persisted.value;
+      }
+    }
+  }
   if (inflight) return inflight;
   inflight = doProbe()
     .then((value) => {
       cache = { at: Date.now(), value };
+      persistResult(value);
       return value;
     })
     .finally(() => {
