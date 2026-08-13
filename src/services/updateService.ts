@@ -58,7 +58,16 @@ function getExtra(): { githubOwner: string; githubRepo: string; includePrereleas
 }
 
 function parseVersion(tag: string): number[] {
-  return tag.replace(/^v/i, '').split('.').map(Number);
+  // Normalize GitHub release tags that are sometimes uploaded as `v1.0.4` and
+  // sometimes as `v.1.0.5` (stray dot after the `v`). The old `^v` regex left
+  // `.1.0.5`, which parsed to `[0,1,0,5]` and made `1.0.4` look "newer" than
+  // `1.0.5` — silently hiding every update.
+  const cleaned = tag.replace(/^v\.?/i, '').trim();
+  return cleaned.split('.').map((n) => Number(n));
+}
+
+export function normalizeVersionString(tag: string): string {
+  return tag.replace(/^v\.?/i, '').trim();
 }
 
 export function compareVersions(current: string, latest: string): number {

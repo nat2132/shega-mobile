@@ -97,7 +97,7 @@ export const UpdateProvider = ({ children }: { children: React.ReactNode }) => {
       latestReleaseRef.current = release;
 
       const currentVer = UpdateService.getCurrentAppVersion();
-      const latestVer = release.tag_name.replace(/^v/i, '');
+      const latestVer = UpdateService.normalizeVersionString(release.tag_name);
       const comparison = UpdateService.compareVersions(currentVer, latestVer);
 
       if (comparison >= 0) {
