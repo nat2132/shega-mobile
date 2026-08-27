@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -11,33 +11,100 @@ import {
   Bell,
   Languages,
   Moon,
-  Sun
+  Sun,
+  Wifi,
+  WifiOff,
+  RefreshCw,
+  AlertTriangle
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useSettings, PROFILE_IMAGES } from '@/context/SettingsContext';
 import { useSidebar } from '@/context/SidebarContext';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useSync } from '@/context/SyncContext';
+import { useToast } from '@/context/ToastContext';
 
 const GlobalHeader = () => {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { userProfile, theme, setTheme, previousDarkTheme, colors } = useSettings();
+  const { userProfile, theme, setTheme, previousDarkTheme, colors, t } = useSettings();
   const { openSidebar } = useSidebar();
   const { notifCount } = useNotifications();
+  const { status, busy, lastError, lastResult, runSync } = useSync();
+  const { showToast } = useToast();
 
   const toggleTheme = () => {
     setTheme(theme === 'light' ? previousDarkTheme : 'light');
   };
 
+  // Show toast on sync completion/error
+  useEffect(() => {
+    if (lastResult) {
+      const { pushed, pulled, conflicts } = lastResult;
+      if (pushed > 0 || pulled > 0) {
+        showToast({
+          message: t('sync.completed', { pushed: String(pushed), pulled: String(pulled) }),
+          type: 'success',
+          title: t('sync.title')
+        });
+      }
+      if (conflicts > 0) {
+        showToast({
+          message: t('sync.conflicts', { count: String(conflicts) }),
+          type: 'warning',
+          title: t('sync.title')
+        });
+      }
+    }
+  }, [lastResult, t, showToast]);
+
+  useEffect(() => {
+    if (lastError) {
+      showToast({
+        message: lastError,
+        type: 'error',
+        title: t('sync.error_title')
+      });
+    }
+  }, [lastError, t, showToast]);
+
+  const getSyncState = () => {
+    if (busy) return 'syncing';
+    if (!status.hub) return 'unconfigured';
+    if (lastError) return 'error';
+    return 'online';
+  };
+
+  const syncState = getSyncState();
+
+  const renderSyncIcon = () => {
+    switch (syncState) {
+      case 'syncing':
+        return <RefreshCw size={18} color={colors.primary} style={styles.spinningIcon} />;
+      case 'error':
+        return <AlertTriangle size={18} color={colors.error || '#FF3B30'} />;
+      case 'unconfigured':
+        return <WifiOff size={18} color={colors.textSecondary} />;
+      default:
+        return <Wifi size={18} color={colors.success || '#34C759'} />;
+    }
+  };
+
+  const pendingCount = status.outboxCount || 0;
+
+  const handleSyncPress = () => {
+    runSync();
+  };
+
   return (
-    <View style={[styles.outerContainer, { top: 0, paddingTop: insets.top + 10 }]}>
+    <View style={[styles.outerContainer, { top: 0, paddingTop: insets.top + 10 }] as const}>
       <View
         style={[
           styles.headerContainer,
           {
             backgroundColor: colors.header,
             borderBottomColor: colors.border,
-          },
+          } as const,
         ]}
       >
         <View style={styles.headerContent}>
@@ -47,7 +114,7 @@ const GlobalHeader = () => {
             activeOpacity={0.7}
             style={styles.avatarTouch}
           >
-            <View style={[styles.avatarBorder, { borderColor: colors.border }]}>
+            <View style={[styles.avatarBorder, { borderColor: colors.border } as const]}>
                <Image
                  source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]}
                  style={styles.avatarImage}
@@ -57,10 +124,32 @@ const GlobalHeader = () => {
 
           {/* Right: Actions */}
           <View style={styles.actionGroup}>
+            {/* Sync Status Indicator */}
+            <TouchableOpacity
+              onPress={handleSyncPress}
+              style={[styles.iconBtn, { backgroundColor: colors.card } as const]}
+              accessibilityLabel={t('sync.status_' + syncState)}
+            >
+              {renderSyncIcon()}
+              {pendingCount > 0 && (
+                <View
+                  style={[
+                    styles.badge,
+                    { backgroundColor: colors.primary, borderColor: colors.background } as const,
+                    pendingCount > 9 && styles.badgeWide,
+                  ]}
+                >
+                  <Text style={styles.badgeText} numberOfLines={1}>
+                    {pendingCount > 99 ? '99+' : String(pendingCount)}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
             {/* Translation */}
             <TouchableOpacity
               onPress={() => router.push('/translation')}
-              style={[styles.iconBtn, { backgroundColor: colors.card }]}
+              style={[styles.iconBtn, { backgroundColor: colors.card } as const]}
             >
               <Languages size={18} color={colors.text} />
             </TouchableOpacity>
@@ -68,19 +157,19 @@ const GlobalHeader = () => {
             {/* Notifications */}
             <TouchableOpacity
               onPress={() => router.push('/notifications')}
-              style={[styles.iconBtn, { backgroundColor: colors.card }]}
+              style={[styles.iconBtn, { backgroundColor: colors.card } as const]}
             >
               <Bell size={18} color={colors.text} />
               {notifCount > 0 && (
                 <View
                   style={[
                     styles.badge,
-                    { backgroundColor: colors.error || '#FF3B30', borderColor: colors.background },
+                    { backgroundColor: colors.error || '#FF3B30', borderColor: colors.background } as const,
                     notifCount > 9 && styles.badgeWide,
                   ]}
                 >
                   <Text style={styles.badgeText} numberOfLines={1}>
-                    {notifCount > 99 ? '99+' : notifCount}
+                    {notifCount > 99 ? '99+' : String(notifCount)}
                   </Text>
                 </View>
               )}
@@ -89,7 +178,7 @@ const GlobalHeader = () => {
             {/* Theme Toggle */}
             <TouchableOpacity
               onPress={toggleTheme}
-              style={[styles.iconBtn, { backgroundColor: colors.text }]}
+              style={[styles.iconBtn, { backgroundColor: colors.text } as const]}
             >
               {theme === 'light' ? (
                 <Moon size={18} color={colors.background} />
@@ -177,9 +266,13 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 10,
     fontFamily: 'Inter-Bold',
-    fontWeight: '700',
+    fontWeight: '700' as const,
     lineHeight: 14,
-    textAlign: 'center',
+    textAlign: 'center' as const,
+  },
+  spinningIcon: {
+    // Animation handled by lucide-react-native's built-in spin prop or use Animated API
+    // For now, just a placeholder style
   },
 });
 

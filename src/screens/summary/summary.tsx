@@ -3,7 +3,7 @@ import { NotificationBell } from '@/components/NotificationBell';
 import { Fonts } from '@/constants/theme';
 import { PROFILE_IMAGES, useSettings } from '@/context/SettingsContext';
 import { useSidebar } from '@/context/SidebarContext';
-import { getSummaryMetricsByDateRange, getEarliestRecordDate } from '@/database/db';
+import { getSummaryMetricsByDateRange, getEarliestRecordDate, getVatSummaryByDateRange, getDrilldownSummaryByDateRange } from '@/database/db';
 import { useNotifications } from '@/hooks/useNotifications';
 import { formatDate } from '@/utils/date-utils';
 import * as Haptics from 'expo-haptics';
@@ -22,6 +22,7 @@ import {
   Meh,
   Frown,
   ChevronDown,
+  BadgePercent,
 } from 'lucide-react-native';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Image, Modal, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
@@ -184,12 +185,16 @@ const SummaryScreen = () => {
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
   const [earliestDate, setEarliestDate] = useState<string | undefined>(undefined);
   const [dateRange, setDateRange] = useState<DateRange>(getDateRangeForOption('today'));
+  const [vat, setVat] = useState<any>(null);
+  const [drilldowns, setDrilldowns] = useState<any>(null);
 
   const loadData = useCallback((option: DateRangeOption, date?: string) => {
     const range = getDateRangeForOption(option, date);
     setDateRange(range);
     const data = getSummaryMetricsByDateRange(range.start, range.end);
     if (data) setMetrics(data);
+    setVat(getVatSummaryByDateRange(range.start, range.end));
+    setDrilldowns(getDrilldownSummaryByDateRange(range.start, range.end));
   }, []);
 
   useEffect(() => {
@@ -337,6 +342,49 @@ const SummaryScreen = () => {
               icon={CreditCard}
             />
           </View>
+
+          {/* Row 2b: VAT Output & Taxable Sales */}
+          <View style={styles.metricsRow}>
+            <MetricCard 
+              label={t('summary.vat_output')}
+              value={<AppNumber value={vat?.summary?.totalVAT ?? 0} showCurrency size="title" weight="bold" compact />}
+              icon={BadgePercent}
+              subtitle={vat?.buckets?.map((b: any) => `${b.rate}: ${b.count}`).join(' · ')}
+            />
+            <MetricCard 
+              label={t('summary.taxable_sales')}
+              value={<AppNumber value={vat?.summary?.totalTaxable ?? 0} showCurrency size="title" weight="bold" compact />}
+              icon={DollarSign}
+              subtitle={t('summary.vat_invoices') + `: ${vat?.summary?.totalCount ?? 0}`}
+            />
+          </View>
+
+          {/* Row 2c: Drill-downs — Top movers & Margin by item */}
+          {drilldowns && ((drilldowns.movers || []).length > 0 || (drilldowns.marginByItem || []).length > 0) && (
+            <>
+              <AppText variant="caption" weight="bold" style={[styles.sectionTitle, { color: G.muted }]}>
+                {t('summary.drilldowns')}
+              </AppText>
+              <View style={styles.metricsRow}>
+                <MetricCard 
+                  label={t('summary.fast_movers')}
+                  value={(drilldowns.movers?.[0]?.name || '—') as string}
+                  icon={TrendingUp}
+                  subtitle={drilldowns.movers?.[0]
+                    ? `${drilldowns.movers[0].unitsSold} ${t('summary.units_sold')} · ${drilldowns.movers[0].saleCount} ${t('summary.sales_count')}`
+                    : undefined}
+                />
+                <MetricCard 
+                  label={t('summary.top_margin_item')}
+                  value={(drilldowns.marginByItem?.[0]?.name || '—') as string}
+                  icon={Package}
+                  subtitle={drilldowns.marginByItem?.[0]
+                    ? `${t('summary.profit')}: ${(drilldowns.marginByItem[0].profit ?? 0).toLocaleString()}` 
+                    : undefined}
+                />
+              </View>
+            </>
+          )}
 
           {/* Row 3: Debt & Damage Loss */}
           <View style={styles.metricsRow}>
@@ -539,6 +587,12 @@ const styles = StyleSheet.create({
   metricsRow: {
     flexDirection: 'row',
     gap: 10,
+  },
+  sectionTitle: {
+    marginTop: 12,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
   },
   metricCard: {
     flex: 1,

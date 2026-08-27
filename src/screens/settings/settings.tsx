@@ -68,6 +68,7 @@ import WarehouseSettingsScreen from './warehouse';
 import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
 import { settingsTutorial } from '@/tutorials/definitions';
 import { useUpdate } from '@/context/UpdateContext';
+import SyncSettings from '@/components/SyncSettings';
 
 // →→→ Shared Sub-Components →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
 
@@ -564,6 +565,9 @@ const SettingsScreen = () => {
             />
           </View>
         </View>
+
+        {/* Offline-first Sync (Phase 3) */}
+        <SyncSettings />
 
         {/* Dashboard Customization */}
         <View style={styles.ledgerSection}>

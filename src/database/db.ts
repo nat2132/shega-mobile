@@ -1,37 +1,42 @@
 import { fromEthiopianToDate, getEthiopianDaysInMonth, toEthiopianDate, toLocalDateString } from '@/utils/date-utils';
+import { sha256Hex } from '@/utils/sha256';
 import * as SQLite from 'expo-sqlite';
 
 const GLOBAL_DB_KEY = '__shega_db';
 const DB_NAME = 'shegabe.db';
+const DEMO_DB_NAME = 'shegabe_demo.db';
 
 let db: SQLite.SQLiteDatabase | null = null;
+let demoDb: SQLite.SQLiteDatabase | null = null;
+let currentDb: SQLite.SQLiteDatabase | null = null;
 let dbReady = false;
+let isDemoMode = false;
 
-const openDB = (useNew = false) => {
-  const opened = SQLite.openDatabaseSync(DB_NAME, useNew ? { useNewConnection: true } : undefined);
+const openDB = (useNew = false, dbName = DB_NAME) => {
+  const opened = SQLite.openDatabaseSync(dbName, useNew ? { useNewConnection: true } : undefined);
   try { opened.execSync('ROLLBACK'); } catch {}
   opened.execSync('PRAGMA journal_mode=WAL');
   opened.execSync('PRAGMA busy_timeout=5000');
   return opened;
 };
 
-const recoverDB = () => {
+const recoverDB = (dbName = DB_NAME) => {
   try { db?.closeSync(); } catch {}
   (globalThis as any)[GLOBAL_DB_KEY] = null;
   db = null;
   dbReady = false;
 
   try {
-    SQLite.deleteDatabaseSync(DB_NAME);
-    db = openDB();
-    (globalThis as any)[GLOBAL_DB_KEY] = db;
+    SQLite.deleteDatabaseSync(dbName);
+    db = openDB(false, dbName);
+    (globalThis as any)[dbName === DEMO_DB_NAME ? '__shega_demo_db' : GLOBAL_DB_KEY] = db;
     dbReady = true;
     return db;
   } catch {}
 
   try {
-    db = openDB(true);
-    (globalThis as any)[GLOBAL_DB_KEY] = db;
+    db = openDB(true, dbName);
+    (globalThis as any)[dbName === DEMO_DB_NAME ? '__shega_demo_db' : GLOBAL_DB_KEY] = db;
     dbReady = true;
     return db;
   } catch {}
@@ -39,8 +44,9 @@ const recoverDB = () => {
   throw new Error('Cannot recover database - still locked after delete + reopen');
 };
 
-const getDBCached = (): SQLite.SQLiteDatabase => {
-  const cached = (globalThis as any)[GLOBAL_DB_KEY];
+const getDBCached = (dbName = DB_NAME): SQLite.SQLiteDatabase => {
+  const key = dbName === DEMO_DB_NAME ? '__shega_demo_db' : GLOBAL_DB_KEY;
+  const cached = (globalThis as any)[key];
   if (cached) {
     try {
       try { cached.execSync('ROLLBACK'); } catch {}
@@ -49,35 +55,129 @@ const getDBCached = (): SQLite.SQLiteDatabase => {
       return cached;
     } catch {
       try { cached.closeSync(); } catch {}
-      (globalThis as any)[GLOBAL_DB_KEY] = null;
+      (globalThis as any)[key] = null;
     }
   }
   try {
-    db = openDB();
+    db = openDB(false, dbName);
   } catch {
-    return recoverDB();
+    return recoverDB(dbName);
   }
-  (globalThis as any)[GLOBAL_DB_KEY] = db;
+  (globalThis as any)[key] = db;
   return db;
+};
+
+export const getDemoMode = () => isDemoMode;
+
+export const setDemoMode = (enabled: boolean) => {
+  isDemoMode = enabled;
+  if (enabled) {
+    if (!demoDb) {
+      demoDb = getDBCached(DEMO_DB_NAME);
+    }
+    currentDb = demoDb;
+  } else {
+    if (!db) {
+      db = getDBCached(DB_NAME);
+    }
+    currentDb = db;
+  }
+  return isDemoMode;
 };
 
 export const getDB = () => {
-  if (db && dbReady) {
-    return db;
+  if (currentDb && dbReady) {
+    return currentDb;
   }
-  db = getDBCached();
+  if (!currentDb) {
+    currentDb = getDBCached(isDemoMode ? DEMO_DB_NAME : DB_NAME);
+  }
   dbReady = true;
-  return db;
+  return currentDb;
 };
 
-export const resetDatabase = () => {
-  try { db?.closeSync(); } catch {}
-  db = null;
-  dbReady = false;
-  (globalThis as any)[GLOBAL_DB_KEY] = null;
-  SQLite.deleteDatabaseSync(DB_NAME);
-  db = getDB();
-  return db;
+export const resetDemoDb = () => {
+  if (demoDb) {
+    try { demoDb.closeSync(); } catch {}
+    demoDb = null;
+  }
+  SQLite.deleteDatabaseSync(DEMO_DB_NAME);
+  demoDb = getDBCached(DEMO_DB_NAME);
+  if (isDemoMode) {
+    currentDb = demoDb;
+  }
+  return demoDb;
+};
+
+export const seedDemoData = () => {
+  const ddb = getDB();
+  const bizId = 1;
+  
+  // Add demo categories
+  const categories = ['Beverages', 'Snacks', 'Dairy', 'Bakery', 'Produce', 'Household'];
+  for (const cat of categories) {
+    ddb.runSync('INSERT OR IGNORE INTO categories (businessId, name, isCustom) VALUES (?, ?, 1)', bizId, cat);
+  }
+  
+  // Add demo items
+  const items = [
+    { name: 'Coca Cola 500ml', category: 'Beverages', price: 45, cost: 30, qty: 100 },
+    { name: 'Pepsi 500ml', category: 'Beverages', price: 45, cost: 30, qty: 80 },
+    { name: 'Water 1L', category: 'Beverages', price: 15, cost: 8, qty: 200 },
+    { name: 'Potato Chips', category: 'Snacks', price: 35, cost: 22, qty: 150 },
+    { name: 'Chocolate Bar', category: 'Snacks', price: 25, cost: 15, qty: 200 },
+    { name: 'Milk 1L', category: 'Dairy', price: 55, cost: 40, qty: 50 },
+    { name: 'Yogurt', category: 'Dairy', price: 18, cost: 12, qty: 100 },
+    { name: 'Bread Loaf', category: 'Bakery', price: 30, cost: 18, qty: 80 },
+    { name: 'Apples 1kg', category: 'Produce', price: 80, cost: 50, qty: 60 },
+    { name: 'Bananas 1kg', category: 'Produce', price: 60, cost: 35, qty: 90 },
+    { name: 'Dish Soap', category: 'Household', price: 120, cost: 80, qty: 40 },
+    { name: 'Toilet Paper 4pk', category: 'Household', price: 95, cost: 65, qty: 30 },
+  ];
+  
+  for (const item of items) {
+    const catRow = ddb.getFirstSync('SELECT id FROM categories WHERE businessId = ? AND name = ?', bizId, item.category) as any;
+    if (catRow) {
+      ddb.runSync(`
+        INSERT OR IGNORE INTO items (businessId, name, categoryId, baseSalePrice, basePurchasePrice, totalBaseQuantity, unitsPerPack, isCustom, allowSellByBaseUnit)
+        VALUES (?, ?, ?, ?, ?, ?, 1, 1, 1)
+      `, bizId, item.name, catRow.id, item.price, item.cost, item.qty);
+    }
+  }
+  
+  // Add demo customers
+  const customers = [
+    { name: 'Walk-in Customer', phone: '', email: '' },
+    { name: 'Abebe Kebede', phone: '+251911223344', email: 'abebe@email.com' },
+    { name: 'Meron Tesfaye', phone: '+251922334455', email: 'meron@email.com' },
+    { name: 'Office Supply Co.', phone: '+251115556677', email: 'orders@office.com' },
+  ];
+  
+  for (const cust of customers) {
+    ddb.runSync(`
+      INSERT OR IGNORE INTO customers (businessId, name, phone, email, isCustom)
+      VALUES (?, ?, ?, ?, 1)
+    `, bizId, cust.name, cust.phone, cust.email);
+  }
+  
+  // Add demo sales
+  const today = new Date().toISOString().split('T')[0];
+  const itemsForSale = ddb.getAllSync('SELECT id, baseSalePrice FROM items WHERE businessId = ?', bizId) as any[];
+  const demoCustomers = ddb.getAllSync('SELECT id FROM customers WHERE businessId = ?', bizId) as any[];
+  
+  for (let i = 0; i < 10; i++) {
+    const item = itemsForSale[Math.floor(Math.random() * itemsForSale.length)];
+    const customer = demoCustomers[Math.floor(Math.random() * demoCustomers.length)];
+    const qty = Math.floor(Math.random() * 5) + 1;
+    const total = item.baseSalePrice * qty;
+    
+    ddb.runSync(`
+      INSERT INTO sales (businessId, customerId, customerName, totalPrice, paymentMethod, paymentStatus, status, createdAt)
+      VALUES (?, ?, ?, ?, 'Cash', 'Completed', 'Active', ?)
+    `, bizId, customer?.id || null, customer?.name || 'Walk-in Customer', total, today);
+  }
+  
+  return { success: true, message: 'Demo data seeded successfully' };
 };
 
 const beginTransaction = (database: SQLite.SQLiteDatabase) => {
@@ -103,7 +203,9 @@ const migrateItemsTable = (database: SQLite.SQLiteDatabase) => {
     { name: 'baseSellingPrice', type: 'REAL' },
     { name: 'packSellingPrice', type: 'REAL' },
     { name: 'allowSellByBaseUnit', type: 'INTEGER', default: '1' },
-    { name: 'allowSellByPackUnit', type: 'INTEGER', default: '0' }
+    { name: 'allowSellByPackUnit', type: 'INTEGER', default: '0' },
+    { name: 'sku', type: 'TEXT' },
+    { name: 'barcode', type: 'TEXT' }
   ];
 
   for (const col of columns) {
@@ -192,7 +294,14 @@ export const initDB = () => {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         icon TEXT,
-        isCustom INTEGER NOT NULL DEFAULT 0
+        isCustom INTEGER NOT NULL DEFAULT 0,
+        uuid TEXT,
+        device_id TEXT,
+        row_version INTEGER DEFAULT 1,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        is_deleted INTEGER DEFAULT 0,
+        deleted_at TEXT,
+        is_synced INTEGER DEFAULT 1
       );
     `);
     console.log('Table "categories" checked/created.');
@@ -202,6 +311,8 @@ export const initDB = () => {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         categoryId INTEGER,
+        sku TEXT,
+        barcode TEXT,
         companyName TEXT,
         purchaseUnit TEXT, 
         baseUnit TEXT,
@@ -221,6 +332,13 @@ export const initDB = () => {
         supplierPhone TEXT,
         supplierAccount TEXT,
         createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        uuid TEXT,
+        device_id TEXT,
+        row_version INTEGER DEFAULT 1,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        is_deleted INTEGER DEFAULT 0,
+        deleted_at TEXT,
+        is_synced INTEGER DEFAULT 1,
         FOREIGN KEY (categoryId) REFERENCES categories(id)
       );
     `);
@@ -234,6 +352,13 @@ export const initDB = () => {
         currentQuantity REAL,
         unit TEXT,
         status TEXT DEFAULT 'Not Opened',
+        uuid TEXT,
+        device_id TEXT,
+        row_version INTEGER DEFAULT 1,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        is_deleted INTEGER DEFAULT 0,
+        deleted_at TEXT,
+        is_synced INTEGER DEFAULT 1,
         FOREIGN KEY (itemId) REFERENCES items(id)
       );
     `);
@@ -270,6 +395,13 @@ export const initDB = () => {
         customerPhone TEXT,
         packId INTEGER,
         createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        uuid TEXT,
+        device_id TEXT,
+        row_version INTEGER DEFAULT 1,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        is_deleted INTEGER DEFAULT 0,
+        deleted_at TEXT,
+        is_synced INTEGER DEFAULT 1,
         FOREIGN KEY (itemId) REFERENCES items(id),
         FOREIGN KEY (packId) REFERENCES item_packs(id)
       );
@@ -291,7 +423,14 @@ export const initDB = () => {
         amount REAL NOT NULL,
         type TEXT NOT NULL,
         note TEXT,
-        createdAt TEXT DEFAULT CURRENT_TIMESTAMP
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        uuid TEXT,
+        device_id TEXT,
+        row_version INTEGER DEFAULT 1,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        is_deleted INTEGER DEFAULT 0,
+        deleted_at TEXT,
+        is_synced INTEGER DEFAULT 1
       );
     `);
     console.log('Table "debt_payments" checked/created.');
@@ -310,7 +449,14 @@ export const initDB = () => {
         overdueDays INTEGER DEFAULT 0,
         lastNotified TEXT,
         paymentStatus TEXT DEFAULT 'pending',
-        createdAt TEXT DEFAULT CURRENT_TIMESTAMP
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        uuid TEXT,
+        device_id TEXT,
+        row_version INTEGER DEFAULT 1,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        is_deleted INTEGER DEFAULT 0,
+        deleted_at TEXT,
+        is_synced INTEGER DEFAULT 1
       );
     `);
     console.log('Table "expenses" checked/created.');
@@ -327,6 +473,13 @@ export const initDB = () => {
         reason TEXT,
         date TEXT NOT NULL,
         createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        uuid TEXT,
+        device_id TEXT,
+        row_version INTEGER DEFAULT 1,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        is_deleted INTEGER DEFAULT 0,
+        deleted_at TEXT,
+        is_synced INTEGER DEFAULT 1,
         FOREIGN KEY (itemId) REFERENCES items(id)
       );
     `);
@@ -382,6 +535,32 @@ export const initDB = () => {
     try {
       database.execSync(`ALTER TABLE contacts ADD COLUMN isActive INTEGER DEFAULT 1;`);
       console.log('Successfully migrated contacts table: Added isActive');
+    } catch {}
+
+    // Phase 3: synced customers table mirroring the Desktop hub's `customers`
+    // shared entity so phone can query debt/credit history offline. The unique
+    // (customerName, phone) index mirrors the hub's business-scoped uniqueness.
+    database.execSync(`
+      CREATE TABLE IF NOT EXISTS customers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customerName TEXT NOT NULL,
+        phone TEXT,
+        secondaryPhone TEXT,
+        email TEXT,
+        address TEXT,
+        city TEXT,
+        company TEXT,
+        taxNumber TEXT,
+        groupName TEXT DEFAULT 'general',
+        creditLimit REAL DEFAULT 0,
+        notes TEXT,
+        isActive INTEGER DEFAULT 1,
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    try {
+      database.execSync('CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_name_phone ON customers(customerName, COALESCE(phone, \'\'));');
     } catch {}
 
     // Migration: Purchase fields on the stock_movements log so restocks can be
@@ -526,6 +705,13 @@ export const initDB = () => {
       notes TEXT,
       returnDate TEXT,
       createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      uuid TEXT,
+      device_id TEXT,
+      row_version INTEGER DEFAULT 1,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      is_deleted INTEGER DEFAULT 0,
+      deleted_at TEXT,
+      is_synced INTEGER DEFAULT 1,
       FOREIGN KEY (saleId) REFERENCES sales(id),
       FOREIGN KEY (itemId) REFERENCES items(id)
     );
@@ -548,6 +734,162 @@ export const initDB = () => {
   addColumnIfMissing('returns', 'refundType', 'TEXT DEFAULT \'Full Refund\'');
   addColumnIfMissing('returns', 'notes', 'TEXT');
   addColumnIfMissing('returns', 'returnDate', 'TEXT');
+
+  // 4.12: Gift cards / store credit.
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS gift_cards (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      code TEXT UNIQUE NOT NULL,
+      cardName TEXT,
+      initialBalance REAL DEFAULT 0,
+      balance REAL DEFAULT 0,
+      status TEXT DEFAULT 'active',
+      issuedTo TEXT,
+      expiryDate TEXT,
+      notes TEXT,
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      uuid TEXT,
+      device_id TEXT,
+      row_version INTEGER DEFAULT 1,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      is_deleted INTEGER DEFAULT 0,
+      deleted_at TEXT,
+      is_synced INTEGER DEFAULT 1
+    );
+    CREATE TABLE IF NOT EXISTS gift_card_transactions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      giftCardId INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      amount REAL NOT NULL,
+      refType TEXT,
+      refId INTEGER,
+      note TEXT,
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (giftCardId) REFERENCES gift_cards(id)
+    );
+  `);
+
+  // ========== PHASE 3 SYNC LAYER ==========
+  const syncTables = ['categories', 'items', 'item_packs', 'sales', 'debt_payments', 'expenses', 'adjustments', 'returns', 'customers'];
+  const syncCols: [string, string][] = [
+    ['uuid', 'TEXT'],
+    ['device_id', 'TEXT'],
+    ['row_version', 'INTEGER DEFAULT 1'],
+    ['updated_at', 'TEXT DEFAULT CURRENT_TIMESTAMP'],
+    ['is_deleted', 'INTEGER DEFAULT 0'],
+    ['deleted_at', 'TEXT'],
+    ['is_synced', 'INTEGER DEFAULT 1']
+  ];
+  for (const tbl of syncTables) {
+    for (const [name, def] of syncCols) {
+      addColumnIfMissing(tbl, name, def);
+    }
+  }
+  // 4.8: reorder automation columns on items.
+  for (const [name, def] of [['reorderPoint', 'REAL DEFAULT 10'], ['reorderQty', 'REAL DEFAULT 0'], ['autoReorder', 'INTEGER DEFAULT 0']] as [string, string][]) {
+    addColumnIfMissing('items', name, def);
+  }
+  const genUuid = "lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' || substr(hex(randomblob(2)),2) || '-' || substr('89ab',abs(random())%4+1,1) || substr(hex(randomblob(2)),2) || '-' || hex(randomblob(6)))";
+  for (const tbl of syncTables) {
+    try {
+      database.execSync(`UPDATE ${tbl} SET uuid = ${genUuid}, row_version = 1 WHERE uuid IS NULL;`);
+      database.execSync(`CREATE UNIQUE INDEX IF NOT EXISTS idx_${tbl}_uuid ON ${tbl}(uuid);`);
+    } catch (e: any) {
+      console.warn(`Sync migration (${tbl}): `, e?.message);
+    }
+  }
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS sync_meta (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      device_id TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS sync_outbox (
+      seq INTEGER PRIMARY KEY AUTOINCREMENT,
+      entity TEXT NOT NULL,
+      entity_uuid TEXT NOT NULL,
+      op TEXT NOT NULL,
+      row_id INTEGER,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS sync_cursor (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      hub_seq INTEGER NOT NULL DEFAULT 0,
+      last_sync_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS sync_refs (
+      device_id TEXT,
+      entity TEXT,
+      local_id INTEGER,
+      uuid TEXT,
+      PRIMARY KEY (device_id, entity, local_id)
+    );
+    CREATE TABLE IF NOT EXISTS sync_conflicts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      entity TEXT NOT NULL,
+      entity_uuid TEXT NOT NULL,
+      op TEXT NOT NULL,
+      incoming_payload TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_sync_conflicts_uuid ON sync_conflicts(entity_uuid);
+  `);
+
+  // ========== PHASE 4.3 AUDIT TRAIL (tamper-evident, chained hashes) ==========
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      entity TEXT NOT NULL,
+      entity_id INTEGER,
+      action TEXT NOT NULL,
+      old_value TEXT,
+      new_value TEXT,
+      description TEXT,
+      device_id TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      prev_hash TEXT,
+      hash TEXT
+    );
+  `);
+  // Backfill chain for any pre-existing rows.
+  try {
+    const auditRows = database.getAllSync('SELECT * FROM audit_logs ORDER BY id ASC') as any[];
+    if (auditRows.length) {
+      let prev = 'GENESIS';
+      for (const r of auditRows) {
+        if (r.hash) {
+          prev = r.hash;
+          continue;
+        }
+        const hh = sha256Hex(`${prev}|${r.id}|${r.entity}|${r.entity_id ?? ''}|${r.action}|${r.old_value ?? ''}|${r.new_value ?? ''}|${r.description ?? ''}|${r.device_id ?? ''}|${r.created_at ?? ''}`);
+        database.runSync('UPDATE audit_logs SET prev_hash = ?, hash = ? WHERE id = ?', [prev, hh, r.id]);
+        prev = hh;
+      }
+    }
+  } catch (e: any) {
+    console.warn('Audit backfill: ', e?.message);
+  }
+  for (const tbl of syncTables) {
+    try {
+      database.execSync(`
+        CREATE TRIGGER IF NOT EXISTS trg_${tbl}_ai AFTER INSERT ON ${tbl} BEGIN
+          UPDATE ${tbl} SET uuid = ${genUuid} WHERE id = NEW.id AND uuid IS NULL;
+          INSERT INTO sync_outbox (entity, entity_uuid, op, row_id)
+          SELECT '${tbl}', uuid, 'INSERT', id FROM ${tbl} WHERE id = NEW.id;
+        END;
+        CREATE TRIGGER IF NOT EXISTS trg_${tbl}_au AFTER UPDATE ON ${tbl} WHEN OLD.uuid IS NOT NULL AND NEW.uuid IS NOT NULL BEGIN
+          INSERT INTO sync_outbox (entity, entity_uuid, op, row_id)
+          SELECT '${tbl}', uuid, 'UPDATE', id FROM ${tbl} WHERE id = NEW.id;
+        END;
+        CREATE TRIGGER IF NOT EXISTS trg_${tbl}_ad AFTER DELETE ON ${tbl} BEGIN
+          INSERT INTO sync_outbox (entity, entity_uuid, op, row_id)
+          VALUES ('${tbl}', OLD.uuid, 'DELETE', OLD.id);
+        END;
+      `);
+    } catch (e: any) {
+      console.warn(`Sync trigger (${tbl}): `, e?.message);
+    }
+  }
+  console.log('Sync layer ready.');
 
   // Create notifications table (in-app notification center)
   database.execSync(`
@@ -893,6 +1235,53 @@ export const initDB = () => {
   }
 };
 
+const auditCanonical = (prev: string, r: any): string =>
+  `${prev}|${r.id}|${r.entity}|${r.entity_id ?? ''}|${r.action}|${r.old_value ?? ''}|${r.new_value ?? ''}|${r.description ?? ''}|${r.device_id ?? ''}|${r.created_at ?? ''}`;
+
+/** Append an audit entry with a chained hash (Phase 4.3). */
+export const auditLog = (entity: string, entityId: number | null, action: string, oldValue: string | null, newValue: string | null, description: string | null): void => {
+  try {
+    const database = getDB();
+    const prev = (database.getFirstSync('SELECT hash FROM audit_logs ORDER BY id DESC LIMIT 1') as any)?.hash ?? 'GENESIS';
+    const deviceId = (database.getFirstSync('SELECT device_id FROM sync_meta WHERE id = 1') as any)?.device_id ?? 'mobile';
+    const info = database.runSync(
+      'INSERT INTO audit_logs (entity, entity_id, action, old_value, new_value, description, device_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [entity, entityId, action, oldValue, newValue, description, deviceId, new Date().toISOString()]
+    );
+    const id = Number((info as any)?.lastInsertRowId ?? info);
+    const row = database.getFirstSync('SELECT * FROM audit_logs WHERE id = ?', [id]) as any;
+    const hash = sha256Hex(auditCanonical(prev, row));
+    database.runSync('UPDATE audit_logs SET prev_hash = ?, hash = ? WHERE id = ?', [prev, hash, id]);
+  } catch (error) {
+    console.warn('[audit] failed', error);
+  }
+};
+
+/** Verify the audit chain. Returns { ok, count, brokenAt }. */
+export const verifyAuditChain = (): { ok: boolean; count: number; brokenAt: number | null } => {
+  const database = getDB();
+  const rows = database.getAllSync('SELECT * FROM audit_logs ORDER BY id ASC') as any[];
+  let prev = 'GENESIS';
+  for (const r of rows) {
+    const expected = sha256Hex(auditCanonical(prev, r));
+    if (r.prev_hash !== prev || r.hash !== expected) {
+      return { ok: false, count: rows.length, brokenAt: r.id };
+    }
+    prev = r.hash;
+  }
+  return { ok: true, count: rows.length, brokenAt: null };
+};
+
+export const getAuditLogs = (limit: number = 100): any[] => {
+  try {
+    const database = getDB();
+    return database.getAllSync('SELECT * FROM audit_logs ORDER BY id DESC LIMIT ?', [limit]);
+  } catch (error) {
+    console.error('Get audit logs error:', error);
+    return [];
+  }
+};
+
 export const insertCategory = (name: string, icon: string, isCustom: boolean) => {
   try {
     const database = getDB();
@@ -977,6 +1366,8 @@ export interface ItemData {
 export interface InsertItemData {
   name: string;
   categoryId: number;
+  sku?: string | null;
+  barcode?: string | null;
   companyName: string;
   purchaseUnit: string;
   baseUnit: string;
@@ -1051,11 +1442,11 @@ export const insertItem = (data: InsertItemData) => {
   try {
     const database = getDB();
     const statement = database.prepareSync(`
-      INSERT INTO items (name, categoryId, companyName, purchaseUnit, baseUnit, unitsPerPack, totalPackQuantity, totalBaseQuantity, packPurchasePrice, basePurchasePrice, baseSellingPrice, packSellingPrice, allowSellByBaseUnit, allowSellByPackUnit, expiryDate, qualityGrade, notes, isCredit, supplierPhone, supplierAccount, supplierCallEnabled, warehouseId, dueDate, lastPriceCheckAt, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
+      INSERT INTO items (name, categoryId, sku, barcode, companyName, purchaseUnit, baseUnit, unitsPerPack, totalPackQuantity, totalBaseQuantity, packPurchasePrice, basePurchasePrice, baseSellingPrice, packSellingPrice, allowSellByBaseUnit, allowSellByPackUnit, expiryDate, qualityGrade, notes, isCredit, supplierPhone, supplierAccount, supplierCallEnabled, warehouseId, dueDate, lastPriceCheckAt, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
     `);
     const result = statement.executeSync([
-      data.name, data.categoryId, data.companyName || null, data.purchaseUnit || 'pcs', data.baseUnit || 'pcs', data.unitsPerPack || 0, data.totalPackQuantity || 0, data.totalBaseQuantity || 0, data.packPurchasePrice || 0, data.basePurchasePrice || 0, data.baseSellingPrice || 0, data.packSellingPrice || 0, data.allowSellByBaseUnit ? 1 : 0, data.allowSellByPackUnit ? 1 : 0, data.expiryDate || null, data.qualityGrade || null, data.notes || null, data.isCredit ? 1 : 0, data.supplierPhone || null, data.supplierAccount || null, data.supplierCallEnabled ? 1 : 0, data.warehouseId ?? null, data.dueDate || null, data.lastPriceCheckAt || null, null
+      data.name, data.categoryId, data.sku || null, data.barcode || null, data.companyName || null, data.purchaseUnit || 'pcs', data.baseUnit || 'pcs', data.unitsPerPack || 0, data.totalPackQuantity || 0, data.totalBaseQuantity || 0, data.packPurchasePrice || 0, data.basePurchasePrice || 0, data.baseSellingPrice || 0, data.packSellingPrice || 0, data.allowSellByBaseUnit ? 1 : 0, data.allowSellByPackUnit ? 1 : 0, data.expiryDate || null, data.qualityGrade || null, data.notes || null, data.isCredit ? 1 : 0, data.supplierPhone || null, data.supplierAccount || null, data.supplierCallEnabled ? 1 : 0, data.warehouseId ?? null, data.dueDate || null, data.lastPriceCheckAt || null, null
     ]);
     const newId = result.lastInsertRowId;
     // Log the initial stock as a movement so it appears in the activity feed.
@@ -1115,6 +1506,21 @@ export const getItemById = (id: number) => {
   }
 };
 
+export const getItemByBarcode = (code: string) => {
+  try {
+    const database = getDB();
+    return database.getFirstSync(`
+      SELECT items.*, categories.name as categoryName
+      FROM items
+      LEFT JOIN categories ON items.categoryId = categories.id
+      WHERE items.barcode = ? COLLATE NOCASE OR items.sku = ? COLLATE NOCASE
+      LIMIT 1
+    `, [code, code]);
+  } catch (error) {
+    console.error('Get item by barcode error:', error);
+    return null;
+  }
+};
 // Returns items flagged with supplierCallEnabled that have had a price
 // adjustment (price_up / price_down) within the last `days` days.
 // Used by the weekly "should I call the supplier?" notification.
@@ -1393,6 +1799,25 @@ export const insertSale = (saleData: {
   const database = getDB();
   beginTransaction(database);
   try {
+    const item = database.getFirstSync<{ unitsPerPack: number; totalBaseQuantity: number; totalPackQuantity: number }>(
+      'SELECT unitsPerPack, totalBaseQuantity, totalPackQuantity FROM items WHERE id = ?',
+      [saleData.itemId]
+    );
+    if (!item) {
+      throw new Error(`Item ${saleData.itemId} not found`);
+    }
+
+    let baseQty = saleData.quantity;
+    let packQty = 0;
+    if (saleData.unitType === 'pack' && item.unitsPerPack) {
+      baseQty = saleData.quantity * item.unitsPerPack;
+      packQty = saleData.quantity;
+    }
+
+    if (item.totalBaseQuantity < baseQty || item.totalPackQuantity < packQty) {
+      throw new Error(`Insufficient stock for item ${saleData.itemId}: need ${baseQty} base / ${packQty} pack, have ${item.totalBaseQuantity} base / ${item.totalPackQuantity} pack`);
+    }
+
     // Insert the sale record
     const statement = database.prepareSync(`
       INSERT INTO sales (itemId, quantity, unit, unitType, discount, vat, taxType, totalPrice, paymentMethod, paymentStatus, customerName, customerPhone, packId, batchId, dueDate, notes, paidAmount, orderNumber, convertedAt, cancelledAt, createdAt)
@@ -1411,22 +1836,15 @@ export const insertSale = (saleData: {
     ]);
 
     // Update inventory quantities
-    const item = database.getFirstSync<{ unitsPerPack: number }>('SELECT unitsPerPack FROM items WHERE id = ?', [saleData.itemId]);
-    let baseQty = saleData.quantity;
-    let packQty = 0;
-    
-    if (saleData.unitType === 'pack' && item?.unitsPerPack) {
-      baseQty = saleData.quantity * item.unitsPerPack;
-      packQty = saleData.quantity;
-    }
-
     database.runSync(
       'UPDATE items SET totalBaseQuantity = totalBaseQuantity - ?, totalPackQuantity = totalPackQuantity - ? WHERE id = ?',
       [baseQty, packQty, saleData.itemId]
     );
 
     commitTransaction(database);
-    return result.lastInsertRowId;
+    const saleId = result.lastInsertRowId;
+    auditLog('sale', Number(saleId), 'sale.create', null, JSON.stringify({ itemId: saleData.itemId, quantity: saleData.quantity, unit: saleData.unitType, total: saleData.totalPrice, method: saleData.paymentMethod }), `Sale #${saleId} recorded`);
+    return saleId;
   } catch (error) {
     rollbackTransaction(database);
     console.error('Insert sale error:', error);
@@ -1469,7 +1887,7 @@ export const getSalesByDateRange = (startDate: string, endDate: string) => {
 export const getFilteredSales = (options: FilterOptions) => {
   try {
     const database = getDB();
-    let query = `SELECT sales.*, items.name as itemName, items.baseUnit FROM sales LEFT JOIN items ON sales.itemId = items.id`;
+    let query = `SELECT sales.*, items.name as itemName, items.baseUnit FROM sales LEFT JOIN items ON sales.itemId = items.id LEFT JOIN categories ON items.categoryId = categories.id`;
     const params: any[] = [];
     const conditions: string[] = [];
 
@@ -1479,7 +1897,7 @@ export const getFilteredSales = (options: FilterOptions) => {
     }
 
     if (options.category && options.category !== 'All') {
-      conditions.push('items.name = ?');
+      conditions.push('categories.name = ?');
       params.push(options.category);
     }
 
@@ -2540,11 +2958,29 @@ export const getLowStockItems = () => {
       SELECT items.*, categories.name as categoryName 
       FROM items 
       LEFT JOIN categories ON items.categoryId = categories.id
-      WHERE totalBaseQuantity < 10
+      WHERE totalBaseQuantity < COALESCE(reorderPoint, 10)
       ORDER BY totalBaseQuantity ASC
     `);
   } catch (error) {
     console.error('Get low stock items error:', error);
+    return [];
+  }
+};
+
+export const getReorderSuggestions = () => {
+  try {
+    const database = getDB();
+    return database.getAllSync(`
+      SELECT items.*, categories.name as categoryName,
+             COALESCE(reorderPoint, 10) as reorderPoint,
+             MAX(COALESCE(reorderQty, 0), COALESCE(reorderPoint, 10) - totalBaseQuantity) as suggestedQty
+      FROM items
+      LEFT JOIN categories ON items.categoryId = categories.id
+      WHERE totalBaseQuantity < COALESCE(reorderPoint, 10)
+      ORDER BY (totalBaseQuantity - COALESCE(reorderPoint, 10)) ASC
+    `);
+  } catch (error) {
+    console.error('Get reorder suggestions error:', error);
     return [];
   }
 };
@@ -3171,6 +3607,7 @@ export const deleteExpense = (id: number) => {
   try {
     const database = getDB();
     database.execSync(`DELETE FROM expenses WHERE id = ${id}`);
+    auditLog('expense', id, 'expense.delete', null, null, `Expense #${id} deleted`);
     return true;
   } catch (error) {
     console.error('Delete expense error:', error);
@@ -3214,6 +3651,7 @@ export const deleteSale = (id: number) => {
     }
 
     database.runSync('DELETE FROM sales WHERE id = ?', [id]);
+    auditLog('sale', id, 'sale.delete', JSON.stringify(sale), null, `Sale #${id} deleted/voided`);
     return true;
   } catch (error) {
     console.error('Delete sale error:', error);
@@ -3415,7 +3853,8 @@ export const updateItem = (id: number, updates: any) => {
       'packPurchasePrice', 'basePurchasePrice', 'baseSellingPrice',
       'packSellingPrice', 'allowSellByBaseUnit', 'allowSellByPackUnit',
       'expiryDate', 'qualityGrade', 'notes', 'isCredit',
-      'supplierPhone', 'supplierAccount', 'supplierCallEnabled', 'lastPriceCheckAt', 'createdAt'
+      'supplierPhone', 'supplierAccount', 'supplierCallEnabled', 'lastPriceCheckAt', 'createdAt',
+      'reorderPoint', 'reorderQty', 'autoReorder'
     ];
 
     const filteredUpdates = Object.keys(updates)
@@ -3465,6 +3904,10 @@ export const updateItem = (id: number, updates: any) => {
     const itemsSql = `UPDATE items SET ${setQuery} WHERE id = ?`;
     const itemsParams = [...values, id] as any[];
     database.runSync(itemsSql, ...itemsParams);
+    const auditFields = Object.keys(filteredUpdates).filter(k => ['name', 'baseSellingPrice', 'packSellingPrice', 'basePurchasePrice', 'totalBaseQuantity', 'totalPackQuantity'].includes(k));
+    if (auditFields.length) {
+      auditLog('item', id, 'item.update', null, JSON.stringify(auditFields.reduce((o: any, k) => { o[k] = filteredUpdates[k]; return o; }, {})), `Item #${id} updated (${auditFields.join(', ')})`);
+    }
     return true;
   } catch (error) {
     console.error('Update item error:', error);
@@ -3497,6 +3940,7 @@ export const updateSale = (id: number, updates: any) => {
     const salesSql = `UPDATE sales SET ${setQuery} WHERE id = ?`;
     const salesParams = [...values, id] as any[];
     database.runSync(salesSql, ...salesParams);
+    auditLog('sale', id, 'sale.update', null, JSON.stringify(filteredUpdates), `Sale #${id} updated`);
     return true;
   } catch (error) {
     console.error('Update sale error:', error);
@@ -4123,6 +4567,199 @@ export const getSummaryMetricsByDateRange = (
     };
   } catch (error) {
     console.error('getSummaryMetricsByDateRange error:', error);
+    return null;
+  }
+};
+
+// Phase 4.5: VAT / TOT summary for ERCA filing.
+export const getVatSummaryByDateRange = (
+  startDate: string,
+  endDate: string,
+) => {
+  try {
+    const database = getDB();
+    const rows = database.getAllSync<{ vat: number; totalPrice: number; discount: number }>(`
+      SELECT vat, totalPrice, discount FROM sales
+      WHERE date(createdAt) >= ? AND date(createdAt) <= ? AND (is_deleted = 0 OR is_deleted IS NULL)
+    `, [startDate, endDate]);
+
+    const rateTotals: Record<string, { count: number; taxable: number; vat: number; sales: number }> = {};
+    let totalTaxable = 0, totalVAT = 0, totalSales = 0, totalCount = 0, totalDiscount = 0;
+    for (const r of rows) {
+      const taxable = Math.max(0, (r.totalPrice || 0) - (r.discount || 0) - (r.vat || 0));
+      const vatAmt = r.vat || 0;
+      let rate = '0';
+      if (vatAmt > 0 && taxable > 0) {
+        rate = String(Math.round((vatAmt / taxable) * 100));
+      } else if (vatAmt > 0) {
+        rate = '15';
+      }
+      const bucket = rateTotals[rate] || { count: 0, taxable: 0, vat: 0, sales: 0 };
+      bucket.count += 1;
+      bucket.taxable += taxable;
+      bucket.vat += vatAmt;
+      bucket.sales += r.totalPrice || 0;
+      rateTotals[rate] = bucket;
+      totalTaxable += taxable;
+      totalVAT += vatAmt;
+      totalSales += r.totalPrice || 0;
+      totalCount += 1;
+      totalDiscount += r.discount || 0;
+    }
+
+    const buckets = Object.entries(rateTotals)
+      .map(([rate, v]) => ({ rate: rate === '0' ? '0%' : `${rate}%`, ...v }))
+      .sort((a: any, b: any) => (a.rate === '0%' ? 1 : b.rate === '0%' ? -1 : Number(b.rate) - Number(a.rate)));
+
+    return {
+      startDate, endDate,
+      buckets,
+      summary: { totalCount, totalTaxable, totalVAT, totalSales, totalDiscount }
+    };
+  } catch (error) {
+    console.error('getVatSummaryByDateRange error:', error);
+    return null;
+  }
+};
+
+// 4.12: Gift cards / store credit.
+export const getGiftCards = () => {
+  try {
+    return getDB().getAllSync(
+      `SELECT * FROM gift_cards WHERE (is_deleted = 0 OR is_deleted IS NULL) ORDER BY createdAt DESC`
+    );
+  } catch (error) {
+    console.error('getGiftCards error:', error);
+    return [];
+  }
+};
+
+export const findGiftCardByCode = (code: string) => {
+  try {
+    const c = code.trim().toUpperCase();
+    const row = getDB().getFirstSync<{ id: number; balance: number; status: string; expiryDate?: string }>(
+      `SELECT id, balance, status, expiryDate FROM gift_cards WHERE upper(code) = ? AND (is_deleted = 0 OR is_deleted IS NULL)`,
+      [c]
+    );
+    if (!row) return { ok: false as const, message: 'Gift card not found' };
+    if (row.status !== 'active') return { ok: false as const, message: 'Gift card is not active' };
+    if (row.expiryDate && row.expiryDate < new Date().toISOString().split('T')[0]) return { ok: false as const, message: 'Gift card has expired' };
+    return { ok: true as const, card: row };
+  } catch (error) {
+    console.error('findGiftCardByCode error:', error);
+    return { ok: false as const, message: 'Failed to lookup gift card' };
+  }
+};
+
+export const redeemGiftCard = (code: string, amount: number, refId?: number) => {
+  try {
+    const database = getDB();
+    const found = findGiftCardByCode(code);
+    if (!found.ok) return { ok: false as const, message: found.message };
+    const card = found.card;
+    if (amount <= 0) return { ok: false as const, message: 'Invalid amount' };
+    if ((card.balance || 0) < amount) return { ok: false as const, message: `Insufficient gift card balance (${card.balance})` };
+    const tx = () => {
+      beginTransaction(database);
+      try {
+        database.runSync('UPDATE gift_cards SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [amount, card.id]);
+        database.runSync(
+          `INSERT INTO gift_card_transactions (giftCardId, type, amount, refType, refId) VALUES (?, 'redeem', ?, 'sale', ?)`,
+          [card.id, amount, refId || null]
+        );
+        commitTransaction(database);
+        return card.balance - amount;
+      } catch (e) {
+        rollbackTransaction(database);
+        throw e;
+      }
+    };
+    return { ok: true as const, balance: tx() };
+  } catch (error) {
+    console.error('redeemGiftCard error:', error);
+    return { ok: false as const, message: 'Failed to redeem gift card' };
+  }
+};
+
+export const getGiftCardTransactions = (cardId: number) => {
+  try {
+    return getDB().getAllSync(
+      `SELECT * FROM gift_card_transactions WHERE giftCardId = ? ORDER BY createdAt DESC`,
+      [cardId]
+    );
+  } catch (error) {
+    console.error('getGiftCardTransactions error:', error);
+    return [];
+  }
+};
+
+export const getDrilldownSummaryByDateRange = (
+  startDate: string,
+  endDate: string,
+) => {
+  try {
+    const database = getDB();
+    const salesWhere = `date(s.createdAt) >= ? AND date(s.createdAt) <= ? AND (s.is_deleted = 0 OR s.is_deleted IS NULL)`;
+    const salesParams = [startDate, endDate];
+
+    const byHour = database.getAllSync(`
+      SELECT CAST(strftime('%H', s.createdAt) AS INTEGER) AS hour, COUNT(*) AS saleCount,
+             COALESCE(SUM(s.totalPrice), 0) AS revenue
+      FROM sales s
+      WHERE ${salesWhere}
+      GROUP BY CAST(strftime('%H', s.createdAt) AS INTEGER)
+      ORDER BY hour ASC
+    `, salesParams);
+
+    const marginByItem = database.getAllSync(`
+      SELECT i.id, i.name, COALESCE(c.name, 'Uncategorized') AS categoryName,
+             SUM(s.quantity) AS units,
+             COALESCE(SUM(s.totalPrice), 0) AS revenue,
+             COALESCE(SUM((CASE WHEN s.unitType = 'pack' THEN s.quantity * COALESCE(i.unitsPerPack, 1) ELSE s.quantity END) * COALESCE(i.basePurchasePrice, 0)), 0) AS cogs,
+             COALESCE(SUM(s.totalPrice - (CASE WHEN s.unitType = 'pack' THEN s.quantity * COALESCE(i.unitsPerPack, 1) ELSE s.quantity END) * COALESCE(i.basePurchasePrice, 0)), 0) AS profit
+      FROM sales s
+      LEFT JOIN items i ON s.itemId = i.id
+      LEFT JOIN categories c ON i.categoryId = c.id
+      WHERE ${salesWhere}
+      GROUP BY i.id
+      ORDER BY profit DESC
+    `, salesParams);
+
+    const today = new Date().toISOString().split('T')[0];
+    const debtAging = database.getAllSync(`
+      SELECT s.customerName, s.customerPhone,
+             COALESCE(SUM(s.totalPrice), 0) - COALESCE((SELECT SUM(dp.amount) FROM debt_payments dp WHERE dp.saleId = s.id), 0) AS outstanding,
+             CAST(julianday(?) - julianday(MAX(s.createdAt)) AS INTEGER) AS daysOverdue
+      FROM sales s
+      WHERE s.paymentStatus = 'Debt' AND (s.is_deleted = 0 OR s.is_deleted IS NULL)
+      GROUP BY s.customerName, s.customerPhone
+      HAVING outstanding > 0
+      ORDER BY daysOverdue DESC
+    `, [today]);
+
+    const movers = database.getAllSync(`
+      SELECT i.id, i.name,
+             COALESCE(SUM(s.quantity), 0) AS unitsSold,
+             COALESCE(SUM(s.totalPrice), 0) AS revenue,
+             COUNT(s.id) AS saleCount,
+             CAST(julianday(?) - julianday(MAX(s.createdAt)) AS INTEGER) AS daysSinceLastSale
+      FROM items i
+      LEFT JOIN sales s ON s.itemId = i.id AND ${salesWhere}
+      WHERE i.is_deleted = 0
+      GROUP BY i.id
+      ORDER BY unitsSold DESC
+      LIMIT 50
+    `, [today, ...salesParams]);
+
+    return {
+      startDate, endDate,
+      byHour,
+      marginByItem,
+      debtAging,
+      movers,
+    };
+  } catch (error) {
+    console.error('getDrilldownSummaryByDateRange error:', error);
     return null;
   }
 };

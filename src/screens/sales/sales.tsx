@@ -10,6 +10,7 @@ import { PROFILE_IMAGES, useSettings } from "@/context/SettingsContext";
 import { useSubscription } from "@/context/SubscriptionContext";
 import { useSidebar } from "@/context/SidebarContext";
 import { useToast } from "@/context/ToastContext";
+import { useSync } from "@/context/SyncContext";
 import {
   getCustomerActivity,
   getDebtCustomers,
@@ -127,6 +128,7 @@ const SalesDashboard = () => {
   const SALES_GLASS = useMemo(() => getSalesGlass(colors), [colors]);
   const hideFABStyle = useAutoHideScroll();
   const { showToast } = useToast();
+  const { requestSync } = useSync();
   const tutorial = useTutorial({ tutorial: salesHubTutorial });
   const cpTutorial = useTutorial({ tutorial: collectPaymentsTutorial });
   const { notifCount } = useNotifications();
@@ -3594,6 +3596,7 @@ const SalesDashboard = () => {
                     setPendingSales([]);
                     setSaleFlowStep("search");
                     loadData();
+                    requestSync();
                     setCompletedSaleData({
                       totalPrice:
                         saleMetadata.totalPrice ||

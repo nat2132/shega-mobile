@@ -6,6 +6,7 @@ import { SidebarProvider } from '@/context/SidebarContext';
 import { NavigationIntentProvider } from '@/context/NavigationIntentContext';
 import { WarehouseProvider } from '@/context/WarehouseContext';
 import { UpdateProvider } from '@/context/UpdateContext';
+import { SyncProvider } from '@/context/SyncContext';
 import { TutorialProvider, TutorialOverlay } from '@/tutorials';
 import { initDB } from '@/database/db';
 import { playStart } from '@/services/soundService';
@@ -258,9 +259,11 @@ export default function RootLayout() {
                         <NotificationProvider>
                           <NavigationIntentProvider>
                             <SidebarProvider>
-                              <UpdateProvider>
-                                <AppShell dbWarning={dbError} />
-                              </UpdateProvider>
+                              <SyncProvider>
+                                <UpdateProvider>
+                                  <AppShell dbWarning={dbError} />
+                                </UpdateProvider>
+                              </SyncProvider>
                             </SidebarProvider>
                           </NavigationIntentProvider>
                         </NotificationProvider>

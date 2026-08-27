@@ -8,7 +8,10 @@
     "scheme": "shega",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Shega uses the camera to scan the pairing QR code shown on the desktop POS so the phone can sync sales, items and stock over your local network."
+      }
     },
     "android": {
       "softwareKeyboardLayoutMode": "resize",
@@ -67,11 +70,10 @@
       "eas": {
         "projectId": "3c2ed669-c717-450f-a697-692503f950de"
       },
-      "update": {
+"update": {
         "githubOwner": "nat2132",
         "githubRepo": "shega-mobile",
-        "includePrereleases": false,
-        "githubToken": "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"
+        "includePrereleases": false
       }
     }
   }

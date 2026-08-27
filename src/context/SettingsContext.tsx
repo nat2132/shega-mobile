@@ -1876,6 +1876,15 @@ const translations: Record<Language, Record<string, string>> = {
     'summary.damage_loss': 'Damage Loss',
     'summary.price_changes': 'Price Changes',
     'summary.net_profit': 'Net Profit',
+    'summary.vat_output': 'VAT Output',
+    'summary.taxable_sales': 'Taxable Sales',
+    'summary.vat_invoices': 'Invoices',
+    'summary.drilldowns': 'Drill-downs',
+    'summary.fast_movers': 'Fast Mover',
+    'summary.top_margin_item': 'Top Margin Item',
+    'summary.units_sold': 'units sold',
+    'summary.sales_count': 'sales',
+    'summary.profit': 'Profit',
     'summary.performance_rating': 'Performance Rating',
     'summary.performance_desc': 'Based on profitability, losses, expenses, and overall business performance during this period.',
     'summary.formula_label': 'Net Profit = Sales Profit + Price Change Gains \u2212 Expenses \u2212 Damage Losses \u2212 Other Losses',
@@ -3547,6 +3556,19 @@ const translations: Record<Language, Record<string, string>> = {
     'screen.settings': 'Settings',
     'screen.summary': 'Summary',
     'screen.warehouse_manager': 'Warehouse Manager',
+
+    // Sync (6.2)
+    'sync.title': 'Sync',
+    'sync.status_online': 'Online',
+    'sync.status_syncing': 'Syncing...',
+    'sync.status_error': 'Error',
+    'sync.status_unconfigured': 'Not Configured',
+    'sync.completed': 'Pushed {pushed}, pulled {pulled}',
+    'sync.conflicts': '{count} conflict(s) need review',
+    'sync.error_title': 'Sync Failed',
+    'sync.last_synced': 'Last synced: {time}',
+    'sync.pending': '{count} pending',
+    'sync.manual_sync': 'Tap to sync now',
   },
   am: {
     // Tabs & Navigation
@@ -5097,6 +5119,15 @@ const translations: Record<Language, Record<string, string>> = {
     'summary.profit_cash': 'ትርፍ (ጥሬ)',
     'summary.debt': 'ዕዳ',
     'summary.damage_loss': 'የተበላሸ ኪሳራ',
+    'summary.vat_output': 'የተ.እ.ታ ምርት',
+    'summary.taxable_sales': 'ታክስ የሚጠይቁ ሽያጮች',
+    'summary.vat_invoices': 'ደረሰኞች',
+    'summary.drilldowns': 'ዝርዝር ሪፖርቶች',
+    'summary.fast_movers': 'ፈጣን ሽያጭ ምርት',
+    'summary.top_margin_item': 'ከፍተኛ ህዳግ ምርት',
+    'summary.units_sold': 'የተሸጡ ክፍሎች',
+    'summary.sales_count': 'ሽያጮች',
+    'summary.profit': 'ትርፍ',
     'summary.price_changes': 'የዋጋ ለውጦች',
     'summary.net_profit': 'ተጣራ ትርፍ',
     'summary.performance_rating': 'የአፈፃፀም ደረጃ',
@@ -6602,6 +6633,19 @@ const translations: Record<Language, Record<string, string>> = {
     'tutorial.translation.steps.tr-list.desc': 'ከሚገኙ ቋንቋዎች ይምረጡ። የመተግበሪያ በይነገጽ ወደ መረጡት ቋንቋ ወዲያውኑ ይቀየራል።',
     'tutorial.translation.steps.tr-current.title': 'አሁን ያለ ቋንቋ',
     'tutorial.translation.steps.tr-current.desc': 'አሁን ያለው ቋንቋዎ ደምቆ ይታያል። ለመቀየር የተለየ ቋንቋ ንካ።',
+
+    // Sync (6.2)
+    'sync.title': 'ስንክ',
+    'sync.status_online': 'ኦንላይን',
+    'sync.status_syncing': 'ስንክ እየተካሄደ...',
+    'sync.status_error': 'ስህተት',
+    'sync.status_unconfigured': 'አይተዋቅረውም',
+    'sync.completed': '{pushed} ተላከ፣ {pulled} ተቀበለ',
+    'sync.conflicts': '{count} ችግሮች ይፈቀዳሉ',
+    'sync.error_title': 'ስንክ አልተሳካም',
+    'sync.last_synced': 'መጨረሻ ስንክ: {time}',
+    'sync.pending': '{count} በመጠበቅ',
+    'sync.manual_sync': 'አሁን ለማስንክ ጫኑ',
   },
   om: {
     // Basic i18n for Afaan Oromo
@@ -7714,6 +7758,15 @@ const translations: Record<Language, Record<string, string>> = {
     'summary.expenses': 'Baasii',
     'summary.debt': 'Liqii',
     'summary.damage_loss': 'Hoona Miidhaa',
+    'summary.vat_output': 'Baayina VAT',
+    'summary.taxable_sales': 'Gurgurtaa qaraxaa',
+    'summary.vat_invoices': 'Risaasota',
+    'summary.drilldowns': 'Gabaasota gad fageeffannoo',
+    'summary.fast_movers': 'Meeshaan saffisaan gurguramu',
+    'summary.top_margin_item': 'Meeshaan marjii olaanaa',
+    'summary.units_sold': 'lakkoofsa gurgurame',
+    'summary.sales_count': 'gurgurtaa',
+    'summary.profit': 'Bu\'aa',
     'summary.price_changes': 'Jijjiirama Gatii',
     'summary.net_profit': 'Bu\'aa Qulqulluu',
     'summary.performance_rating': 'Qabxii Hoji',
@@ -9995,7 +10048,7 @@ const translations: Record<Language, Record<string, string>> = {
     'support.voice_hours': 'Available 09:00 - 18:00 (GMT+3)',
     'support.voice_terminal': 'VOICE TERMINAL',
 
-    // Translation Translations
+// Translation Translations
     'translation.global_hub': 'Global Hub',
     'translation.localization': 'Localization',
     'translation.preview_desc': 'System orchestration mapped to current script',
@@ -10007,7 +10060,20 @@ const translations: Record<Language, Record<string, string>> = {
     'trial.banner_compact': 'Premium Trial',
     'trial.banner_title': 'Premium Trial',
 
-},
+    // Sync (6.2)
+    'sync.title': 'Ogeessaa',
+    'sync.status_online': 'Ongulaa',
+    'sync.status_syncing': 'Ogeessaa jira...',
+    'sync.status_error': 'Dogoggora',
+    'sync.status_unconfigured': 'Amma si qindeessi\'e',
+    'sync.completed': '{pushed} baafame, {pulled} fufame',
+    'sync.conflicts': '{count} dogoggora mirkaneessu qaba',
+    'sync.error_title': 'Ogeessaa Hin Xumure',
+    'sync.last_synced': 'Duraan ogeessa\'e: {time}',
+    'sync.pending': '{count} dhufu',
+    'sync.manual_sync': 'Amma ogeessaa deemuu cukata',
+
+  },
   ti: {
     // Basic i18n for Tigrinya
     'tabs.dashboard': 'ዳሽቦርድ',
@@ -12938,6 +13004,19 @@ const translations: Record<Language, Record<string, string>> = {
     'tutorial.translation.subtitle': 'ቋንቋኻ ምረጽ',
     'tutorial.translation.steps.translation.title': 'ምርጫ ቋንቋ',
     'tutorial.translation.steps.translation.desc': 'ንመስርሕ ኣፕ ቋንቋኻ ምረጽ። ኩሎም ሜኑ፣ መለለይታትን መልሕቂታትን በቲ ምርጫኻ ክኸውኑ እዮም።',
+
+    // Sync (6.2)
+    'sync.title': 'ስንክ',
+    'sync.status_online': 'ኦንላይን',
+    'sync.status_syncing': 'ስንክ እየተካሄደ...',
+    'sync.status_error': 'ስህተት',
+    'sync.status_unconfigured': 'ኣይተዋቅረውን',
+    'sync.completed': '{pushed} ተላከ፣ {pulled} ተቀበለ',
+    'sync.conflicts': '{count} ችግሮች ይፈቀዳሉ',
+    'sync.error_title': 'ስንክ ኣይተሳካን',
+    'sync.last_synced': 'መጨረሻ ስንክ: {time}',
+    'sync.pending': '{count} በመጠበቅ',
+    'sync.manual_sync': 'ኣሁን ለማስንክ ጭኑ',
   },
 };
 
