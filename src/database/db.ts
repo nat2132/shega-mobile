@@ -775,7 +775,7 @@ export const initDB = () => {
     ['uuid', 'TEXT'],
     ['device_id', 'TEXT'],
     ['row_version', 'INTEGER DEFAULT 1'],
-    ['updated_at', 'TEXT DEFAULT CURRENT_TIMESTAMP'],
+    ['updated_at', 'TEXT'],
     ['is_deleted', 'INTEGER DEFAULT 0'],
     ['deleted_at', 'TEXT'],
     ['is_synced', 'INTEGER DEFAULT 1']
