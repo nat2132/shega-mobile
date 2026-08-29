@@ -19,7 +19,7 @@ type DiscoveryEventMap = {
   error: [Error];
 };
 
-class MobileMdnsDiscovery extends EventEmitter<DiscoveryEventMap> {
+class MobileMdnsDiscovery extends EventEmitter {
   private zeroconf: Zeroconf | null = null;
   private isScanning = false;
   private discoveredHubs = new Map<string, DiscoveredHub>();

@@ -34,7 +34,7 @@ type ScannerEventMap = {
   scannerConnected: [boolean];
 };
 
-export class MobileBarcodeScanner extends EventEmitter<ScannerEventMap> {
+export class MobileBarcodeScanner extends EventEmitter {
   private config: Required<any>;
   private isScanning = false;
   private cameraListener: any = null;
@@ -169,7 +169,6 @@ export class MobileBarcodeScanner extends EventEmitter<ScannerEventMap> {
   // ============================================
 
   private externalBuffer = '';
-  private lastKeyTime = 0;
 
   handleExternalKeyInput(key: string): void {
     const now = Date.now();

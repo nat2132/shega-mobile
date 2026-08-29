@@ -1,8 +1,14 @@
-import { WebSocket } from 'react-native-websocket';
 import { EventEmitter } from 'events';
 import { Platform } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import { getDB } from '../database/db';
+
+// Simple logger (defined before first use)
+const logger = {
+  info: (msg: string, ...args: any[]) => console.log(`[WS] ${msg}`, ...args),
+  warn: (msg: string, ...args: any[]) => console.warn(`[WS] ${msg}`, ...args),
+  error: (msg: string, ...args: any[]) => console.error(`[WS] ${msg}`, ...args),
+};
 
 export interface WsMessage {
   type: string;
@@ -34,26 +40,26 @@ type SyncEventMap = {
   heartbeat: [number];
 };
 
-export class WsSyncClient extends EventEmitter<SyncEventMap> {
-  private ws: WebSocket | null = null;
+export class WsSyncClient extends EventEmitter {
+  private ws: any = null;
   private config: WsSyncClientConfig | null = null;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 10;
   private reconnectDelay = 2000;
-  private heartbeatInterval: NodeJS.Timeout | null = null;
-  private pendingRequests = new Map<string, { resolve: (value: any) => void; reject: (reason: any) => void; timeout: NodeJS.Timeout }>();
+  private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+  private pendingRequests = new Map<string, { resolve: (value: any) => void; reject: (reason: any) => void; timeout: ReturnType<typeof setTimeout> }>();
   private requestCounter = 0;
   private lastServerSeq = 0;
-  private isConnected = false;
+  private _isConnected = false;
   private isSyncing = false;
-  private messageQueue: { msg: WsMessage; resolve: (value: any) => void; reject: (reason: any) => void }[] = [];
+  private messageQueue: any[] = [];
 
   constructor() {
     super();
   }
 
   async connect(config: WsSyncClientConfig): Promise<void> {
-    if (this.isConnected) return;
+    if (this._isConnected) return;
 
     this.config = config;
     this.reconnectAttempts = 0;
@@ -63,19 +69,21 @@ export class WsSyncClient extends EventEmitter<SyncEventMap> {
       logger.info(`[WS] Connecting to ${wsUrl}`);
 
       try {
-        this.ws = new WebSocket(wsUrl);
+        // Dynamic import for react-native-websocket
+        const WS = require('react-native-websocket').WebSocket;
+        this.ws = new WS(wsUrl);
         this.ws.binaryType = 'arraybuffer';
 
         this.ws.onopen = () => {
           logger.info('[WS] Connected to hub');
-          this.isConnected = true;
+          this._isConnected = true;
           this.reconnectAttempts = 0;
           this.startHeartbeat();
           this.processQueue();
           this.sendPairRequest().then(resolve).catch(reject);
         };
 
-        this.ws.onmessage = (event) => {
+        this.ws.onmessage = (event: any) => {
           try {
             const data = event.data instanceof ArrayBuffer
               ? new TextDecoder().decode(event.data)
@@ -87,12 +95,12 @@ export class WsSyncClient extends EventEmitter<SyncEventMap> {
           }
         };
 
-        this.ws.onclose = (event) => {
+        this.ws.onclose = (event: any) => {
           logger.warn(`[WS] Disconnected: ${event.code} ${event.reason}`);
           this.handleDisconnect(event.code === 1000 ? null : new Error(`Connection closed: ${event.code}`));
         };
 
-        this.ws.onerror = (error) => {
+        this.ws.onerror = (error: any) => {
           logger.error('[WS] Error:', error);
           reject(error);
         };
@@ -120,7 +128,6 @@ export class WsSyncClient extends EventEmitter<SyncEventMap> {
         break;
 
       case 'HEARTBEAT_ACK':
-        // Heartbeat acknowledged
         break;
 
       case 'PAIR_RESPONSE':
@@ -175,12 +182,10 @@ export class WsSyncClient extends EventEmitter<SyncEventMap> {
   }
 
   private async handleIncomingChanges(changes: any[]): Promise<void> {
-    const db = getDB();
     if (!changes.length) return;
 
-    // Apply in dependency order
     const APPLY_ORDER = ['categories', 'items', 'item_packs', 'customers', 'sales', 'debt_payments', 'expenses', 'adjustments', 'returns'];
-    const sorted = changes.slice().sort((a, b) => {
+    const sorted = changes.slice().sort((a: any, b: any) => {
       const ia = APPLY_ORDER.indexOf(a.entity);
       const ib = APPLY_ORDER.indexOf(b.entity);
       return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
@@ -232,7 +237,6 @@ export class WsSyncClient extends EventEmitter<SyncEventMap> {
       return;
     }
 
-    // LWW conflict resolution
     const incoming = { ...payload, uuid: entity_uuid, updated_at: payload.updated_at ?? new Date().toISOString() };
     if (this.lwwWins(incoming, existing)) {
       const updateData = { ...payload };
@@ -271,7 +275,7 @@ export class WsSyncClient extends EventEmitter<SyncEventMap> {
   }
 
   async syncNow(): Promise<SyncResult> {
-    if (!this.isConnected || this.isSyncing) {
+    if (!this._isConnected || this.isSyncing) {
       return { pushed: 0, pulled: 0, conflicts: 0 };
     }
 
@@ -281,7 +285,6 @@ export class WsSyncClient extends EventEmitter<SyncEventMap> {
     let totalConflicts = 0;
 
     try {
-      // Push outbox
       const { changes, seqs } = await this.buildChangesFromOutbox();
       if (changes.length > 0) {
         const pushResult = await this.sendRequest('SYNC_PUSH', { changes, client_seq: this.lastServerSeq });
@@ -292,7 +295,6 @@ export class WsSyncClient extends EventEmitter<SyncEventMap> {
         db.runSync('DELETE FROM sync_outbox WHERE seq IN (' + seqs.map(() => '?').join(',') + ')', seqs);
       }
 
-      // Pull changes
       const pullResult = await this.sendRequest('SYNC_PULL', { since: this.lastServerSeq });
       totalPulled = pullResult.changes?.length || 0;
 
@@ -342,7 +344,6 @@ export class WsSyncClient extends EventEmitter<SyncEventMap> {
 
       this.pendingRequests.set(requestId, { resolve, reject, timeout });
 
-      const msg = { type, payload, requestId };
       this.send({ type, payload, requestId });
     });
   }
@@ -368,7 +369,7 @@ export class WsSyncClient extends EventEmitter<SyncEventMap> {
   }
 
   private send(msg: any): void {
-    if (this.ws?.readyState === WebSocket.OPEN) {
+    if (this.ws && this.ws.readyState === 1) {
       this.ws.send(JSON.stringify(msg));
     } else {
       this.messageQueue.push(msg);
@@ -376,7 +377,7 @@ export class WsSyncClient extends EventEmitter<SyncEventMap> {
   }
 
   private processQueue(): void {
-    while (this.messageQueue.length && this.ws?.readyState === WebSocket.OPEN) {
+    while (this.messageQueue.length && this.ws && this.ws.readyState === 1) {
       const msg = this.messageQueue.shift();
       if (msg) this.send(msg);
     }
@@ -384,14 +385,14 @@ export class WsSyncClient extends EventEmitter<SyncEventMap> {
 
   private startHeartbeat(): void {
     this.heartbeatInterval = setInterval(() => {
-      if (this.ws?.readyState === WebSocket.OPEN) {
+      if (this.ws && this.ws.readyState === 1) {
         this.send({ type: 'HEARTBEAT', timestamp: Date.now() });
       }
     }, 15000);
   }
 
   private handleDisconnect(error: Error | null): void {
-    this.isConnected = false;
+    this._isConnected = false;
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
@@ -399,9 +400,8 @@ export class WsSyncClient extends EventEmitter<SyncEventMap> {
 
     this.emit('disconnected', error);
 
-    // Auto-reconnect with exponential backoff
-    if (this.reconnectAttempts < 10) {
-      const delay = Math.min(2000 * Math.pow(1.5, this.reconnectAttempts), 30000);
+    if (this.reconnectAttempts < this.maxReconnectAttempts) {
+      const delay = Math.min(this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts), 30000);
       this.reconnectAttempts++;
       setTimeout(() => this.connect(this.config!), delay);
     }
@@ -416,40 +416,26 @@ export class WsSyncClient extends EventEmitter<SyncEventMap> {
       this.ws.close();
       this.ws = null;
     }
-    this.isConnected = false;
+    this._isConnected = false;
   }
 
   get isConnectedNow(): boolean {
-    return this.isConnected && this.ws?.readyState === WebSocket.OPEN;
+    return this._isConnected && this.ws?.readyState === 1;
   }
 }
 
-// Simple logger
-const logger = {
-  info: (msg: string, ...args: any[]) => console.log(`[WS] ${msg}`, ...args),
-  warn: (msg: string, ...args: any[]) => console.warn(`[WS] ${msg}`, ...args),
-  error: (msg: string, ...args: any[]) => console.error(`[WS] ${msg}`, ...args),
-};
-
-interface WsSyncClientEvents {
-  connected: [];
-  disconnected: [Error | null];
-  syncCompleted: [any];
-  conflict: [any];
-  error: [Error];
-}
-
-export const wsSyncClient = new (class extends EventEmitter<WsSyncClientEvents> {
+// Singleton wrapper
+export const wsSyncClient = new (class extends EventEmitter {
   private instance: WsSyncClient | null = null;
 
   async connect(config: any) {
     if (this.instance) await this.instance.disconnect();
     this.instance = new WsSyncClient();
     this.instance.on('connected', () => this.emit('connected'));
-    this.instance.on('disconnected', (err) => this.emit('disconnected', err));
-    this.instance.on('syncCompleted', (r) => this.emit('syncCompleted', r));
-    this.instance.on('conflict', (c) => this.emit('conflict', c));
-    this.instance.on('error', (e) => this.emit('error', e));
+    this.instance.on('disconnected', (err: any) => this.emit('disconnected', err));
+    this.instance.on('syncCompleted', (r: any) => this.emit('syncCompleted', r));
+    this.instance.on('conflict', (c: any) => this.emit('conflict', c));
+    this.instance.on('error', (e: any) => this.emit('error', e));
     return this.instance.connect(config);
   }
 

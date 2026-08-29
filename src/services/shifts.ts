@@ -89,7 +89,7 @@ export function openShift(
     VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)
   `, [businessId, registerId, cashierId, openingFloat, openingFloat, now, notes || '', now, now]);
 
-  const shiftId = result.lastInsertRowid;
+  const shiftId = result.lastInsertRowId;
   
   // Record opening float
   db.runSync(`
@@ -312,7 +312,7 @@ export function addShiftTransaction(
     }
   }
 
-  return result.lastInsertRowid;
+  return result.lastInsertRowId;
 }
 
 export function getShiftTransactions(shiftId: number): any[] {

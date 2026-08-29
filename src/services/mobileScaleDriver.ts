@@ -18,35 +18,20 @@ export interface ScaleReading {
 
 export interface ScaleConfig {
   type: 'cas' | 'dibal' | 'mettler' | 'generic' | 'auto';
-  // Serial (RS-232 / USB CDC)
   baudRate?: number;
   dataBits?: number;
   stopBits?: number;
   parity?: 'none' | 'even' | 'odd' | 'mark' | 'space';
-  // USB
   vendorId?: number;
   productId?: number;
-  // Bluetooth SPP
   deviceId?: string;
   serviceUuid?: string;
   characteristicUuid?: string;
-  // Protocol
   protocol?: 'continuous' | 'poll' | 'command';
   pollInterval?: number;
   command?: string;
-  // Stability
   stableThreshold?: number;
   stableSamples?: number;
-}
-
-export interface ScaleReading {
-  weightKg: number | null;
-  unit: string;
-  stable: boolean;
-  zero: boolean;
-  net: boolean;
-  raw: string;
-  timestamp: number;
 }
 
 type ScaleEventMap = {
@@ -61,11 +46,11 @@ type ScaleEventMap = {
 
 const UNSTABLE_MARKERS = ['D', 'I', 'U', 'US', 'UNSTABLE'];
 
-export class MobileScaleDriver extends EventEmitter<ScaleEventMap> {
+export class MobileScaleDriver extends EventEmitter {
   private config: Required<any>;
   private serialPort: any = null;
   private btSocket: any = null;
-  private isConnected = false;
+  private _connected = false;
   private debouncer: any = null;
 
   constructor(config: any = {}) {
@@ -89,12 +74,8 @@ export class MobileScaleDriver extends EventEmitter<ScaleEventMap> {
     };
   }
 
-  // ============================================
-  // Serial Port Connection (RS-232 / USB CDC/ACM)
-  // ============================================
-
   async connectSerial(path?: string): Promise<void> {
-    if (this.isConnected) return;
+    if (this._connected) return;
 
     if (Platform.OS === 'android') {
       await this.connectAndroidSerial(path);
@@ -104,65 +85,19 @@ export class MobileScaleDriver extends EventEmitter<ScaleEventMap> {
   }
 
   private async connectAndroidSerial(path?: string): Promise<void> {
-    // Using react-native-serialport or react-native-usb
-    // react-native-serialport for USB CDC/ACM devices
-    // react-native-usb for USB HID/bulk devices
-    /*
-    const SerialPort = require('react-native-serialport');
-    
-    this.serialPort = new SerialPort({
-      path: path || '/dev/ttyUSB0',
-      baudRate: this.config.baudRate,
-      dataBits: this.config.dataBits,
-      stopBits: this.config.stopBits,
-      parity: this.config.parity,
-    });
-
-    this.serialPort.on('data', (data: string) => {
-      const line = data.trim();
-      if (line) {
-        const reading = this.parseWeightLine(line);
-        if (reading) this.emit('reading', reading);
-      });
-    */
-
     console.log('[Scale] Android serial connected (placeholder)');
-    this.isConnected = true;
+    this._connected = true;
     this.emit('connected', 'serial');
   }
 
   private async connectIosSerial(path?: string): Promise<void> {
-    // iOS: External Accessory Framework or USB CDC via react-native-ble-plx
-    // For MFi devices, use External Accessory framework
-    /*
-    const { ExternalAccessory } = NativeModules;
-    
-    const accessories = await ExternalAccessory.getAccessories();
-    const scale = accessories.find(a => 
-      a.manufacturer?.toLowerCase().includes('scale') ||
-      a.modelNumber?.toLowerCase().includes('scale')
-    );
-    
-    if (!scale) throw new Error('Scale accessory not found');
-    
-    const session = await ExternalAccessory.openSession(scale.protocolStrings[0]);
-    session.on('data', (data: string) => {
-      const reading = this.parseWeightLine(data);
-      if (reading) this.emit('reading', reading);
-    });
-    */
-
     console.log('[Scale] iOS serial connected (placeholder)');
-    this.isConnected = true;
+    this._connected = true;
     this.emit('connected', 'serial');
   }
 
-  // ============================================
-  // Bluetooth SPP Connection
-  // ============================================
-
   async connectBluetooth(deviceId: string): Promise<void> {
-    if (this.isConnected) return;
+    if (this._connected) return;
 
     if (Platform.OS === 'android') {
       await this.connectAndroidBluetooth(deviceId);
@@ -172,56 +107,16 @@ export class MobileScaleDriver extends EventEmitter<ScaleEventMap> {
   }
 
   private async connectAndroidBluetooth(deviceId: string): Promise<void> {
-    // Using react-native-bluetooth-classic for SPP
-    /*
-    const { BluetoothManager } = require('react-native-bluetooth-classic');
-    
-    const socket = await BluetoothManager.connect(deviceId);
-    
-    this.btSocket = socket;
-    
-    socket.on('data', (data: string) => {
-      const reading = this.parseWeightLine(data);
-      if (reading) this.emit('reading', reading);
-    });
-    
-    socket.on('closed', () => this.handleDisconnect());
-    socket.on('error', (err: Error) => this.emit('error', err));
-    */
-
     console.log('[Scale] Android Bluetooth connected (placeholder)');
-    this.isConnected = true;
+    this._connected = true;
     this.emit('connected', 'bluetooth');
   }
 
   private async connectIosBluetooth(deviceId: string): Promise<void> {
-    // iOS: External Accessory Framework or BLE
-    // For SPP, need MFi certification
-    // For BLE, use CoreBluetooth via react-native-ble-plx
-    /*
-    const { BleManager } = NativeModules;
-    
-    await BleManager.connect(deviceId);
-    await BleManager.discoverServices(deviceId);
-    
-    const characteristic = await BleManager.readCharacteristic(
-      deviceId, serviceUuid, characteristicUuid
-    );
-    
-    BleManager.monitorCharacteristicForDevice(deviceId, serviceUuid, characteristicUuid)
-      .then(() => {
-        // Handle notifications
-      });
-    */
-
     console.log('[Scale] iOS Bluetooth connected (placeholder)');
-    this.isConnected = true;
+    this._connected = true;
     this.emit('connected', 'bluetooth');
   }
-
-  // ============================================
-  // USB Connection (Android USB Host / iOS External Accessory)
-  // ============================================
 
   async connectUsb(vendorId: number, productId: number): Promise<void> {
     if (Platform.OS === 'android') {
@@ -232,26 +127,12 @@ export class MobileScaleDriver extends EventEmitter<ScaleEventMap> {
   }
 
   private async connectAndroidUsb(vendorId: number, productId: number): Promise<void> {
-    // Using react-native-usb
-    /*
-    const Usb = require('react-native-usb');
-    
-    await Usb.requestPermission(vendorId, productId);
-    const device = await Usb.openDevice(vendorId, productId);
-    
-    // Find HID or bulk endpoint
-    // Start polling interrupt IN endpoint
-    */
     console.log('[Scale] Android USB connected (placeholder)');
-    this.isConnected = true;
+    this._connected = true;
     this.emit('connected', 'usb');
   }
 
-  // ============================================
-  // Data Parsing
-  // ============================================
-
-  private parseWeightLine(line: string): any | null {
+  private parseWeightLine(line: string): ScaleReading | null {
     const raw = line.trim();
     if (!raw) return null;
 
@@ -261,7 +142,6 @@ export class MobileScaleDriver extends EventEmitter<ScaleEventMap> {
     let body = raw;
     const upper = raw.toUpperCase();
 
-    // Protocol headers
     if (upper.startsWith('ST') || upper.startsWith('S')) {
       stable = true;
       body = raw.replace(/^ST,?|^S,?/, '');
@@ -292,7 +172,7 @@ export class MobileScaleDriver extends EventEmitter<ScaleEventMap> {
       unit: unit === 'g' ? 'g' : unit,
       stable,
       zero,
-      net: net,
+      net,
       raw: line,
       timestamp: Date.now(),
     };
@@ -319,16 +199,8 @@ export class MobileScaleDriver extends EventEmitter<ScaleEventMap> {
     }
   }
 
-  private handleDisconnect(): void {
-    this.emit('disconnected', 'Scale disconnected');
-  }
-
-  // ============================================
-  // Public API
-  // ============================================
-
   async connect(config?: { path?: string; deviceId?: string; vendorId?: number; productId?: number }): Promise<void> {
-    if (this.isConnected) return;
+    if (this._connected) return;
 
     if (config?.path) {
       await this.connectSerial(config.path);
@@ -350,13 +222,13 @@ export class MobileScaleDriver extends EventEmitter<ScaleEventMap> {
       try { this.btSocket.disconnect(); } catch {}
       this.btSocket = null;
     }
+    this._connected = false;
     this.emit('disconnected', 'Scale disconnected');
   }
 
-  async requestWeight(): Promise<any | null> {
-    if (!this.isConnected) return null;
+  async requestWeight(): Promise<ScaleReading | null> {
+    if (!this._connected) return null;
 
-    // Send command if in command mode
     if (this.config.protocol === 'command' && this.config.command) {
       if (this.serialPort) {
         this.serialPort.write(this.config.command + '\r\n');
@@ -366,7 +238,7 @@ export class MobileScaleDriver extends EventEmitter<ScaleEventMap> {
     }
 
     return new Promise((resolve) => {
-      const handler = (reading: any) => {
+      const handler = (reading: ScaleReading) => {
         this.off('reading', handler);
         resolve(reading);
       };
@@ -380,7 +252,7 @@ export class MobileScaleDriver extends EventEmitter<ScaleEventMap> {
   }
 
   async tare(): Promise<boolean> {
-    if (!this.isConnected) return false;
+    if (!this._connected) return false;
 
     const tareCommands = ['T', 'TARE', '\x1BT', '\x02T'];
     
@@ -390,7 +262,7 @@ export class MobileScaleDriver extends EventEmitter<ScaleEventMap> {
         else if (this.btSocket) this.btSocket.write(cmd + '\r\n');
         await new Promise(r => setTimeout(r, 200));
         return true;
-      } catch (e) {
+      } catch {
         continue;
       }
     }
@@ -398,7 +270,7 @@ export class MobileScaleDriver extends EventEmitter<ScaleEventMap> {
   }
 
   async sendCommand(command: string): Promise<void> {
-    if (!this.isConnected) return;
+    if (!this._connected) return;
     
     if (this.serialPort) {
       this.serialPort.write(command + '\r\n');
@@ -408,10 +280,9 @@ export class MobileScaleDriver extends EventEmitter<ScaleEventMap> {
   }
 
   isConnected(): boolean {
-    return this.isConnected;
+    return this._connected;
   }
 
-  // Cleanup
   destroy(): void {
     this.removeAllListeners();
     this.disconnect();

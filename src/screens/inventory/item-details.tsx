@@ -1,4 +1,5 @@
 import { CustomDatePicker } from '@/components/CustomDatePicker';
+import ManageBarcodesModal from '@/components/ManageBarcodesModal';
 import PremiumActionModal from '@/components/PremiumActionModal';
 import { AppNumber, AppText } from '@/components/ui';
 import { Fonts } from '@/constants/theme';
@@ -12,6 +13,7 @@ import {
   Activity,
   AlertCircle,
   Award,
+  Barcode,
   Boxes,
   Calendar,
   Check,
@@ -58,6 +60,7 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showExpiryPicker, setShowExpiryPicker] = useState(false);
+  const [showBarcodes, setShowBarcodes] = useState(false);
 
   if (!item) return null;
 
@@ -164,6 +167,9 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => 
                  </View>
                ) : (
                  <View style={styles.editActions}>
+                   <TouchableOpacity onPress={() => setShowBarcodes(true)} style={[styles.circleBtn, { backgroundColor: colors.primary + '15', marginRight: 10 }]}>
+                      <Barcode size={18} color={colors.primary} />
+                   </TouchableOpacity>
                    <TouchableOpacity onPress={() => setShowDeleteConfirm(true)} style={[styles.circleBtn, { backgroundColor: colors.error + '15', marginRight: 10 }]}>
                        <Trash2 size={18} color={colors.error} />
                    </TouchableOpacity>
@@ -734,6 +740,12 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => 
           onCancel={() => setShowDeleteConfirm(false)}
         />
       </Modal>
+
+      <ManageBarcodesModal
+        visible={showBarcodes}
+        item={item}
+        onClose={() => setShowBarcodes(false)}
+      />
 
     </View>
   );

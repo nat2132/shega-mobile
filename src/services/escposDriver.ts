@@ -28,6 +28,9 @@ export interface PrinterTransport {
   close(): Promise<void>;
   isConnected(): boolean;
   getType(): PrinterTransportType;
+  on?(event: string, listener: (...args: any[]) => void): void;
+  off?(event: string, listener: (...args: any[]) => void): void;
+  emit?(event: string, ...args: any[]): void;
 }
 
 // ============================================
@@ -290,7 +293,7 @@ export class UsbTransportMobile extends EventEmitter implements PrinterTransport
           
           // Find interface and endpoints
           const interfaces = device.interfaces || [];
-          const iface = interfaces[config.interfaceNumber || 0];
+          const iface = interfaces[(config as any).interfaceNumber || 0];
           if (!iface) throw new Error('Interface not found');
           
           this.interface = iface;
@@ -491,20 +494,6 @@ export class EscposWriter {
 }
 
 // ============================================
-// Transport Factory
-// ============================================
-
-export function createTransport(type: PrinterTransportType): PrinterTransport {
-  switch (type) {
-    case 'tcp': return new TcpTransportMobile();
-    case 'bluetooth': return new BluetoothTransportMobile();
-    case 'ble': return new BleTransportMobile();
-    case 'usb': return new UsbTransportMobile();
-    default: throw new Error(`Unknown transport type: ${type}`);
-  }
-}
-
-// ============================================
 // ESC/POS Driver with Multi-Transport Support
 // ============================================
 
@@ -534,13 +523,12 @@ export class EscposDriver extends EventEmitter {
       lineFeed: (n = 1) => [0x0a, 0x1b, 0x64, Math.max(0, Math.min(255, n))],
       align: (n: 0 | 1 | 2) => [0x1b, 0x61, n],
       bold: (on: boolean) => [0x1b, 0x45, on ? 1 : 0],
-      size: (w: number, h: number) => {
-        const w = Math.max(0, Math.min(7, w));
-        const h = Math.max(0, Math.min(7, h));
+      size: (width: number, height: number) => {
+        const w = Math.max(0, Math.min(7, width));
+        const h = Math.max(0, Math.min(7, height));
         return [0x1d, 0x21, (w << 4) | h];
       },
       text: (s: string) => Array.from(s).map(c => c.charCodeAt(0) & 0xff),
-      lineFeed: (n = 1) => [0x0a, 0x1b, 0x64, Math.max(0, Math.min(255, n))],
       cut: (partial = true) => [0x1d, 0x56, partial ? 0x42 : 0x41, 0x00],
       openDrawer: (pin: 2 | 5 = 2) => [0x1b, 0x70, pin === 5 ? 1 : 0, 0x19, 0xfa],
     };
@@ -554,13 +542,13 @@ export class EscposDriver extends EventEmitter {
     this.config = config;
     this.transport = createTransport(config.transport);
 
-    this.transport.on('data', (data: Uint8Array) => {
+    this.transport.on?.('data', (data: Uint8Array) => {
       this.emit('data', data);
     });
-    this.transport.on('error', (err: Error) => {
+    this.transport.on?.('error', (err: Error) => {
       this.emit('error', err);
     });
-    this.transport.on('close', () => {
+    this.transport.on?.('close', () => {
       this.emit('close');
     });
 

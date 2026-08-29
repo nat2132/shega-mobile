@@ -17,6 +17,7 @@ import {
   getDebtSales,
   getPaymentMethodBreakdown,
   getPeakSalesHoursByItem,
+  getQuickProducts,
   getRecentSales,
   getRecentSalesGrouped,
   getSalesChartData,
@@ -91,6 +92,8 @@ import GlobalCheckout from "./sale-form";
 import SaleDetailsScreen from "./sales-details";
 import SalesRecordScreen from "./sales-record";
 import SearchScreen from "./search";
+import ScanPanel from "./scan-panel";
+import RegisterProductModal from "@/components/RegisterProductModal";
 import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
 import { salesHubTutorial, collectPaymentsTutorial } from '@/tutorials/definitions';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -141,10 +144,13 @@ const SalesDashboard = () => {
   const [showSalesRecord, setShowSalesRecord] = useState(false);
   const [showSaleFlow, setShowSaleFlow] = useState(false);
   const [saleFlowStep, setSaleFlowStep] = useState<
-    "search" | "form" | "pending"
-  >("search");
+    "search" | "scan" | "form" | "pending"
+  >("scan");
   const [, setSelectedItem] = useState<any>(null);
   const [pendingSales, setPendingSales] = useState<any[]>([]);
+  const [quickProducts, setQuickProducts] = useState<any[]>([]);
+  const [showRegisterProduct, setShowRegisterProduct] = useState(false);
+  const [registerBarcode, setRegisterBarcode] = useState("");
   const [selectedSale, setSelectedSale] = useState<any>(null);
   const [showSaleDetails, setShowSaleDetails] = useState(false);
   const [isBarExpanded, setIsBarExpanded] = useState(false);
@@ -239,6 +245,31 @@ const SalesDashboard = () => {
     loadData();
     setTimeout(() => setRefreshing(false), 800);
   }, [activeTab]);
+
+  // Add an item to the pending cart (merge by id, else append a new line).
+  const addToPendingSales = React.useCallback((item: any) => {
+    const existing = pendingSales.find((s) => s.id === item.id);
+    if (existing) {
+      setPendingSales(
+        pendingSales.map((s) =>
+          s.id === item.id ? { ...s, quantity: (s.quantity || 0) + 1 } : s,
+        ),
+      );
+    } else {
+      setPendingSales([
+        ...pendingSales,
+        { ...item, id: item.id, quantity: 1, unitType: "base" },
+      ]);
+    }
+  }, [pendingSales]);
+
+  const loadQuickProducts = React.useCallback(() => {
+    try {
+      setQuickProducts(getQuickProducts());
+    } catch (e) {
+      setQuickProducts([]);
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -1354,8 +1385,9 @@ const SalesDashboard = () => {
                     style={styles.dockBtn}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setSaleFlowStep("search");
+                      setSaleFlowStep("scan");
                       setSelectedItem(null);
+                      loadQuickProducts();
                       setShowSaleFlow(true);
                       setIsBarExpanded(false);
                     }}
@@ -3487,28 +3519,32 @@ const SalesDashboard = () => {
             {saleFlowStep === "search" && (
               <SearchScreen
                 onSelectItem={(item: any) => {
-                  const existing = pendingSales.find((s) => s.id === item.id);
-                  if (existing) {
-                    setPendingSales(
-                      pendingSales.map((s) =>
-                        s.id === item.id
-                          ? { ...s, quantity: s.quantity + 1 }
-                          : s,
-                      ),
-                    );
-                  } else {
-                    setPendingSales([
-                      ...pendingSales,
-                      {
-                        ...item,
-                        id: item.id,
-                        quantity: 1,
-                        unitType: "base",
-                      },
-                    ]);
-                  }
+                  addToPendingSales(item);
                   setSaleFlowStep("pending");
                 }}
+              />
+            )}
+            {saleFlowStep === "scan" && (
+              <ScanPanel
+                quickProducts={quickProducts}
+                cartCount={pendingSales.reduce((sum, s) => sum + Math.max(0, s.quantity || 0), 0)}
+                cartTotal={pendingSales.reduce((sum, s) => {
+                  const p =
+                    s.unitType === "pack"
+                      ? s.packSellingPrice || 0
+                      : s.baseSellingPrice || 0;
+                  return sum + Number(p) * Math.max(0, s.quantity || 0);
+                }, 0)}
+                onAddProduct={(item: any) => {
+                  addToPendingSales(item);
+                }}
+                onOpenSearch={() => setSaleFlowStep("search")}
+                onViewCart={() => setSaleFlowStep("pending")}
+                onRegisterProduct={(barcode: string) => {
+                  setRegisterBarcode(barcode);
+                  setShowRegisterProduct(true);
+                }}
+                onClose={() => setShowSaleFlow(false)}
               />
             )}
             {saleFlowStep === "pending" && (
@@ -3626,6 +3662,20 @@ const SalesDashboard = () => {
         </View>
       </KeyboardAvoidingView>
     </Modal>
+
+    {/* Register unknown-barcode product inline */}
+    <RegisterProductModal
+      visible={showRegisterProduct}
+      barcode={registerBarcode}
+      onClose={() => setShowRegisterProduct(false)}
+      onSaved={(item: any) => {
+        loadQuickProducts();
+        if (item && item.id) {
+          addToPendingSales(item);
+        }
+        showToast(t("sale.product_created") || "Product created", "success");
+      }}
+    />
 
       {showSaleSuccess && completedSaleData && (
         <Modal

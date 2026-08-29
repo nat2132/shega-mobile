@@ -29,7 +29,7 @@ import {
   Percent,
 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
-import { getDebtCustomers } from "@/database/db";
+import { getDebtCustomers, getComplianceSettings } from "@/database/db";
 import { useSettings } from "@/context/SettingsContext";
 import { useDialog } from "@/context/DialogContext";
 import { playNice, playBad } from "@/services/soundService";
@@ -267,6 +267,29 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
           message: t('dialog.insufficient_stock_desc', { name: item.name, required: String(requiredQty), unit: unitLabel, available: String(availableStock) }),
           iconType: "danger",
         });
+        return;
+      }
+    }
+
+    // ETB cash-transaction guardrail (National Bank of Ethiopia DAB limit).
+    // Cash (Paid) sales above the configured threshold require a digital method.
+    if (paymentMethod === "Cash" && paymentStatus === "Paid") {
+      const compliance = getComplianceSettings();
+      if (total > compliance.cashTransactionLimit) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        playBad();
+        const switchToTransfer = await dialog.confirm({
+          title: t("sale.cash_limit_title") || "Cash Limit Exceeded",
+          message:
+            t("sale.cash_limit_msg") ||
+            `This sale (ETB ${total.toLocaleString()}) exceeds the ETB ${compliance.cashTransactionLimit.toLocaleString()} cash transaction limit. Switch to Transfer to continue.`,
+          confirmText: t("sale.cash_limit_switch") || "Switch to Transfer",
+          cancelText: t("common.cancel") || "Cancel",
+          iconType: "warning",
+        });
+        if (switchToTransfer) {
+          setPaymentMethod("Transfer");
+        }
         return;
       }
     }

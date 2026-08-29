@@ -250,6 +250,12 @@ const migrateItemsTable = (database: SQLite.SQLiteDatabase) => {
     console.log('Successfully migrated items table: Added lastPriceCheckAt');
   } catch {}
 
+  // Migration: Product active/inactive status
+  try {
+    database.execSync(`ALTER TABLE items ADD COLUMN isActive INTEGER DEFAULT 1;`);
+    console.log('Successfully migrated items table: Added isActive');
+  } catch {}
+
   // Migration for batchId on sales table
   try {
     database.execSync(`ALTER TABLE sales ADD COLUMN batchId TEXT;`);
@@ -331,6 +337,7 @@ export const initDB = () => {
         isCredit INTEGER,
         supplierPhone TEXT,
         supplierAccount TEXT,
+        isActive INTEGER DEFAULT 1,
         createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
         uuid TEXT,
         device_id TEXT,
@@ -363,6 +370,47 @@ export const initDB = () => {
       );
     `);
     console.log('Table "item_packs" checked/created.');
+
+    // Alternative barcodes for products (multiple barcodes per product)
+    database.execSync(`
+      CREATE TABLE IF NOT EXISTS item_barcodes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        itemId INTEGER NOT NULL,
+        barcode TEXT NOT NULL,
+        isPrimary INTEGER DEFAULT 0,
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        uuid TEXT,
+        device_id TEXT,
+        row_version INTEGER DEFAULT 1,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        is_deleted INTEGER DEFAULT 0,
+        deleted_at TEXT,
+        is_synced INTEGER DEFAULT 1,
+        FOREIGN KEY (itemId) REFERENCES items(id),
+        UNIQUE(itemId, barcode)
+      );
+    `);
+    console.log('Table "item_barcodes" checked/created.');
+
+    // Quick products / favorites for fast POS access
+    database.execSync(`
+      CREATE TABLE IF NOT EXISTS quick_products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        itemId INTEGER NOT NULL,
+        position INTEGER DEFAULT 0,
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        uuid TEXT,
+        device_id TEXT,
+        row_version INTEGER DEFAULT 1,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        is_deleted INTEGER DEFAULT 0,
+        deleted_at TEXT,
+        is_synced INTEGER DEFAULT 1,
+        FOREIGN KEY (itemId) REFERENCES items(id),
+        UNIQUE(itemId)
+      );
+    `);
+    console.log('Table "quick_products" checked/created.');
 
     // Stock movement log — records each stock-add event so the activity
     // feed shows historical additions instead of live (shrinking) stock levels.
@@ -770,7 +818,7 @@ export const initDB = () => {
   `);
 
   // ========== PHASE 3 SYNC LAYER ==========
-  const syncTables = ['categories', 'items', 'item_packs', 'sales', 'debt_payments', 'expenses', 'adjustments', 'returns', 'customers'];
+  const syncTables = ['categories', 'items', 'item_packs', 'item_barcodes', 'quick_products', 'sales', 'debt_payments', 'expenses', 'adjustments', 'returns', 'customers'];
   const syncCols: [string, string][] = [
     ['uuid', 'TEXT'],
     ['device_id', 'TEXT'],
@@ -1393,6 +1441,7 @@ export interface InsertItemData {
   supplierPaidAmount?: number;
   dueDate?: string;
   lastPriceCheckAt?: string;
+  isActive?: boolean;
 }
 
 export const getNextItemId = () => {
@@ -1442,11 +1491,11 @@ export const insertItem = (data: InsertItemData) => {
   try {
     const database = getDB();
     const statement = database.prepareSync(`
-      INSERT INTO items (name, categoryId, sku, barcode, companyName, purchaseUnit, baseUnit, unitsPerPack, totalPackQuantity, totalBaseQuantity, packPurchasePrice, basePurchasePrice, baseSellingPrice, packSellingPrice, allowSellByBaseUnit, allowSellByPackUnit, expiryDate, qualityGrade, notes, isCredit, supplierPhone, supplierAccount, supplierCallEnabled, warehouseId, dueDate, lastPriceCheckAt, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
+      INSERT INTO items (name, categoryId, sku, barcode, companyName, purchaseUnit, baseUnit, unitsPerPack, totalPackQuantity, totalBaseQuantity, packPurchasePrice, basePurchasePrice, baseSellingPrice, packSellingPrice, allowSellByBaseUnit, allowSellByPackUnit, expiryDate, qualityGrade, notes, isCredit, supplierPhone, supplierAccount, supplierCallEnabled, warehouseId, dueDate, lastPriceCheckAt, isActive, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
     `);
     const result = statement.executeSync([
-      data.name, data.categoryId, data.sku || null, data.barcode || null, data.companyName || null, data.purchaseUnit || 'pcs', data.baseUnit || 'pcs', data.unitsPerPack || 0, data.totalPackQuantity || 0, data.totalBaseQuantity || 0, data.packPurchasePrice || 0, data.basePurchasePrice || 0, data.baseSellingPrice || 0, data.packSellingPrice || 0, data.allowSellByBaseUnit ? 1 : 0, data.allowSellByPackUnit ? 1 : 0, data.expiryDate || null, data.qualityGrade || null, data.notes || null, data.isCredit ? 1 : 0, data.supplierPhone || null, data.supplierAccount || null, data.supplierCallEnabled ? 1 : 0, data.warehouseId ?? null, data.dueDate || null, data.lastPriceCheckAt || null, null
+      data.name, data.categoryId, data.sku || null, data.barcode || null, data.companyName || null, data.purchaseUnit || 'pcs', data.baseUnit || 'pcs', data.unitsPerPack || 0, data.totalPackQuantity || 0, data.totalBaseQuantity || 0, data.packPurchasePrice || 0, data.basePurchasePrice || 0, data.baseSellingPrice || 0, data.packSellingPrice || 0, data.allowSellByBaseUnit ? 1 : 0, data.allowSellByPackUnit ? 1 : 0, data.expiryDate || null, data.qualityGrade || null, data.notes || null, data.isCredit ? 1 : 0, data.supplierPhone || null, data.supplierAccount || null, data.supplierCallEnabled ? 1 : 0, data.warehouseId ?? null, data.dueDate || null, data.lastPriceCheckAt || null, data.isActive === false ? 0 : 1, null
     ]);
     const newId = result.lastInsertRowId;
     // Log the initial stock as a movement so it appears in the activity feed.
@@ -1476,13 +1525,15 @@ export const insertItem = (data: InsertItemData) => {
   }
 };
 
-export const getItems = () => {
+export const getItems = (activeOnly: boolean = true) => {
   try {
     const database = getDB();
+    const whereClause = activeOnly ? 'WHERE items.is_deleted = 0 AND items.isActive = 1' : 'WHERE items.is_deleted = 0';
     return database.getAllSync(`
       SELECT items.*, categories.name as categoryName 
       FROM items 
       LEFT JOIN categories ON items.categoryId = categories.id 
+      ${whereClause}
       ORDER BY items.id DESC
     `);
   } catch (error) {
@@ -1491,14 +1542,28 @@ export const getItems = () => {
   }
 };
 
-export const getItemById = (id: number) => {
+export const toggleItemActive = (itemId: number, isActive: boolean) => {
   try {
     const database = getDB();
+    database.runSync(`
+      UPDATE items SET isActive = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+    `, [isActive ? 1 : 0, itemId]);
+    return true;
+  } catch (error) {
+    console.error('Toggle item active error:', error);
+    return false;
+  }
+};
+
+export const getItemById = (id: number, activeOnly: boolean = true) => {
+  try {
+    const database = getDB();
+    const whereClause = activeOnly ? 'WHERE items.id = ? AND items.is_deleted = 0 AND items.isActive = 1' : 'WHERE items.id = ? AND items.is_deleted = 0';
     return database.getFirstSync(`
       SELECT items.*, categories.name as categoryName
       FROM items
       LEFT JOIN categories ON items.categoryId = categories.id
-      WHERE items.id = ?
+      ${whereClause}
     `, [id]);
   } catch (error) {
     console.error('Get item by ID error:', error);
@@ -1506,19 +1571,181 @@ export const getItemById = (id: number) => {
   }
 };
 
-export const getItemByBarcode = (code: string) => {
+export const getItemByBarcode = (code: string, activeOnly: boolean = true) => {
   try {
     const database = getDB();
+    const activeClause = activeOnly ? 'AND items.is_deleted = 0 AND items.isActive = 1' : 'AND items.is_deleted = 0';
     return database.getFirstSync(`
       SELECT items.*, categories.name as categoryName
       FROM items
       LEFT JOIN categories ON items.categoryId = categories.id
-      WHERE items.barcode = ? COLLATE NOCASE OR items.sku = ? COLLATE NOCASE
+      WHERE (items.barcode = ? COLLATE NOCASE 
+         OR items.sku = ? COLLATE NOCASE
+         OR EXISTS (
+           SELECT 1 FROM item_barcodes ib 
+           WHERE ib.itemId = items.id 
+           AND ib.barcode = ? COLLATE NOCASE 
+           AND ib.is_deleted = 0
+         ))
+      ${activeClause}
       LIMIT 1
-    `, [code, code]);
+    `, [code, code, code]);
   } catch (error) {
     console.error('Get item by barcode error:', error);
     return null;
+  }
+};
+
+export const getItemBarcodes = (itemId: number) => {
+  try {
+    const database = getDB();
+    return database.getAllSync(`
+      SELECT * FROM item_barcodes 
+      WHERE itemId = ? AND is_deleted = 0
+      ORDER BY isPrimary DESC, id ASC
+    `, [itemId]);
+  } catch (error) {
+    console.error('Get item barcodes error:', error);
+    return [];
+  }
+};
+
+export const addItemBarcode = (itemId: number, barcode: string, isPrimary: boolean = false) => {
+  try {
+    const database = getDB();
+    
+    // If setting as primary, unset other primary barcodes for this item
+    if (isPrimary) {
+      database.runSync(`
+        UPDATE item_barcodes SET isPrimary = 0 WHERE itemId = ? AND is_deleted = 0
+      `, [itemId]);
+    }
+    
+    const statement = database.prepareSync(`
+      INSERT INTO item_barcodes (itemId, barcode, isPrimary)
+      VALUES (?, ?, ?)
+    `);
+    const result = statement.executeSync([itemId, barcode, isPrimary ? 1 : 0]);
+    return result.lastInsertRowId;
+  } catch (error) {
+    console.error('Add item barcode error:', error);
+    return null;
+  }
+};
+
+export const removeItemBarcode = (barcodeId: number) => {
+  try {
+    const database = getDB();
+    database.runSync(`
+      UPDATE item_barcodes SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE id = ?
+    `, [barcodeId]);
+    return true;
+  } catch (error) {
+    console.error('Remove item barcode error:', error);
+    return false;
+  }
+};
+
+export const setPrimaryBarcode = (barcodeId: number, itemId: number) => {
+  try {
+    const database = getDB();
+    database.runSync(`
+      UPDATE item_barcodes SET isPrimary = 0 WHERE itemId = ? AND is_deleted = 0
+    `, [itemId]);
+    database.runSync(`
+      UPDATE item_barcodes SET isPrimary = 1 WHERE id = ?
+    `, [barcodeId]);
+    return true;
+  } catch (error) {
+    console.error('Set primary barcode error:', error);
+    return false;
+  }
+};
+
+// Quick Products / Favorites
+export const getQuickProducts = () => {
+  try {
+    const database = getDB();
+    return database.getAllSync(`
+      SELECT items.*, categories.name as categoryName, qp.position
+      FROM quick_products qp
+      JOIN items ON qp.itemId = items.id
+      LEFT JOIN categories ON items.categoryId = categories.id
+      WHERE qp.is_deleted = 0 AND items.is_deleted = 0
+      ORDER BY qp.position ASC
+    `);
+  } catch (error) {
+    console.error('Get quick products error:', error);
+    return [];
+  }
+};
+
+export const addQuickProduct = (itemId: number) => {
+  try {
+    const database = getDB();
+    const existing = database.getFirstSync<{ id: number }>(
+      'SELECT id FROM quick_products WHERE itemId = ? AND is_deleted = 0',
+      [itemId]
+    );
+    if (existing) return true;
+    // Get the next position
+    const maxPos = database.getFirstSync<{ maxPos: number }>(
+      'SELECT MAX(position) as maxPos FROM quick_products WHERE is_deleted = 0'
+    );
+    const nextPosition = (maxPos?.maxPos ?? -1) + 1;
+    
+    const statement = database.prepareSync(`
+      INSERT INTO quick_products (itemId, position)
+      VALUES (?, ?)
+    `);
+    statement.executeSync([itemId, nextPosition]);
+    return true;
+  } catch (error) {
+    console.error('Add quick product error:', error);
+    return false;
+  }
+};
+
+export const removeQuickProduct = (itemId: number) => {
+  try {
+    const database = getDB();
+    database.runSync(`
+      UPDATE quick_products SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE itemId = ?
+    `, [itemId]);
+    return true;
+  } catch (error) {
+    console.error('Remove quick product error:', error);
+    return false;
+  }
+};
+
+export const reorderQuickProducts = (itemIds: number[]) => {
+  try {
+    const database = getDB();
+    const statement = database.prepareSync(`
+      UPDATE quick_products SET position = ?, updated_at = CURRENT_TIMESTAMP WHERE itemId = ?
+    `);
+    itemIds.forEach((itemId, index) => {
+      statement.executeSync([index, itemId]);
+    });
+    return true;
+  } catch (error) {
+    console.error('Reorder quick products error:', error);
+    return false;
+  }
+};
+
+export const isQuickProduct = (itemId: number) => {
+  try {
+    const database = getDB();
+    const result = database.getFirstSync<{ count: number }>(
+      'SELECT COUNT(*) as count FROM quick_products WHERE itemId = ? AND is_deleted = 0',
+      [itemId]
+    );
+    return (result?.count ?? 0) > 0;
+  } catch (error) {
+    console.error('Check quick product error:', error);
+    return false;
   }
 };
 // Returns items flagged with supplierCallEnabled that have had a price
@@ -3854,7 +4081,7 @@ export const updateItem = (id: number, updates: any) => {
       'packSellingPrice', 'allowSellByBaseUnit', 'allowSellByPackUnit',
       'expiryDate', 'qualityGrade', 'notes', 'isCredit',
       'supplierPhone', 'supplierAccount', 'supplierCallEnabled', 'lastPriceCheckAt', 'createdAt',
-      'reorderPoint', 'reorderQty', 'autoReorder'
+      'reorderPoint', 'reorderQty', 'autoReorder', 'sku', 'barcode', 'isActive'
     ];
 
     const filteredUpdates = Object.keys(updates)
@@ -6321,6 +6548,35 @@ export const getExpenseById = (id: number) => {
   }
 };
 
+// Compliance settings helpers
+export const getComplianceSettings = () => {
+  try {
+    const database = getDB();
+    const cashLimit = database.getFirstSync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', ['cash_transaction_limit']);
+    const allowNegativeStock = database.getFirstSync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', ['allow_negative_stock']);
+    const requireDigitalOverLimit = database.getFirstSync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', ['require_digital_over_limit']);
+    return {
+      cashTransactionLimit: cashLimit ? parseFloat(cashLimit.value) : 50000,
+      allowNegativeStock: allowNegativeStock ? allowNegativeStock.value === '1' : false,
+      requireDigitalOverLimit: requireDigitalOverLimit ? requireDigitalOverLimit.value === '1' : true,
+    };
+  } catch (error) {
+    console.error('Get compliance settings error:', error);
+    return { cashTransactionLimit: 50000, allowNegativeStock: false, requireDigitalOverLimit: true };
+  }
+};
+
+export const setComplianceSetting = (key: string, value: string) => {
+  try {
+    const database = getDB();
+    database.runSync('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)', [key, value]);
+    return true;
+  } catch (error) {
+    console.error('Set compliance setting error:', error);
+    return false;
+  }
+};
+
 export const searchInventory = (query: string) => {
   try {
     const database = getDB();
@@ -6329,10 +6585,22 @@ export const searchInventory = (query: string) => {
       `SELECT items.*, categories.name as categoryName
       FROM items
       LEFT JOIN categories ON items.categoryId = categories.id
-      WHERE items.name LIKE ? OR categories.name LIKE ?
+      WHERE items.is_deleted = 0
+        AND (
+          items.name LIKE ? 
+          OR categories.name LIKE ?
+          OR items.sku LIKE ?
+          OR items.barcode LIKE ?
+          OR EXISTS (
+            SELECT 1 FROM item_barcodes ib 
+            WHERE ib.itemId = items.id 
+            AND ib.barcode LIKE ? 
+            AND ib.is_deleted = 0
+          )
+        )
       ORDER BY items.id DESC
       LIMIT 20`,
-      [q, q]
+      [q, q, q, q, q]
     );
   } catch (error) {
     console.error('Search inventory error:', error);

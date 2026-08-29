@@ -70,17 +70,6 @@ export function compareVectorClocks(a: VectorClock, b: VectorClock): VectorClock
   return 'equal';
 }
 
-export interface Delta {
-  entity: string;
-  entity_uuid: string;
-  op: 'INSERT' | 'UPDATE' | 'DELETE';
-  payload: Record<string, any>;
-  vector_clock: VectorClock;
-  origin_device_id: string;
-  checksum: string;
-  timestamp: number;
-}
-
 export async function createDelta(
   entity: string,
   entity_uuid: string,
@@ -136,9 +125,6 @@ export async function applyDelta(delta: any): Promise<{ applied: boolean; confli
       return { applied: false, conflict: false, reason: 'not_found' };
     }
 
-    const existingRow = db.getFirstSync(`SELECT * FROM ${delta.entity} WHERE uuid = ?`, [delta.entity_uuid]) as any;
-    const cleanedPayload = cleanPayload(delta.entity, delta.payload);
-
     if (!existing) {
       // INSERT
       const insertData = { ...delta.payload };
@@ -165,8 +151,6 @@ export async function applyDelta(delta: any): Promise<{ applied: boolean; confli
       return { applied: true, conflict: false };
     }
 
-    const existingRow = db.getFirstSync(`SELECT * FROM ${delta.entity} WHERE uuid = ?`, [delta.entity_uuid]) as any;
-    const cleanedPayload = cleanPayload(delta.entity, delta.payload);
     const existingVc = await getVectorClockForRow(delta.entity, delta.entity_uuid);
 
     const cmp = compareVectorClocks(vector_clock, existingVc);
@@ -208,24 +192,6 @@ export async function applyDelta(delta: any): Promise<{ applied: boolean; confli
   } catch (e: any) {
     return { applied: false, conflict: false, reason: e.message };
   }
-}
-
-function compareVectorClocks(a: any, b: any) {
-  const allDevices = new Set([...Object.keys(a), ...Object.keys(b)]);
-  let aGreater = false;
-  let bGreater = false;
-
-  for (const deviceId of allDevices) {
-    const aSeq = a[deviceId] || 0;
-    const bSeq = b[deviceId] || 0;
-    if (aSeq > bSeq) aGreater = true;
-    else if (bSeq > aSeq) bGreater = true;
-  }
-
-  if (aGreater && !bGreater) return 'a-before-b';
-  if (bGreater && !aGreater) return 'b-before-a';
-  if (aGreater && bGreater) return 'concurrent';
-  return 'equal';
 }
 
 async function getVectorClockForRow(entity: string, uuid: string): Promise<Record<string, number>> {
