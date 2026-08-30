@@ -23,6 +23,7 @@ import { getSalesGlass } from "./glass-sales";
 import { AppText, AppNumber } from "@/components/ui";
 import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
 import { pendingSalesTutorial } from '@/tutorials/definitions';
+import { getLinePrice, getLineUnitLabel, getLineStock, calcLineTotal, cartSubtotal } from '@/utils/cartUtils';
 const PendingRow = React.memo(
   ({
     item,
@@ -37,12 +38,9 @@ const PendingRow = React.memo(
   }) => {
     const { colors } = useSettings();
     const SALES_GLASS = useMemo(() => getSalesGlass(colors), [colors]);
-    const currentUnitPrice =
-      item.unitType === "pack" ? item.packSellingPrice : item.baseSellingPrice;
-    const currentUnitLabel =
-      item.unitType === "pack" ? item.purchaseUnit : item.baseUnit;
-    const lineTotal =
-      (parseFloat(currentUnitPrice) || 0) * Math.max(0, item.quantity || 0);
+    const currentUnitPrice = getLinePrice(item);
+    const currentUnitLabel = getLineUnitLabel(item) || 'pcs';
+    const lineTotal = calcLineTotal(item);
 
     const decrement = useCallback(() => {
       if (item.quantity > 1)
@@ -52,10 +50,7 @@ const PendingRow = React.memo(
     }, [item, onUpdate]);
 
     const increment = useCallback(() => {
-      const maxStock =
-        item.unitType === "pack"
-          ? Math.floor(item.totalPackQuantity || 0)
-          : Math.floor(item.totalBaseQuantity || 0);
+      const maxStock = getLineStock(item);
       if ((item.quantity || 0) >= maxStock) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         return;
@@ -136,7 +131,7 @@ const PendingRow = React.memo(
               />
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <AppNumber
-                  value={parseFloat(currentUnitPrice) || 0}
+                  value={currentUnitPrice}
                   size="caption"
                   weight="medium"
                   color={SALES_GLASS.fgSecondary}
@@ -215,18 +210,7 @@ const PendingSales: React.FC<PendingSalesProps> = ({
   const SALES_GLASS = useMemo(() => getSalesGlass(colors), [colors]);
   const tutorial = useTutorial({ tutorial: pendingSalesTutorial });
   const safeItems = useMemo(() => (Array.isArray(items) ? items : []), [items]);
-  const totalAmount = useMemo(
-    () =>
-      safeItems.reduce((sum, item) => {
-        const price =
-          item.unitType === "pack"
-            ? parseFloat(item.packSellingPrice) || 0
-            : parseFloat(item.baseSellingPrice) || 0;
-        const qty = Math.max(0, item.quantity || 0);
-        return sum + price * qty;
-      }, 0),
-    [safeItems],
-  );
+  const totalAmount = useMemo(() => cartSubtotal(safeItems), [safeItems]);
 
   const renderItem = useCallback(
     ({ item, index }: { item: any; index: number }) => (

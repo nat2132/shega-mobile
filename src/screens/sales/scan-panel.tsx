@@ -88,6 +88,7 @@ const ScanPanel: React.FC<ScanPanelProps> = ({
           onClose={onClose}
           onManualEntry={() => onOpenSearch()}
           silent
+          showTopBar={false}
         />
       </View>
 
@@ -290,7 +291,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingBottom: 132,
     gap: 10,
     zIndex: 30,
   },

@@ -44,6 +44,7 @@ import {
   Languages,
   LayoutDashboard,
   Palette,
+  Printer,
   Shield,
   Sliders,
   Trash2,
@@ -55,6 +56,8 @@ import {
 import { DataTransferModal } from '@/components/DataTransferModal';
 import { BottomSheet } from '@/components/BottomSheet';
 import { AppListItem, AppText } from '@/components/ui';
+import { PeripheralCenter } from './devices/peripherals';
+import { usePermissions } from '@/hooks/usePermissions';
 import PremiumFeatureGate from '@/components/PremiumFeatureGate';
 import { useWarehouse } from '@/context/WarehouseContext';
 import { translateWarehouseName, translateWarehouseLocation } from '@/utils/warehouse-labels';
@@ -435,6 +438,9 @@ const SettingsScreen = () => {
   const [showExportModal, setShowExportModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showWarehouse, setShowWarehouse] = useState(false);
+  const [showDevices, setShowDevices] = useState(false);
+
+  const { canManageDevices } = usePermissions();
 
   const { activeWarehouse, warehouses } = useWarehouse();
   const { checkForUpdates, state: updateState } = useUpdate();
@@ -568,6 +574,25 @@ const SettingsScreen = () => {
 
         {/* Offline-first Sync (Phase 3) */}
         <SyncSettings />
+
+        {/* Devices & Peripherals */}
+        {canManageDevices ? (
+          <View style={styles.ledgerSection}>
+            <View style={styles.sectionHead}>
+              <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: G.muted }]} numberOfLines={1}>{t('devices.title')}</AppText>
+              <View style={{ flex: 1 }} />
+              <Printer size={20} color={G.muted} />
+            </View>
+            <View style={[styles.ledgerGroup, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+              <SettingLedgerItem
+                icon={Printer}
+                title={t('devices.title')}
+                subtitle={t('devices.settings_subtitle')}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowDevices(true); }}
+              />
+            </View>
+          </View>
+        ) : null}
 
         {/* Dashboard Customization */}
         <View style={styles.ledgerSection}>
@@ -755,6 +780,11 @@ const SettingsScreen = () => {
       {/* Warehouse Modal */}
       <BottomSheet visible={showWarehouse} onClose={() => setShowWarehouse(false)}>
         <WarehouseSettingsScreen onClose={() => setShowWarehouse(false)} />
+      </BottomSheet>
+
+      {/* Devices & Peripherals */}
+      <BottomSheet visible={showDevices} onClose={() => setShowDevices(false)}>
+        <PeripheralCenter onClose={() => setShowDevices(false)} />
       </BottomSheet>
 
       {/* Reset Modal */}

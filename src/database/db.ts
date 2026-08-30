@@ -205,7 +205,16 @@ const migrateItemsTable = (database: SQLite.SQLiteDatabase) => {
     { name: 'allowSellByBaseUnit', type: 'INTEGER', default: '1' },
     { name: 'allowSellByPackUnit', type: 'INTEGER', default: '0' },
     { name: 'sku', type: 'TEXT' },
-    { name: 'barcode', type: 'TEXT' }
+    { name: 'barcode', type: 'TEXT' },
+    { name: 'wholesaleSellingPrice', type: 'REAL' },
+    { name: 'minWholesaleQty', type: 'REAL' },
+    { name: 'transportCost', type: 'REAL', default: '0' },
+    { name: 'importCost', type: 'REAL', default: '0' },
+    { name: 'packagingCost', type: 'REAL', default: '0' },
+    { name: 'handlingCost', type: 'REAL', default: '0' },
+    { name: 'otherCost', type: 'REAL', default: '0' },
+    { name: 'targetMargin', type: 'REAL' },
+    { name: 'taxTreatment', type: 'TEXT' }
   ];
 
   for (const col of columns) {
@@ -254,6 +263,16 @@ const migrateItemsTable = (database: SQLite.SQLiteDatabase) => {
   try {
     database.execSync(`ALTER TABLE items ADD COLUMN isActive INTEGER DEFAULT 1;`);
     console.log('Successfully migrated items table: Added isActive');
+  } catch {}
+
+  // Migration: product photo (compressed base64) + default tax classification
+  try {
+    database.execSync(`ALTER TABLE items ADD COLUMN image TEXT;`);
+    console.log('Successfully migrated items table: Added image');
+  } catch {}
+  try {
+    database.execSync(`ALTER TABLE items ADD COLUMN taxType TEXT;`);
+    console.log('Successfully migrated items table: Added taxType');
   } catch {}
 
   // Migration for batchId on sales table
@@ -334,6 +353,8 @@ export const initDB = () => {
         expiryDate TEXT,
         qualityGrade TEXT,
         notes TEXT,
+        image TEXT,
+        taxType TEXT,
         isCredit INTEGER,
         supplierPhone TEXT,
         supplierAccount TEXT,
@@ -426,6 +447,28 @@ export const initDB = () => {
       );
     `);
     console.log('Table "stock_movements" checked/created.');
+
+    // Price history — log purchase/selling/wholesale price changes so the
+    // pricing intelligence can show previous vs current values and margin drift.
+    database.execSync(`
+      CREATE TABLE IF NOT EXISTS item_price_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        itemId INTEGER NOT NULL,
+        field TEXT NOT NULL,
+        oldValue REAL,
+        newValue REAL,
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        uuid TEXT,
+        device_id TEXT,
+        row_version INTEGER DEFAULT 1,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        is_deleted INTEGER DEFAULT 0,
+        deleted_at TEXT,
+        is_synced INTEGER DEFAULT 1,
+        FOREIGN KEY (itemId) REFERENCES items(id)
+      );
+    `);
+    console.log('Table "item_price_history" checked/created.');
 
     database.execSync(`
       CREATE TABLE IF NOT EXISTS sales (
@@ -1387,6 +1430,10 @@ export interface ItemData {
   categoryId: number;
   categoryName: string;
   companyName: string;
+  sku: string | null;
+  barcode: string | null;
+  image: string | null;
+  taxType: string | null;
   purchaseUnit: string;
   baseUnit: string;
   unitsPerPack: number;
@@ -1402,13 +1449,26 @@ export interface ItemData {
   qualityGrade: string;
   notes: string;
   isCredit: boolean;
+  isActive: boolean;
   supplierPhone: string | null;
   supplierAccount: string | null;
   supplierCallEnabled: boolean;
+  reorderPoint: number;
+  reorderQty: number;
+  autoReorder: boolean;
   lastPriceCheckAt: string | null;
   createdAt: string;
   creditQuantity?: number;
   creditAmount?: number;
+  wholesaleSellingPrice?: number | null;
+  minWholesaleQty?: number | null;
+  transportCost?: number | null;
+  importCost?: number | null;
+  packagingCost?: number | null;
+  handlingCost?: number | null;
+  otherCost?: number | null;
+  targetMargin?: number | null;
+  taxTreatment?: string | null;
 }
 
 export interface InsertItemData {
@@ -1416,6 +1476,8 @@ export interface InsertItemData {
   categoryId: number;
   sku?: string | null;
   barcode?: string | null;
+  image?: string | null;
+  taxType?: string | null;
   companyName: string;
   purchaseUnit: string;
   baseUnit: string;
@@ -1442,6 +1504,15 @@ export interface InsertItemData {
   dueDate?: string;
   lastPriceCheckAt?: string;
   isActive?: boolean;
+  wholesaleSellingPrice?: number | null;
+  minWholesaleQty?: number | null;
+  transportCost?: number | null;
+  importCost?: number | null;
+  packagingCost?: number | null;
+  handlingCost?: number | null;
+  otherCost?: number | null;
+  targetMargin?: number | null;
+  taxTreatment?: string | null;
 }
 
 export const getNextItemId = () => {
@@ -1487,15 +1558,71 @@ export const logStockMovement = (
   }
 };
 
+// Internal: insert a single price-history entry for an item/field.
+const recordPriceHistory = (itemId: number, field: string, oldValue: number | null, newValue?: number | null) => {
+  try {
+    const database = getDB();
+    const nv = newValue === undefined ? oldValue : newValue;
+    database.runSync(
+      `INSERT INTO item_price_history (itemId, field, oldValue, newValue) VALUES (?, ?, ?, ?)`,
+      itemId, field, oldValue ?? null, nv ?? null
+    );
+  } catch (error) {
+    console.error('Record price history error:', error);
+  }
+};
+
+// Public: compare an item's stored pricing fields against supplied updates and
+// log every changed value so price-history reporting stays current. Used by
+// updateItem so edits from any screen (wizard, item-details, etc.) are tracked.
+export const logItemPriceChanges = (id: number, updates: any) => {
+  try {
+    const database = getDB();
+    const current = database.getFirstSync<any>(
+      'SELECT basePurchasePrice, baseSellingPrice, packSellingPrice, wholesaleSellingPrice FROM items WHERE id = ?', [id]
+    );
+    if (!current) return;
+    const tests: [string, any, number | null][] = [
+      ['purchase', updates.basePurchasePrice, current.basePurchasePrice],
+      ['selling', updates.baseSellingPrice, current.baseSellingPrice],
+      ['pack_selling', updates.packSellingPrice, current.packSellingPrice],
+      ['wholesale', updates.wholesaleSellingPrice, current.wholesaleSellingPrice],
+    ];
+    for (const [field, next, prev] of tests) {
+      if (next === undefined) continue;
+      const nextVal = next === null ? null : Number(next);
+      if (nextVal === prev) continue;
+      if (prev !== null && nextVal !== null && Math.abs(nextVal - prev) < 0.001) continue;
+      recordPriceHistory(id, field, prev ?? null, nextVal ?? null);
+    }
+  } catch (error) {
+    console.error('Log item price changes error:', error);
+  }
+};
+
+// Public: latest price history for an item (most recent first).
+export const getPriceHistory = (itemId: number, limit: number = 20) => {
+  try {
+    const database = getDB();
+    return database.getAllSync<any>(
+      'SELECT * FROM item_price_history WHERE itemId = ? AND is_deleted = 0 ORDER BY id DESC LIMIT ?',
+      [itemId, limit]
+    );
+  } catch (error) {
+    console.error('Get price history error:', error);
+    return [];
+  }
+};
+
 export const insertItem = (data: InsertItemData) => {
   try {
     const database = getDB();
     const statement = database.prepareSync(`
-      INSERT INTO items (name, categoryId, sku, barcode, companyName, purchaseUnit, baseUnit, unitsPerPack, totalPackQuantity, totalBaseQuantity, packPurchasePrice, basePurchasePrice, baseSellingPrice, packSellingPrice, allowSellByBaseUnit, allowSellByPackUnit, expiryDate, qualityGrade, notes, isCredit, supplierPhone, supplierAccount, supplierCallEnabled, warehouseId, dueDate, lastPriceCheckAt, isActive, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
+      INSERT INTO items (name, categoryId, sku, barcode, image, taxType, companyName, purchaseUnit, baseUnit, unitsPerPack, totalPackQuantity, totalBaseQuantity, packPurchasePrice, basePurchasePrice, baseSellingPrice, packSellingPrice, allowSellByBaseUnit, allowSellByPackUnit, expiryDate, qualityGrade, notes, isCredit, supplierPhone, supplierAccount, supplierCallEnabled, warehouseId, dueDate, lastPriceCheckAt, isActive, wholesaleSellingPrice, minWholesaleQty, transportCost, importCost, packagingCost, handlingCost, otherCost, targetMargin, taxTreatment, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
     `);
     const result = statement.executeSync([
-      data.name, data.categoryId, data.sku || null, data.barcode || null, data.companyName || null, data.purchaseUnit || 'pcs', data.baseUnit || 'pcs', data.unitsPerPack || 0, data.totalPackQuantity || 0, data.totalBaseQuantity || 0, data.packPurchasePrice || 0, data.basePurchasePrice || 0, data.baseSellingPrice || 0, data.packSellingPrice || 0, data.allowSellByBaseUnit ? 1 : 0, data.allowSellByPackUnit ? 1 : 0, data.expiryDate || null, data.qualityGrade || null, data.notes || null, data.isCredit ? 1 : 0, data.supplierPhone || null, data.supplierAccount || null, data.supplierCallEnabled ? 1 : 0, data.warehouseId ?? null, data.dueDate || null, data.lastPriceCheckAt || null, data.isActive === false ? 0 : 1, null
+      data.name, data.categoryId, data.sku || null, data.barcode || null, data.image || null, data.taxType || null, data.companyName || null, data.purchaseUnit || 'pcs', data.baseUnit || 'pcs', data.unitsPerPack || 0, data.totalPackQuantity || 0, data.totalBaseQuantity || 0, data.packPurchasePrice || 0, data.basePurchasePrice || 0, data.baseSellingPrice || 0, data.packSellingPrice || 0, data.allowSellByBaseUnit ? 1 : 0, data.allowSellByPackUnit ? 1 : 0, data.expiryDate || null, data.qualityGrade || null, data.notes || null, data.isCredit ? 1 : 0, data.supplierPhone || null, data.supplierAccount || null, data.supplierCallEnabled ? 1 : 0, data.warehouseId ?? null, data.dueDate || null, data.lastPriceCheckAt || null, data.isActive === false ? 0 : 1, data.wholesaleSellingPrice ?? null, data.minWholesaleQty ?? null, data.transportCost ?? 0, data.importCost ?? 0, data.packagingCost ?? 0, data.handlingCost ?? 0, data.otherCost ?? 0, data.targetMargin ?? null, data.taxTreatment || null, null
     ]);
     const newId = result.lastInsertRowId;
     // Log the initial stock as a movement so it appears in the activity feed.
@@ -1511,6 +1638,10 @@ export const insertItem = (data: InsertItemData) => {
         data.supplierPaidAmount
       );
     }
+    // Record the item's initial pricing baseline for price-history reporting.
+    recordPriceHistory(newId, 'purchase', data.basePurchasePrice || 0);
+    recordPriceHistory(newId, 'selling', data.baseSellingPrice || 0);
+    if (data.wholesaleSellingPrice) recordPriceHistory(newId, 'wholesale', data.wholesaleSellingPrice);
     // Link the item to its supplier so multi-supplier relationships work.
     if (newId && data.supplierId) {
       database.runSync(
@@ -4081,7 +4212,10 @@ export const updateItem = (id: number, updates: any) => {
       'packSellingPrice', 'allowSellByBaseUnit', 'allowSellByPackUnit',
       'expiryDate', 'qualityGrade', 'notes', 'isCredit',
       'supplierPhone', 'supplierAccount', 'supplierCallEnabled', 'lastPriceCheckAt', 'createdAt',
-      'reorderPoint', 'reorderQty', 'autoReorder', 'sku', 'barcode', 'isActive'
+      'reorderPoint', 'reorderQty', 'autoReorder', 'sku', 'barcode', 'isActive',
+      'image', 'taxType', 'wholesaleSellingPrice', 'minWholesaleQty',
+      'transportCost', 'importCost', 'packagingCost', 'handlingCost', 'otherCost',
+      'targetMargin', 'taxTreatment'
     ];
 
     const filteredUpdates = Object.keys(updates)
@@ -4124,6 +4258,9 @@ export const updateItem = (id: number, updates: any) => {
         id, (updates as any).supplierId
       );
     }
+
+    // Log price changes to price history before they are overwritten.
+    logItemPriceChanges(id, filteredUpdates);
 
     const setQuery = Object.keys(filteredUpdates).map(k => `${k} = ?`).join(', ');
     const values = Object.values(filteredUpdates);
@@ -6574,6 +6711,44 @@ export const setComplianceSetting = (key: string, value: string) => {
   } catch (error) {
     console.error('Set compliance setting error:', error);
     return false;
+  }
+};
+
+// Generic app_settings read helper (role, counters, flags).
+export const getAppSetting = (key: string, fallback: string | null = null): string | null => {
+  try {
+    const database = getDB();
+    const row = database.getFirstSync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', [key]);
+    return row ? row.value : fallback;
+  } catch (error) {
+    console.error('Get app setting error:', error);
+    return fallback;
+  }
+};
+
+// Generates a unique internal product code (e.g. "SHG-000123") scannable as
+// CODE128. Used for products without a manufacturer barcode. The counter lives
+// in app_settings so codes stay monotonic across the business.
+export const generateShegaCode = (): string => {
+  try {
+    const database = getDB();
+    const row = database.getFirstSync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', ['shega_barcode_seq']);
+    let seq = row ? parseInt(row.value, 10) || 0 : 0;
+    for (let i = 0; i < 100; i++) {
+      seq += 1;
+      const code = 'SHG-' + String(seq).padStart(6, '0');
+      const clash = database.getFirstSync<{ n: number }>(
+        'SELECT COUNT(*) as n FROM items WHERE (barcode = ? OR sku = ?) AND is_deleted = 0', [code, code]
+      );
+      if (!clash || clash.n === 0) {
+        database.runSync('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)', ['shega_barcode_seq', String(seq)]);
+        return code;
+      }
+    }
+    return 'SHG-' + String(Date.now()).slice(-6);
+  } catch (error) {
+    console.error('Generate Shega code error:', error);
+    return 'SHG-' + String(Date.now()).slice(-6);
   }
 };
 

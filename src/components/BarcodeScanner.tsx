@@ -1,13 +1,13 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { View, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView, useCameraPermissions, BarcodeType } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import { playNice, playBad } from '@/services/soundService';
 import { useSettings } from '@/context/SettingsContext';
 import { getSalesGlass } from '@/screens/sales/glass-sales';
 import { AppText } from '@/components/ui';
 import { Camera as CameraIcon, X, Flashlight, FlashlightOff, RotateCcw, Barcode as BarcodeIcon } from 'lucide-react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming, interpolate } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming, withRepeat, interpolate, Easing } from 'react-native-reanimated';
 
 export interface BarcodeScanResult {
   barcode: string;
@@ -22,14 +22,15 @@ interface BarcodeScannerProps {
   onError?: (error: Error) => void;
   torchEnabled?: boolean;
   scanInterval?: number;
-  barcodeTypes?: string[];
+  barcodeTypes?: BarcodeType[];
+  showTopBar?: boolean;
   showTorchToggle?: boolean;
   showCameraFlip?: boolean;
   showManualEntry?: boolean;
   silent?: boolean;
 }
 
-const SUPPORTED_BARCODE_TYPES = [
+const SUPPORTED_BARCODE_TYPES: BarcodeType[] = [
   'ean13',
   'ean8',
   'upc_a',
@@ -38,11 +39,11 @@ const SUPPORTED_BARCODE_TYPES = [
   'code39',
   'code93',
   'codabar',
-  'itf',
-  'qr_code',
+  'itf14',
+  'qr',
   'pdf417',
   'aztec',
-  'data_matrix',
+  'datamatrix',
 ];
 
 export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
@@ -53,6 +54,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   torchEnabled = false,
   scanInterval = 100,
   barcodeTypes = SUPPORTED_BARCODE_TYPES,
+  showTopBar = true,
   showTorchToggle = true,
   showCameraFlip = true,
   showManualEntry = true,
@@ -91,35 +93,36 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
     };
   }, []);
 
-  useEffect(() => {
-    if (permission?.granted) {
-      setHasPermission(true);
-      startScanLineAnimation();
-    } else if (permission?.canAskAgain === false) {
-      setHasPermission(false);
-      setError(t('barcode.camera_permission_denied') || 'Camera permission denied');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [permission]);
+useEffect(() => {
+  if (!permission) return;
+  if (permission.granted) {
+    setHasPermission(true);
+    setError(null);
+    if (isMounted.current) startScanLineAnimation();
+  } else if (permission.status === 'undetermined') {
+    // Prompt automatically the first time the scanner opens instead of
+    // hanging on the "requesting permission" splash.
+    requestPermission();
+  } else {
+    setHasPermission(false);
+    setError(t('barcode.camera_permission_denied') || 'Camera permission denied');
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [permission]);
 
-  const startScanLineAnimation = () => {
+const startScanLineAnimation = () => {
     scanLineAnim.value = 0;
     scannerFrameAnim.value = 0;
-    const animate = () => {
-      if (!isMounted.current) return;
-      scanLineAnim.value = withTiming(1, { duration: 2000, easing: (t) => t }, () => {
-        if (isMounted.current) {
-          scanLineAnim.value = 0;
-          animate();
-        }
-      });
-      scannerFrameAnim.value = withTiming(1, { duration: 1000, easing: (t) => t }, () => {
-        if (isMounted.current) {
-          scannerFrameAnim.value = 0;
-        }
-      });
-    };
-    animate();
+    scanLineAnim.value = withRepeat(
+      withTiming(1, { duration: 2000, easing: Easing.linear }),
+      -1,
+      false,
+    );
+    scannerFrameAnim.value = withRepeat(
+      withTiming(1, { duration: 1000, easing: Easing.linear }),
+      -1,
+      false,
+    );
   };
 
   const handleBarcodeScanned = useCallback(({ data, type, bounds }: { data: string; type: string; bounds?: any }) => {
@@ -176,7 +179,11 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   };
 
   const flipCamera = () => {
-    setCameraType((prev) => (prev === 'back' ? 'front' : 'back'));
+    setCameraType((prev) => {
+      if (prev === 'front') return 'back';
+      setTorchOn(false);
+      return 'front';
+    });
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
@@ -250,37 +257,39 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
     }
 
     return (
-      <>
+      <View style={styles.cameraWrap}>
         <CameraView
           style={StyleSheet.absoluteFill}
           facing={cameraType}
+          enableTorch={torchOn}
           onBarcodeScanned={handleBarcodeScanned}
           barcodeScannerSettings={{
-            barcodeTypes: barcodeTypes as any,
+            barcodeTypes,
           }}
-        >
-          <View style={StyleSheet.absoluteFill} pointerEvents="none">
-            <View style={styles.scannerOverlay}>
-              <Animated.View
-                style={[
-                  styles.scanLine,
-                  {
-                    backgroundColor: colors.primary,
-                  },
-                  scanLineStyle,
-                ]}
-              />
-              <Animated.View
-                style={[
-                  styles.scannerFrame,
-                  {
-                    borderColor: colors.primary,
-                  },
-                  frameStyle,
-                ]}
-              />
-            </View>
+        />
+        <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+          <View style={styles.scannerOverlay}>
+            <Animated.View
+              style={[
+                styles.scanLine,
+                {
+                  backgroundColor: colors.primary,
+                },
+                scanLineStyle,
+              ]}
+            />
+            <Animated.View
+              style={[
+                styles.scannerFrame,
+                {
+                  borderColor: colors.primary,
+                },
+                frameStyle,
+              ]}
+            />
+          </View>
 
+          {showTopBar && (
             <View style={styles.topBar}>
               <TouchableOpacity style={styles.closeButton} onPress={onClose} activeOpacity={0.7}>
                 <X size={24} color={SALES_GLASS.fg} />
@@ -290,51 +299,51 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
               </AppText>
               <View style={{ width: 40 }} />
             </View>
+          )}
 
-            <View style={styles.bottomBar}>
-              {showTorchToggle && (
-                <TouchableOpacity
-                  style={[styles.controlButton, torchOn && { backgroundColor: colors.warning + '30' }]}
-                  onPress={toggleTorch}
-                  activeOpacity={0.7}
-                >
-                  {torchOn ? (
-                    <Flashlight size={24} color={colors.warning} />
-                  ) : (
-                    <FlashlightOff size={24} color={SALES_GLASS.fgSecondary} />
-                  )}
-                </TouchableOpacity>
-              )}
+          <View style={styles.bottomBar}>
+            {showTorchToggle && (
+              <TouchableOpacity
+                style={[styles.controlButton, torchOn && { backgroundColor: colors.warning + '30' }]}
+                onPress={toggleTorch}
+                activeOpacity={0.7}
+              >
+                {torchOn ? (
+                  <Flashlight size={24} color={colors.warning} />
+                ) : (
+                  <FlashlightOff size={24} color={SALES_GLASS.fgSecondary} />
+                )}
+              </TouchableOpacity>
+            )}
 
-              {showCameraFlip && (
-                <TouchableOpacity
-                  style={styles.controlButton}
-                  onPress={flipCamera}
-                  activeOpacity={0.7}
-                >
-                  <RotateCcw size={24} color={SALES_GLASS.fg} />
-                </TouchableOpacity>
-              )}
+            {showCameraFlip && (
+              <TouchableOpacity
+                style={styles.controlButton}
+                onPress={flipCamera}
+                activeOpacity={0.7}
+              >
+                <RotateCcw size={24} color={SALES_GLASS.fg} />
+              </TouchableOpacity>
+            )}
 
-              {showManualEntry && (
-                <TouchableOpacity
-                  style={styles.controlButton}
-                  onPress={() => setShowManualInput(true)}
-                  activeOpacity={0.7}
-                >
-                  <BarcodeIcon size={24} color={SALES_GLASS.fg} />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            <View style={styles.hintContainer}>
-              <AppText variant="caption" weight="medium" style={{ color: SALES_GLASS.fgSecondary, textAlign: 'center' }} numberOfLines={2}>
-                {t('barcode.align_hint') || 'Align barcode within the frame'}
-              </AppText>
-            </View>
+            {showManualEntry && (
+              <TouchableOpacity
+                style={styles.controlButton}
+                onPress={() => setShowManualInput(true)}
+                activeOpacity={0.7}
+              >
+                <BarcodeIcon size={24} color={SALES_GLASS.fg} />
+              </TouchableOpacity>
+            )}
           </View>
-        </CameraView>
-      </>
+
+          <View style={styles.hintContainer}>
+            <AppText variant="caption" weight="medium" style={{ color: SALES_GLASS.fgSecondary, textAlign: 'center' }} numberOfLines={2}>
+              {t('barcode.align_hint') || 'Align barcode within the frame'}
+            </AppText>
+          </View>
+        </View>
+      </View>
     );
   };
 
@@ -410,6 +419,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: 'black',
+  },
+  cameraWrap: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,

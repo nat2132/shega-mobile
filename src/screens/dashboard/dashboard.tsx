@@ -41,6 +41,8 @@ import AdjustmentDetailsScreen from '../adjustement/adjustment-details';
 import ExpenseDetailsScreen from '../expense/expense-details';
 import AddAssetFlow from '../inventory/inventroy-form';
 import PendingSales from '../sales/pending';
+import NewSaleScreen from '../sales/new-sale';
+import ScanPanel from '../sales/scan-panel';
 import GlobalCheckout from '../sales/sale-form';
 import SaleDetailsScreen from '../sales/sales-details';
 import SalesRecordScreen from '../sales/sales-record';
@@ -53,8 +55,9 @@ import OnCreditItemsScreen from './oncredit-list';
 import { BusinessAssistant } from '@/components/BusinessAssistant';
 import { BusinessHealthCard } from '@/components/BusinessHealthCard';
 import PremiumFeatureGate from '@/components/PremiumFeatureGate';
+import RegisterProductModal from '@/components/RegisterProductModal';
 import { SparklineSkeleton } from '@/components/ChartSkeleton';
-import { AppNumber, AppText } from '@/components/ui';
+import { AppButton, AppNumber, AppText } from '@/components/ui';
 import { UniversalSearch } from '@/components/UniversalSearch';
 import { useDialog } from '@/context/DialogContext';
 import { useToast } from '@/context/ToastContext';
@@ -63,11 +66,14 @@ import { useSidebar } from '@/context/SidebarContext';
 import { useTutorial, TutorialScrollView, TutorialTarget, TutorialButton } from '@/tutorials';
 import { dashboardTutorial } from '@/tutorials/definitions';
 import { useWarehouse } from '@/context/WarehouseContext';
-import { getActivityFeed, getAdjustmentById, getDashboardStats, getDebtCustomers, getExpenseById, getInventoryStats, getLowStockItems, getOnCreditItems, getRecentItems, getSaleWithItemsById, getBudgetsOverBudget, ItemData } from '@/database/db';
+import { getActivityFeed, getAdjustmentById, getDashboardStats, getDebtCustomers, getExpenseById, getInventoryStats, getLowStockItems, getOnCreditItems, getQuickProducts, getRecentItems, getSaleWithItemsById, getBudgetsOverBudget, ItemData } from '@/database/db';
 import { useBusinessAssistant } from '@/hooks/useBusinessAssistant';
 import { useBusinessHealthScore } from '@/hooks/useBusinessHealthScore';
 import { useAutoHideScroll } from '@/hooks/useAutoHideScroll';
 import { useNotifications } from '@/hooks/useNotifications';
+import { usePeripheralScan } from '@/hooks/usePeripherals';
+import { getPeripheralManager } from '@/services/peripherals/peripheralManager';
+import { generateReceiptPDF } from '@/utils/pdf-utils';
 import { playBad } from '@/services/soundService';
 import { formatDate, toEthiopianHour } from '@/utils/date-utils';
 import {
@@ -208,6 +214,11 @@ SparklineChart.displayName = 'SparklineChart';
     const [, setRecentInventoryItems] = useState<ItemData[]>([]);
     const [, setSelectedItem] = useState<any>(null);
     const [pendingSales, setPendingSales] = useState<any[]>([]);
+    const [showSaleFlow, setShowSaleFlow] = useState(false);
+    const [saleFlowStep, setSaleFlowStep] = useState<'home' | 'scan' | 'form' | 'pending'>('home');
+    const [quickProducts, setQuickProducts] = useState<any[]>([]);
+    const [showRegisterProduct, setShowRegisterProduct] = useState(false);
+    const [registerBarcode, setRegisterBarcode] = useState('');
     const [metrics, setMetrics] = useState<any>(null);
     const [, setInvStats] = useState<any>(null);
     const [debtCustomersCount, setDebtCustomersCount] = useState(0);
@@ -264,6 +275,141 @@ SparklineChart.displayName = 'SparklineChart';
     refreshAssistant();
     refreshTrialDays();
   }, [activeWarehouseId, refreshHealth, refreshAssistant, refreshTrialDays]);
+
+  const addToPendingSales = React.useCallback((item: any) => {
+    setPendingSales((prev) => {
+      const existing = prev.find((s) => s.id === item.id);
+      if (existing) {
+        return prev.map((s) =>
+          s.id === item.id ? { ...s, quantity: (s.quantity || 0) + 1 } : s,
+        );
+      }
+      return [...prev, { ...item, id: item.id, quantity: 1, unitType: 'base' }];
+    });
+  }, []);
+
+  const loadQuickProducts = React.useCallback(() => {
+    try {
+      setQuickProducts(getQuickProducts());
+    } catch {
+      setQuickProducts([]);
+    }
+  }, []);
+
+  const recordSale = React.useCallback(async (saleMetadata: any) => {
+    try {
+      const { insertSale } = await import('@/database/db');
+      const batchId = Date.now().toString() + '_' + Math.random().toString(36).substring(2, 8);
+
+      for (const item of pendingSales) {
+        if (!item.id || typeof item.id !== 'number') {
+          throw new Error(`Invalid item ID: ${item.id}`);
+        }
+        if (!item.quantity || item.quantity <= 0) {
+          throw new Error(`Invalid quantity for item: ${item.id}`);
+        }
+
+        const finalUnitPrice = item.unitType === 'pack' ? item.packSellingPrice : item.baseSellingPrice;
+        const finalUnitLabel = item.unitType === 'pack' ? item.purchaseUnit : item.baseUnit;
+
+        const customerName = saleMetadata.customerName ? saleMetadata.customerName.trim() : '';
+        const customerPhone = saleMetadata.customerPhone ? saleMetadata.customerPhone.trim() : '';
+        const discount = Math.max(0, Number(saleMetadata.discount) || 0);
+        const vat = Math.min(100, Math.max(0, Number(saleMetadata.vat) || 0));
+        const taxType = saleMetadata.taxType || t('tax.vat');
+
+        await insertSale({
+          itemId: item.id,
+          quantity: item.quantity,
+          unit: finalUnitLabel,
+          unitType: item.unitType,
+          discount: discount / pendingSales.length,
+          vat,
+          taxType,
+          totalPrice: finalUnitPrice * item.quantity,
+          paymentMethod: saleMetadata.paymentMethod,
+          paymentStatus: saleMetadata.paymentStatus,
+          customerName,
+          customerPhone,
+          batchId,
+        });
+      }
+      setPendingSales([]);
+      loadDashboardData();
+      setLastSaleData({
+        totalPrice: saleMetadata.totalPrice || 0,
+        paymentMethod: saleMetadata.paymentMethod || 'Cash',
+        itemCount: pendingSales.length,
+        paymentStatus: saleMetadata.paymentStatus || 'Paid',
+        customerName: saleMetadata.customerName || t('sales.walk_in_customer'),
+        transactionId: batchId,
+        paidAmount: saleMetadata.paidAmount,
+      });
+      // Best-effort cash drawer open — never affects the saved sale.
+      void peripheral.openDrawerForPayment(saleMetadata.paymentMethod || 'Cash');
+      return true;
+    } catch {
+      await dialog.alert({
+        title: t('common.error'),
+        message: t('sale.save_error'),
+        iconType: 'danger',
+      });
+      return false;
+    }
+  }, [pendingSales, loadDashboardData, dialog, t]);
+
+  // Peripheral receipt printing — never blocks the completed sale
+  const [printState, setPrintState] = React.useState<{ visible: boolean; errorCode: string | null }>({
+    visible: false,
+    errorCode: null,
+  });
+  const peripheral = getPeripheralManager();
+
+  // Hardware barcode scanners (keyboard/HID) feed the cart directly.
+  usePeripheralScan({
+    onProduct: (item: any) => addToPendingSales(item),
+  });
+
+  const handlePrintReceipt = async (saleData: any) => {
+    if (!saleData?.transactionId) return;
+    const res = await peripheral.printSaleReceipt({
+      transactionId: saleData.transactionId,
+      businessName: userProfile.businessName || 'My Store',
+      businessDetails: (userProfile as any).address || undefined,
+      cashier: userProfile.name || t('devices.cashier'),
+      paymentMethod: saleData.paymentMethod || 'Cash',
+      totalPrice: Number(saleData.totalPrice) || 0,
+      paidAmount: saleData.paidAmount,
+      customerName: saleData.customerName,
+    });
+    if (res.ok) {
+      showToast(t('devices.print_ok'), 'success');
+    } else if (res.errorCode === 'sale_not_found') {
+      showToast(t('toast.sale_not_found'), 'error');
+    } else {
+      setPrintState({ visible: true, errorCode: res.errorCode || 'print_error' });
+    }
+  };
+
+  const handleSaveOrSendReceipt = async (action: 'share' | 'save') => {
+    if (!lastSaleData?.transactionId) return;
+    try {
+      const sale = getSaleWithItemsById(lastSaleData.transactionId);
+      if (!sale) {
+        showToast(t('toast.sale_not_found'), 'error');
+        return;
+      }
+      await generateReceiptPDF(sale, userProfile, language, action, timeSystem);
+      showToast(t('devices.pdf_sent'), 'success');
+    } catch {
+      showToast(t('toast.invoice_pdf_failed'), 'error');
+    }
+  };
+
+  const retryPrint = () => {
+    setPrintState((p) => ({ ...p, visible: false }));
+    if (lastSaleData) void handlePrintReceipt(lastSaleData);
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -799,32 +945,32 @@ SparklineChart.displayName = 'SparklineChart';
         {/* Smart FAB */}
         <Animated.View style={[styles.dockedBarWrapper, hideFABStyle]}>
           <Animated.View style={[expandStyle, { height: 60, borderRadius: 30, overflow: 'hidden' }]}>
-            <View style={[styles.dockedBar, { paddingHorizontal: isBarExpanded ? 12 : 0 }]}>
-              {isBarExpanded && (
-                <Animated.View entering={FadeIn.delay(100)} exiting={FadeOut.duration(100)}>
-                  <TouchableOpacity style={styles.dockBtn} onPress={() => { setShowSearch(true); setIsBarExpanded(false); }}>
-                    <ShoppingBag size={20} color={G.muted} />
-                  </TouchableOpacity>
-                </Animated.View>
-              )}
-              
-              <TouchableOpacity 
-                style={styles.dockMainBtn} 
-                activeOpacity={0.85}
-                onPress={() => setIsBarExpanded(!isBarExpanded)}
-              >
-                <Animated.View entering={FadeIn.duration(200)}>
-                  {isBarExpanded ? <X size={22} color={G.bg} /> : <Plus size={22} color={G.bg} />}
-                </Animated.View>
-              </TouchableOpacity>
-              
-              {isBarExpanded && (
-                <Animated.View entering={FadeIn.delay(100)} exiting={FadeOut.duration(100)}>
-                  <TouchableOpacity style={styles.dockBtn} onPress={() => { setShowAddAsset(true); setIsBarExpanded(false); }}>
-                    <Package size={20} color={G.muted} />
-                  </TouchableOpacity>
-                </Animated.View>
-              )}
+            <View style={[styles.dockedBarGlass, { borderColor: G.borderLight }]}>
+              <View style={[styles.dockedBar, { paddingHorizontal: isBarExpanded ? 10 : 0, backgroundColor: G.bgCard || G.surfaceFill }]}>
+                {isBarExpanded && (
+                  <Animated.View entering={FadeIn.delay(100)} exiting={FadeOut.duration(100)}>
+                    <TouchableOpacity style={styles.dockBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setSaleFlowStep('home'); setSelectedItem(null); loadQuickProducts(); setShowSaleFlow(true); setIsBarExpanded(false); }}>
+                      <ShoppingBag size={22} color={G.fgSecondary} />
+                    </TouchableOpacity>
+                  </Animated.View>
+                )}
+
+                <TouchableOpacity
+                  style={[styles.dockMainBtn, { backgroundColor: G.fg }]}
+                  onPress={() => setIsBarExpanded(!isBarExpanded)}
+                  activeOpacity={0.85}
+                >
+                  {isBarExpanded ? <X size={24} color={G.bg} /> : <Plus size={24} color={G.bg} />}
+                </TouchableOpacity>
+
+                {isBarExpanded && (
+                  <Animated.View entering={FadeIn.delay(100)} exiting={FadeOut.duration(100)}>
+                    <TouchableOpacity style={styles.dockBtn} onPress={() => { setIsBarExpanded(false); setShowAddAsset(true); }}>
+                      <Package size={22} color={G.fgSecondary} />
+                    </TouchableOpacity>
+                  </Animated.View>
+                )}
+              </View>
             </View>
           </Animated.View>
         </Animated.View>
@@ -1014,69 +1160,155 @@ SparklineChart.displayName = 'SparklineChart';
                    setTimeout(() => setShowPending(true), 300);
                  }}
                   onFinish={async (saleMetadata: any) => {
-                    try {
-                      const { insertSale } = await import('@/database/db');
-                      const batchId = Date.now().toString() + '_' + Math.random().toString(36).substring(2, 8);
-                      
-                      for (const item of pendingSales) {
-                       // Validate item data
-                       if (!item.id || typeof item.id !== 'number') {
-                         throw new Error(`Invalid item ID: ${item.id}`);
-                       }
-                       if (!item.quantity || item.quantity <= 0) {
-                         throw new Error(`Invalid quantity for item: ${item.id}`);
-                       }
-                       
-                       const finalUnitPrice = item.unitType === 'pack' ? item.packSellingPrice : item.baseSellingPrice;
-                       const finalUnitLabel = item.unitType === 'pack' ? item.purchaseUnit : item.baseUnit;
-                       
-                       // Validate and sanitize customer info
-                       const customerName = saleMetadata.customerName ? saleMetadata.customerName.trim() : '';
-                       const customerPhone = saleMetadata.customerPhone ? saleMetadata.customerPhone.trim() : '';
-                       const discount = Math.max(0, Number(saleMetadata.discount) || 0);
-                        const vat = Math.min(100, Math.max(0, Number(saleMetadata.vat) || 0));
-                        const taxType = saleMetadata.taxType || t('tax.vat');
-                        
-                         await insertSale({
-                           itemId: item.id,
-                           quantity: item.quantity,
-                           unit: finalUnitLabel,
-                           unitType: item.unitType,
-                           discount: discount / pendingSales.length,
-                           vat: vat,
-                           taxType: taxType,
-                           totalPrice: finalUnitPrice * item.quantity,
-                          paymentMethod: saleMetadata.paymentMethod,
-                          paymentStatus: saleMetadata.paymentStatus,
-                          customerName: customerName,
-                          customerPhone: customerPhone,
-                          batchId,
-                        });
-                     }
-                      setPendingSales([]);
+                    const ok = await recordSale(saleMetadata);
+                    if (ok) {
                       setShowSaleFormFlow(false);
-                      loadDashboardData();
-                      setLastSaleData({
-                        totalPrice: saleMetadata.totalPrice || 0,
-                        paymentMethod: saleMetadata.paymentMethod || 'Cash',
-                        itemCount: pendingSales.length,
-                        paymentStatus: saleMetadata.paymentStatus || 'Paid',
-                        customerName: saleMetadata.customerName || t('sales.walk_in_customer'),
-                        transactionId: batchId,
-                      });
-                    } catch {
-                      await dialog.alert({
-                        title: t('common.error'),
-                        message: t('sale.save_error'),
-                        iconType: 'danger',
-                      });
                     }
-                 }}
+                  }}
               />
             </View>
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Add Sale Multi-Step Flow */}
+      <Modal
+        visible={showSaleFlow}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowSaleFlow(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.modalOverlay}>
+            <TouchableOpacity
+              style={styles.modalBackdrop}
+              activeOpacity={1}
+              onPress={() => setShowSaleFlow(false)}
+            />
+            <View
+              style={[
+                styles.bottomSheetContainer,
+                {
+                  backgroundColor: colors.background,
+                  maxHeight: Dimensions.get('window').height * 0.85,
+                  flex: 1,
+                },
+              ]}
+            >
+            <View style={styles.modalHeader}>
+              <View
+                style={[styles.modalHandle, { backgroundColor: colors.border }]}
+              />
+            </View>
+            {saleFlowStep === 'home' && (
+              <NewSaleScreen
+                quickProducts={quickProducts}
+                cartCount={pendingSales.reduce((sum, s) => sum + Math.max(0, s.quantity || 0), 0)}
+                cartTotal={pendingSales.reduce((sum, s) => {
+                  const p =
+                    s.unitType === 'pack'
+                      ? s.packSellingPrice || 0
+                      : s.baseSellingPrice || 0;
+                  return sum + Number(p) * Math.max(0, s.quantity || 0);
+                }, 0)}
+                onAddProduct={(item: any) => {
+                  addToPendingSales(item);
+                }}
+                onOpenScanner={() => setSaleFlowStep('scan')}
+                onPay={() => setSaleFlowStep('pending')}
+                onClose={() => setShowSaleFlow(false)}
+              />
+            )}
+            {saleFlowStep === 'scan' && (
+              <ScanPanel
+                quickProducts={quickProducts}
+                cartCount={pendingSales.reduce((sum, s) => sum + Math.max(0, s.quantity || 0), 0)}
+                cartTotal={pendingSales.reduce((sum, s) => {
+                  const p =
+                    s.unitType === 'pack'
+                      ? s.packSellingPrice || 0
+                      : s.baseSellingPrice || 0;
+                  return sum + Number(p) * Math.max(0, s.quantity || 0);
+                }, 0)}
+                onAddProduct={(item: any) => {
+                  addToPendingSales(item);
+                }}
+                onOpenSearch={() => setSaleFlowStep('home')}
+                onViewCart={() => setSaleFlowStep('pending')}
+                onRegisterProduct={(barcode: string) => {
+                  setRegisterBarcode(barcode);
+                  setShowRegisterProduct(true);
+                }}
+                onClose={() => setShowSaleFlow(false)}
+              />
+            )}
+            {saleFlowStep === 'pending' && (
+              <PendingSales
+                items={pendingSales}
+                onUpdateItem={(id, updates) => {
+                  setPendingSales(
+                    pendingSales.map((s) =>
+                      s.id === id ? { ...s, ...updates } : s,
+                    ),
+                  );
+                }}
+                onRemoveItem={(id) => {
+                  setPendingSales(pendingSales.filter((s) => s.id !== id));
+                }}
+                onAddMore={() => {
+                  setSaleFlowStep('home');
+                }}
+                onFinish={() => {
+                  setSaleFlowStep('form');
+                }}
+              />
+            )}
+            {saleFlowStep === 'form' && (
+              <GlobalCheckout
+                cart={pendingSales}
+                onAddItem={(item: any) => addToPendingSales(item)}
+                onUpdateItem={(id, updates) => {
+                  setPendingSales(
+                    pendingSales.map((s) =>
+                      s.id === id ? { ...s, ...updates } : s,
+                    ),
+                  );
+                }}
+                onRemoveItem={(id) => {
+                  setPendingSales(pendingSales.filter((s) => s.id !== id));
+                }}
+                onBack={() => setSaleFlowStep('pending')}
+                onFinish={async (saleMetadata: any) => {
+                  const ok = await recordSale(saleMetadata);
+                  if (ok) {
+                    setShowSaleFlow(false);
+                    setSaleFlowStep('home');
+                    setShowSearch(false);
+                  }
+                }}
+              />
+            )}
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+
+    {/* Register unknown-barcode product inline */}
+    <RegisterProductModal
+      visible={showRegisterProduct}
+      barcode={registerBarcode}
+      onClose={() => setShowRegisterProduct(false)}
+      onSaved={(item: any) => {
+        loadQuickProducts();
+        if (item && item.id) {
+          addToPendingSales(item);
+        }
+        showToast(t('sale.product_created') || 'Product created', 'success');
+      }}
+    />
 
       <Modal visible={showAddAsset} transparent animationType="slide" onRequestClose={() => setShowAddAsset(false)}>
         <KeyboardAvoidingView
@@ -1104,8 +1336,33 @@ SparklineChart.displayName = 'SparklineChart';
         <SaleSuccessModal 
           saleData={lastSaleData} 
           onClose={() => setLastSaleData(null)} 
+          onPrint={() => void handlePrintReceipt(lastSaleData)}
         />
       </Modal>
+
+      {/* Printer unavailable — the sale is already committed */}
+      {printState.visible && (
+        <Modal visible={printState.visible} transparent animationType="fade" onRequestClose={() => setPrintState({ visible: false, errorCode: null })}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 24 }}>
+            <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.border }}>
+              <AppText variant="heading" weight="bold" style={{ color: colors.text, textAlign: 'center' }} numberOfLines={2}>
+                {t('devices.sale_print_failed')}
+              </AppText>
+              <AppText variant="body" weight="medium" style={{ color: colors.textSecondary, marginTop: 8, textAlign: 'center' }} numberOfLines={4}>
+                {printState.errorCode === 'printer_missing'
+                  ? t('devices.sale_printer_missing')
+                  : t('devices.sale_print_dev_build')}
+              </AppText>
+              <View style={{ gap: 10, marginTop: 20 }}>
+                <AppButton label={t('devices.retry')} variant="primary" fullWidth onPress={retryPrint} />
+                <AppButton label={t('devices.save_receipt')} variant="secondary" fullWidth onPress={() => void handleSaveOrSendReceipt('save')} />
+                <AppButton label={t('devices.send_digital')} variant="secondary" fullWidth onPress={() => void handleSaveOrSendReceipt('share')} />
+                <AppButton label={t('common.close')} variant="ghost" fullWidth onPress={() => setPrintState({ visible: false, errorCode: null })} />
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
       <UniversalSearch
         visible={showUniversalSearch}
         onClose={() => setShowUniversalSearch(false)}
@@ -1624,22 +1881,26 @@ const createStyles = (G: any) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  dockedBarGlass: {
+    flex: 1,
+    borderRadius: 30,
+    borderWidth: 1,
+    overflow: 'hidden',
+    borderColor: G.borderLight,
+    shadowColor: G.shadowColor,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: G.shadowOuter * 1.2,
+    shadowRadius: 24,
+    elevation: 12,
+  },
   dockedBar: {
     flex: 1,
-    borderRadius: 35,
+    borderRadius: 30,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-evenly',
     paddingHorizontal: 10,
-    borderWidth: 1,
-    borderColor: G.borderLight,
-    backgroundColor: G.bgCard || G.surfaceFill,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
   },
   dockBtn: {
     width: 50,
@@ -1651,14 +1912,13 @@ const createStyles = (G: any) => StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: G.fg,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: G.fg,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: G.shadowOuter,
+    shadowRadius: 8,
+    elevation: 6,
   },
   modalOverlay: {
     flex: 1,

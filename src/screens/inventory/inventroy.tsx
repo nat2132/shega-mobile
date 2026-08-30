@@ -681,6 +681,11 @@ const InventoryDashboard = () => {
                 loadAllData();
               }} 
               onClose={() => { setShowAddForm(false); loadAllData(); }}
+              onViewProduct={(item) => {
+                setShowAddForm(false);
+                setSelectedItem(item);
+                setShowItemDetails(true);
+              }}
             />
           </View>
         </View>

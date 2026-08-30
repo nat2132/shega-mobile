@@ -2,7 +2,7 @@ import { BarChartSkeleton } from "@/components/ChartSkeleton";
 import { ChartEmpty } from "@/components/ChartStateView";
 import { PDFLanguageModal } from "@/components/PDFLanguageModal";
 import SaleSuccessModal from "@/components/SaleSuccessModal";
-import { AppNumber, AppText } from "@/components/ui";
+import { AppButton, AppNumber, AppText } from "@/components/ui";
 import { Fonts, LightTheme } from "@/constants/theme";
 import { useDialog } from "@/context/DialogContext";
 import { useNavigationIntent } from "@/context/NavigationIntentContext";
@@ -20,17 +20,20 @@ import {
   getQuickProducts,
   getRecentSales,
   getRecentSalesGrouped,
+  getSaleWithItemsById,
   getSalesChartData,
   getSalesSummary,
   getTopSellingItems,
-  insertSale,
   markDebtAsLoss,
   processDebtPayment,
   processIndividualPayment,
 } from "@/database/db";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useAutoHideScroll } from "@/hooks/useAutoHideScroll";
+import { usePeripheralScan } from "@/hooks/usePeripherals";
+import { getPeripheralManager } from "@/services/peripherals/peripheralManager";
 import { playBad, playNice } from "@/services/soundService";
+import { recordSaleBatch } from "@/services/saleService";
 import {
   formatHourLabel,
   formatShortDate,
@@ -39,7 +42,7 @@ import {
   getEthiopianMonthNames,
   toEthiopianDate,
 } from "@/utils/date-utils";
-import { generateInvoicePDF } from "@/utils/pdf-utils";
+import { generateInvoicePDF, generateReceiptPDF } from "@/utils/pdf-utils";
 import * as Haptics from "expo-haptics";
 import { useFocusEffect, useRouter } from "expo-router";
 import {
@@ -91,7 +94,7 @@ import PendingSales from "./pending";
 import GlobalCheckout from "./sale-form";
 import SaleDetailsScreen from "./sales-details";
 import SalesRecordScreen from "./sales-record";
-import SearchScreen from "./search";
+import NewSaleScreen from "./new-sale";
 import ScanPanel from "./scan-panel";
 import RegisterProductModal from "@/components/RegisterProductModal";
 import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
@@ -144,8 +147,8 @@ const SalesDashboard = () => {
   const [showSalesRecord, setShowSalesRecord] = useState(false);
   const [showSaleFlow, setShowSaleFlow] = useState(false);
   const [saleFlowStep, setSaleFlowStep] = useState<
-    "search" | "scan" | "form" | "pending"
-  >("scan");
+    "home" | "scan" | "form" | "pending"
+  >("home");
   const [, setSelectedItem] = useState<any>(null);
   const [pendingSales, setPendingSales] = useState<any[]>([]);
   const [quickProducts, setQuickProducts] = useState<any[]>([]);
@@ -182,6 +185,13 @@ const SalesDashboard = () => {
   // Sale success modal
   const [showSaleSuccess, setShowSaleSuccess] = useState(false);
   const [completedSaleData, setCompletedSaleData] = useState<any>(null);
+
+  // Peripheral receipt printing — never blocks the completed sale
+  const [printState, setPrintState] = useState<{ visible: boolean; errorCode: string | null }>({
+    visible: false,
+    errorCode: null,
+  });
+  const peripheral = getPeripheralManager();
 
   // Collect Payments modal
   const [showCollectPayment, setShowCollectPayment] = useState(false);
@@ -262,6 +272,55 @@ const SalesDashboard = () => {
       ]);
     }
   }, [pendingSales]);
+
+  // Hardware barcode scanners (keyboard/HID) feed the cart directly.
+  usePeripheralScan({
+    onProduct: (item: any) => addToPendingSales(item),
+  });
+
+  const handlePrintReceipt = async (saleData: any) => {
+    if (!saleData?.transactionId) {
+      showToast(t("sales.receipt_ready"), "info");
+      return;
+    }
+    const res = await peripheral.printSaleReceipt({
+      transactionId: saleData.transactionId,
+      businessName: userProfile.businessName || "My Store",
+      businessDetails: (userProfile as any).address || undefined,
+      cashier: userProfile.name || t("devices.cashier"),
+      paymentMethod: saleData.paymentMethod || "Cash",
+      totalPrice: Number(saleData.totalPrice) || 0,
+      paidAmount: saleData.paidAmount,
+      customerName: saleData.customerName,
+    });
+    if (res.ok) {
+      showToast(t("devices.print_ok"), "success");
+    } else if (res.errorCode === "sale_not_found") {
+      showToast(t("devices.print_error"), "error");
+    } else {
+      setPrintState({ visible: true, errorCode: res.errorCode || "print_error" });
+    }
+  };
+
+  const handleSaveOrSendReceipt = async (action: "share" | "save") => {
+    if (!completedSaleData?.transactionId) return;
+    try {
+      const sale = getSaleWithItemsById(completedSaleData.transactionId);
+      if (!sale) {
+        showToast(t("toast.sale_not_found"), "error");
+        return;
+      }
+      await generateReceiptPDF(sale, userProfile, language, action, timeSystem);
+      showToast(t("devices.pdf_sent"), "success");
+    } catch {
+      showToast(t("toast.invoice_pdf_failed"), "error");
+    }
+  };
+
+  const retryPrint = () => {
+    setPrintState((p) => ({ ...p, visible: false }));
+    if (completedSaleData) void handlePrintReceipt(completedSaleData);
+  };
 
   const loadQuickProducts = React.useCallback(() => {
     try {
@@ -1385,7 +1444,7 @@ const SalesDashboard = () => {
                     style={styles.dockBtn}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setSaleFlowStep("scan");
+                      setSaleFlowStep("home");
                       setSelectedItem(null);
                       loadQuickProducts();
                       setShowSaleFlow(true);
@@ -3516,12 +3575,23 @@ const SalesDashboard = () => {
                 style={[styles.modalHandle, { backgroundColor: colors.border }]}
               />
             </View>
-            {saleFlowStep === "search" && (
-              <SearchScreen
-                onSelectItem={(item: any) => {
+            {saleFlowStep === "home" && (
+              <NewSaleScreen
+                quickProducts={quickProducts}
+                cartCount={pendingSales.reduce((sum, s) => sum + Math.max(0, s.quantity || 0), 0)}
+                cartTotal={pendingSales.reduce((sum, s) => {
+                  const p =
+                    s.unitType === "pack"
+                      ? s.packSellingPrice || 0
+                      : s.baseSellingPrice || 0;
+                  return sum + Number(p) * Math.max(0, s.quantity || 0);
+                }, 0)}
+                onAddProduct={(item: any) => {
                   addToPendingSales(item);
-                  setSaleFlowStep("pending");
                 }}
+                onOpenScanner={() => setSaleFlowStep("scan")}
+                onPay={() => setSaleFlowStep("pending")}
+                onClose={() => setShowSaleFlow(false)}
               />
             )}
             {saleFlowStep === "scan" && (
@@ -3538,7 +3608,7 @@ const SalesDashboard = () => {
                 onAddProduct={(item: any) => {
                   addToPendingSales(item);
                 }}
-                onOpenSearch={() => setSaleFlowStep("search")}
+                onOpenSearch={() => setSaleFlowStep("home")}
                 onViewCart={() => setSaleFlowStep("pending")}
                 onRegisterProduct={(barcode: string) => {
                   setRegisterBarcode(barcode);
@@ -3561,7 +3631,7 @@ const SalesDashboard = () => {
                   setPendingSales(pendingSales.filter((s) => s.id !== id));
                 }}
                 onAddMore={() => {
-                  setSaleFlowStep("search");
+                  setSaleFlowStep("home");
                 }}
                 onFinish={() => {
                   setSaleFlowStep("form");
@@ -3571,6 +3641,17 @@ const SalesDashboard = () => {
             {saleFlowStep === "form" && (
               <GlobalCheckout
                 cart={pendingSales}
+                onAddItem={(item: any) => addToPendingSales(item)}
+                onUpdateItem={(id, updates) => {
+                  setPendingSales(
+                    pendingSales.map((s) =>
+                      s.id === id ? { ...s, ...updates } : s,
+                    ),
+                  );
+                }}
+                onRemoveItem={(id) => {
+                  setPendingSales(pendingSales.filter((s) => s.id !== id));
+                }}
                 onBack={() => setSaleFlowStep("pending")}
                 onFinish={async (saleMetadata: any) => {
                   if (isReadOnly) {
@@ -3578,59 +3659,10 @@ const SalesDashboard = () => {
                     return;
                   }
                   try {
-                    const batchId =
-                      Date.now().toString() +
-                      "_" +
-                      Math.random().toString(36).substring(2, 8);
-                    const totalDiscount = Number(saleMetadata.discount) || 0;
-                    for (const item of pendingSales) {
-                      const finalUnitPrice =
-                        item.unitType === "pack"
-                          ? item.packSellingPrice
-                          : item.baseSellingPrice;
-                      const finalUnitLabel =
-                        item.unitType === "pack"
-                          ? item.purchaseUnit
-                          : item.baseUnit;
-
-                      const lineSubtotal =
-                        (parseFloat(finalUnitPrice) || 0) *
-                        Math.max(0, item.quantity || 0);
-                      const totalSubtotal = pendingSales.reduce((sum, i) => {
-                        const price =
-                          i.unitType === "pack"
-                            ? parseFloat(i.packSellingPrice) || 0
-                            : parseFloat(i.baseSellingPrice) || 0;
-                        return sum + price * Math.max(0, i.quantity || 0);
-                      }, 0);
-                      const itemDiscount =
-                        totalSubtotal > 0
-                          ? (lineSubtotal / totalSubtotal) *
-                            Math.max(0, totalDiscount)
-                          : 0;
-                      const discountedTotal = lineSubtotal - itemDiscount;
-
-                      await insertSale({
-                        itemId: item.id,
-                        quantity: item.quantity,
-                        unit: finalUnitLabel,
-                        unitType: item.unitType,
-                        discount: itemDiscount,
-                        vat: saleMetadata.vat,
-                        taxType: saleMetadata.taxType || "VAT",
-                        totalPrice: discountedTotal,
-                        paymentMethod: saleMetadata.paymentMethod,
-                        paymentStatus: saleMetadata.paymentStatus,
-                        customerName: saleMetadata.customerName,
-                        customerPhone: saleMetadata.customerPhone,
-                        dueDate: saleMetadata.dueDate,
-                        packId: undefined,
-                        batchId,
-                      });
-                    }
+                    const batchId = await recordSaleBatch(pendingSales, saleMetadata);
                     setShowSaleFlow(false);
                     setPendingSales([]);
-                    setSaleFlowStep("search");
+                    setSaleFlowStep("home");
                     loadData();
                     requestSync();
                     setCompletedSaleData({
@@ -3650,8 +3682,14 @@ const SalesDashboard = () => {
                         saleMetadata.customerName ||
                         t("sales.walk_in_customer"),
                       transactionId: batchId,
+                      paidAmount: saleMetadata.paidAmount,
                     });
                     setShowSaleSuccess(true);
+                    // Open the cash drawer for cash-only drawers after commit —
+                    // best-effort, never affects the saved sale.
+                    void peripheral.openDrawerForPayment(
+                      saleMetadata.paymentMethod || "Cash",
+                    );
                   } catch {
                     showToast(t("sales.failed_msg"), "error");
                   }
@@ -3687,12 +3725,7 @@ const SalesDashboard = () => {
           <SaleSuccessModal
             saleData={completedSaleData}
             onClose={() => setShowSaleSuccess(false)}
-            onPrint={() =>
-              showToast(
-                t("sales.receipt_ready"),
-                "info",
-              )
-            }
+            onPrint={() => void handlePrintReceipt(completedSaleData)}
             onShare={() =>
               showToast(
                 t("sales.receipt_ready"),
@@ -3711,6 +3744,35 @@ const SalesDashboard = () => {
               }
             }}
           />
+        </Modal>
+      )}
+
+      {/* Printer unavailable — the sale is already committed */}
+      {printState.visible && (
+        <Modal
+          visible={printState.visible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setPrintState({ visible: false, errorCode: null })}
+        >
+          <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", padding: 24 }}>
+            <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.border }}>
+              <AppText variant="heading" weight="bold" style={{ color: colors.text, textAlign: "center" }} numberOfLines={2}>
+                {t("devices.sale_print_failed")}
+              </AppText>
+              <AppText variant="body" weight="medium" style={{ color: colors.textSecondary, marginTop: 8, textAlign: "center" }} numberOfLines={4}>
+                {printState.errorCode === "printer_missing"
+                  ? t("devices.sale_printer_missing")
+                  : t("devices.sale_print_dev_build")}
+              </AppText>
+              <View style={{ gap: 10, marginTop: 20 }}>
+                <AppButton label={t("devices.retry")} variant="primary" fullWidth onPress={retryPrint} />
+                <AppButton label={t("devices.save_receipt")} variant="secondary" fullWidth onPress={() => void handleSaveOrSendReceipt("save")} />
+                <AppButton label={t("devices.send_digital")} variant="secondary" fullWidth onPress={() => void handleSaveOrSendReceipt("share")} />
+                <AppButton label={t("common.close")} variant="ghost" fullWidth onPress={() => setPrintState({ visible: false, errorCode: null })} />
+              </View>
+            </View>
+          </View>
         </Modal>
       )}
     </View>

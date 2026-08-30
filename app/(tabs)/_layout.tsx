@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Tabs, useRootNavigationState, router } from 'expo-router';
 import { CustomTabBar } from '@/components/CustomTabBar';
+import { HidScannerCapture } from '@/components/HidScannerCapture';
 import { useSettings } from '@/context/SettingsContext';
 import { useAuth } from '@/context/AuthContext';
 import { useWarehouse } from '@/context/WarehouseContext';
@@ -105,6 +106,9 @@ export default function TabsLayout() {
         visible={showWarehouseSelector}
         onComplete={() => setShowWarehouseSelector(false)}
       />
+
+      {/* Captures hardware scanner key events across all POS tabs */}
+      <HidScannerCapture />
     </>
   );
 }
