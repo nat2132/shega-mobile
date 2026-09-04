@@ -36,6 +36,7 @@ import {
   ArrowUpRight,
   BadgeCheck,
   Bell,
+  Building2,
   Calendar,
   ChevronRight,
   CloudDownload,
@@ -45,9 +46,11 @@ import {
   LayoutDashboard,
   Palette,
   Printer,
+  RefreshCw,
   Shield,
   Sliders,
   Trash2,
+  Users,
   Volume2,
   Warehouse,
   Zap
@@ -72,6 +75,10 @@ import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from 
 import { settingsTutorial } from '@/tutorials/definitions';
 import { useUpdate } from '@/context/UpdateContext';
 import SyncSettings from '@/components/SyncSettings';
+import SyncCenter from '@/components/SyncCenter';
+import BusinessOverview from '@/components/BusinessOverview';
+import { BusinessManagement } from './business/BusinessManagement';
+import { useBusinessAuth } from '@/hooks/useBusinessAuth';
 
 // →→→ Shared Sub-Components →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
 
@@ -439,8 +446,12 @@ const SettingsScreen = () => {
   const [showImportModal, setShowImportModal] = useState(false);
   const [showWarehouse, setShowWarehouse] = useState(false);
   const [showDevices, setShowDevices] = useState(false);
+  const [showBusiness, setShowBusiness] = useState(false);
+  const [showSyncCenter, setShowSyncCenter] = useState(false);
+  const [showBusinessOverview, setShowBusinessOverview] = useState(false);
 
   const { canManageDevices } = usePermissions();
+  const { can: canManageBusiness } = useBusinessAuth();
 
   const { activeWarehouse, warehouses } = useWarehouse();
   const { checkForUpdates, state: updateState } = useUpdate();
@@ -572,8 +583,59 @@ const SettingsScreen = () => {
           </View>
         </View>
 
-        {/* Offline-first Sync (Phase 3) */}
+        {/* Offline-first Sync (Phase 3) — compact summary + link to full §24 Sync Center */}
         <SyncSettings />
+        <View style={styles.ledgerSection}>
+          <View style={styles.sectionHead}>
+            <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: G.muted }]} numberOfLines={1}>{t('sync.center_title')}</AppText>
+            <View style={{ flex: 1 }} />
+            <RefreshCw size={20} color={G.muted} />
+          </View>
+          <View style={[styles.ledgerGroup, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+            <SettingLedgerItem
+              icon={RefreshCw}
+              title={'Sync Center'}
+              subtitle={'Pending · Devices · History · Conflicts'}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowSyncCenter(true); }}
+            />
+          </View>
+        </View>
+
+        {/* §38 Business Overview */}
+        <View style={styles.ledgerSection}>
+          <View style={styles.sectionHead}>
+            <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: G.muted }]} numberOfLines={1}>{t('overview.title')}</AppText>
+            <View style={{ flex: 1 }} />
+            <Building2 size={20} color={G.muted} />
+          </View>
+          <View style={[styles.ledgerGroup, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+            <SettingLedgerItem
+              icon={Building2}
+              title={'Business Overview'}
+              subtitle={'Sales · Debt · Stock · Devices · Sync · Team'}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowBusinessOverview(true); }}
+            />
+          </View>
+        </View>
+
+        {/* Business Management (multi-device: people, devices, registers, permissions) */}
+        {canManageBusiness('team.manage') || canManageBusiness('devices.manage') ? (
+          <View style={styles.ledgerSection}>
+            <View style={styles.sectionHead}>
+              <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: G.muted }]} numberOfLines={1}>{t('devices.title')}</AppText>
+              <View style={{ flex: 1 }} />
+              <Users size={20} color={G.muted} />
+            </View>
+            <View style={[styles.ledgerGroup, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+              <SettingLedgerItem
+                icon={Users}
+                title={'Business'}
+                subtitle={'People · Devices · Registers · Permissions'}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowBusiness(true); }}
+              />
+            </View>
+          </View>
+        ) : null}
 
         {/* Devices & Peripherals */}
         {canManageDevices ? (
@@ -785,6 +847,21 @@ const SettingsScreen = () => {
       {/* Devices & Peripherals */}
       <BottomSheet visible={showDevices} onClose={() => setShowDevices(false)}>
         <PeripheralCenter onClose={() => setShowDevices(false)} />
+      </BottomSheet>
+
+      {/* Business Management */}
+      <BottomSheet visible={showBusiness} onClose={() => setShowBusiness(false)}>
+        <BusinessManagement onClose={() => setShowBusiness(false)} />
+      </BottomSheet>
+
+      {/* §24 Sync Center */}
+      <BottomSheet visible={showSyncCenter} onClose={() => setShowSyncCenter(false)}>
+        <SyncCenter />
+      </BottomSheet>
+
+      {/* §38 Business Overview */}
+      <BottomSheet visible={showBusinessOverview} onClose={() => setShowBusinessOverview(false)}>
+        <BusinessOverview />
       </BottomSheet>
 
       {/* Reset Modal */}

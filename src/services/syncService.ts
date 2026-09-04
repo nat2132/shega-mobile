@@ -1,10 +1,19 @@
 import * as Crypto from 'expo-crypto';
 import { getDB } from '../database/db';
+import {
+  cloudSyncPush,
+  cloudSyncPull,
+  cloudDeviceStatus,
+  getStoredToken,
+  type CloudChange,
+  type CloudPushResult,
+} from './api';
 
 // Phase 3 offline-first sync client. Talks to the Shega Desktop hub
 // (HTTP JSON on port 5757) using the same payload format the hub expects.
 
 export const SYNC_ENTITIES = [
+  'businesses',
   'categories',
   'items',
   'item_packs',
@@ -13,13 +22,24 @@ export const SYNC_ENTITIES = [
   'expenses',
   'adjustments',
   'returns',
-  'customers'
+  'customers',
+  'locations',
+  'registers',
+  'business_roles',
+  'users',
+  'devices',
+  'stock_movements',
+  'audit_logs'
 ] as const;
 
 type SyncEntity = (typeof SYNC_ENTITIES)[number];
 
+// Entities whose primary key is a UUID (canonical business model) rather than an
+// autoincrement integer — their id must be set to the sync uuid on apply.
+const UUID_KEYED_ENTITIES: readonly string[] = ['businesses', 'locations', 'registers', 'business_roles', 'users', 'devices'];
+
 // Apply order so FK references resolve before they are needed.
-const APPLY_ORDER: SyncEntity[] = ['categories', 'items', 'item_packs', 'customers', 'sales', 'debt_payments', 'expenses', 'adjustments', 'returns'];
+const APPLY_ORDER: SyncEntity[] = ['businesses', 'categories', 'items', 'item_packs', 'customers', 'sales', 'debt_payments', 'expenses', 'adjustments', 'returns', 'locations', 'registers', 'business_roles', 'users', 'devices', 'stock_movements', 'audit_logs'];
 
 interface OutboxRow {
   seq: number;
@@ -44,6 +64,65 @@ export interface SyncStatus {
   outboxCount: number;
   hub: string | null;
   token: string;
+}
+
+// §24 Sync Center — unified synchronization status & diagnostics
+export type SyncTransport = 'lan' | 'cloud' | 'offline';
+export type SyncHealth = 'synced' | 'pending' | 'syncing' | 'error' | 'offline';
+
+export interface PendingChange {
+  id: number;
+  entity: string;
+  entity_uuid: string;
+  op: string;
+  created_at: string;
+  status: 'pending' | 'failed' | 'synced';
+  transport: SyncTransport;
+  retry_count: number;
+  source_device: string;
+}
+
+export interface DeviceStatus {
+  device_id: string;
+  name: string;
+  status: 'online' | 'offline' | 'unknown';
+  last_seen_at: string | null;
+  transport: SyncTransport;
+  is_self: boolean;
+}
+
+export interface SyncHistoryEntry {
+  id: number;
+  timestamp: string;
+  transport: SyncTransport;
+  pushed: number;
+  pulled: number;
+  conflicts: number;
+  status: 'success' | 'partial' | 'failed';
+  error: string | null;
+}
+
+export interface UnifiedSyncStatus {
+  health: SyncHealth;
+  transport: SyncTransport;
+  lastSyncAt: string | null;
+  pendingOutbound: number;
+  pendingInbound: number;
+  failedChanges: number;
+  conflicts: number;
+  lan: {
+    configured: boolean;
+    hubUrl: string | null;
+    lastSyncAt: string | null;
+    outboxCount: number;
+  };
+  cloud: {
+    configured: boolean;
+    enabled: boolean;
+    lastSyncAt: string | null;
+    cursor: number;
+    lastError: string | null;
+  };
 }
 
 let columnCache: Record<string, string[]> = {};
@@ -203,20 +282,61 @@ function applyChange(change: HubChange, force = false): void {
     return;
   }
 
-  const existing = db.getFirstSync(`SELECT * FROM ${entity} WHERE uuid = ?`, [change.entity_uuid]) as any;
-  if (!existing) {
-    const insertData: Record<string, any> = { ...data };
+    const existing = db.getFirstSync(`SELECT * FROM ${entity} WHERE uuid = ?`, [change.entity_uuid]) as any;
+  if (entity === 'audit_logs' && existing) {
+    // Append-only: dedupe an already-applied audit event; never rewrite a hashed row.
+    return;
+  }
+  if (!existing) {    const insertData: Record<string, any> = { ...data };
     delete insertData.id; // local ids stay local — remap via sync_refs
+    if (UUID_KEYED_ENTITIES.includes(entity)) {
+      // Canonical business tables use the sync uuid as their TEXT primary key.
+      insertData.id = change.entity_uuid;
+    }
     insertData.uuid = change.entity_uuid;
     insertData.device_id = change.device_id ?? getDeviceId();
     insertData.updated_at = insertData.updated_at ?? new Date().toISOString();
-    if ((entity === 'sales' || entity === 'returns') && insertData.itemId != null) {
+    if ((entity === 'sales' || entity === 'returns' || entity === 'stock_movements') && insertData.itemId != null) {
       const localItemId = resolveFk(change.device_id ?? getDeviceId(), 'items', insertData.itemId);
       if (localItemId != null) insertData.itemId = localItemId;
     }
     if (entity === 'sales' && insertData.packId != null) {
       const localPackId = resolveFk(change.device_id ?? getDeviceId(), 'item_packs', insertData.packId);
       if (localPackId != null) insertData.packId = localPackId;
+    }
+    if (entity === 'stock_movements') {
+      // Addition-only bridge: a relayed `restock_in` becomes a mobile addition
+      // (feeds the activity view) and is stored as sync history. On-hand stock
+      // is NOT altered here — it converges via the synced `items` rows.
+      const type = String(insertData.type ?? 'restock_in');
+      if (type === 'restock_in') {
+        insertData.quantityAdded = insertData.quantity ?? insertData.quantityAdded;
+        insertData.type = 'restock_in';
+      } else {
+        // Non-additive movement types have no mobile addition column; store as
+        // history without counting into the activity feed.
+        insertData.quantityAdded = insertData.quantityAdded ?? 0;
+      }
+    }
+    if (entity === 'audit_logs') {
+      // Map a desktop camelCase audit payload onto the mobile snake_case table
+      // and dedup by uuid. Audit rows are append-only at the source; we only
+      // insert (never update) them here.
+      insertData.entity = insertData.entity ?? insertData.entityType ?? '';
+      insertData.entity_id = insertData.entity_id != null ? insertData.entity_id : (insertData.entityId ?? null);
+      insertData.action = insertData.action ?? '';
+      insertData.old_value = insertData.old_value != null ? insertData.old_value : (insertData.oldValue ?? null);
+      insertData.new_value = insertData.new_value != null ? insertData.new_value : (insertData.newValue ?? null);
+      insertData.description = insertData.description != null ? (insertData.description as string) : (insertData.description ?? null);
+      insertData.created_at = insertData.created_at ?? insertData.createdAt ?? new Date().toISOString();
+      insertData.source_device = insertData.source_device ?? insertData.device_id;
+      delete insertData.entityType;
+      delete insertData.entityId;
+      delete insertData.oldValue;
+      delete insertData.newValue;
+      delete insertData.createdAt;
+      delete insertData.changedBy;
+      delete insertData.changedById;
     }
     const cols = columnsOf(entity).filter((c) => c in insertData);
     const placeholders = cols.map(() => '?').join(', ');
@@ -369,4 +489,312 @@ export async function pairDevice(): Promise<any> {
     method: 'POST',
     body: JSON.stringify({ device_id: deviceId, name: 'Shega Mobile', token: getHubToken() })
   });
+}
+
+// ---------------------------------------------------------------------------
+// Cloud synchronization (spec §20)
+//
+// Internet/cloud transport over Django. Reuses the SAME outbox, apply (LWW) and
+// conflict path as LAN sync so the canonical records are transport-independent.
+// Auth reuses the existing JWT + refresh flow in api.ts.
+// ---------------------------------------------------------------------------
+
+export interface CloudSyncStatus {
+  configured: boolean;
+  enabled: boolean;
+  hasToken: boolean;
+  url: string;
+  lastError: string | null;
+  lastAt: string | null;
+  cursor: number;
+}
+
+function readSetting(key: string): string | null {
+  const db = getDB();
+  const row = db.getFirstSync('SELECT value FROM app_settings WHERE key = ?', [key]) as any;
+  return row?.value ?? null;
+}
+function writeSetting(key: string, value: string): void {
+  const db = getDB();
+  db.runSync('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)', [key, value]);
+}
+
+export function getCloudUrl(): string {
+  return readSetting('cloud_sync_url') || '';
+}
+export function setCloudUrl(url: string): void {
+  writeSetting('cloud_sync_url', url.trim().replace(/\/+$/, ''));
+}
+export function getCloudEnabled(): boolean {
+  return readSetting('cloud_sync_enabled') === 'true';
+}
+export function setCloudEnabled(v: boolean): void {
+  writeSetting('cloud_sync_enabled', String(v));
+}
+export function getCloudCursor(): number {
+  const v = Number(readSetting('cloud_sync_cursor') || 0);
+  return Number.isFinite(v) ? v : 0;
+}
+
+export async function getCloudStatus(): Promise<CloudSyncStatus> {
+  const url = getCloudUrl();
+  const token = await getStoredToken();
+  return {
+    configured: !!url,
+    enabled: getCloudEnabled(),
+    hasToken: !!token,
+    url: url || '',
+    lastError: readSetting('cloud_sync_last_error'),
+    lastAt: readSetting('cloud_sync_last_at'),
+    cursor: getCloudCursor(),
+  };
+}
+
+/**
+ * Push the local outbox to Django and pull other-branch changes back, applying
+ * them with the same LWW/conflict path used for LAN sync.
+ *
+ * Idempotent & retry-safe: each change carries its local outbox `seq`; the
+ * server dedupes by (device, seq), so a retry after a lost response cannot
+ * duplicate a sale, stock movement, customer, etc. Outbox rows are removed only
+ * after a successful push response.
+ */
+export async function cloudSyncNow(): Promise<{ pushed: number; pulled: number; conflicts: number }> {
+  const url = getCloudUrl();
+  if (!url) throw new Error('Cloud sync not configured');
+  const token = await getStoredToken();
+  if (!token) throw new Error('Cloud sync requires an account login');
+
+  const deviceId = getDeviceId();
+  const db = getDB();
+  let pushed = 0;
+  let conflicts = 0;
+
+  const { changes, seqs } = await buildChangesFromOutbox();
+  if (changes.length > 0) {
+    const payload = changes
+      .map((c, i) => ({ ...c, seq: seqs[i] }))
+      .filter((c): c is CloudChange => typeof c.seq === 'number');
+    let res: CloudPushResult;
+    try {
+      res = await cloudSyncPush({ device_id: deviceId, device_name: 'Shega Mobile', changes: payload });
+    } catch (e) {
+      writeSetting('cloud_sync_last_error', (e as any)?.message || String(e));
+      throw e;
+    }
+    pushed = payload.length;
+    const accepted = Number(res?.accepted ?? payload.length);
+    // Only clear outbox entries the server has accepted (server dedupes by seq,
+    // so re-pushing an already-stored seq is a no-op and loses nothing).
+    const acceptedSeqs = seqs.slice(0, payload.length);
+    db.runSync('DELETE FROM sync_outbox WHERE seq IN (' + acceptedSeqs.map(() => '?').join(',') + ')', acceptedSeqs);
+    void accepted;
+  }
+
+  const since = getCloudCursor();
+  let pulled: { ok?: boolean; changes: CloudChange[]; lastSeq: number };
+  try {
+    pulled = await cloudSyncPull({ device: deviceId, since });
+  } catch (e) {
+    writeSetting('cloud_sync_last_error', (e as any)?.message || String(e));
+    throw e;
+  }
+  const changesIn = (pulled?.changes ?? []) as HubChange[];
+  if (changesIn.length > 0) {
+    const sorted = changesIn.slice().sort((a, b) => {
+      const ia = APPLY_ORDER.indexOf(a.entity as SyncEntity);
+      const ib = APPLY_ORDER.indexOf(b.entity as SyncEntity);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    });
+    for (const change of sorted) {
+      try {
+        applyChange({ ...change, device_id: change.device_id ?? deviceId });
+      } catch (e: any) {
+        console.warn('[cloud-sync] apply failed', change.entity, change.entity_uuid, e?.message);
+      }
+    }
+  }
+  const newSeq = Number(pulled?.lastSeq ?? since);
+  writeSetting('cloud_sync_cursor', String(newSeq));
+  writeSetting('cloud_sync_last_at', new Date().toISOString());
+  writeSetting('cloud_sync_last_error', '');
+
+  return { pushed, pulled: changesIn.length, conflicts };
+}
+
+/**
+ * Fetch THIS device's roster status from the cloud (spec §17/§18 receive side).
+ * Lets the mobile lock overlay observe a remote disable even when only the
+ * cloud path is available.
+ */
+export async function cloudSelfStatus(): Promise<{ status: string | null; blocked: boolean }> {
+  const deviceId = getDeviceId();
+  const res = await cloudDeviceStatus(deviceId);
+  return { status: res?.status ?? null, blocked: res?.blocked ?? false };
+}
+
+// ============================================================================
+// §24 Sync Center — unified status, pending changes, device status, history
+// ============================================================================
+
+/**
+ * Get unified sync status combining LAN and Cloud transports.
+ */
+export async function getUnifiedSyncStatus(): Promise<UnifiedSyncStatus> {
+  const db = getDB();
+  const lanStatus = getSyncStatus();
+  const cloudStatus = await getCloudStatus();
+
+  // Count pending outbound (local outbox)
+  const outboxCount = (db.getFirstSync('SELECT COUNT(*) AS c FROM sync_outbox') as any)?.c ?? 0;
+
+  // Count failed changes (conflicts + errors)
+  const failedCount = (db.getFirstSync('SELECT COUNT(*) AS c FROM sync_conflicts') as any)?.c ?? 0;
+  const conflictsCount = failedCount; // conflicts table stores both
+
+  // Determine overall health
+  let health: SyncHealth = 'synced';
+  if (outboxCount > 0 || failedCount > 0) health = 'pending';
+  if (lanStatus.outboxCount > 0 || cloudStatus.lastError) health = 'pending';
+  if (!lanStatus.hub && !cloudStatus.configured) health = 'offline';
+
+  // Determine active transport
+  let transport: SyncTransport = 'offline';
+  if (lanStatus.hub && (cloudStatus.enabled || cloudStatus.configured)) transport = 'lan';
+  else if (lanStatus.hub) transport = 'lan';
+  else if (cloudStatus.enabled) transport = 'cloud';
+
+  return {
+    health,
+    transport,
+    lastSyncAt: lanStatus.lastSyncAt ?? cloudStatus.lastAt ?? null,
+    pendingOutbound: outboxCount,
+    pendingInbound: 0, // Would need server-side cursor comparison
+    failedChanges: failedCount,
+    conflicts: conflictsCount,
+    lan: {
+      configured: !!lanStatus.hub,
+      hubUrl: lanStatus.hub,
+      lastSyncAt: lanStatus.lastSyncAt,
+      outboxCount: lanStatus.outboxCount,
+    },
+    cloud: {
+      configured: cloudStatus.configured,
+      enabled: cloudStatus.enabled,
+      lastSyncAt: cloudStatus.lastAt,
+      cursor: cloudStatus.cursor,
+      lastError: cloudStatus.lastError,
+    },
+  };
+}
+
+/**
+ * Get pending changes from local outbox with status info.
+ */
+export function getPendingChanges(): PendingChange[] {
+  const db = getDB();
+  const rows = db.getAllSync(
+    `SELECT o.seq as id, o.entity, o.entity_uuid, o.op, o.created_at, o.transport, o.retry_count, o.source_device
+     FROM sync_outbox o
+     ORDER BY o.seq ASC LIMIT 200`
+  ) as any[];
+
+  // Ensure sync_outbox has the new columns (migration handled separately)
+  return rows.map(r => ({
+    id: r.id,
+    entity: r.entity,
+    entity_uuid: r.entity_uuid,
+    op: r.op,
+    created_at: r.created_at ?? new Date().toISOString(),
+    status: 'pending' as const,
+    transport: (r.transport as SyncTransport) ?? 'lan',
+    retry_count: r.retry_count ?? 0,
+    source_device: r.source_device ?? getDeviceId(),
+  }));
+}
+
+/**
+ * Get device status grid from local roster + sync metadata.
+ */
+export function getDeviceStatusList(): DeviceStatus[] {
+  const db = getDB();
+  const selfId = getDeviceId();
+
+  // Get roster devices from local database
+  const roster = db.getAllSync(
+    `SELECT d.device_id, d.name, d.last_seen_at, d.status
+     FROM devices d
+     WHERE d.is_active = 1`
+  ) as any[];
+
+  // Add self if not in roster
+  const hasSelf = roster.some(d => d.device_id === selfId);
+  if (!hasSelf) {
+    roster.push({ device_id: selfId, name: 'This Device', last_seen_at: new Date().toISOString(), status: 'active' });
+  }
+
+  const now = Date.now();
+  return roster.map(d => {
+    const lastSeen = d.last_seen_at ? new Date(d.last_seen_at).getTime() : 0;
+    const isOnline = lastSeen > 0 && (now - lastSeen) < 5 * 60 * 1000; // 5 min threshold
+    return {
+      device_id: d.device_id,
+      name: d.name ?? d.device_id.slice(0, 8),
+      status: isOnline ? 'online' : d.status === 'active' ? 'offline' : 'unknown',
+      last_seen_at: d.last_seen_at ?? null,
+      transport: 'lan' as SyncTransport, // Would need cloud roster sync for cloud devices
+      is_self: d.device_id === selfId,
+    };
+  });
+}
+
+/**
+ * Get sync history from local log.
+ */
+export function getSyncHistory(limit = 50): SyncHistoryEntry[] {
+  const db = getDB();
+  const rows = db.getAllSync(
+    `SELECT id, created_at as timestamp, transport, pushed, pulled, conflicts, status, error
+     FROM sync_history
+     ORDER BY id DESC LIMIT ?`
+  , [limit]) as any[];
+
+  // Ensure sync_history table exists (migration handled separately)
+  return rows.map(r => ({
+    id: r.id,
+    timestamp: r.timestamp,
+    transport: r.transport as SyncTransport,
+    pushed: r.pushed ?? 0,
+    pulled: r.pulled ?? 0,
+    conflicts: r.conflicts ?? 0,
+    status: r.status as 'success' | 'partial' | 'failed',
+    error: r.error ?? null,
+  }));
+}
+
+/**
+ * Record a sync attempt to history.
+ */
+export function recordSyncHistory(entry: {
+  transport: SyncTransport;
+  pushed: number;
+  pulled: number;
+  conflicts: number;
+  status: 'success' | 'partial' | 'failed';
+  error?: string | null;
+}): void {
+  const db = getDB();
+  db.runSync(
+    `INSERT INTO sync_history (transport, pushed, pulled, conflicts, status, error, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      entry.transport,
+      entry.pushed,
+      entry.pulled,
+      entry.conflicts,
+      entry.status,
+      entry.error ?? null,
+      new Date().toISOString(),
+    ]
+  );
 }

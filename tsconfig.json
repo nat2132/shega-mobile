@@ -7,6 +7,9 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@shega/shared": [
+        "../shega-shared/src/index.ts"
       ]
     }
   },

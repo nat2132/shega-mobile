@@ -9,10 +9,22 @@
 import { Platform } from 'react-native';
 import { getItemByBarcode } from '@/database/db';
 import { detectBarcodeFormat } from './barcodeFormat';
-import { buildDrawerKickBytes, buildReceiptBytes, buildTestReceiptBytes, buildTestReceiptPreview } from './escpos';
+import {
+  buildCommandDiagnosticBytes,
+  buildDrawerKickBytes,
+  buildReceiptBytes,
+  buildSampleReceiptBytes,
+  buildSampleReceiptPreview,
+  buildTestReceiptBytes,
+  buildTestReceiptPreview,
+  type CommandDiagnosticResult,
+  type PrinterMeta,
+  type ReceiptLayoutOptions,
+} from './escpos';
 import { saleReceiptFromBatch, type SaleReceiptInput } from './saleReceipt';
 import { clearDeviceLogs, loadDeviceLogs, loadDevices, newLogId, saveDeviceLogs, saveDevices } from './storage';
 import { transportCapability, writePrinterBytes } from './transports';
+import { disconnectVirtualTcp, probeVirtualTcp } from './virtualTcp';
 import type {
   ConnectionType,
   DeviceLogEntry,
@@ -22,8 +34,8 @@ import type {
   PeripheralConfig,
   PrintResult,
   ScanResult,
+  VirtualProbeResult,
 } from './types';
-import type { PrinterMeta, ReceiptLayoutOptions } from './escpos';
 
 export interface TestResult {
   ok: boolean;
@@ -36,6 +48,17 @@ export interface ConnectResult {
   errorCode?: string;
 }
 
+// Per-device virtual-printer telemetry. Only counts/status — no receipt,
+// customer or payment data is ever stored in diagnostic state.
+export interface VirtualMetrics {
+  connection: PeripheralConfig['status'];
+  lastPrintAt?: number;
+  lastResult?: 'ok' | 'failed';
+  lastError?: string;
+  bytesSent?: number;
+  queue?: number;
+}
+
 type ScanListener = (result: ScanResult, item: unknown | null) => void;
 
 class PeripheralManager {
@@ -44,6 +67,7 @@ class PeripheralManager {
   private listeners = new Set<() => void>();
   private scanListeners = new Set<ScanListener>();
   private version = 0;
+  private virtualMetrics = new Map<string, VirtualMetrics>();
 
   constructor() {
     this.devices = loadDevices();
@@ -116,6 +140,66 @@ class PeripheralManager {
 
   capability = (connectionType: ConnectionType): string => transportCapability(connectionType).state;
 
+  // --- Virtual printer telemetry ---------------------------------------------
+
+  getVirtualMetrics = (id: string): VirtualMetrics | undefined => this.virtualMetrics.get(id);
+
+  private trackVirtual = (id: string, patch: Partial<VirtualMetrics>): void => {
+    const cur = this.virtualMetrics.get(id) ?? { connection: 'disconnected', queue: 0 };
+    this.virtualMetrics.set(id, { ...cur, ...patch });
+    this.emit();
+  };
+
+  // -- Virtual ESC/POS printer: connection + command diagnostics ---------------
+
+  // Public connectivity check for the virtual-printer diagnostics UI.
+  probeInternet = (): Promise<boolean> => this.checkInternet();
+
+  async probeVirtual(deviceId: string | null, host: string, port: number): Promise<VirtualProbeResult> {
+    const probe = await probeVirtualTcp({ host: (host || '').trim(), port: Number(port) || 9397, timeoutMs: 6000 });
+    const dev = deviceId ? this.getDevice(deviceId) : undefined;
+    if (dev && deviceId) {
+      if (probe.ok) {
+        this.setStatus(deviceId, 'connected');
+        this.log('info', 'devices.virtual_connected', deviceId);
+      } else {
+        this.setStatus(deviceId, probe.outcome === 'timeout' ? 'connecting' : 'error');
+        this.log('warn', 'devices.virtual_probe_failed', deviceId, probe.errorCode);
+      }
+      this.trackVirtual(deviceId, {
+        connection: probe.ok ? 'connected' : probe.outcome === 'timeout' ? 'connecting' : 'error',
+      });
+    }
+    return probe;
+  }
+
+  async sampleReceipt(id: string): Promise<TestResult> {
+    const dev = this.getDevice(id);
+    if (!dev) return { ok: false, errorCode: 'missing' };
+    if (dev.role !== 'printer') return { ok: false, errorCode: 'not_printer' };
+
+    const preview = buildSampleReceiptPreview({ businessName: dev.name, paperWidth: dev.paperWidth });
+    const cap = transportCapability(dev.connectionType);
+    if (cap.state !== 'available') {
+      this.setStatus(dev.id, 'error');
+      this.log('warn', 'devices.print_dev_build', dev.id);
+      return { ok: false, errorCode: 'needs_dev_build', preview };
+    }
+    const result = await this.sendBytes(dev, buildSampleReceiptBytes({ businessName: dev.name, paperWidth: dev.paperWidth }));
+    if (result.ok) this.log('info', 'devices.print_ok', dev.id);
+    else this.log('error', 'devices.print_failed', dev.id, result.errorCode);
+    return { ...result, preview };
+  }
+
+  // Local ESC/POS command exercise — `generated` vs `confirmed` stays
+  // intentionally separate (the virtual printer cannot verify paper output).
+  commandDiagnostic(id: string): { result: CommandDiagnosticResult; preview: string } {
+    const dev = this.getDevice(id);
+    const result = buildCommandDiagnosticBytes({ paperWidth: dev?.paperWidth, drawerPin: dev?.role === 'drawer' ? dev?.pin : 2 });
+    const preview = result.commands.map((c) => `${c.label} - ${c.bytesEmitted} bytes [GENERATED]`).join('\n');
+    return { result, preview };
+  }
+
   // --- Connection lifecycle --------------------------------------------------
 
   connect = (id: string): ConnectResult => {
@@ -134,6 +218,14 @@ class PeripheralManager {
       return { ok: false, errorCode: 'unsupported' };
     }
 
+    if (dev.connectionType === 'virtual_tcp_escpos') {
+      // Dev build with a socket: status resolves when the real TCP probe lands.
+      this.setStatus(id, 'connecting');
+      this.log('info', 'devices.connecting_virtual', id);
+      void this.probeVirtual(id, dev.address ?? '', dev.port ?? 9397);
+      return { ok: true };
+    }
+
     this.setStatus(id, 'connected');
     this.log('info', 'devices.connected', id);
     return { ok: true };
@@ -142,6 +234,7 @@ class PeripheralManager {
   disconnect = (id: string): void => {
     const dev = this.getDevice(id);
     if (!dev) return;
+    if (dev.connectionType === 'virtual_tcp_escpos') disconnectVirtualTcp();
     this.setStatus(id, 'disconnected');
     this.log('info', 'devices.disconnected', id);
   };
@@ -172,6 +265,23 @@ class PeripheralManager {
 
   // --- Printing --------------------------------------------------------------
 
+  // Single choke point for byte delivery; records virtual-printer telemetry
+  // (counts/status only) so diagnostics never store receipt content.
+  private sendBytes = async (dev: PeripheralConfig, bytes: Uint8Array): Promise<PrintResult> => {
+    const result = await writePrinterBytes(dev, bytes);
+    if (dev.connectionType === 'virtual_tcp_escpos') {
+      const extended = result as PrintResult & { bytesSent?: number };
+      this.trackVirtual(dev.id, {
+        lastPrintAt: Date.now(),
+        lastResult: result.ok ? 'ok' : 'failed',
+        lastError: result.ok ? undefined : result.errorCode,
+        bytesSent: result.ok ? Math.max(1, extended.bytesSent ?? bytes.length) : 0,
+        connection: result.ok ? 'connected' : 'error',
+      });
+    }
+    return result;
+  };
+
   async printReceipt(meta: PrinterMeta, layout: ReceiptLayoutOptions): Promise<PrintResult> {
     const printer = this.getPrimaryDevice('printer');
     if (!printer) {
@@ -189,7 +299,7 @@ class PeripheralManager {
     const copies = Math.max(1, Math.min(5, printer.printCopies || 1));
     let result: PrintResult = { ok: false, errorCode: 'network_error', deviceName: printer.name };
     for (let i = 0; i < copies; i++) {
-      result = await writePrinterBytes(printer, buildReceiptBytes(meta, layout));
+      result = await this.sendBytes(printer, buildReceiptBytes(meta, layout));
       if (!result.ok) break;
     }
     if (!result.ok) {
@@ -227,7 +337,7 @@ class PeripheralManager {
         this.log('warn', 'devices.print_dev_build', dev.id);
         return { ok: false, errorCode: 'needs_dev_build', preview };
       }
-      const result = await writePrinterBytes(
+      const result = await this.sendBytes(
         dev,
         buildTestReceiptBytes({ deviceName: dev.name, connectionLabel: dev.connectionType, paperWidth: dev.paperWidth }),
       );
@@ -241,7 +351,7 @@ class PeripheralManager {
         this.log('warn', 'devices.drawer_dev_build', dev.id);
         return { ok: false, errorCode: 'needs_dev_build' };
       }
-      const result = await writePrinterBytes(dev, buildDrawerKickBytes(dev.pin));
+      const result = await this.sendBytes(dev, buildDrawerKickBytes(dev.pin));
       if (result.ok) this.log('info', 'devices.drawer_kicked', dev.id);
       return { ...result };
     }
@@ -263,7 +373,7 @@ class PeripheralManager {
       this.log('warn', 'devices.drawer_skipped_dev_build', drawer.id);
       return;
     }
-    await writePrinterBytes(drawer, buildDrawerKickBytes(drawer.pin));
+    await this.sendBytes(drawer, buildDrawerKickBytes(drawer.pin));
   }
 
   async testDrawer(id: string): Promise<TestResult> {

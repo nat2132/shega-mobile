@@ -184,3 +184,120 @@ export function buildTestReceiptPreview(opts: TestReceiptOptions): string {
 export function buildDrawerKickBytes(pin: 2 | 5 = 2): Uint8Array {
   return new EscposWriter().init().openDrawer(pin).toUint8Array();
 }
+
+// --- Virtual printer diagnostics -------------------------------------------------
+//
+// A per-command record for the ESC/POS command diagnostic test. `generated` is
+// always true for commands our encoder emitted; `confirmed` is only true when
+// the printer/service verified the command — a virtual printer cannot verify
+// physical paper output, so the UI keeps these distinctly labelled.
+
+export interface CommandCheck {
+  id: string;
+  label: string;
+  bytesEmitted: number;
+  generated: boolean;
+  confirmed: boolean;
+}
+
+export interface CommandDiagnosticResult {
+  bytes: Uint8Array;
+  commands: CommandCheck[];
+  totalBytes: number;
+}
+
+export function buildCommandDiagnosticBytes(opts: { paperWidth?: 58 | 80; drawerPin?: 2 | 5 } = {}): CommandDiagnosticResult {
+  const width = widthFor(opts.paperWidth);
+  const w = new EscposWriter();
+  const commands: CommandCheck[] = [];
+  const emit = (id: string, label: string, fn: () => void): void => {
+    const before = w.length;
+    fn();
+    commands.push({ id, label, bytesEmitted: w.length - before, generated: true, confirmed: false });
+  };
+
+  emit('init', 'Initialize printer', () => w.init());
+  emit('align_left', 'Left alignment', () => w.align(0));
+  emit('align_center', 'Center alignment', () => w.align(1));
+  emit('align_right', 'Right alignment', () => w.align(2));
+  emit('bold_on', 'Bold ON', () => w.bold(true));
+  emit('bold_off', 'Bold OFF', () => w.bold(false));
+  emit('text_normal', 'Normal text', () => w.text('The quick brown fox jumps over the lazy dog').lineFeed());
+  emit('font_size', 'Font size (2x)', () => w.size(1, 1).text('DOUBLE SIZE').lineFeed().size(0, 0));
+  emit('line_spacing', 'Line spacing', () => w.lineFeed(2));
+  emit('feed', 'Feed (3 lines)', () => w.lineFeed(3));
+  emit('separator', 'Horizontal separator', () => w.text('-'.repeat(24)).lineFeed());
+  emit('barcode_code128', 'Barcode CODE128', () => w.barcodeCode128('SHEGA-2026'));
+  emit('barcode_ean13', 'Barcode EAN-13', () => w.barcodeEan13('123456789012'));
+  emit('qr_url', 'QR code (https://shega.example)', () => w.qr('https://shega.example', 4));
+  emit('qr_et_receipt', 'QR code (Ethiopian receipt payload — placeholder)', () => w.qr('SHEGA-ET-RECEIPT-SAMPLE-2026', 4));
+  emit('totals', 'Receipt totals line', () => w.bold(true).size(1, 1).column('TOTAL', '105.00', width).size(0, 0).bold(false));
+  emit('cut', 'Cut command', () => w.cut(true));
+  emit('drawer', `Cash drawer kick (pin ${opts.drawerPin ?? 2})`, () => w.openDrawer(opts.drawerPin ?? 2));
+
+  return { bytes: w.toUint8Array(), commands, totalBytes: w.length };
+}
+
+// Sample receipt for the virtual printer — built with the exact same
+// `buildReceiptBytes` used by production checkout.
+export function buildSampleReceiptBytes(opts: { businessName?: string; paperWidth?: 58 | 80 } = {}): Uint8Array {
+  const lines: ReceiptLine[] = [
+    { name: 'Biscuit 50g', quantity: 2, unitPrice: 25, total: 50 },
+    { name: 'Water 1L', quantity: 1, unitPrice: 20, total: 20 },
+    { name: 'Bread', quantity: 1, unitPrice: 35, total: 35 },
+  ];
+  return buildReceiptBytes(
+    {
+      businessName: opts.businessName || 'SHEGA',
+      businessDetails: 'SAMPLE RECEIPT',
+      orderId: 'SAMPLE-001',
+      dateTime: new Date().toLocaleString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+      cashier: 'Test',
+    },
+    {
+      lines,
+      subtotal: 105,
+      discount: 0,
+      vat: 10,
+      total: 115,
+      paid: 120,
+      change: 5,
+      paymentMethod: 'CASH',
+      qr: 'https://shega.example',
+      paperWidth: opts.paperWidth,
+    },
+  );
+}
+
+export function buildSampleReceiptPreview(opts: { businessName?: string; paperWidth?: 58 | 80 } = {}): string {
+  const width = widthFor(opts.paperWidth);
+  const lines: string[] = [];
+  lines.push(opts.businessName || 'SHEGA');
+  lines.push('SAMPLE RECEIPT');
+  lines.push(rule(width));
+  lines.push('Order       SAMPLE-001');
+  lines.push('Date        ' + new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }));
+  lines.push('Cashier     Test');
+  lines.push('Biscuit 50g');
+  lines.push('2 x 25.00  50.00');
+  lines.push('Water 1L');
+  lines.push('1 x 20.00  20.00');
+  lines.push('Bread');
+  lines.push('1 x 35.00  35.00');
+  lines.push(rule(width));
+  lines.push('SUB TOTAL   105.00');
+  lines.push('VAT         10.00');
+  lines.push('TOTAL       115.00');
+  lines.push('Paid        120.00');
+  lines.push('Change      5.00');
+  lines.push('Method      CASH');
+  lines.push(rule(width));
+  lines.push('*** THANK YOU ***');
+  return lines.join('\n');
+}

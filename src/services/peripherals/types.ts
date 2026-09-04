@@ -11,6 +11,7 @@ export type ConnectionType =
   | 'bluetooth_escpos'
   | 'usb_escpos'
   | 'network_escpos'
+  | 'virtual_tcp_escpos'
   | 'bluetooth_hid'
   | 'usb_hid'
   | 'keyboard_hid'
@@ -95,10 +96,25 @@ export interface TransportCapability {
   reasonCode: 'ok' | 'needs_dev_build' | 'unsupported';
 }
 
+// Outcome of a Virtual ESC/POS printer connection test. `reachable` is only
+// reported when the remote TCP endpoint actually answered — never faked.
+export type VirtualProbeOutcome = 'reachable' | 'timeout' | 'unreachable';
+
+export interface VirtualProbeResult {
+  outcome: VirtualProbeOutcome;
+  ok: boolean;
+  // True when the remote end rejected the client (e.g. a TCP whitelist rule).
+  rejected: boolean;
+  latencyMs?: number;
+  errorCode?: 'timeout' | 'unreachable' | 'rejected' | 'network_error' | 'missing_host';
+  detail?: string;
+}
+
 export const CONNECTION_LABELS: Record<ConnectionType, string> = {
   bluetooth_escpos: 'conn_bluetooth_escpos',
   usb_escpos: 'conn_usb_escpos',
   network_escpos: 'conn_network_escpos',
+  virtual_tcp_escpos: 'conn_virtual_tcp_escpos',
   bluetooth_hid: 'conn_bluetooth_hid',
   usb_hid: 'conn_usb_hid',
   keyboard_hid: 'conn_keyboard_hid',

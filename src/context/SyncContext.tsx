@@ -1,20 +1,33 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 import { getDB } from '@/database/db';
-import { getHubUrl, getSyncStatus, syncNow, type SyncStatus } from '@/services/syncService';
+import { getHubUrl, getSyncStatus, syncNow, type SyncStatus, type UnifiedSyncStatus, type PendingChange, type DeviceStatus, type SyncHistoryEntry, getUnifiedSyncStatus, getPendingChanges, getDeviceStatusList, getSyncHistory, recordSyncHistory } from '@/services/syncService';
+import {
+  cloudSyncNow,
+  getCloudStatus,
+  getCloudUrl,
+  type CloudSyncStatus,
+} from '@/services/syncService';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 
 interface SyncContextValue {
   status: SyncStatus;
+  cloudStatus: CloudSyncStatus;
+  unifiedStatus: UnifiedSyncStatus | null;
   busy: boolean;
   lastError: string | null;
-  lastResult: { pushed: number; pulled: number; conflicts: number } | null;
+  lastResult: { pushed: number; pulled: number; conflicts: number; transport?: 'lan' | 'cloud' | null } | null;
   enabled: boolean;
   setEnabled: (v: boolean) => void;
   runSync: () => Promise<boolean>;
   requestSync: () => void;
   expoPushToken?: string;
   registerPushToken: () => Promise<void>;
+  // §24 Sync Center
+  refreshUnifiedStatus: () => Promise<void>;
+  getPendingChanges: () => PendingChange[];
+  getDeviceStatusList: () => DeviceStatus[];
+  getSyncHistory: (limit?: number) => SyncHistoryEntry[];
 }
 
 const SyncContext = createContext<SyncContextValue | null>(null);
@@ -36,6 +49,16 @@ function writeEnabled(v: boolean): void {
 
 export function SyncProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<SyncStatus>(getSyncStatus);
+  const [cloudStatus, setCloudStatus] = useState<CloudSyncStatus>({
+    configured: false,
+    enabled: false,
+    hasToken: false,
+    url: '',
+    lastError: null,
+    lastAt: null,
+    cursor: 0,
+  });
+  const [unifiedStatus, setUnifiedStatus] = useState<UnifiedSyncStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<SyncContextValue['lastResult']>(null);
@@ -45,6 +68,23 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   const failures = useRef(0);
 
   const { expoPushToken: hookPushToken } = usePushNotifications();
+
+  const refresh = useCallback(() => {
+    setStatus(getSyncStatus());
+    getCloudStatus().then(setCloudStatus).catch(() => {});
+  }, []);
+
+  const refreshUnifiedStatus = useCallback(async () => {
+    const unified = await getUnifiedSyncStatus();
+    setUnifiedStatus(unified);
+  }, []);
+
+  // Refresh unified status periodically
+  useEffect(() => {
+    refreshUnifiedStatus();
+    const interval = setInterval(refreshUnifiedStatus, 30000); // every 30 seconds
+    return () => clearInterval(interval);
+  }, [refreshUnifiedStatus]);
 
   const registerPushToken = useCallback(async () => {
     if (!expoPushToken) return;
@@ -82,26 +122,73 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     }
   }, [expoPushToken, enabled, registerPushToken]);
 
-  const refresh = useCallback(() => {
-    setStatus(getSyncStatus());
-  }, []);
-
+  /**
+   * Combined runSync (spec §20/§18):
+   *  - Prefer LAN when a hub is configured and reachable (no unnecessary cloud
+   *    round-trips for changes that can cross the local network).
+   *  - Fall back to the Internet/cloud transport when the LAN hub is absent or
+   *    unreachable.
+   * The shared outbox is only cleared after whichever transport succeeds, so a
+   * change is delivered once regardless of path (no duplicates).
+   */
   const runSync = useCallback(async (): Promise<boolean> => {
     if (running.current) return false;
-    if (!getHubUrl()) return false;
+    const hubUrl = getHubUrl();
+    const cloudUrl = getCloudUrl();
+    if (!hubUrl && !cloudUrl) return false;
     running.current = true;
     setBusy(true);
     try {
-      const res = await syncNow();
-      failures.current = 0;
-      setLastResult(res);
-      setLastError(null);
+      let result: SyncContextValue['lastResult'] = null;
+      let err: unknown = null;
+
+      if (hubUrl) {
+        try {
+          const res = await syncNow();
+          result = { ...res, transport: 'lan' };
+        } catch (e) {
+          err = e;
+        }
+      }
+
+      if (!result && cloudUrl) {
+        try {
+          const res = await cloudSyncNow();
+          result = { ...res, transport: 'cloud' };
+          err = null;
+        } catch (e) {
+          if (!err) err = e;
+        }
+      }
+
+      if (result) {
+        failures.current = 0;
+        setLastResult(result);
+        setLastError(err ? (err as any)?.message || 'Sync warning' : null);
+        // Record successful sync to history
+        recordSyncHistory({
+          transport: result.transport ?? 'lan',
+          pushed: result.pushed,
+          pulled: result.pulled,
+          conflicts: result.conflicts,
+          status: 'success',
+        });
+      } else {
+        failures.current += 1;
+        const errorMsg = (err as any)?.message || 'Sync failed';
+        setLastError(errorMsg);
+        recordSyncHistory({
+          transport: 'lan',
+          pushed: 0,
+          pulled: 0,
+          conflicts: 0,
+          status: 'failed',
+          error: errorMsg,
+        });
+      }
       refresh();
-      return true;
-    } catch (e: any) {
-      failures.current += 1;
-      setLastError(e?.message || 'Sync failed');
-      return false;
+      refreshUnifiedStatus();
+      return !!result;
     } finally {
       running.current = false;
       setBusy(false);
@@ -111,7 +198,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   // Debounced best-effort trigger (used right after a sale/expense is recorded).
   const pending = useRef(false);
   const requestSync = useCallback(() => {
-    if (!enabled || !getHubUrl()) return;
+    if (!enabled) return;
     if (pending.current) return;
     pending.current = true;
     setTimeout(() => {
@@ -163,6 +250,8 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     <SyncContext.Provider
       value={{
         status,
+        cloudStatus,
+        unifiedStatus,
         busy,
         lastError,
         lastResult,
@@ -172,6 +261,11 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         requestSync,
         expoPushToken,
         registerPushToken,
+        // §24 Sync Center
+        refreshUnifiedStatus,
+        getPendingChanges,
+        getDeviceStatusList,
+        getSyncHistory,
       }}
     >
       {children}

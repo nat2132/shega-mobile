@@ -1,4 +1,5 @@
 import SidebarOverlay from '@/components/SidebarOverlay';
+import { DeviceLockOverlay } from '@/components/DeviceLockOverlay';
 import { AuthProvider } from '@/context/AuthContext';
 import { AccountProvider } from '@/context/AccountContext';
 import { SettingsProvider , useSettings } from '@/context/SettingsContext';
@@ -129,6 +130,7 @@ function AppShell({ dbWarning }: { dbWarning?: string | null }) {
           </Stack>
           <TutorialOverlay />
           <SidebarOverlay />
+          <DeviceLockOverlay />
         </TutorialProvider>
       </ErrorBoundary>
     </View>

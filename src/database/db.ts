@@ -876,6 +876,19 @@ export const initDB = () => {
       addColumnIfMissing(tbl, name, def);
     }
   }
+  // §23: align the movement ledger with the shared sync schema so restock
+  // additions (canonical `restock_in`) converge with the desktop hub. Mobile's
+  // legacy addition-only `quantityAdded` feed is preserved; `type`/`quantity`
+  // are the sync-canonical fields. Stock itself is NOT touched by a relayed
+  // movement — on-hand levels converge via the already-synced `items` rows.
+  addColumnIfMissing('stock_movements', 'businessId', 'INTEGER');
+  addColumnIfMissing('stock_movements', 'warehouseId', 'INTEGER');
+  addColumnIfMissing('stock_movements', 'type', "TEXT DEFAULT 'restock_in'");
+  addColumnIfMissing('stock_movements', 'quantity', 'REAL');
+  addColumnIfMissing('stock_movements', 'referenceId', 'INTEGER');
+  addColumnIfMissing('stock_movements', 'referenceType', 'TEXT');
+  addColumnIfMissing('stock_movements', 'notes', 'TEXT');
+  if (syncTables.indexOf('stock_movements') === -1) syncTables.push('stock_movements');
   // 4.8: reorder automation columns on items.
   for (const [name, def] of [['reorderPoint', 'REAL DEFAULT 10'], ['reorderQty', 'REAL DEFAULT 0'], ['autoReorder', 'INTEGER DEFAULT 0']] as [string, string][]) {
     addColumnIfMissing('items', name, def);
@@ -925,6 +938,198 @@ export const initDB = () => {
     CREATE INDEX IF NOT EXISTS idx_sync_conflicts_uuid ON sync_conflicts(entity_uuid);
   `);
 
+  // §24 Sync Center — sync_outbox enhancements & sync_history
+  addColumnIfMissing('sync_outbox', 'transport', "TEXT DEFAULT 'lan'");
+  addColumnIfMissing('sync_outbox', 'retry_count', 'INTEGER DEFAULT 0');
+  addColumnIfMissing('sync_outbox', 'source_device', 'TEXT');
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS sync_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      transport TEXT NOT NULL,
+      pushed INTEGER NOT NULL DEFAULT 0,
+      pulled INTEGER NOT NULL DEFAULT 0,
+      conflicts INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL,
+      error TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+  console.log('§24 Sync Center tables checked/created.');
+
+  // ========== BUSINESS MODEL (multi-device business, users, roles, devices, registers) ==========
+  // These tables implement the shared business model from @shega/shared. Entity
+  // ids are UUID text so they can synchronize across devices without colliding.
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS businesses (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      owner_user_id TEXT,
+      currency TEXT DEFAULT 'ETB',
+      plan_label TEXT,
+      max_mobile INTEGER DEFAULT 1,
+      max_desktop INTEGER DEFAULT 0,
+      is_default INTEGER DEFAULT 0,
+      address TEXT,
+      business_code TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      uuid TEXT,
+      row_version INTEGER DEFAULT 1,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      is_deleted INTEGER DEFAULT 0,
+      is_synced INTEGER DEFAULT 1
+    );
+
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      business_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      phone TEXT,
+      email TEXT,
+      role TEXT NOT NULL,
+      role_name TEXT,
+      permissions TEXT,
+      is_active INTEGER DEFAULT 1,
+      is_owner INTEGER DEFAULT 0,
+      pin_hash TEXT,
+      pin_salt TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      uuid TEXT,
+      row_version INTEGER DEFAULT 1,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      is_deleted INTEGER DEFAULT 0,
+      is_synced INTEGER DEFAULT 1,
+      FOREIGN KEY (business_id) REFERENCES businesses(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS business_roles (
+      id TEXT PRIMARY KEY,
+      business_id TEXT,
+      name TEXT NOT NULL,
+      description TEXT,
+      permissions TEXT,
+      is_system INTEGER DEFAULT 0,
+      builtin_key TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      uuid TEXT,
+      row_version INTEGER DEFAULT 1,
+      is_deleted INTEGER DEFAULT 0,
+      is_synced INTEGER DEFAULT 1
+    );
+
+    CREATE TABLE IF NOT EXISTS invitations (
+      id TEXT PRIMARY KEY,
+      business_id TEXT NOT NULL,
+      code TEXT UNIQUE NOT NULL,
+      name TEXT,
+      role TEXT,
+      platform TEXT DEFAULT 'mobile',
+      created_by TEXT,
+      expires_at TEXT,
+      status TEXT DEFAULT 'open',
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (business_id) REFERENCES businesses(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS devices (
+      id TEXT PRIMARY KEY,
+      business_id TEXT NOT NULL,
+      user_id TEXT,
+      name TEXT NOT NULL,
+      model TEXT,
+      platform TEXT NOT NULL DEFAULT 'mobile',
+      register_id TEXT,
+      role TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      pairing_code TEXT,
+      pairing_expires_at TEXT,
+      last_seen_at TEXT,
+      last_sync_at TEXT,
+      app_version TEXT,
+      is_primary INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      uuid TEXT,
+      row_version INTEGER DEFAULT 1,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      is_deleted INTEGER DEFAULT 0,
+      is_synced INTEGER DEFAULT 1,
+      FOREIGN KEY (business_id) REFERENCES businesses(id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS locations (
+      id TEXT PRIMARY KEY,
+      business_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      address TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      uuid TEXT,
+      row_version INTEGER DEFAULT 1,
+      is_deleted INTEGER DEFAULT 0,
+      is_synced INTEGER DEFAULT 1,
+      FOREIGN KEY (business_id) REFERENCES businesses(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS registers (
+      id TEXT PRIMARY KEY,
+      business_id TEXT NOT NULL,
+      location_id TEXT,
+      name TEXT NOT NULL,
+      device_id TEXT,
+      printer_name TEXT,
+      has_drawer INTEGER DEFAULT 0,
+      is_active INTEGER DEFAULT 1,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      uuid TEXT,
+      row_version INTEGER DEFAULT 1,
+      is_deleted INTEGER DEFAULT 0,
+      is_synced INTEGER DEFAULT 1,
+      FOREIGN KEY (business_id) REFERENCES businesses(id),
+      FOREIGN KEY (location_id) REFERENCES locations(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_users_business ON users(business_id);
+    CREATE INDEX IF NOT EXISTS idx_devices_business ON devices(business_id);
+    CREATE INDEX IF NOT EXISTS idx_registers_business ON registers(business_id);
+  `);
+
+  // ========== SHARED BUSINESS MODEL SYNC (locations / registers / business_roles) ==========
+  // These tables use TEXT UUID primary keys and snake_case columns (the canonical
+  // @shega/shared schema), distinct from the INTEGER-id legacy tables above. They
+  // are wired into the same LAN/cloud outbox transport with their own dedicated
+  // triggers (the generic syncTables loop runs earlier and must not touch them).
+  const businessSyncTables = ['businesses', 'locations', 'registers', 'business_roles', 'users', 'devices'];
+  const bizSyncCols: [string, string][] = [
+    ['device_id', 'TEXT'],
+    ['updated_at', 'TEXT DEFAULT CURRENT_TIMESTAMP'],
+    ['deleted_at', 'TEXT']
+  ];
+  for (const tbl of businessSyncTables) {
+    for (const [name, def] of bizSyncCols) {
+      addColumnIfMissing(tbl, name, def);
+    }
+    try {
+      database.execSync(`UPDATE ${tbl} SET uuid = ${genUuid}, row_version = 1 WHERE uuid IS NULL;`);
+      database.execSync(`CREATE UNIQUE INDEX IF NOT EXISTS idx_${tbl}_uuid ON ${tbl}(uuid);`);
+      database.execSync(`
+        CREATE TRIGGER IF NOT EXISTS trg_${tbl}_ai AFTER INSERT ON ${tbl} BEGIN
+          UPDATE ${tbl} SET uuid = ${genUuid} WHERE id = NEW.id AND uuid IS NULL;
+          INSERT INTO sync_outbox (entity, entity_uuid, op, row_id)
+          SELECT '${tbl}', uuid, 'INSERT', id FROM ${tbl} WHERE id = NEW.id;
+        END;
+        CREATE TRIGGER IF NOT EXISTS trg_${tbl}_au AFTER UPDATE ON ${tbl} WHEN OLD.uuid IS NOT NULL AND NEW.uuid IS NOT NULL BEGIN
+          INSERT INTO sync_outbox (entity, entity_uuid, op, row_id)
+          SELECT '${tbl}', uuid, 'UPDATE', id FROM ${tbl} WHERE id = NEW.id;
+        END;
+        CREATE TRIGGER IF NOT EXISTS trg_${tbl}_ad AFTER DELETE ON ${tbl} BEGIN
+          INSERT INTO sync_outbox (entity, entity_uuid, op, row_id)
+          VALUES ('${tbl}', OLD.uuid, 'DELETE', OLD.id);
+        END;
+      `);
+    } catch (e: any) {
+      console.warn(`Business-model sync trigger (${tbl}): `, e?.message);
+    }
+  }
+
   // ========== PHASE 4.3 AUDIT TRAIL (tamper-evident, chained hashes) ==========
   database.execSync(`
     CREATE TABLE IF NOT EXISTS audit_logs (
@@ -940,6 +1145,15 @@ export const initDB = () => {
       prev_hash TEXT,
       hash TEXT
     );
+  `);
+  addColumnIfMissing('audit_logs', 'uuid', 'TEXT');
+  addColumnIfMissing('audit_logs', 'business_id', 'TEXT');
+  addColumnIfMissing('audit_logs', 'source_device', 'TEXT');
+  addColumnIfMissing('audit_logs', 'row_version', 'INTEGER DEFAULT 1');
+  addColumnIfMissing('audit_logs', 'updated_at', 'TEXT');
+  addColumnIfMissing('audit_logs', 'is_synced', 'INTEGER DEFAULT 0');
+  database.execSync(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_audit_logs_uuid ON audit_logs(uuid);
   `);
   // Backfill chain for any pre-existing rows.
   try {
@@ -979,6 +1193,18 @@ export const initDB = () => {
     } catch (e: any) {
       console.warn(`Sync trigger (${tbl}): `, e?.message);
     }
+  }
+  // §32: emit local audit_logs into the sync outbox (append-only INSERT). The
+  // receiving device dedupes by uuid and never rewrites a hashed row.
+  try {
+    database.execSync(`
+      CREATE TRIGGER IF NOT EXISTS trg_audit_logs_ai AFTER INSERT ON audit_logs WHEN NEW.uuid IS NOT NULL BEGIN
+        INSERT INTO sync_outbox (entity, entity_uuid, op, row_id)
+        VALUES ('audit_logs', NEW.uuid, 'INSERT', NEW.id);
+      END;
+    `);
+  } catch (e: any) {
+    console.warn('Sync trigger (audit_logs): ', e?.message);
   }
   console.log('Sync layer ready.');
 
@@ -1326,6 +1552,12 @@ export const initDB = () => {
   }
 };
 
+const randomUUIDCompat = (): string => {
+  if (typeof globalThis.crypto?.randomUUID === 'function') return globalThis.crypto.randomUUID();
+  const hex = () => Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, '0');
+  return `${hex()}-${hex().slice(0, 4)}-4${hex().slice(0, 3)}-8${hex().slice(0, 3)}-${hex()}`;
+};
+
 const auditCanonical = (prev: string, r: any): string =>
   `${prev}|${r.id}|${r.entity}|${r.entity_id ?? ''}|${r.action}|${r.old_value ?? ''}|${r.new_value ?? ''}|${r.description ?? ''}|${r.device_id ?? ''}|${r.created_at ?? ''}`;
 
@@ -1335,14 +1567,15 @@ export const auditLog = (entity: string, entityId: number | null, action: string
     const database = getDB();
     const prev = (database.getFirstSync('SELECT hash FROM audit_logs ORDER BY id DESC LIMIT 1') as any)?.hash ?? 'GENESIS';
     const deviceId = (database.getFirstSync('SELECT device_id FROM sync_meta WHERE id = 1') as any)?.device_id ?? 'mobile';
+    const uuid = randomUUIDCompat();
     const info = database.runSync(
-      'INSERT INTO audit_logs (entity, entity_id, action, old_value, new_value, description, device_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [entity, entityId, action, oldValue, newValue, description, deviceId, new Date().toISOString()]
+      'INSERT INTO audit_logs (entity, entity_id, action, old_value, new_value, description, device_id, created_at, uuid, source_device) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [entity, entityId, action, oldValue, newValue, description, deviceId, new Date().toISOString(), uuid, deviceId]
     );
     const id = Number((info as any)?.lastInsertRowId ?? info);
     const row = database.getFirstSync('SELECT * FROM audit_logs WHERE id = ?', [id]) as any;
     const hash = sha256Hex(auditCanonical(prev, row));
-    database.runSync('UPDATE audit_logs SET prev_hash = ?, hash = ? WHERE id = ?', [prev, hash, id]);
+    database.runSync('UPDATE audit_logs SET prev_hash = ?, hash = ?, is_synced = 0 WHERE id = ?', [prev, hash, id]);
   } catch (error) {
     console.warn('[audit] failed', error);
   }
@@ -1543,7 +1776,7 @@ export const logStockMovement = (
     if (!itemId || !quantityAdded || quantityAdded <= 0) return;
     const database = getDB();
     database.runSync(
-      `INSERT INTO stock_movements (itemId, quantityAdded, unit, note, supplierId, unitPrice, paymentStatus, paidAmount) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO stock_movements (itemId, quantityAdded, unit, note, supplierId, unitPrice, paymentStatus, paidAmount, type, quantity, referenceType) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'restock_in', ?, 'restock')`,
       itemId,
       quantityAdded,
       unit || null,
@@ -1551,7 +1784,8 @@ export const logStockMovement = (
       supplierId || null,
       unitPrice || 0,
       paymentStatus || null,
-      paidAmount || 0
+      paidAmount || 0,
+      quantityAdded
     );
   } catch (error) {
     console.error('Log stock movement error:', error);

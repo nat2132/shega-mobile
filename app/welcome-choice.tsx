@@ -10,6 +10,9 @@ export default function WelcomeChoice() {
       onLogin={() => {
         router.replace('/login' as any);
       }}
+      onJoin={() => {
+        router.replace('/join-existing' as any);
+      }}
     />
   );
 }

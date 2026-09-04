@@ -69,6 +69,7 @@ import { useWarehouse } from '@/context/WarehouseContext';
 import { getActivityFeed, getAdjustmentById, getDashboardStats, getDebtCustomers, getExpenseById, getInventoryStats, getLowStockItems, getOnCreditItems, getQuickProducts, getRecentItems, getSaleWithItemsById, getBudgetsOverBudget, ItemData } from '@/database/db';
 import { useBusinessAssistant } from '@/hooks/useBusinessAssistant';
 import { useBusinessHealthScore } from '@/hooks/useBusinessHealthScore';
+import { useEnsureOwnerBusiness } from '@/hooks/useEnsureOwnerBusiness';
 import { useAutoHideScroll } from '@/hooks/useAutoHideScroll';
 import { useNotifications } from '@/hooks/useNotifications';
 import { usePeripheralScan } from '@/hooks/usePeripherals';
@@ -188,6 +189,7 @@ SparklineChart.displayName = 'SparklineChart';
   const DashboardScreen = () => {
     const { openSidebar } = useSidebar();
     const { userProfile, colors, calendarType, language, timeSystem, t } = useSettings();
+    useEnsureOwnerBusiness(userProfile.businessName, userProfile.name);
     const { dashboardVisibility, toggleDashboardSection } = useDashboardVisibility();
     const { refreshTrialDays, isFeatureUnlocked } = useSubscription();
     const tutorial = useTutorial({ tutorial: dashboardTutorial });

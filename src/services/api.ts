@@ -431,6 +431,61 @@ export const verifyLicense = (payload: { license_key: string }): Promise<License
   request<LicenseStatusInfo>('/api/license/verify/', { method: 'POST', body: payload, auth: true });
 
 // ---------------------------------------------------------------------------
+// Cloud sync transport (spec §20)
+//
+// The device pushes its outbox changes to Django and pulls other-branch changes
+// back. These reuse the central `request()` client so they inherit bearer auth,
+// the 401 → refresh → retry flow, connectivity gating, and rate-limit handling.
+// Device identity is sent in the body (push) / query (pull & status); the
+// backend derives the business tenant from the authenticated user and the
+// device from the identity — never from a client-supplied business id.
+// ---------------------------------------------------------------------------
+
+export interface CloudChange {
+  entity: string;
+  entity_uuid: string;
+  op: string;
+  payload: Record<string, unknown>;
+  checksum?: string;
+  seq: number;
+}
+
+export interface CloudPushResult {
+  ok?: boolean;
+  accepted: number;
+  last_remote_seq: number;
+  lastSeq?: number;
+}
+
+export const cloudSyncPush = (payload: {
+  device_id: string;
+  device_name?: string;
+  changes: CloudChange[];
+}): Promise<CloudPushResult> =>
+  request<CloudPushResult>('/api/sync/push/', { method: 'POST', body: payload, auth: true });
+
+export const cloudSyncPull = (params: {
+  device: string;
+  since: number;
+}): Promise<{ ok?: boolean; changes: CloudChange[]; lastSeq: number }> =>
+  request<{ ok?: boolean; changes: CloudChange[]; lastSeq: number }>(
+    `/api/sync/pull/?device=${encodeURIComponent(params.device)}&since=${params.since}`,
+    { auth: true }
+  );
+
+export const cloudDeviceStatus = (deviceId: string): Promise<{
+  ok?: boolean;
+  device_id: string;
+  status: string | null;
+  name?: string;
+  blocked?: boolean;
+}> =>
+  request<{ ok?: boolean; device_id: string; status: string | null; name?: string; blocked?: boolean }>(
+    `/api/sync/status/?device=${encodeURIComponent(deviceId)}`,
+    { auth: true }
+  );
+
+// ---------------------------------------------------------------------------
 // Error handling helpers
 // ---------------------------------------------------------------------------
 

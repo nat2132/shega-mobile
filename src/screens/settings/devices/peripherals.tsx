@@ -14,6 +14,8 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  FlaskConical,
+  Globe,
   History,
   Info,
   LucideIcon,
@@ -36,6 +38,8 @@ import { getPeripheralManager } from '@/services/peripherals/peripheralManager';
 import { usePeripheralScan, usePeripheralStore } from '@/hooks/usePeripherals';
 import { transportCapability } from '@/services/peripherals/transports';
 import { defaultConfig } from '@/services/peripherals/types';
+import { buildSampleReceiptPreview } from '@/services/peripherals/escpos';
+import type { CommandCheck, CommandDiagnosticResult } from '@/services/peripherals/escpos';
 import type {
   ConnectionType,
   DeviceRole,
@@ -43,6 +47,7 @@ import type {
   DiagnosticReport,
   PeripheralConfig,
   ScanResult,
+  VirtualProbeResult,
 } from '@/services/peripherals/types';
 
 type ViewState =
@@ -82,6 +87,7 @@ const connLabelKey = (c: ConnectionType): string => {
     bluetooth_escpos: 'conn_bluetooth_escpos',
     usb_escpos: 'conn_usb_escpos',
     network_escpos: 'conn_network_escpos',
+    virtual_tcp_escpos: 'conn_virtual_tcp_escpos',
     bluetooth_hid: 'conn_bluetooth_hid',
     usb_hid: 'conn_usb_hid',
     keyboard_hid: 'conn_keyboard_hid',
@@ -93,10 +99,12 @@ const connLabelKey = (c: ConnectionType): string => {
 // →→→ Small pieces →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
 const CONNECTION_OPTIONS: Record<DeviceRole, ConnectionType[]> = {
   scanner: ['camera', 'keyboard_hid', 'bluetooth_hid', 'usb_hid'],
-  printer: ['network_escpos', 'bluetooth_escpos', 'usb_escpos'],
+  printer: ['network_escpos', 'bluetooth_escpos', 'usb_escpos', 'virtual_tcp_escpos'],
   drawer: ['network_escpos', 'bluetooth_escpos', 'usb_escpos'],
   scale: ['bluetooth_escpos', 'usb_escpos'],
 };
+
+const isVirtualConnection = (c: ConnectionType): boolean => c === 'virtual_tcp_escpos';
 
 const ROLE_ORDER: DeviceRole[] = ['scanner', 'printer', 'drawer', 'scale'];
 
@@ -248,6 +256,259 @@ const Segmented = ({
           </TouchableOpacity>
         );
       })}
+    </View>
+  );
+};
+
+const DevBadge = () => {
+  const { t } = useSettings();
+  const G = useGlass();
+  return (
+    <View
+      style={{
+        backgroundColor: G.warning + '1A',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 999,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+      }}
+    >
+      <FlaskConical size={10} color={G.warning} />
+      <AppText variant="micro" weight="bold" style={{ color: G.warning }} numberOfLines={1}>
+        {t('devices.virtual_dev_label')}
+      </AppText>
+    </View>
+  );
+};
+
+// Remote TCP endpoint reachability test for the virtual printer. Results are
+// real: "Connected" only when the endpoint answered, plus whitelist-aware
+// failure guidance. Never fakes a successful connection.
+const VirtualProbePanel = ({ host, port, onOpenSettings }: { host: string; port: number; onOpenSettings?: () => void }) => {
+  const { t } = useSettings();
+  const G = useGlass();
+  const manager = getPeripheralManager();
+  const [state, setState] = useState<'idle' | 'testing' | 'ok' | 'fail'>('idle');
+  const [outcome, setOutcome] = useState<VirtualProbeResult | null>(null);
+  const [internet, setInternet] = useState<boolean | null>(null);
+
+  const run = async () => {
+    if (!host || !port) {
+      Alert.alert(t('devices.test_connection_failed'), t('devices.connection'));
+      return;
+    }
+    setState('testing');
+    setOutcome(null);
+    setInternet(null);
+    const r = await manager.probeVirtual(null, host, port);
+    setState(r.ok ? 'ok' : 'fail');
+    setOutcome(r);
+  };
+
+  const runDiagnostics = async () => {
+    setInternet(null);
+    setInternet(await manager.probeInternet());
+  };
+
+  const causes =
+    outcome?.outcome === 'timeout' ? ['whitelist', 'not_running', 'firewall'] : ['internet', 'host', 'port', 'whitelist', 'not_running', 'firewall'];
+  const showWhitelist = state === 'fail' && (outcome?.rejected || outcome?.outcome === 'timeout');
+
+  return (
+    <View style={{ marginTop: 14 }}>
+      <AppButton
+        label={state === 'testing' ? t('devices.connecting') : t('devices.test_connection')}
+        variant="secondary"
+        leftIcon={state !== 'testing' ? <Radio size={16} color={G.fg} /> : undefined}
+        loading={state === 'testing'}
+        onPress={run}
+      />
+
+      {state === 'testing' ? (
+        <View style={[styles.card, { backgroundColor: G.warning + '14', borderColor: G.warning + '40' }]}>
+          <AppText variant="caption" weight="bold" style={{ color: G.warning }}>
+            {t('devices.connecting')}
+          </AppText>
+          <AppText variant="caption" weight="medium" style={{ color: G.fg, marginTop: 4 }}>
+            {t('devices.tel_host')}: {host}:{port}
+          </AppText>
+          <AppText variant="caption" weight="medium" style={{ color: G.muted }}>
+            {t('devices.tel_protocol')}: {t('devices.escpos_short')}
+          </AppText>
+        </View>
+      ) : null}
+
+      {state === 'ok' && outcome ? (
+        <View style={[styles.card, { backgroundColor: G.success + '14', borderColor: G.success + '40' }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <CheckCircle2 size={16} color={G.success} />
+            <AppText variant="body" weight="bold" style={{ color: G.success }}>
+              {t('devices.connected_ok')}
+            </AppText>
+          </View>
+          <AppText variant="caption" weight="medium" style={{ color: G.fg, marginTop: 6 }}>
+            {t('devices.tel_host')}: {host}:{port}
+          </AppText>
+          <AppText variant="caption" weight="medium" style={{ color: G.muted }}>
+            {t('devices.tel_protocol')}: {t('devices.escpos_short')} · {t('devices.transport_tcp')}
+            {outcome.latencyMs !== undefined ? ` · ${outcome.latencyMs}ms` : ''}
+          </AppText>
+        </View>
+      ) : null}
+
+      {state === 'fail' ? (
+        <>
+          <View style={[styles.card, { backgroundColor: G.error + '14', borderColor: G.error + '40' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <AlertTriangle size={16} color={G.error} />
+              <AppText variant="body" weight="bold" style={{ color: G.error }}>
+                {t('devices.connection_failed')}
+              </AppText>
+            </View>
+            {outcome?.outcome === 'timeout' ? (
+              <AppText variant="caption" weight="medium" style={{ color: G.fg, marginTop: 6 }}>
+                {t('devices.no_response')}
+              </AppText>
+            ) : null}
+            <AppText variant="caption" weight="bold" style={{ color: G.muted, marginTop: 8 }}>
+              {t('devices.probe_causes')}
+            </AppText>
+            {causes.map((c) => (
+              <View key={c} style={{ flexDirection: 'row', gap: 6, marginTop: 2 }}>
+                <AppText variant="caption" weight="medium" style={{ color: G.muted }}>
+                  •
+                </AppText>
+                <AppText variant="caption" weight="medium" style={{ color: G.fg, flex: 1 }}>
+                  {t(`devices.cause_${c}`)}
+                </AppText>
+              </View>
+            ))}
+
+            {internet !== null ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                {internet ? <CheckCircle2 size={14} color={G.success} /> : <AlertTriangle size={14} color={G.error} />}
+                <AppText variant="caption" weight="bold" style={{ color: internet ? G.success : G.error }}>
+                  {t('devices.diag_internet')}: {internet ? t('devices.connected_ok') : t('devices.connection_failed')}
+                </AppText>
+              </View>
+            ) : null}
+
+            <View style={styles.actionRow}>
+              <AppButton label={t('devices.retry')} variant="secondary" onPress={run} style={{ flex: 1 }} />
+              <AppButton label={t('devices.diagnostics')} variant="secondary" onPress={runDiagnostics} style={{ flex: 1 }} />
+            </View>
+          </View>
+
+          {showWhitelist ? (
+            <View style={[styles.card, { backgroundColor: G.warning + '14', borderColor: G.warning + '40' }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <AlertTriangle size={16} color={G.warning} />
+                <AppText variant="body" weight="bold" style={{ color: G.warning, flex: 1 }}>
+                  {t('devices.whitelist_title')}
+                </AppText>
+              </View>
+              <AppText variant="caption" weight="medium" style={{ color: G.fg, marginTop: 6 }} numberOfLines={4}>
+                {t('devices.whitelist_body')}
+              </AppText>
+              <View style={styles.actionRow}>
+                <AppButton label={t('devices.retry')} variant="secondary" onPress={run} style={{ flex: 1 }} />
+                <AppButton label={t('devices.open_printer_settings')} variant="secondary" onPress={() => (onOpenSettings ? onOpenSettings() : Alert.alert(t('devices.whitelist_title'), t('devices.whitelist_body')))} style={{ flex: 1 }} />
+              </View>
+            </View>
+          ) : null}
+        </>
+      ) : null}
+    </View>
+  );
+};
+
+const CmdRow = ({ c }: { c: CommandCheck }) => {
+  const { t } = useSettings();
+  const G = useGlass();
+  return (
+    <View style={[styles.logRow, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+      <View style={[styles.logDot, { backgroundColor: c.generated ? G.success : G.muted }]} />
+      <View style={{ flex: 1 }}>
+        <AppText variant="caption" weight="bold" style={{ color: G.fg }} numberOfLines={2}>
+          {c.label}
+        </AppText>
+        <AppText variant="micro" weight="medium" style={{ color: G.muted }} numberOfLines={1}>
+          {t('devices.cmd_generated')} · {t('devices.cmd_bytes', { bytes: String(c.bytesEmitted) })}
+        </AppText>
+        <AppText variant="micro" weight="medium" style={{ color: c.confirmed ? G.success : G.warning }} numberOfLines={1}>
+          {c.confirmed ? t('devices.cmd_confirmed') : t('devices.cmd_awaiting')}
+        </AppText>
+      </View>
+    </View>
+  );
+};
+
+const CommandDiagnosticList = ({ commands }: { commands: CommandCheck[] }) => {
+  const { t } = useSettings();
+  const G = useGlass();
+  return (
+    <View style={{ marginTop: 12 }}>
+      <View style={[styles.hintBox, { backgroundColor: G.mutedLight, borderColor: G.border }]}>
+        <Info size={14} color={G.fg} />
+        <AppText variant="caption" weight="medium" style={{ color: G.fg, flex: 1 }} numberOfLines={4}>
+          {t('devices.cmd_notice')}
+        </AppText>
+      </View>
+      <View style={styles.diagList}>
+        {commands.map((c) => (
+          <CmdRow key={c.id} c={c} />
+        ))}
+      </View>
+    </View>
+  );
+};
+
+// Per-print diagnostics for the virtual printer — counts/status only, no
+// receipt/customer/payment content.
+const VirtualTelemetry = ({ id }: { id: string }) => {
+  const { t } = useSettings();
+  const G = useGlass();
+  const manager = getPeripheralManager();
+  const dev = usePeripheralStore().devices.find((d) => d.id === id);
+  if (!dev) return null;
+  const m = manager.getVirtualMetrics(id);
+  const connColor = m?.connection === 'connected' ? G.success : m?.connection === 'connecting' ? G.warning : m?.connection === 'error' ? G.error : G.muted;
+  const rows: { label: string; value: string; color?: string }[] = [
+    { label: t('devices.tel_host'), value: dev.address || '-' },
+    { label: t('devices.tel_port'), value: String(dev.port ?? 9397) },
+    { label: t('devices.tel_protocol'), value: t('devices.escpos_short') },
+    { label: t('devices.tel_connection'), value: t(`devices.status_${m?.connection ?? 'disconnected'}`), color: connColor },
+    { label: t('devices.tel_last_print'), value: m?.lastPrintAt ? new Date(m.lastPrintAt).toLocaleTimeString('en-GB') : t('devices.never_printed') },
+    {
+      label: t('devices.tel_last_result'),
+      value:
+        m?.lastResult === 'ok'
+          ? t('devices.tel_result_ok')
+          : m?.lastError
+            ? `${t('devices.tel_result_failed')} · ${m.lastError}`
+            : '-',
+      color: m?.lastResult === 'ok' ? G.success : m?.lastResult === 'failed' ? G.error : undefined,
+    },
+    { label: t('devices.tel_bytes'), value: String(m?.bytesSent ?? 0) },
+    { label: t('devices.tel_queue'), value: String(dev.printCopies ?? 1) },
+  ];
+  return (
+    <View style={[styles.card, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+      <AppText variant="caption" weight="bold" style={{ color: G.muted, marginBottom: 4 }}>
+        {t('devices.telemetry')}
+      </AppText>
+      {rows.map((r) => (
+        <View key={r.label} style={styles.telemetryRow}>
+          <AppText variant="caption" weight="medium" style={{ color: G.muted }}>
+            {r.label}
+          </AppText>
+          <AppText variant="caption" weight="bold" style={{ color: r.color ?? G.fg }} numberOfLines={1}>
+            {r.value}
+          </AppText>
+        </View>
+      ))}
     </View>
   );
 };
@@ -432,9 +693,11 @@ const AddDeviceView = ({ role: initialRole, onBack }: { role?: DeviceRole; onBac
   const canSave = !!role && !!connection && name.trim().length > 0;
   const needsAddress =
     !!role && !!connection &&
-    (connection === 'network_escpos' || connection === 'bluetooth_escpos' || connection === 'bluetooth_hid' ||
+    (connection === 'network_escpos' || connection === 'virtual_tcp_escpos' || connection === 'bluetooth_escpos' || connection === 'bluetooth_hid' ||
       connection === 'usb_escpos' || connection === 'usb_hid');
   const isNetwork = connection === 'network_escpos';
+  const isVirtual = connection === 'virtual_tcp_escpos';
+  const showEndpoint = isNetwork || isVirtual;
   const isScanRole = role === 'scanner';
 
   const handleSave = () => {
@@ -443,6 +706,7 @@ const AddDeviceView = ({ role: initialRole, onBack }: { role?: DeviceRole; onBac
     cfg.name = name.trim();
     if (needsAddress) cfg.address = address.trim() || undefined;
     if (isNetwork) cfg.port = parseInt(port, 10) > 0 ? parseInt(port, 10) : 9100;
+    else if (isVirtual) cfg.port = parseInt(port, 10) > 0 ? parseInt(port, 10) : 9397;
     manager.addDevice(cfg);
     manager.connect(cfg.id);
     onBack();
@@ -484,7 +748,8 @@ const AddDeviceView = ({ role: initialRole, onBack }: { role?: DeviceRole; onBac
           {(CONNECTION_OPTIONS[role] ?? []).map((c) => {
             const cap = transportCapability(c);
             const isSel = c === connection;
-            const Icon = c === 'bluetooth_escpos' || c === 'bluetooth_hid' ? Radio : c === 'network_escpos' ? Activity : ScanLine;
+            const Icon =
+              c === 'bluetooth_escpos' || c === 'bluetooth_hid' ? Radio : c === 'network_escpos' ? Activity : isVirtualConnection(c) ? Globe : ScanLine;
             return (
               <TouchableOpacity
                 key={c}
@@ -501,7 +766,10 @@ const AddDeviceView = ({ role: initialRole, onBack }: { role?: DeviceRole; onBac
                     {t(`devices.conn_${connLabelKey(c)}_desc`)}
                   </AppText>
                 </View>
-                <CapBadge state={cap.state} />
+                <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                  {isVirtualConnection(c) ? <DevBadge /> : null}
+                  <CapBadge state={cap.state} />
+                </View>
               </TouchableOpacity>
             );
           })}
@@ -518,7 +786,7 @@ const AddDeviceView = ({ role: initialRole, onBack }: { role?: DeviceRole; onBac
             maxLength={40}
           />
 
-          {needsAddress && isNetwork ? (
+          {showEndpoint ? (
             <>
               <AppText variant="caption" weight="bold" style={{ color: G.muted, marginTop: 12, marginBottom: 8 }}>
                 {t('devices.address')}
@@ -526,11 +794,12 @@ const AddDeviceView = ({ role: initialRole, onBack }: { role?: DeviceRole; onBac
               <TextInput
                 value={address}
                 onChangeText={setAddress}
-                placeholder="192.168.1.50"
+                placeholder={isVirtual ? 'virtual-printer.online' : '192.168.1.50'}
                 placeholderTextColor={G.placeholderColor}
                 style={[styles.input, { backgroundColor: G.inputBg, borderColor: G.inputBorder, color: G.fg }]}
-                maxLength={40}
+                maxLength={60}
                 autoCapitalize="none"
+                autoCorrect={false}
               />
               <AppText variant="caption" weight="bold" style={{ color: G.muted, marginTop: 12, marginBottom: 8 }}>
                 {t('devices.port')}
@@ -538,19 +807,40 @@ const AddDeviceView = ({ role: initialRole, onBack }: { role?: DeviceRole; onBac
               <TextInput
                 value={port}
                 onChangeText={setPort}
-                placeholder="9100"
+                placeholder={isVirtual ? '9397' : '9100'}
                 placeholderTextColor={G.placeholderColor}
                 style={[styles.input, { backgroundColor: G.inputBg, borderColor: G.inputBorder, color: G.fg }]}
                 maxLength={5}
                 keyboardType="number-pad"
               />
+              {isVirtual ? (
+                <>
+                  <View style={[styles.readRow, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+                    <AppText variant="caption" weight="medium" style={{ color: G.muted }}>
+                      {t('devices.protocol')}
+                    </AppText>
+                    <AppText variant="caption" weight="bold" style={{ color: G.fg }}>
+                      {t('devices.escpos_short')}
+                    </AppText>
+                  </View>
+                  <View style={[styles.readRow, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+                    <AppText variant="caption" weight="medium" style={{ color: G.muted }}>
+                      {t('devices.transport')}
+                    </AppText>
+                    <AppText variant="caption" weight="bold" style={{ color: G.fg }}>
+                      {t('devices.transport_tcp')}
+                    </AppText>
+                  </View>
+                  <VirtualProbePanel host={address} port={parseInt(port, 10) || 0} />
+                </>
+              ) : null}
             </>
           ) : null}
 
-          <View style={[styles.hintBox, { backgroundColor: isScanRole ? G.success + '14' : G.mutedLight, borderColor: isScanRole ? G.success + '40' : G.border }]}>
-            {isScanRole ? <CheckCircle2 size={14} color={G.success} /> : <Info size={14} color={G.fg} />}
+          <View style={[styles.hintBox, { backgroundColor: isVirtual ? G.warning + '14' : isScanRole ? G.success + '14' : G.mutedLight, borderColor: isVirtual ? G.warning + '40' : isScanRole ? G.success + '40' : G.border }]}>
+            {isVirtual ? <FlaskConical size={14} color={G.warning} /> : isScanRole ? <CheckCircle2 size={14} color={G.success} /> : <Info size={14} color={G.fg} />}
             <AppText variant="caption" weight="medium" style={{ color: G.fg, flex: 1 }} numberOfLines={3}>
-              {t(isScanRole ? 'devices.add_scan_hint' : 'devices.add_build_hint')}
+              {t(isVirtual ? 'devices.virtual_note' : isScanRole ? 'devices.add_scan_hint' : 'devices.add_build_hint')}
             </AppText>
           </View>
 
@@ -697,7 +987,7 @@ const DeviceDetailView = ({
             value={String(dev.paperWidth)}
             onChange={(k) => patch({ paperWidth: Number(k) === 80 ? 80 : 58 })}
           />
-          {dev.connectionType === 'network_escpos' && dev.address ? (
+          {(dev.connectionType === 'network_escpos' || dev.connectionType === 'virtual_tcp_escpos') && dev.address ? (
             <View style={[styles.readRow, { backgroundColor: G.bgCard, borderColor: G.border }]}>
               <AppText variant="caption" weight="medium" style={{ color: G.muted }}>
                 {t('devices.address')}
@@ -708,6 +998,7 @@ const DeviceDetailView = ({
               </AppText>
             </View>
           ) : null}
+          {dev.connectionType === 'virtual_tcp_escpos' ? <VirtualProbePanel host={dev.address ?? ''} port={dev.port ?? 9397} /> : null}
         </>
       ) : dev.role === 'drawer' ? (
         <>
@@ -834,8 +1125,13 @@ export const PrinterDiagnosticsSheet = ({ id, onBack }: { id: string; onBack: ()
   const dev = devices.find((d) => d.id === id);
 
   const [busy, setBusy] = useState(false);
+  const [busySample, setBusySample] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sampleMessage, setSampleMessage] = useState<string | null>(null);
+  const [sampleError, setSampleError] = useState<string | null>(null);
+  const [previewKind, setPreviewKind] = useState<'test' | 'sample'>('test');
+  const [cmd, setCmd] = useState<CommandDiagnosticResult | null>(null);
 
   if (!dev) {
     return (
@@ -845,13 +1141,18 @@ export const PrinterDiagnosticsSheet = ({ id, onBack }: { id: string; onBack: ()
     );
   }
 
+  const isVirtual = dev.connectionType === 'virtual_tcp_escpos';
   const cap = transportCapability(dev.connectionType);
-  const previewText = buildTestPreview(t, dev.name, dev.connectionType, dev.paperWidth);
+  const previewText =
+    previewKind === 'test'
+      ? buildTestPreview(t, dev.name, dev.connectionType, dev.paperWidth)
+      : buildSampleReceiptPreview({ businessName: dev.name, paperWidth: dev.paperWidth });
 
   const run = async () => {
     setBusy(true);
     setMessage(null);
     setError(null);
+    setPreviewKind('test');
     const res = await manager.testDevice(dev.id, {
       deviceName: dev.name,
       connectionLabel: t(`devices.${connLabelKey(dev.connectionType)}`),
@@ -861,6 +1162,22 @@ export const PrinterDiagnosticsSheet = ({ id, onBack }: { id: string; onBack: ()
     if (res.ok) setMessage(t('devices.print_ok'));
     else if (res.errorCode === 'needs_dev_build') setError(t('devices.requires_dev'));
     else setError(t('devices.print_error'));
+  };
+
+  const runSample = async () => {
+    setBusySample(true);
+    setSampleMessage(null);
+    setSampleError(null);
+    const res = await manager.sampleReceipt(dev.id);
+    setBusySample(false);
+    setPreviewKind('sample');
+    if (res.ok) setSampleMessage(t('devices.print_ok'));
+    else if (res.errorCode === 'needs_dev_build') setSampleError(t('devices.requires_dev'));
+    else setSampleError(t('devices.print_error'));
+  };
+
+  const runCmd = () => {
+    setCmd(manager.commandDiagnostic(dev.id).result);
   };
 
   return (
@@ -879,15 +1196,37 @@ export const PrinterDiagnosticsSheet = ({ id, onBack }: { id: string; onBack: ()
         </View>
       </View>
 
+      {isVirtual ? <VirtualProbePanel host={dev.address ?? ''} port={dev.port ?? 9397} /> : null}
+
       <AppButton
         label={t('devices.print_test')}
-        variant={cap.state === 'available' ? 'primary' : 'secondary'}
+        variant={cap.state === 'available' || isVirtual ? 'primary' : 'secondary'}
         fullWidth
         loading={busy}
-        leftIcon={!busy ? <Play size={16} color={cap.state === 'available' ? G.bg : G.fg} /> : undefined}
+        leftIcon={!busy ? <Play size={16} color={cap.state === 'available' || isVirtual ? G.bg : G.fg} /> : undefined}
         onPress={run}
-        style={{ marginTop: 4 }}
+        style={{ marginTop: 14 }}
       />
+
+      {isVirtual ? (
+        <View style={styles.actionRow}>
+          <AppButton
+            label={t('devices.print_sample_receipt')}
+            variant="secondary"
+            loading={busySample}
+            leftIcon={!busySample ? <PrinterIcon size={16} color={G.fg} /> : undefined}
+            onPress={runSample}
+            style={{ flex: 1 }}
+          />
+          <AppButton
+            label={t('devices.cmd_test')}
+            variant="secondary"
+            leftIcon={!cmd ? <FlaskConical size={16} color={G.fg} /> : undefined}
+            onPress={runCmd}
+            style={{ flex: 1 }}
+          />
+        </View>
+      ) : null}
 
       {message ? (
         <View style={[styles.hintBox, { backgroundColor: G.success + '14', borderColor: G.success + '40' }]}>
@@ -901,10 +1240,40 @@ export const PrinterDiagnosticsSheet = ({ id, onBack }: { id: string; onBack: ()
         <View style={[styles.hintBox, { backgroundColor: G.error + '14', borderColor: G.error + '40' }]}>
           <AlertTriangle size={14} color={G.error} />
           <AppText variant="caption" weight="medium" style={{ color: G.fg, flex: 1 }} numberOfLines={3}>
-            {error} — {t('devices.print_dev_build')}
+            {isVirtual ? `${error} — ${t('devices.virtual_dev_build')}` : `${error} — ${t('devices.print_dev_build')}`}
           </AppText>
         </View>
       ) : null}
+      {sampleMessage ? (
+        <View style={[styles.hintBox, { backgroundColor: G.success + '14', borderColor: G.success + '40' }]}>
+          <CheckCircle2 size={14} color={G.success} />
+          <AppText variant="caption" weight="medium" style={{ color: G.fg, flex: 1 }}>
+            {sampleMessage}
+          </AppText>
+        </View>
+      ) : null}
+      {sampleError ? (
+        <View style={[styles.hintBox, { backgroundColor: G.error + '14', borderColor: G.error + '40' }]}>
+          <AlertTriangle size={14} color={G.error} />
+          <AppText variant="caption" weight="medium" style={{ color: G.fg, flex: 1 }} numberOfLines={3}>
+            {sampleError} — {t('devices.virtual_dev_build')}
+          </AppText>
+        </View>
+      ) : null}
+
+      {cmd ? (
+        <View style={{ marginTop: 8 }}>
+          <AppText variant="caption" weight="bold" style={{ color: G.muted, marginBottom: 4 }}>
+            {t('devices.cmd_test')}
+          </AppText>
+          <AppText variant="micro" weight="medium" style={{ color: G.muted, marginBottom: 4 }}>
+            {t('devices.cmd_bytes', { bytes: String(cmd.totalBytes) })} · ESC/POS
+          </AppText>
+          <CommandDiagnosticList commands={cmd.commands} />
+        </View>
+      ) : null}
+
+      {isVirtual ? <VirtualTelemetry id={dev.id} /> : null}
 
       <AppText variant="caption" weight="bold" style={{ color: G.muted, marginTop: 16, marginBottom: 8 }}>
         {t('devices.preview')}
@@ -1127,4 +1496,5 @@ const styles = StyleSheet.create({
   logRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderRadius: 12, padding: 12, borderWidth: 1 },
   logDot: { width: 8, height: 8, borderRadius: 4, marginTop: 5 },
   receiptPreview: { backgroundColor: '#FFFFFF', borderRadius: 8, padding: 12, marginTop: 6 },
+  telemetryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
 });

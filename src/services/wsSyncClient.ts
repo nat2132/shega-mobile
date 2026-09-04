@@ -2,6 +2,7 @@ import { EventEmitter } from 'events';
 import { Platform } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import { getDB } from '../database/db';
+import { DEVICE_JOIN_MSG } from '@shega/shared';
 
 // Simple logger (defined before first use)
 const logger = {
@@ -162,6 +163,11 @@ export class WsSyncClient extends EventEmitter {
         this.resolvePending(msg.requestId, msg.payload);
         break;
 
+      case DEVICE_JOIN_MSG.ACK:
+      case DEVICE_JOIN_MSG.RESPONSE:
+        this.resolvePending(msg.requestId, msg.payload);
+        break;
+
       case 'SYNC_VERIFY_RESPONSE':
         this.resolvePending(msg.requestId, msg.payload);
         break;
@@ -272,6 +278,37 @@ export class WsSyncClient extends EventEmitter {
     const id = Crypto.randomUUID();
     db.runSync('INSERT OR REPLACE INTO sync_meta (id, device_id) VALUES (1, ?)', [id]);
     return id;
+  }
+
+  async submitDeviceJoinRequest(payload: any): Promise<any> {
+    if (!this._isConnected) throw new Error('Not connected to hub');
+    return this.sendRequest(DEVICE_JOIN_MSG.SUBMIT, payload);
+  }
+
+  async listDeviceJoinRequests(businessId: string): Promise<any[]> {
+    if (!this._isConnected) throw new Error('Not connected to hub');
+    const res = await this.sendRequest(DEVICE_JOIN_MSG.LIST, { businessId });
+    return res?.requests ?? [];
+  }
+
+  async decideDeviceJoinRequest(payload: any): Promise<any> {
+    if (!this._isConnected) throw new Error('Not connected to hub');
+    return this.sendRequest(DEVICE_JOIN_MSG.DECIDE, payload);
+  }
+
+  async publishInvitation(payload: any): Promise<any> {
+    if (!this._isConnected) throw new Error('Not connected to hub');
+    return this.sendRequest(DEVICE_JOIN_MSG.PUBLISH, payload);
+  }
+
+  async resolveInvitation(code: string): Promise<any> {
+    if (!this._isConnected) throw new Error('Not connected to hub');
+    return this.sendRequest(DEVICE_JOIN_MSG.RESOLVE, { code });
+  }
+
+  async checkDeviceJoinStatus(code: string, joinerDeviceId: string): Promise<any> {
+    if (!this._isConnected) throw new Error('Not connected to hub');
+    return this.sendRequest(DEVICE_JOIN_MSG.STATUS, { code, joinerDeviceId });
   }
 
   async syncNow(): Promise<SyncResult> {
@@ -441,6 +478,30 @@ export const wsSyncClient = new (class extends EventEmitter {
 
   async syncNow() {
     return this.instance?.syncNow() ?? { pushed: 0, pulled: 0, conflicts: 0 };
+  }
+
+  async submitDeviceJoinRequest(payload: any) {
+    return this.instance?.submitDeviceJoinRequest(payload);
+  }
+
+  async listDeviceJoinRequests(businessId: string) {
+    return this.instance?.listDeviceJoinRequests(businessId) ?? [];
+  }
+
+  async decideDeviceJoinRequest(payload: any) {
+    return this.instance?.decideDeviceJoinRequest(payload);
+  }
+
+  async publishInvitation(payload: any) {
+    return this.instance?.publishInvitation(payload);
+  }
+
+  async resolveInvitation(code: string) {
+    return this.instance?.resolveInvitation(code);
+  }
+
+  async checkDeviceJoinStatus(code: string, joinerDeviceId: string) {
+    return this.instance?.checkDeviceJoinStatus(code, joinerDeviceId);
   }
 
   async disconnect() {

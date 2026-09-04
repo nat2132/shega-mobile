@@ -25,6 +25,7 @@ const { W: w } = DIMENSIONS;
 interface WelcomeChoiceProps {
   onCreateAccount: () => void;
   onLogin: () => void;
+  onJoin: () => void;
 }
 
 function FloatingOrb({
@@ -80,7 +81,7 @@ function FloatingOrb({
   );
 }
 
-const WelcomeChoiceScreen: React.FC<WelcomeChoiceProps> = ({ onCreateAccount, onLogin }) => {
+const WelcomeChoiceScreen: React.FC<WelcomeChoiceProps> = ({ onCreateAccount, onLogin, onJoin }) => {
   const { colors, t } = useSettings();
   const G = getGlass(colors);
 
@@ -175,6 +176,15 @@ const WelcomeChoiceScreen: React.FC<WelcomeChoiceProps> = ({ onCreateAccount, on
             >
               <AppText variant="body" weight="bold" numberOfLines={1} style={{ color: G.fg }}>
                 {t('onboarding.login')}
+              </AppText>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.cardActionSecondary}
+              onPress={onJoin}
+              activeOpacity={0.85}
+            >
+              <AppText variant="body" weight="bold" numberOfLines={1} style={{ color: G.fg }}>
+                Join Existing Business
               </AppText>
             </TouchableOpacity>
           </View>

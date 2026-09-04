@@ -8,26 +8,31 @@ import {
   TextInput,
   View
 } from 'react-native';
-import { RefreshCw, Wifi, WifiOff, AlertTriangle, QrCode } from 'lucide-react-native';
+import { RefreshCw, Wifi, WifiOff, AlertTriangle, QrCode, Globe, Cloud, CloudOff } from 'lucide-react-native';
 import QrPairScanner from '@/components/QrPairScanner';
 import { useSettings } from '@/context/SettingsContext';
 import { useToast } from '@/context/ToastContext';
 import { useSync } from '@/context/SyncContext';
 import { AppText } from '@/components/ui';
 import { getSettingsGlass } from '@/screens/settings/glass-settings';
-import { getHubUrl, getHubToken, setHubUrl, setHubToken, verifyRemote, pairDevice, getConflicts, dismissConflict, resolveConflict } from '@/services/syncService';
+import { getHubUrl, getHubToken, setHubUrl, setHubToken, verifyRemote, pairDevice, getConflicts, dismissConflict, resolveConflict, getCloudUrl, setCloudUrl, getCloudEnabled, setCloudEnabled, cloudSyncNow, cloudSelfStatus } from '@/services/syncService';
+import { getStoredToken } from '@/services/api';
 
 export default function SyncSettings() {
   const { colors } = useSettings();
   const G = getSettingsGlass(colors);
   const { showToast } = useToast();
-  const { status, busy, lastError, lastResult, enabled, setEnabled, runSync } = useSync();
+  const { status, cloudStatus, busy, lastError, lastResult, enabled, setEnabled, runSync } = useSync();
 
   const [modalOpen, setModalOpen] = useState(false);
+  const [cloudModalOpen, setCloudModalOpen] = useState(false);
+  const [cloudUrl, setCloudUrlState] = useState('');
   const [url, setUrl] = useState('');
   const [token, setToken] = useState('');
   const [verifyResult, setVerifyResult] = useState<string | null>(null);
+  const [cloudResult, setCloudResult] = useState<string | null>(null);
   const [localBusy, setLocalBusy] = useState(false);
+  const [cloudBusy, setCloudBusy] = useState(false);
   const [conflicts, setConflicts] = useState<any[]>([]);
   const [qrOpen, setQrOpen] = useState(false);
 
@@ -84,8 +89,56 @@ export default function SyncSettings() {
     }
   };
 
+  const openCloudModal = () => {
+    setCloudUrlState(getCloudUrl());
+    setCloudResult(null);
+    setCloudModalOpen(true);
+  };
+
+  const saveCloudUrlOnly = async () => {
+    setCloudBusy(true);
+    try {
+      setCloudUrl(cloudUrl);
+      const t = await getStoredToken();
+      if (!t) {
+        setCloudResult('No account session — sign in to your Shega account to sync over the cloud.');
+      } else {
+        setCloudResult('Cloud URL saved. Enable cloud sync to begin.');
+      }
+      setCloudModalOpen(false);
+    } finally {
+      setCloudBusy(false);
+    }
+  };
+
+  const doCloudSync = async () => {
+    setCloudBusy(true);
+    try {
+      const res = await cloudSyncNow();
+      setCloudResult(`Cloud synced — pushed ${res.pushed}, pulled ${res.pulled}.`);
+      showToast('Cloud sync complete', 'success');
+    } catch (e: any) {
+      setCloudResult(`Cloud sync failed: ${e?.message || 'error'}`);
+      showToast('Cloud sync failed', 'error');
+    } finally {
+      setCloudBusy(false);
+    }
+  };
+
+  const checkCloudStatus = async () => {
+    try {
+      const s = await cloudSelfStatus();
+      setCloudResult(s.blocked ? `Status: ${s.status} — this device is blocked remotely.` : `Status: active`);
+    } catch (e: any) {
+      setCloudResult(`Status check failed: ${e?.message || 'error'}`);
+    }
+  };
+
   const online = !!status?.hub;
   const pending = status?.outboxCount ?? 0;
+  const cloudOnline = cloudStatus.configured && cloudStatus.hasToken;
+  // Connection mode for §13: LAN / Cloud / Both / Offline.
+  const connMode = online && cloudOnline ? 'Both' : online ? 'LAN' : cloudOnline ? 'Cloud' : 'Offline';
 
   return (
     <View style={styles.section}>
@@ -189,6 +242,111 @@ export default function SyncSettings() {
           </View>
         ) : null}
       </View>
+
+      <View style={[styles.group, { backgroundColor: G.bgCard, borderColor: G.border, marginTop: 12 }]}>
+        <View style={styles.row}>
+          <View style={[styles.iconBox, { backgroundColor: G.accentGlass }]}>
+            {cloudOnline ? <Cloud size={18} color={G.fg} strokeWidth={2.5} /> : <CloudOff size={18} color={G.muted} strokeWidth={2.5} />}
+          </View>
+          <View style={styles.rowBody}>
+            <AppText variant="body" weight="bold" style={{ color: G.fg }}>Cloud Sync</AppText>
+            <AppText variant="caption" style={{ color: G.muted }} numberOfLines={1}>
+              {cloudOnline
+                ? `${cloudStatus.url.replace(/^https?:\/\//, '')} · mode ${connMode}`
+                : cloudStatus.configured
+                  ? 'Configured — sign in to sync' 
+                  : 'Not configured — tap to set cloud address'}
+            </AppText>
+          </View>
+          <Globe size={16} color={G.muted} />
+        </View>
+
+        <View style={[styles.divider, { backgroundColor: G.border }]} />
+
+        <View style={styles.toggleRow}>
+          <View style={styles.rowBody}>
+            <AppText variant="body" weight="bold" style={{ color: G.fg }}>Enable cloud sync</AppText>
+            <AppText variant="caption" style={{ color: G.muted }} numberOfLines={1}>
+              Sync over the Internet when the POS hub is unreachable
+            </AppText>
+          </View>
+          <Switch
+            value={getCloudEnabled()}
+            onValueChange={(v) => { setCloudEnabled(v); showToast(v ? 'Cloud sync enabled' : 'Cloud sync disabled', 'info'); }}
+            trackColor={{ false: G.border, true: G.accent + '60' }}
+            thumbColor={getCloudEnabled() ? G.accent : G.muted}
+          />
+        </View>
+
+        <View style={[styles.divider, { backgroundColor: G.border }]} />
+
+        <Pressable style={styles.row} onPress={openCloudModal}>
+          <View style={[styles.iconBox, { backgroundColor: G.accentGlass }]}>
+            <Globe size={18} color={G.fg} strokeWidth={2.5} />
+          </View>
+          <View style={styles.rowBody}>
+            <AppText variant="body" weight="bold" style={{ color: G.fg }}>Cloud address</AppText>
+            <AppText variant="caption" style={{ color: G.muted }} numberOfLines={1}>
+              {cloudStatus.url ? cloudStatus.url : 'Tap to configure'}
+            </AppText>
+          </View>
+          <RefreshCw size={16} color={G.muted} />
+        </Pressable>
+
+        <View style={styles.statusRow}>
+          <AppText variant="caption" style={{ color: G.muted }}>
+            Cloud: {cloudStatus.lastAt ? new Date(cloudStatus.lastAt).toLocaleTimeString() : 'never'}
+          </AppText>
+          <AppText variant="caption" weight="bold" style={{ color: cloudStatus.lastError ? '#FF3B30' : cloudOnline ? G.accent : G.muted }}>
+            {connMode}
+          </AppText>
+        </View>
+        {cloudStatus.lastError ? (
+          <AppText variant="caption" style={{ color: '#FF3B30', marginBottom: 8 }} numberOfLines={2}>{cloudStatus.lastError}</AppText>
+        ) : null}
+        {cloudResult ? (
+          <AppText variant="caption" style={{ color: G.muted, marginBottom: 8 }} numberOfLines={3}>{cloudResult}</AppText>
+        ) : null}
+
+        <View style={styles.actions}>
+          <Pressable style={[styles.actionBtn, { backgroundColor: G.accentGlass }]} onPress={doCloudSync} disabled={cloudBusy}>
+            {cloudBusy ? <ActivityIndicator size="small" color={G.fg} /> : <RefreshCw size={16} color={G.fg} />}
+            <AppText variant="caption" weight="bold" style={{ color: G.fg, marginLeft: 6 }}>Cloud sync now</AppText>
+          </Pressable>
+          <Pressable style={[styles.actionBtn, { backgroundColor: G.accentGlass }]} onPress={checkCloudStatus} disabled={cloudBusy}>
+            <AppText variant="caption" weight="bold" style={{ color: G.fg }}>Status</AppText>
+          </Pressable>
+        </View>
+      </View>
+
+      <Modal
+        transparent
+        visible={cloudModalOpen}
+        animationType="fade"
+        onRequestClose={() => setCloudModalOpen(false)}
+      >
+        <Pressable style={styles.overlay} onPress={() => setCloudModalOpen(false)}>
+          <Pressable style={[styles.modalBox, { backgroundColor: G.bgCard, borderColor: G.border }]} onPress={(e) => e.stopPropagation()}>
+            <AppText variant="title" weight="bold" style={{ color: G.fg, marginBottom: 6 }}>Cloud sync</AppText>
+            <AppText variant="caption" style={{ color: G.muted, marginBottom: 14 }}>
+              Enter your Shega cloud address (https://shega-api-dah3.onrender.com). Sign in to your Shega account so cloud changes are uploaded to your business.
+            </AppText>
+            <TextInput
+              value={cloudUrl}
+              onChangeText={setCloudUrlState}
+              placeholder="https://shega-api-dah3.onrender.com"
+              placeholderTextColor={G.muted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              style={[styles.input, { backgroundColor: G.bg, borderColor: G.border, color: G.fg }]}
+            />
+            <Pressable style={[styles.saveBtn, { backgroundColor: G.accent }]} onPress={saveCloudUrlOnly} disabled={cloudBusy}>
+              {cloudBusy ? <ActivityIndicator size="small" color="#FFFFFF" /> : <AppText variant="body" weight="bold" style={{ color: '#FFFFFF' }}>Save cloud address</AppText>}
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Modal transparent visible={modalOpen} animationType="fade" onRequestClose={() => setModalOpen(false)}>
         <Pressable style={styles.overlay} onPress={() => setModalOpen(false)}>

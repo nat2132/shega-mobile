@@ -30,6 +30,7 @@ import BusinessSuccessModal, { BusinessSuccessDetails } from '@/components/Busin
 import { CustomDatePicker } from '@/components/CustomDatePicker';
 import { formatDate } from '@/utils/date-utils';
 import { useFormDrafts } from '@/hooks/useFormDrafts';
+import { usePinApproval } from '@/hooks/usePinApproval';
 import { DraftSection } from '@/components/DraftSection';
 import { Draft } from '@/services/draftService';
 
@@ -42,6 +43,7 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
   const { isReadOnly } = useSubscription();
   const G = getAdjustmentGlass(colors);
   const dialog = useDialog();
+  const { request, modal } = usePinApproval();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [selectedItem, setSelectedItem] = useState<any>(null);
@@ -174,6 +176,12 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
       date: new Date().toISOString().split('T')[0],
       createdAt: recordDate || undefined
     };
+
+    const allowed = await request(
+      'products.changePrice',
+      mode === 'increase' ? 'price increase' : 'price decrease',
+    );
+    if (allowed !== 'approved') return;
 
     const result = await insertAdjustment(adjData);
     if (result) {
@@ -455,6 +463,7 @@ const PriceAdjustmentForm = ({ mode = 'increase', onComplete }: { mode?: 'increa
         onSelectDate={(date) => { setRecordDate(date); setShowDatePicker(false); }}
         initialDate={recordDate}
       />
+      {modal}
       </TutorialScrollView>
     </KeyboardAvoidingView>
   );
