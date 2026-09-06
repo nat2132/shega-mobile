@@ -4,7 +4,7 @@ import {
   TouchableOpacity, View,
 } from 'react-native';
 import { router } from 'expo-router';
-import { ArrowLeft, QrCode, RefreshCw, ShieldX, Store } from 'lucide-react-native';
+import { ArrowLeft, QrCode, RefreshCw, ShieldX } from 'lucide-react-native';
 import QRCode from 'react-native-qrcode-svg';
 import * as Haptics from 'expo-haptics';
 import { useSettings } from '@/context/SettingsContext';
@@ -193,7 +193,7 @@ export default function PairingQrScreen() {
                 </AppText>
               )}
               <AppText variant="caption" weight="medium" align="center" style={{ color: G.muted, marginTop: 6 }}>
-                Single use. You'll approve the device once they accept.
+                Single use. You&apos;ll approve the device once they accept.
               </AppText>
               <TouchableOpacity onPress={async () => { setInvite(null); await generate(); }} style={[styles.secondaryBtn, { backgroundColor: G.accentGlass, marginTop: 18 }]}>
                 <RefreshCw size={16} color={G.fg} />

@@ -35,6 +35,7 @@ import {
   canAddDevice, getActiveDeviceCount,
 } from '@/services/invitationService';
 import { wsSyncClient } from '@/services/wsSyncClient';
+import { listPairingInvitations, decidePairing, revokePairing } from '@/services/pairingService';
 
 type Tab = 'overview' | 'people' | 'devices' | 'registers' | 'permissions' | 'ownership' | 'businesses';
 
@@ -233,6 +234,8 @@ function PeoplePanel({ businessId, people, devices, registers, locations, canMan
   return (
     <View>
       <SectionHeader icon={Users} title="People" actionLabel={canManage ? 'Add Person' : undefined} onAction={() => canManage && setShowAdd(true)} glass={glass} />
+
+      {canManage && <CloudPairingSection glass={glass} />}
 
       {people.length === 0 && <EmptyState text="Add your team members to assign roles." />}
 
@@ -802,6 +805,103 @@ function JoinRequestsSection({ businessId, people, glass }: { businessId: string
               <ShieldCheck size={15} color="#fff" /><AppText variant="caption" weight="bold" style={{ color: '#fff', marginLeft: 4 }}>Approve</AppText>
             </TouchableOpacity>
           </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+// ---------- Cloud pairing (backend QR invites) ----------
+
+function CloudPairingSection({ glass }: { glass: any }) {
+  const [invites, setInvites] = useState<any[]>([]);
+  const [busy, setBusy] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      setError(null);
+      const list = await listPairingInvitations();
+      setInvites(Array.isArray(list) ? list : []);
+    } catch {
+      setError('Not signed in to Shega — approve cloud pairing requests from a device signed in to your account.');
+    }
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const pending = invites.filter((i) => i.status === 'used' && i.device_status === 'pending');
+  const issued = invites.filter((i) => i.status === 'pending');
+
+  const decide = async (id: string, approve: boolean) => {
+    setBusy(Number(id));
+    try {
+      await decidePairing(id, approve ? 'approve' : 'reject');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType[approve ? 'Success' : 'Warning']);
+      await refresh();
+    } catch {
+      Alert.alert(approve ? 'Approve failed' : 'Reject failed', 'Could not update the pairing request. Check your connection and try again.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const revoke = async (id: string) => {
+    setBusy(Number(id));
+    try {
+      await revokePairing(id);
+      Haptics.selectionAsync();
+      await refresh();
+    } catch {
+      Alert.alert('Revoke failed', 'Could not revoke the invitation. Check your connection and try again.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (!error && pending.length === 0 && issued.length === 0) return null;
+
+  return (
+    <View style={[styles.warnCard, { backgroundColor: glass.accentGlass, borderColor: glass.border, marginBottom: 12 }]}>
+      <View style={styles.headerRow}>
+        <AppText variant="body" weight="bold" style={{ color: glass.fg }}>Cloud Pairing</AppText>
+        <TouchableOpacity onPress={refresh}><AppText variant="caption" weight="bold" style={{ color: glass.fg }}>Refresh</AppText></TouchableOpacity>
+      </View>
+
+      {error && (
+        <AppText variant="caption" weight="medium" style={{ color: glass.muted, marginTop: 6 }}>{error}</AppText>
+      )}
+
+      {pending.map((inv) => (
+        <View key={inv.id} style={[styles.listCard, { backgroundColor: glass.bgCard, borderColor: glass.border, marginTop: 8 }]}>
+          <View style={{ flex: 1 }}>
+            <AppText variant="body" weight="bold" style={{ color: glass.fg }}>{inv.employee_name || 'New employee'}</AppText>
+            <AppText variant="caption" weight="medium" style={{ color: glass.muted }}>
+              {getRoleLabel(inv.role)}{inv.register ? ' · ' + inv.register : ''}{inv.location ? ' · ' + inv.location : ''}
+            </AppText>
+          </View>
+          <View style={styles.headerActions}>
+            <TouchableOpacity onPress={() => decide(String(inv.id), false)} disabled={busy === Number(inv.id)} style={[styles.smallBtn, { backgroundColor: '#e74c3c' }]}>
+              <ShieldX size={15} color="#fff" /><AppText variant="caption" weight="bold" style={{ color: '#fff', marginLeft: 4 }}>Reject</AppText>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => decide(String(inv.id), true)} disabled={busy === Number(inv.id)} style={[styles.smallBtn, { backgroundColor: '#2ecc71' }]}>
+              <ShieldCheck size={15} color="#fff" /><AppText variant="caption" weight="bold" style={{ color: '#fff', marginLeft: 4 }}>Approve</AppText>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ))}
+
+      {issued.map((inv) => (
+        <View key={inv.id} style={[styles.listCard, { backgroundColor: glass.bgCard, borderColor: glass.border, marginTop: 8 }]}>
+          <View style={{ flex: 1 }}>
+            <AppText variant="body" weight="bold" style={{ color: glass.fg }}>{inv.employee_name || 'Invitation'}</AppText>
+            <AppText variant="caption" weight="medium" style={{ color: glass.muted }}>
+              {getRoleLabel(inv.role)}{inv.register ? ' · ' + inv.register : ''} · waiting to be scanned
+            </AppText>
+          </View>
+          <TouchableOpacity onPress={() => revoke(String(inv.id))} disabled={busy === Number(inv.id)} style={[styles.smallBtn, { backgroundColor: glass.accentGlass }]}>
+            <AppText variant="caption" weight="bold" style={{ color: glass.fg }}>Revoke</AppText>
+          </TouchableOpacity>
         </View>
       ))}
     </View>

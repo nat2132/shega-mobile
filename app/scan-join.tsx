@@ -141,7 +141,7 @@ export default function ScanJoinScreen() {
             </View>
             <AppText variant="display" weight="bold" align="center" style={{ color: G.fg }}>Join by QR</AppText>
             <AppText variant="body" weight="medium" align="center" style={{ color: G.muted }}>
-              Scan the pairing QR the owner showed you. You'll confirm the role once, then wait for their approval.
+              Scan the pairing QR the owner showed you. You&apos;ll confirm the role once, then wait for their approval.
             </AppText>
           </View>
 
@@ -165,7 +165,7 @@ export default function ScanJoinScreen() {
                     onBarcodeScanned={scanning ? ({ data }) => handleToken(data) : undefined}
                   />
                   <AppText variant="caption" weight="medium" align="center" style={{ color: G.muted, marginVertical: 10 }}>
-                    Point the camera at the owner's QR code.
+                    Point the camera at the owner&apos;s QR code.
                   </AppText>
                   <TouchableOpacity
                     onPress={() => { Haptics.selectionAsync(); setStage('manual'); }}
@@ -234,7 +234,7 @@ export default function ScanJoinScreen() {
               <View style={[styles.infoCard, { backgroundColor: G.accentGlass, borderColor: G.border }]}>
                 <Store size={18} color={G.fg} />
                 <AppText variant="caption" weight="medium" style={{ color: G.fg, flex: 1, marginLeft: 8 }}>
-                  Your device stays inactive until the owner approves. You'll need a Shega account to accept.
+                  Your device stays inactive until the owner approves. You&apos;ll need a Shega account to accept.
                 </AppText>
               </View>
               <TouchableOpacity onPress={accept} disabled={checking} style={[styles.primaryBtn, { backgroundColor: G.fg, marginTop: 16, opacity: checking ? 0.6 : 1 }]}>
@@ -252,7 +252,7 @@ export default function ScanJoinScreen() {
                 <AppText variant="heading-lg" weight="bold" style={{ color: G.fg, marginLeft: 8 }}>Pairing submitted</AppText>
               </View>
               <AppText variant="body" weight="medium" style={{ color: G.muted, marginVertical: 12 }}>
-                Your request is waiting for the owner to approve. Please hold tight — you'll get full access once approved.
+                Your request is waiting for the owner to approve. Please hold tight — you&apos;ll get full access once approved.
               </AppText>
               <View style={[styles.infoCard, { backgroundColor: G.accentGlass, borderColor: G.border }]}>
                 <ShieldAlert size={18} color={G.fg} />
@@ -273,7 +273,7 @@ export default function ScanJoinScreen() {
             <View style={[styles.card, { backgroundColor: G.glassCard, borderColor: G.glassBorder }]}>
               <View style={styles.row}>
                 <CheckCircle2 size={24} color="#2ecc71" />
-                <AppText variant="heading-lg" weight="bold" style={{ color: G.fg, marginLeft: 8 }}>Approved — you're in!</AppText>
+                <AppText variant="heading-lg" weight="bold" style={{ color: G.fg, marginLeft: 8 }}>Approved — you&apos;re in!</AppText>
               </View>
               <AppText variant="body" weight="medium" style={{ color: G.muted, marginVertical: 12 }}>
                 Your device is now active on this business.

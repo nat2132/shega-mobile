@@ -9,11 +9,13 @@ import {
   type CloudSyncStatus,
 } from '@/services/syncService';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { startPeerSyncManager, stopPeerSyncManager, getPeerSyncState, type PeerSyncState } from '@/services/peerSyncManager';
 
 interface SyncContextValue {
   status: SyncStatus;
   cloudStatus: CloudSyncStatus;
   unifiedStatus: UnifiedSyncStatus | null;
+  peerSyncState: PeerSyncState | null;
   busy: boolean;
   lastError: string | null;
   lastResult: { pushed: number; pulled: number; conflicts: number; transport?: 'lan' | 'cloud' | null } | null;
@@ -28,6 +30,8 @@ interface SyncContextValue {
   getPendingChanges: () => PendingChange[];
   getDeviceStatusList: () => DeviceStatus[];
   getSyncHistory: (limit?: number) => SyncHistoryEntry[];
+  // Peer sync
+  refreshPeerSyncState: () => Promise<void>;
 }
 
 const SyncContext = createContext<SyncContextValue | null>(null);
@@ -59,6 +63,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     cursor: 0,
   });
   const [unifiedStatus, setUnifiedStatus] = useState<UnifiedSyncStatus | null>(null);
+  const [peerSyncState, setPeerSyncState] = useState<PeerSyncState | null>(null);
   const [busy, setBusy] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<SyncContextValue['lastResult']>(null);
@@ -79,12 +84,33 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     setUnifiedStatus(unified);
   }, []);
 
+  const refreshPeerSyncState = useCallback(async () => {
+    const state = await getPeerSyncState();
+    setPeerSyncState(state);
+  }, []);
+
   // Refresh unified status periodically
   useEffect(() => {
     refreshUnifiedStatus();
-    const interval = setInterval(refreshUnifiedStatus, 30000); // every 30 seconds
+    refreshPeerSyncState();
+    const interval = setInterval(() => {
+      refreshUnifiedStatus();
+      refreshPeerSyncState();
+    }, 30000); // every 30 seconds
     return () => clearInterval(interval);
-  }, [refreshUnifiedStatus]);
+  }, [refreshUnifiedStatus, refreshPeerSyncState]);
+
+  // Start the peer sync manager on mount (enables hub mode if TCP server available)
+  useEffect(() => {
+    if (enabled) {
+      startPeerSyncManager().catch((e) => {
+        console.warn('[SyncContext] Failed to start peer sync:', e);
+      });
+    }
+    return () => {
+      stopPeerSyncManager();
+    };
+  }, [enabled]);
 
   const registerPushToken = useCallback(async () => {
     if (!expoPushToken) return;
@@ -252,6 +278,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         status,
         cloudStatus,
         unifiedStatus,
+        peerSyncState,
         busy,
         lastError,
         lastResult,
@@ -266,6 +293,8 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         getPendingChanges,
         getDeviceStatusList,
         getSyncHistory,
+        // Peer sync
+        refreshPeerSyncState,
       }}
     >
       {children}

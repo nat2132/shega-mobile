@@ -11,6 +11,8 @@ export interface DiscoveredHub {
   addresses: string[];
   capabilities: string[];
   discoveredAt: number;
+  platform?: string;
+  businessId?: string;
 }
 
 type DiscoveryEventMap = {
@@ -45,6 +47,8 @@ class MobileMdnsDiscovery extends EventEmitter {
         addresses: [service.ip],
         capabilities: (service.txtRecord?.capabilities || '').split(',').filter(Boolean),
         discoveredAt: Date.now(),
+        platform: service.txtRecord?.platform || 'desktop',
+        businessId: service.txtRecord?.business_id || undefined,
       };
 
       this.discoveredHubs.set(deviceId, hub);
