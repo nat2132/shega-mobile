@@ -1,6 +1,6 @@
 import { AppText } from '@/components/ui';
 import { Image } from 'expo-image';
-import { ArrowRight, Store } from 'lucide-react-native';
+import { ArrowRight, ScanLine, Store } from 'lucide-react-native';
 import React, { useEffect } from 'react';
 import {
   StyleSheet,
@@ -26,6 +26,7 @@ interface WelcomeChoiceProps {
   onCreateAccount: () => void;
   onLogin: () => void;
   onJoin: () => void;
+  onScanJoin: () => void;
 }
 
 function FloatingOrb({
@@ -81,7 +82,7 @@ function FloatingOrb({
   );
 }
 
-const WelcomeChoiceScreen: React.FC<WelcomeChoiceProps> = ({ onCreateAccount, onLogin, onJoin }) => {
+const WelcomeChoiceScreen: React.FC<WelcomeChoiceProps> = ({ onCreateAccount, onLogin, onJoin, onScanJoin }) => {
   const { colors, t } = useSettings();
   const G = getGlass(colors);
 
@@ -185,6 +186,16 @@ const WelcomeChoiceScreen: React.FC<WelcomeChoiceProps> = ({ onCreateAccount, on
             >
               <AppText variant="body" weight="bold" numberOfLines={1} style={{ color: G.fg }}>
                 Join Existing Business
+              </AppText>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.cardActionSecondary, { marginTop: 10, backgroundColor: G.accentGlass }]}
+              onPress={onScanJoin}
+              activeOpacity={0.85}
+            >
+              <ScanLine size={16} color={G.fg} />
+              <AppText variant="body" weight="bold" numberOfLines={1} style={{ color: G.fg }}>
+                Scan QR & Join
               </AppText>
             </TouchableOpacity>
           </View>

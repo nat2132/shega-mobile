@@ -77,7 +77,7 @@ const CalendarSettings = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFF', padding: 25 },
+  container: { flex: 1, backgroundColor: '#FFF', paddingBottom: 25 },
   headerLabel: { fontSize: 12, fontFamily: Fonts.bold, fontWeight: '700', letterSpacing: 1.5, marginTop: 20, color: '#888' },
   mainTitle: { fontSize: 26, fontFamily: Fonts.bold, fontWeight: '700', marginTop: 8, marginBottom: 6 },
   subtitle: { fontSize: 13, color: '#8E8E93', fontFamily: Fonts.medium, marginBottom: 25 },

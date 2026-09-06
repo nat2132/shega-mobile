@@ -30,7 +30,6 @@ import {
   Trash2,
 } from 'lucide-react-native';
 import * as Device from 'expo-device';
-import { Spacing } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
 import { AppButton, AppText } from '@/components/ui';
 import { getSettingsGlass } from '../glass-settings';
@@ -1472,7 +1471,7 @@ const deviceIdentityString = (): string => {
 // →→→ Styles →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
 
 const styles = StyleSheet.create({
-  sheetContent: { padding: Spacing.lg, paddingBottom: 12 },
+  sheetContent: { paddingTop: 20, paddingBottom: 12 },
   banner: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1 },
   hintBox: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', borderRadius: 10, padding: 10, marginTop: 12, borderWidth: 1 },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderRadius: 12, padding: 12, borderWidth: 1, marginBottom: 12 },

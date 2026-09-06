@@ -11,6 +11,7 @@ import { AppText, AppListItem } from '@/components/ui';
 
 import { getBarsGlass } from './glass-bars';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { useBusinessAuth } from '@/hooks/useBusinessAuth';
 interface SidebarProps {
   onClose: () => void;
 }
@@ -20,8 +21,15 @@ const MyStoreMenu: React.FC<SidebarProps> = ({ onClose }) => {
   const { userProfile, t, theme, colors } = useSettings();
   const { isTrial, trialDaysRemaining, isPremium, isFeatureUnlocked } = useSubscription();
   const { logout } = useAccount();
+  const auth = useBusinessAuth();
   const G = getBarsGlass(colors);
   const gold = '#D4AF37';
+
+  /** Role-gate an entry using the shared permission catalog (hide when denied). */
+  const canAny = (keys?: string[]): boolean => {
+    if (!keys || keys.length === 0) return true;
+    return keys.some((k) => auth.can(k));
+  };
 
   const handleExitSession = () => {
     if (onClose) onClose();
@@ -143,46 +151,58 @@ const MyStoreMenu: React.FC<SidebarProps> = ({ onClose }) => {
                 onPress={() => handleRoute('/contacts')} 
                 delay={150}
               />
-              <MenuItem 
-                icon={Truck} 
-                label={t('sidebar.suppliers')} 
-                onPress={() => handlePremiumRoute('/(tabs)/suppliers', 'supplier_management')} 
-                locked={!isFeatureUnlocked('supplier_management')}
-                delay={200}
-              />
-              <MenuItem 
-                icon={Banknote} 
-                label={t('sidebar.expense_tracker')} 
-                onPress={() => handlePremiumRoute('/expense', 'expense')} 
-                locked={!isFeatureUnlocked('expense')}
-                delay={250}
-              />
-              <MenuItem 
-                icon={SlidersHorizontal} 
-                label={t('sidebar.stock_adjustments')} 
-                onPress={() => handleRoute('/adjustment')} 
-                delay={300}
-              />
-              <MenuItem 
-                icon={ClipboardList} 
-                label={t('sidebar.reports_analytics')} 
-                onPress={() => handlePremiumRoute('/summary', 'reports')} 
-                locked={!isFeatureUnlocked('reports')}
-                delay={350}
-              />
-              <MenuItem 
-                icon={TrendingUp} 
-                label={t('sidebar.financial_reports')} 
-                onPress={() => handlePremiumRoute('/reports', 'reports')} 
-                locked={!isFeatureUnlocked('reports')}
-                delay={400}
-              />
-              <MenuItem 
-                icon={Crown} 
-                label={t('subscription.manage')} 
-                onPress={() => handleRoute('/subscription/manage')} 
-                delay={450}
-              />
+              {canAny(['inventory.suppliers']) && (
+                <MenuItem 
+                  icon={Truck} 
+                  label={t('sidebar.suppliers')} 
+                  onPress={() => handlePremiumRoute('/(tabs)/suppliers', 'supplier_management')} 
+                  locked={!isFeatureUnlocked('supplier_management')}
+                  delay={200}
+                />
+              )}
+              {canAny(['payments.manageExpenses']) && (
+                <MenuItem 
+                  icon={Banknote} 
+                  label={t('sidebar.expense_tracker')} 
+                  onPress={() => handlePremiumRoute('/expense', 'expense')} 
+                  locked={!isFeatureUnlocked('expense')}
+                  delay={250}
+                />
+              )}
+              {canAny(['inventory.adjust']) && (
+                <MenuItem 
+                  icon={SlidersHorizontal} 
+                  label={t('sidebar.stock_adjustments')} 
+                  onPress={() => handleRoute('/adjustment')} 
+                  delay={300}
+                />
+              )}
+              {canAny(['reports.viewOwn', 'reports.viewAll']) && (
+                <MenuItem 
+                  icon={ClipboardList} 
+                  label={t('sidebar.reports_analytics')} 
+                  onPress={() => handlePremiumRoute('/summary', 'reports')} 
+                  locked={!isFeatureUnlocked('reports')}
+                  delay={350}
+                />
+              )}
+              {canAny(['reports.viewAll']) && (
+                <MenuItem 
+                  icon={TrendingUp} 
+                  label={t('sidebar.financial_reports')} 
+                  onPress={() => handlePremiumRoute('/reports', 'reports')} 
+                  locked={!isFeatureUnlocked('reports')}
+                  delay={400}
+                />
+              )}
+              {canAny(['subscription.view']) && (
+                <MenuItem 
+                  icon={Crown} 
+                  label={t('subscription.manage')} 
+                  onPress={() => handleRoute('/subscription/manage')} 
+                  delay={450}
+                />
+              )}
 
               <View style={[styles.divider, { backgroundColor: G.border }]} />
               

@@ -117,10 +117,9 @@ const SupportCenter = () => {
   glowWash: { position: 'absolute' },
   content: {
     flex: 1,
-    paddingHorizontal: 25,
   },
   headerNode: {
-    paddingTop: 60,
+    paddingTop: 20,
     paddingBottom: 30,
   },
   headerSub: {

@@ -195,7 +195,7 @@ const SecuritySettings = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 25 },
+  container: { flex: 1, paddingBottom: 25 },
   header: { fontSize: 12, fontFamily: Fonts.bold, letterSpacing: 1.5, marginTop: 20 },
   subHeader: { fontSize: 26, fontFamily: Fonts.bold, marginTop: 8, marginBottom: 16 },
   statusBadge: {

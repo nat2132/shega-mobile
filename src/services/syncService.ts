@@ -29,7 +29,28 @@ export const SYNC_ENTITIES = [
   'users',
   'devices',
   'stock_movements',
-  'audit_logs'
+  'audit_logs',
+  'suppliers',
+  'orders',
+  'order_items',
+  'order_history',
+  'shipments',
+  'shipment_items',
+  'shipment_history',
+  'employee_roles',
+  'employees',
+  'employee_accounts',
+  'attendance',
+  'employee_performance',
+  'subscriptions',
+  'subscription_payments',
+  'subscription_renewals',
+  'scheduled_reminders',
+  'budgets',
+  'budget_categories',
+  'budget_adjustments',
+  'notifications',
+  'contacts'
 ] as const;
 
 type SyncEntity = (typeof SYNC_ENTITIES)[number];
@@ -39,7 +60,7 @@ type SyncEntity = (typeof SYNC_ENTITIES)[number];
 const UUID_KEYED_ENTITIES: readonly string[] = ['businesses', 'locations', 'registers', 'business_roles', 'users', 'devices'];
 
 // Apply order so FK references resolve before they are needed.
-const APPLY_ORDER: SyncEntity[] = ['businesses', 'categories', 'items', 'item_packs', 'customers', 'sales', 'debt_payments', 'expenses', 'adjustments', 'returns', 'locations', 'registers', 'business_roles', 'users', 'devices', 'stock_movements', 'audit_logs'];
+const APPLY_ORDER: SyncEntity[] = ['businesses', 'categories', 'items', 'item_packs', 'customers', 'suppliers', 'orders', 'order_items', 'order_history', 'shipments', 'shipment_items', 'shipment_history', 'employee_roles', 'employees', 'employee_accounts', 'attendance', 'employee_performance', 'sales', 'debt_payments', 'expenses', 'adjustments', 'returns', 'locations', 'registers', 'business_roles', 'users', 'devices', 'stock_movements', 'audit_logs', 'subscriptions', 'subscription_payments', 'subscription_renewals', 'scheduled_reminders', 'budgets', 'budget_categories', 'budget_adjustments', 'notifications', 'contacts'];
 
 interface OutboxRow {
   seq: number;
@@ -198,6 +219,43 @@ function cleanPayload(entity: string, payload: Record<string, any>): Record<stri
   return clean;
 }
 
+// Entities carrying a `business_id` column (multi-device business model). The
+// local schema declares it NOT NULL for users/devices/locations/registers, but
+// peers (desktop hub / cloud) may predate that column and send rows without a
+// business_id, as camelCase `businessId`, or explicitly null. Those rows
+// belong to the business this device operates as, so they are backfilled at
+// apply time instead of violating the constraint.
+const BUSINESS_SCOPED_ENTITIES: readonly string[] = ['users', 'devices', 'locations', 'registers', 'business_roles', 'audit_logs', 'suppliers', 'orders', 'order_items', 'shipments', 'shipment_items', 'employee_roles', 'employees', 'employee_accounts', 'subscriptions', 'scheduled_reminders', 'budgets', 'contacts'];
+
+// Core POS tables carrying the camelCase `businessId` column (the mobile
+// business UUID). Desktop peers relay these with the business UUID after the
+// multi-business hub change; legacy peers send the desktop INTEGER id or
+// nothing. Those are normalized to the operating business at apply time so a
+// row can never surface under another business' filter.
+const CORE_BUSINESS_SCOPED_ENTITIES: readonly string[] = [
+  'categories', 'items', 'item_packs', 'sales', 'debt_payments', 'expenses',
+  'adjustments', 'returns', 'customers',
+  'employee_roles', 'employees', 'employee_accounts', 'attendance', 'employee_performance'
+];
+
+/**
+ * Id of the business this device currently operates as — mirrors
+ * businessService.getActiveBusiness() (active → default → first) but reads the
+ * DB directly so the sync layer does not depend on the service layer.
+ */
+function resolveLocalBusinessId(): string | null {
+  const db = getDB();
+  const activeId = (db.getFirstSync("SELECT value FROM app_settings WHERE key = 'active_business_id'") as any)?.value;
+  if (activeId) {
+    const active = db.getFirstSync('SELECT id FROM businesses WHERE id = ? AND is_deleted = 0', [activeId]) as any;
+    if (active?.id) return active.id;
+  }
+  const fallback = db.getFirstSync(
+    'SELECT id FROM businesses WHERE is_deleted = 0 ORDER BY (is_default = 1) DESC, created_at LIMIT 1'
+  ) as any;
+  return fallback?.id ?? null;
+}
+
 function recordRef(deviceId: string, entity: string, payload: Record<string, any>): void {
   const db = getDB();
   if (payload.id == null || !payload.uuid) return;
@@ -272,7 +330,14 @@ function applyChange(change: HubChange, force = false): void {
   const db = getDB();
   const entity = change.entity as SyncEntity;
   if (!SYNC_ENTITIES.includes(entity)) return; // e.g. customers (desktop-only)
-  const data = cleanPayload(entity, change.payload);
+  // Business-scoped rows may arrive without a business_id (or as camelCase
+  // `businessId`) from peers that predate the multi-business model.
+  const rawPayload = { ...change.payload };
+  if (BUSINESS_SCOPED_ENTITIES.includes(entity)) {
+    if (rawPayload.business_id == null && rawPayload.businessId != null) rawPayload.business_id = rawPayload.businessId;
+    delete rawPayload.businessId;
+  }
+  const data = cleanPayload(entity, rawPayload);
 
   if (change.op === 'DELETE') {
     db.runSync(`UPDATE ${entity} SET is_deleted = 1, deleted_at = COALESCE(?, deleted_at) WHERE uuid = ?`, [
@@ -296,6 +361,20 @@ function applyChange(change: HubChange, force = false): void {
     insertData.uuid = change.entity_uuid;
     insertData.device_id = change.device_id ?? getDeviceId();
     insertData.updated_at = insertData.updated_at ?? new Date().toISOString();
+    if (CORE_BUSINESS_SCOPED_ENTITIES.includes(entity)) {
+      // Legacy peers relay the desktop INTEGER id (or nothing); mobile stores
+      // the business UUID, so replace legacy/missing values with the operating
+      // business. Unknown UUIDs pass through untouched (isolated, not visible).
+      const rawBiz = insertData.businessId;
+      if (rawBiz == null || /^[0-9]+$/.test(String(rawBiz))) {
+        insertData.businessId = resolveLocalBusinessId();
+      }
+    }
+    if (BUSINESS_SCOPED_ENTITIES.includes(entity) && insertData.business_id == null) {
+      // Attach hub rows that predate the multi-business model to the business
+      // this device operates as, instead of violating NOT NULL (users/devices/…).
+      insertData.business_id = resolveLocalBusinessId();
+    }
     if ((entity === 'sales' || entity === 'returns' || entity === 'stock_movements') && insertData.itemId != null) {
       const localItemId = resolveFk(change.device_id ?? getDeviceId(), 'items', insertData.itemId);
       if (localItemId != null) insertData.itemId = localItemId;
@@ -354,6 +433,15 @@ function applyChange(change: HubChange, force = false): void {
   const updateData: Record<string, any> = { ...data };
   delete updateData.id;
   updateData.device_id = change.device_id ?? getDeviceId();
+  if (BUSINESS_SCOPED_ENTITIES.includes(entity) && updateData.business_id === null) {
+    // Preserve the local business scope — a peer without the column must not
+    // null it out (the local columns are NOT NULL).
+    delete updateData.business_id;
+  }
+  if (CORE_BUSINESS_SCOPED_ENTITIES.includes(entity) && updateData.businessId == null) {
+    // Same guard for the camelCase businessId on core POS tables.
+    delete updateData.businessId;
+  }
   const cols = columnsOf(entity).filter((c) => c in updateData && c !== 'id' && c !== 'uuid');
   if (cols.length) {
     const sets = cols.map((c) => `${c} = ?`).join(', ');

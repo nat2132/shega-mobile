@@ -99,7 +99,7 @@ const TimeSystemSettings = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 25 },
+  container: { flex: 1, paddingBottom: 25 },
   headerLabel: { fontSize: 12, fontFamily: Fonts.bold, fontWeight: '700', letterSpacing: 1.5, marginTop: 20 },
   mainTitle: { fontSize: 26, fontFamily: Fonts.bold, fontWeight: '700', marginTop: 8, marginBottom: 6 },
   subtitle: { fontSize: 13, fontFamily: Fonts.medium, marginBottom: 25 },

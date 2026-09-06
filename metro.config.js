@@ -15,4 +15,10 @@ config.resolver.nodeModulesPaths = [
   path.resolve(workspaceRoot, 'node_modules'),
 ];
 
+// Resolve the local @shega/shared package so Metro can bundle it even when the
+// npm symlink is missing or when the package lives outside the project root.
+config.resolver.extraNodeModules = {
+  '@shega/shared': path.resolve(workspaceRoot, 'shega-shared'),
+};
+
 module.exports = config;

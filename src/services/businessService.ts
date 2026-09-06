@@ -47,6 +47,8 @@ function rowToUser(row: any): User {
     role: row.role,
     roleName: row.role_name,
     permissions: row.permissions ? JSON.parse(row.permissions) : undefined,
+    assignedRegisterId: row.assigned_register_id ?? undefined,
+    assignedLocationId: row.assigned_location_id ?? undefined,
     isActive: !!row.is_active,
     isOwner: !!row.is_owner,
     createdAt: row.created_at,
@@ -249,6 +251,8 @@ export interface AddUserInput {
   role: BuiltinRoleKey | string;
   phone?: string;
   email?: string;
+  assignedRegisterId?: string;
+  assignedLocationId?: string;
 }
 
 export function addUser(input: AddUserInput, overrides?: Partial<Record<string, Parameters<typeof JSON.stringify>[0]>>): User {
@@ -258,12 +262,25 @@ export function addUser(input: AddUserInput, overrides?: Partial<Record<string, 
   const role = getBuiltinRole(input.role as BuiltinRoleKey);
   const permissions = role ? role.permissions : {};
   db.runSync(
-    `INSERT INTO users (id, business_id, name, phone, email, role, role_name, permissions, is_active, is_owner, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?)`,
+    `INSERT INTO users (id, business_id, name, phone, email, role, role_name, permissions, assigned_register_id, assigned_location_id, is_active, is_owner, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?)`,
     [userId, input.businessId, input.name.trim(), input.phone ?? null, input.email ?? null,
-     input.role, role?.name ?? input.role, JSON.stringify(permissions), now]
+     input.role, role?.name ?? input.role, JSON.stringify(permissions),
+     input.assignedRegisterId ?? null, input.assignedLocationId ?? null, now]
   );
   return getUser(userId)!;
+}
+
+/** Pin a person to a register / location, and optionally the device they use. */
+export function updateUserAssignment(
+  userId: string,
+  patch: { registerId?: string | null; locationId?: string | null }
+): void {
+  const db = getDB();
+  db.runSync(
+    'UPDATE users SET assigned_register_id = ?, assigned_location_id = ?, updated_at = ? WHERE id = ?',
+    [patch.registerId ?? null, patch.locationId ?? null, new Date().toISOString(), userId]
+  );
 }
 
 export function updateUserRole(userId: string, role: BuiltinRoleKey | string): void {
@@ -372,7 +389,32 @@ export function approveDevice(deviceId: string, userId: string, role: string, re
     [userId, role, registerId ?? null, new Date().toISOString(), deviceId]);
 }
 
+/**
+ * §P5 Unsynced-Data Disable Guard — count records attributable to a device that
+ * have not yet been synced to the hub (pending outbox + unresolved conflicts).
+ * Outbox rows carry a ``source_device`` of the originating device.
+ */
+export function countUnsyncedForDevice(deviceId: string): number {
+  const db = getDB();
+  const outbox = (db.getFirstSync(
+    `SELECT COUNT(*) AS c FROM sync_outbox WHERE source_device = ?`,
+    [deviceId]
+  ) as any)?.c ?? 0;
+  return outbox;
+}
+
 export function setDeviceStatus(deviceId: string, status: Device['status']): void {
+  // §P5 Unsynced-Data Disable Guard — never allow a device to be disabled or
+  // removed while it still has unsynced (pending/failed) records, to protect
+  // against silently losing not-yet-synced sales, expenses, etc.
+  if (status === 'disabled' || status === 'removed') {
+    const unsynced = countUnsyncedForDevice(deviceId);
+    if (unsynced > 0) {
+      throw new Error(
+        `Cannot ${status === 'disabled' ? 'disable' : 'remove'} this device — it still has ${unsynced} unsynced record${unsynced === 1 ? '' : 's'}. Connect to a network and sync first.`
+      );
+    }
+  }
   const db = getDB();
   db.runSync('UPDATE devices SET status = ?, updated_at = ? WHERE id = ?', [status, new Date().toISOString(), deviceId]);
 }
@@ -385,6 +427,74 @@ export function renameDevice(deviceId: string, name: string): void {
 export function assignDeviceToUser(deviceId: string, userId: string | null): void {
   const db = getDB();
   db.runSync('UPDATE devices SET user_id = ?, updated_at = ? WHERE id = ?', [userId, new Date().toISOString(), deviceId]);
+}
+
+export interface ReplaceDeviceInput {
+  businessId: string;
+  oldDeviceId: string;
+  name: string;
+  model?: string;
+  platform: 'mobile' | 'desktop';
+  /** When a replacement is for THIS machine, meaning it should be active + primary. */
+  setThisAsReplacement?: boolean;
+  thisDeviceId?: string;
+}
+
+/**
+ * §30 Device Replacement Wizard — register a replacement for a lost/broken
+ * device while preserving the business/roster/audit history.
+ *
+ * - Creates a NEW device row carrying over the old device's user, role, and
+ *   register, and transfers ``isPrimary`` when the old device was primary.
+ * - Deprecates the OLD device (``status='removed'`` + soft-delete) so it no
+ *   longer counts against the active roster / §29 device limit, but its row and
+ *   historical audit entries are preserved.
+ * - The replacement only becomes ``active`` when it is THIS device; otherwise it
+ *   lands as ``pending`` until the owner approves (mirrors ``addDevice``).
+ *
+ * Returns the new Device.
+ */
+export function replaceDevice(input: ReplaceDeviceInput, fallbackThisDeviceId?: string): Device {
+  const db = getDB();
+  const old = getDevice(input.oldDeviceId);
+  if (!old) throw new Error('Original device not found or already removed');
+  if (input.businessId !== old.businessId) throw new Error('Device does not belong to this business');
+
+  // §P5 Unsynced-Data Disable Guard — replacing removes the old device, so block
+  // it while the original still has unsynced records (avoid destroying data).
+  const unsynced = countUnsyncedForDevice(input.oldDeviceId);
+  if (unsynced > 0) {
+    throw new Error(
+      `Cannot replace this device — it still has ${unsynced} unsynced record${unsynced === 1 ? '' : 's'}. Connect to a network and sync before replacing.`
+    );
+  }
+
+  const thisDeviceId = input.thisDeviceId ?? fallbackThisDeviceId;
+  const isThisDevice =
+    input.setThisAsReplacement === true ||
+    (!!thisDeviceId && thisDeviceId === input.oldDeviceId);
+
+  const now = new Date().toISOString();
+  const newId = newUuid();
+  const wasPrimary = !!old.isPrimary;
+  const status: Device['status'] = isThisDevice ? 'active' : 'pending';
+  const isPrimary = isThisDevice ? 1 : (wasPrimary ? 1 : 0);
+
+  // 1. Insert the replacement, carrying over identity from the old device.
+  db.runSync(
+    `INSERT INTO devices (id, business_id, user_id, name, model, platform, register_id, role, status, is_primary, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [newId, input.businessId, old.userId ?? null, input.name.trim(), input.model ?? null,
+     input.platform, old.registerId ?? null, old.role ?? null, status, isPrimary, now, now]
+  );
+
+  // 2. Deprecate the old device (history preserved, removed from active roster).
+  db.runSync(
+    `UPDATE devices SET status = 'removed', is_deleted = 1, deleted_at = ?, updated_at = ? WHERE id = ?`,
+    [now, now, input.oldDeviceId]
+  );
+
+  return getDevice(newId)!;
 }
 
 // ---------- Registers ----------

@@ -1,5 +1,6 @@
+import { can, DEFAULT_ROLE_SETS } from '@shega/shared';
 import { useSubscription } from '@/context/SubscriptionContext';
-import { getAppSetting } from '@/database/db';
+import { getCurrentUserId, getUser, effectivePermissions } from '@/services/businessService';
 
 export type UserRole = 'cashier' | 'inventory' | 'manager' | 'owner';
 
@@ -13,22 +14,34 @@ export interface Permissions {
   canManageDevices: boolean;
 }
 
-// Role is stored in app_settings (`user_role`), defaulting to 'owner' so a
-// single-device business keeps full control. Cashiers keep selling but cannot
-// create/price products or adjust stock; inventory workers can register and
-// restock; managers/owners can do everything.
+/**
+ * Legacy UI helper, now backed by the shared business model. Resolves the
+ * current user (device session) and evaluates the same @shega/shared catalog
+ * that gates the rest of the app, so product/adjust screens can never go out of
+ * sync with the role. Falls back to owner permissions for a fresh single-device
+ * install where no user has been resolved yet.
+ */
 export const usePermissions = (): Permissions => {
   const { isReadOnly } = useSubscription();
-  const stored = (getAppSetting('user_role', 'owner') || 'owner').toLowerCase();
-  const role: UserRole = ['cashier', 'inventory', 'manager', 'owner'].includes(stored) ? (stored as UserRole) : 'owner';
+  const userId = getCurrentUserId();
+  const user = userId ? getUser(userId) : undefined;
+  const perms = user ? effectivePermissions(user) : DEFAULT_ROLE_SETS.owner;
+  const canApprove = !!user && (user.isOwner || user.role === 'owner' || user.role === 'manager');
+  const ctx = { permissions: perms, canApprove };
+
+  const rawRole = user?.role || 'owner';
+  const role: UserRole = rawRole === 'owner' ? 'owner'
+    : rawRole === 'manager' || rawRole === 'accountant' || rawRole === 'reports' ? 'manager'
+    : rawRole === 'inventory' || rawRole === 'warehouse' ? 'inventory'
+    : 'cashier';
 
   return {
     role,
     isReadOnly,
-    canSell: !isReadOnly,
-    canManageCatalog: !isReadOnly && (role === 'manager' || role === 'owner'),
-    canAdjustStock: !isReadOnly && (role === 'inventory' || role === 'manager' || role === 'owner'),
-    canTakePhotos: !isReadOnly && (role === 'inventory' || role === 'manager' || role === 'owner'),
-    canManageDevices: !isReadOnly && (role === 'manager' || role === 'owner'),
+    canSell: can(ctx, 'sales.create') && !isReadOnly,
+    canManageCatalog: can(ctx, 'products.create') || can(ctx, 'products.edit'),
+    canAdjustStock: can(ctx, 'inventory.adjust'),
+    canTakePhotos: can(ctx, 'products.edit'),
+    canManageDevices: can(ctx, 'devices.manage'),
   };
 };

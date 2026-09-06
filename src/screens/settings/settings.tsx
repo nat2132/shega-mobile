@@ -1,4 +1,4 @@
-import { Fonts, Spacing } from '@/constants/theme';
+import { Fonts } from '@/constants/theme';
 import { useDialog } from '@/context/DialogContext';
 import { PROFILE_IMAGES, useDashboardVisibility, useSettings } from '@/context/SettingsContext';
 import { clearDatabase } from '@/database/db';
@@ -130,7 +130,8 @@ const SettingLedgerItem = ({ icon: Icon, title, subtitle, onPress, danger }: Set
       right={<ChevronRight size={16} color={G.muted} />}
       onPress={onPress}
       noBorder
-      padding={Spacing.md}
+      padding={20}
+      gap={0}
       style={{ backgroundColor: 'transparent' }}
     />
   );
@@ -668,7 +669,7 @@ const SettingsScreen = () => {
               <View style={[styles.ledgerIconBox, { backgroundColor: G.accentGlass }]}>
                 <AlertTriangle size={18} color={G.fg} strokeWidth={2.5} />
               </View>
-              <View style={{ flex: 1, marginLeft: 14 }}>
+              <View style={{ flex: 1 }}>
                 <AppText variant="body" weight="bold" style={{ color: G.fg }} numberOfLines={1}>{t('dashboard.alerts')}</AppText>
                 <AppText variant="caption" weight="medium" style={{ color: G.muted }} numberOfLines={1}>{t('settings.dashboard_alerts_desc')}</AppText>
               </View>
@@ -687,7 +688,7 @@ const SettingsScreen = () => {
               <View style={[styles.ledgerIconBox, { backgroundColor: G.accentGlass }]}>
                 <Zap size={18} color={G.fg} strokeWidth={2.5} />
               </View>
-              <View style={{ flex: 1, marginLeft: 14 }}>
+              <View style={{ flex: 1 }}>
                 <AppText variant="body" weight="bold" style={{ color: G.fg }} numberOfLines={1}>{t('dashboard.health_score')}</AppText>
                 <AppText variant="caption" weight="medium" style={{ color: G.muted }} numberOfLines={1}>{t('settings.dashboard_health_desc')}</AppText>
               </View>
@@ -706,7 +707,7 @@ const SettingsScreen = () => {
               <View style={[styles.ledgerIconBox, { backgroundColor: G.accentGlass }]}>
                 <LayoutDashboard size={18} color={G.fg} strokeWidth={2.5} />
               </View>
-              <View style={{ flex: 1, marginLeft: 14 }}>
+              <View style={{ flex: 1 }}>
                 <AppText variant="body" weight="bold" style={{ color: G.fg }} numberOfLines={1}>{t('dashboard.assistant')}</AppText>
                 <AppText variant="caption" weight="medium" style={{ color: G.muted }} numberOfLines={1}>{t('settings.dashboard_assistant_desc')}</AppText>
               </View>
@@ -774,7 +775,7 @@ const SettingsScreen = () => {
                 <View style={[styles.ledgerIconBox, { backgroundColor: G.accentGlass }]}>
                   <Volume2 size={18} color={G.fg} strokeWidth={2.5} />
                 </View>
-                <View style={{ flex: 1, marginLeft: 14 }}>
+                <View style={{ flex: 1 }}>
                   <AppText variant="body" weight="bold" style={{ color: G.fg }} numberOfLines={1}>{t('settings.sound_effects')}</AppText>
                   <AppText variant="caption" weight="medium" style={{ color: G.muted }} numberOfLines={1}>{t('settings.sound_desc')}</AppText>
                 </View>
@@ -1142,7 +1143,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   paletteScrollContent: {
-    paddingHorizontal: 25,
     paddingVertical: 5,
     gap: 12,
   },
@@ -1180,7 +1180,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingVertical: 20,
     borderBottomWidth: 1,
   },
   ledgerTitle: {

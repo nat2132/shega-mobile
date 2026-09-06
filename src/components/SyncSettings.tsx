@@ -407,10 +407,10 @@ export default function SyncSettings() {
 }
 
 const styles = StyleSheet.create({
-  section: { marginBottom: 16 },
-  sectionHead: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  header: { letterSpacing: 1 },
-  group: { borderRadius: 16, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12 },
+  section: { marginBottom: 28, paddingHorizontal: 25 },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
+  header: { letterSpacing: 1, marginBottom: 12 },
+  group: { borderRadius: 24, borderWidth: 1, paddingHorizontal: 20, paddingVertical: 12 },
   row: { flexDirection: 'row', alignItems: 'center' },
   toggleRow: { flexDirection: 'row', alignItems: 'center' },
   iconBox: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 12 },

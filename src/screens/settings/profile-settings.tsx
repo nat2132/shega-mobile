@@ -349,7 +349,7 @@ function formatDate(iso?: string): string {
 
 const styles = StyleSheet.create({
   container: { alignItems: 'center' },
-  bannerContainer: { width: '100%', alignItems: 'center', paddingVertical: 50, position: 'relative' },
+  bannerContainer: { width: '100%', alignItems: 'center', paddingTop: 20, paddingBottom: 25, position: 'relative' },
   bannerWash: { position: 'absolute', top: 0, left: 0, right: 0, height: 200, borderBottomLeftRadius: 50, borderBottomRightRadius: 50 },
   avatarWrapper: { position: 'relative', marginBottom: 15 },
   mainAvatar: { width: 130, height: 130, borderRadius: 65, borderWidth: 4 },
@@ -359,12 +359,12 @@ const styles = StyleSheet.create({
   profileSub: { fontSize: 13, fontFamily: Fonts.bold, textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 20, marginBottom: 15 },
   sectionSubtitle: { fontSize: 12, fontFamily: Fonts.bold, textTransform: 'uppercase', letterSpacing: 1 },
-  avatarGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 15, paddingHorizontal: 30, marginBottom: 35 },
+  avatarGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 15, marginBottom: 35 },
   smallAvatarWrapper: { position: 'relative', width: 64, height: 64, borderRadius: 32, padding: 3, borderWidth: 2, borderColor: 'transparent' },
   selectedAvatarWrapper: { },
   smallAvatar: { width: '100%', height: '100%', borderRadius: 30 },
   checkBadge: { position: 'absolute', top: -4, right: -4, width: 16, height: 16, borderRadius: 8, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#FFF' },
-  formContainer: { width: '100%', paddingHorizontal: 25 },
+  formContainer: { width: '100%' },
   formCard: { width: '100%', borderWidth: 1, borderRadius: 32, padding: 25, overflow: 'hidden' },
   formLabel: { fontSize: 11, fontFamily: Fonts.bold, letterSpacing: 1.5, marginBottom: 25 },
   inputNode: { marginBottom: 25 },

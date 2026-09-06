@@ -120,7 +120,7 @@ const WarehouseSettingsScreen: React.FC<WarehouseSettingsScreenProps> = ({ onClo
 
   return (
     <><KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <TutorialScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <TutorialScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingTop: 20, paddingBottom: 40 }}>
         <TutorialTarget id="ws-header">
           <View style={styles.headerRow}>
             <Warehouse size={20} color={G.fg} />

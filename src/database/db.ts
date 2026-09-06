@@ -591,6 +591,17 @@ export const initDB = () => {
     `);
     console.log('Table "contacts" checked/created.');
 
+    // Sync columns + businessId for contacts (shared entity with desktop hub)
+    try { database.execSync(`ALTER TABLE contacts ADD COLUMN name TEXT;`); } catch {}
+    try { database.execSync(`ALTER TABLE contacts ADD COLUMN businessId INTEGER;`); } catch {}
+    try { database.execSync(`ALTER TABLE contacts ADD COLUMN uuid TEXT;`); } catch {}
+    try { database.execSync(`ALTER TABLE contacts ADD COLUMN device_id TEXT;`); } catch {}
+    try { database.execSync(`ALTER TABLE contacts ADD COLUMN row_version INTEGER DEFAULT 1;`); } catch {}
+    try { database.execSync(`ALTER TABLE contacts ADD COLUMN updated_at TEXT;`); } catch {}
+    try { database.execSync(`ALTER TABLE contacts ADD COLUMN is_deleted INTEGER DEFAULT 0;`); } catch {}
+    try { database.execSync(`ALTER TABLE contacts ADD COLUMN deleted_at TEXT;`); } catch {}
+    try { database.execSync(`ALTER TABLE contacts ADD COLUMN is_synced INTEGER DEFAULT 1;`); } catch {}
+
     // Migration: Add supplierId to items table if not exists
     try {
       database.execSync(`ALTER TABLE items ADD COLUMN supplierId INTEGER REFERENCES contacts(id);`);
@@ -861,7 +872,11 @@ export const initDB = () => {
   `);
 
   // ========== PHASE 3 SYNC LAYER ==========
-  const syncTables = ['categories', 'items', 'item_packs', 'item_barcodes', 'quick_products', 'sales', 'debt_payments', 'expenses', 'adjustments', 'returns', 'customers'];
+  // `stock_movements` must be part of the initial list so the sync-column loop
+  // below adds uuid/device_id/row_version/etc. BEFORE the uuid backfill and
+  // outbox-trigger loops run (§23 movement-ledger sync). Registering it later
+  // leaves the table without sync columns and breaks its migration + triggers.
+  const syncTables = ['categories', 'items', 'item_packs', 'item_barcodes', 'quick_products', 'sales', 'debt_payments', 'expenses', 'adjustments', 'returns', 'customers', 'contacts', 'stock_movements', 'budgets', 'subscriptions', 'scheduled_reminders', 'suppliers', 'orders', 'order_items', 'shipments', 'shipment_items', 'employees', 'employee_roles', 'employee_accounts', 'attendance', 'employee_performance'];
   const syncCols: [string, string][] = [
     ['uuid', 'TEXT'],
     ['device_id', 'TEXT'],
@@ -888,7 +903,6 @@ export const initDB = () => {
   addColumnIfMissing('stock_movements', 'referenceId', 'INTEGER');
   addColumnIfMissing('stock_movements', 'referenceType', 'TEXT');
   addColumnIfMissing('stock_movements', 'notes', 'TEXT');
-  if (syncTables.indexOf('stock_movements') === -1) syncTables.push('stock_movements');
   // 4.8: reorder automation columns on items.
   for (const [name, def] of [['reorderPoint', 'REAL DEFAULT 10'], ['reorderQty', 'REAL DEFAULT 0'], ['autoReorder', 'INTEGER DEFAULT 0']] as [string, string][]) {
     addColumnIfMissing('items', name, def);
@@ -992,6 +1006,8 @@ export const initDB = () => {
       is_owner INTEGER DEFAULT 0,
       pin_hash TEXT,
       pin_salt TEXT,
+      assigned_register_id TEXT,
+      assigned_location_id TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       uuid TEXT,
       row_version INTEGER DEFAULT 1,
@@ -1091,6 +1107,10 @@ export const initDB = () => {
     CREATE INDEX IF NOT EXISTS idx_devices_business ON devices(business_id);
     CREATE INDEX IF NOT EXISTS idx_registers_business ON registers(business_id);
   `);
+
+  // Migration: pin employees to a register/location (existing installs).
+  addColumnIfMissing('users', 'assigned_register_id', 'TEXT');
+  addColumnIfMissing('users', 'assigned_location_id', 'TEXT');
 
   // ========== SHARED BUSINESS MODEL SYNC (locations / registers / business_roles) ==========
   // These tables use TEXT UUID primary keys and snake_case columns (the canonical
@@ -1206,7 +1226,74 @@ export const initDB = () => {
   } catch (e: any) {
     console.warn('Sync trigger (audit_logs): ', e?.message);
   }
+
+  // Sync triggers for shared entities (suppliers, orders, shipments, employees, subscriptions, reminders, budgets, contacts)
+  const sharedSyncTables = ['suppliers', 'orders', 'order_items', 'order_history', 'shipments', 'shipment_items', 'shipment_history', 'employee_roles', 'employees', 'employee_accounts', 'attendance', 'employee_performance', 'subscriptions', 'scheduled_reminders', 'budgets', 'budget_categories', 'budget_adjustments', 'subscription_payments', 'subscription_renewals', 'notifications', 'contacts'];
+  for (const tbl of sharedSyncTables) {
+    try {
+      database.execSync(`UPDATE ${tbl} SET uuid = ${genUuid}, row_version = 1 WHERE uuid IS NULL;`);
+      database.execSync(`CREATE UNIQUE INDEX IF NOT EXISTS idx_${tbl}_uuid ON ${tbl}(uuid);`);
+    } catch (e: any) {
+      console.warn(`Shared sync index (${tbl}): `, e?.message);
+    }
+    try {
+      database.execSync(`
+        CREATE TRIGGER IF NOT EXISTS trg_${tbl}_ai AFTER INSERT ON ${tbl} BEGIN
+          UPDATE ${tbl} SET uuid = ${genUuid} WHERE id = NEW.id AND uuid IS NULL;
+          INSERT INTO sync_outbox (entity, entity_uuid, op, row_id)
+          SELECT '${tbl}', uuid, 'INSERT', id FROM ${tbl} WHERE id = NEW.id;
+        END;
+        CREATE TRIGGER IF NOT EXISTS trg_${tbl}_au AFTER UPDATE ON ${tbl} WHEN OLD.uuid IS NOT NULL AND NEW.uuid IS NOT NULL BEGIN
+          INSERT INTO sync_outbox (entity, entity_uuid, op, row_id)
+          SELECT '${tbl}', uuid, 'UPDATE', id FROM ${tbl} WHERE id = NEW.id;
+        END;
+        CREATE TRIGGER IF NOT EXISTS trg_${tbl}_ad AFTER DELETE ON ${tbl} BEGIN
+          INSERT INTO sync_outbox (entity, entity_uuid, op, row_id)
+          VALUES ('${tbl}', OLD.uuid, 'DELETE', OLD.id);
+        END;
+      `);
+    } catch (e: any) {
+      console.warn(`Shared sync trigger (${tbl}): `, e?.message);
+    }
+  }
+
   console.log('Sync layer ready.');
+
+  // ========== MULTI-BUSINESS SCOPING (core record tables) ==========
+  // Smallest safe change: give every core record table a camelCase `businessId`
+  // column holding the mobile business UUID (the canonical identity used by the
+  // adapter entities, e.g. locations.business_id). Reads and writes are then
+  // isolated per active business; the desktop hub maps its INTEGER businessId
+  // to this UUID before relaying, so business-scoped rows are consistent across
+  // platforms without touching FK identity machinery.
+  const businessScopedTables = [
+    'categories', 'items', 'item_packs', 'item_barcodes', 'quick_products',
+    'sales', 'debt_payments', 'expenses', 'adjustments', 'customers',
+    'warehouses', 'returns', 'gift_cards', 'gift_card_transactions',
+    'employee_roles', 'employees', 'employee_accounts', 'attendance', 'employee_performance'
+  ];
+  // Backfill target: configured active business, else default business, else the
+  // oldest non-deleted business, else none (pre-onboarding, keep NULL).
+  const scopingBusinessId = (() => {
+    const active = database.getFirstSync(`SELECT value FROM app_settings WHERE key = 'active_business_id'`) as any;
+    if (active?.value) {
+      const ok = database.getFirstSync('SELECT id FROM businesses WHERE id = ? AND is_deleted = 0', [active.value]) as any;
+      if (ok?.id) return String(active.value);
+    }
+    const fb = database.getFirstSync(`SELECT id FROM businesses WHERE is_deleted = 0 ORDER BY (is_default = 1) DESC, id LIMIT 1`) as any;
+    return fb?.id ? String(fb.id) : null;
+  })();
+  for (const tbl of businessScopedTables) {
+    try {
+      addColumnIfMissing(tbl, 'businessId', 'TEXT');
+      if (scopingBusinessId) {
+        database.runSync(`UPDATE ${tbl} SET businessId = ? WHERE businessId IS NULL`, [scopingBusinessId]);
+      }
+      database.execSync(`CREATE INDEX IF NOT EXISTS idx_${tbl}_businessId ON ${tbl}(businessId);`);
+    } catch (e: any) {
+      console.warn(`Multi-business column (${tbl}): `, e?.message);
+    }
+  }
 
   // Create notifications table (in-app notification center)
   database.execSync(`
@@ -1232,6 +1319,15 @@ export const initDB = () => {
   `);
   console.log('Table "notifications" checked/created.');
 
+  // Sync columns for notifications (shared entity with desktop hub)
+  try { database.execSync(`ALTER TABLE notifications ADD COLUMN uuid TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE notifications ADD COLUMN device_id TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE notifications ADD COLUMN row_version INTEGER DEFAULT 1;`); } catch {}
+  try { database.execSync(`ALTER TABLE notifications ADD COLUMN updated_at TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE notifications ADD COLUMN is_deleted INTEGER DEFAULT 0;`); } catch {}
+  try { database.execSync(`ALTER TABLE notifications ADD COLUMN deleted_at TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE notifications ADD COLUMN is_synced INTEGER DEFAULT 1;`); } catch {}
+
   // Create scheduled_reminders table
   database.execSync(`
     CREATE TABLE IF NOT EXISTS scheduled_reminders (
@@ -1249,6 +1345,25 @@ export const initDB = () => {
     );
   `);
   console.log('Table "scheduled_reminders" checked/created.');
+
+  // Sync columns + businessId for scheduled_reminders (shared entity with desktop hub's notification_reminders)
+  try { database.execSync(`ALTER TABLE scheduled_reminders ADD COLUMN businessId INTEGER;`); } catch {}
+  try { database.execSync(`ALTER TABLE scheduled_reminders ADD COLUMN title TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE scheduled_reminders ADD COLUMN message TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE scheduled_reminders ADD COLUMN category TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE scheduled_reminders ADD COLUMN triggerDate TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE scheduled_reminders ADD COLUMN repeatInterval TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE scheduled_reminders ADD COLUMN lastTriggeredAt TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE scheduled_reminders ADD COLUMN completedAt TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE scheduled_reminders ADD COLUMN relatedEntityType TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE scheduled_reminders ADD COLUMN relatedEntityId INTEGER;`); } catch {}
+  try { database.execSync(`ALTER TABLE scheduled_reminders ADD COLUMN uuid TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE scheduled_reminders ADD COLUMN device_id TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE scheduled_reminders ADD COLUMN row_version INTEGER DEFAULT 1;`); } catch {}
+  try { database.execSync(`ALTER TABLE scheduled_reminders ADD COLUMN updated_at TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE scheduled_reminders ADD COLUMN is_deleted INTEGER DEFAULT 0;`); } catch {}
+  try { database.execSync(`ALTER TABLE scheduled_reminders ADD COLUMN deleted_at TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE scheduled_reminders ADD COLUMN is_synced INTEGER DEFAULT 1;`); } catch {}
 
   // Create notification_preferences table (per-user overrides)
   database.execSync(`
@@ -1296,6 +1411,21 @@ export const initDB = () => {
     );
   `);
 
+  // Sync columns + businessId for budgets (shared entity with desktop hub)
+  try { database.execSync(`ALTER TABLE budgets ADD COLUMN businessId INTEGER;`); } catch {}
+  try { database.execSync(`ALTER TABLE budgets ADD COLUMN category TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE budgets ADD COLUMN amount REAL DEFAULT 0;`); } catch {}
+  try { database.execSync(`ALTER TABLE budgets ADD COLUMN budgetType TEXT DEFAULT 'business';`); } catch {}
+  try { database.execSync(`ALTER TABLE budgets ADD COLUMN referenceName TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE budgets ADD COLUMN isRecurring INTEGER DEFAULT 0;`); } catch {}
+  try { database.execSync(`ALTER TABLE budgets ADD COLUMN uuid TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE budgets ADD COLUMN device_id TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE budgets ADD COLUMN row_version INTEGER DEFAULT 1;`); } catch {}
+  try { database.execSync(`ALTER TABLE budgets ADD COLUMN updated_at TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE budgets ADD COLUMN is_deleted INTEGER DEFAULT 0;`); } catch {}
+  try { database.execSync(`ALTER TABLE budgets ADD COLUMN deleted_at TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE budgets ADD COLUMN is_synced INTEGER DEFAULT 1;`); } catch {}
+
   // Widen period CHECK to include daily/weekly (safe migration for existing tables)
   try { database.execSync(`ALTER TABLE budgets DROP CONSTRAINT IF EXISTS check_period`); } catch {}
   try { database.execSync(`ALTER TABLE budgets ADD CONSTRAINT check_period CHECK(period IN ('daily','weekly','monthly','quarterly','yearly'))`); } catch {}
@@ -1322,6 +1452,21 @@ export const initDB = () => {
     database.execSync(`PRAGMA foreign_keys=ON`);
   } catch { /* table already has wider constraint or first creation */ }
   console.log('Table "budgets" checked/created.');
+
+  // Sync columns + businessId for budgets (shared entity with desktop hub)
+  try { database.execSync(`ALTER TABLE budgets ADD COLUMN businessId INTEGER;`); } catch {}
+  try { database.execSync(`ALTER TABLE budgets ADD COLUMN category TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE budgets ADD COLUMN amount REAL DEFAULT 0;`); } catch {}
+  try { database.execSync(`ALTER TABLE budgets ADD COLUMN budgetType TEXT DEFAULT 'business';`); } catch {}
+  try { database.execSync(`ALTER TABLE budgets ADD COLUMN referenceName TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE budgets ADD COLUMN isRecurring INTEGER DEFAULT 0;`); } catch {}
+  try { database.execSync(`ALTER TABLE budgets ADD COLUMN uuid TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE budgets ADD COLUMN device_id TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE budgets ADD COLUMN row_version INTEGER DEFAULT 1;`); } catch {}
+  try { database.execSync(`ALTER TABLE budgets ADD COLUMN updated_at TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE budgets ADD COLUMN is_deleted INTEGER DEFAULT 0;`); } catch {}
+  try { database.execSync(`ALTER TABLE budgets ADD COLUMN deleted_at TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE budgets ADD COLUMN is_synced INTEGER DEFAULT 1;`); } catch {}
 
   // Migration: Budgets can carry their own planned amount so a catch-all
   // category is no longer needed to store the total budget.
@@ -1378,6 +1523,24 @@ export const initDB = () => {
     );
   `);
   console.log('Table "budget_adjustments" checked/created.');
+
+  // Sync columns for budget_categories (shared entity with desktop hub)
+  try { database.execSync(`ALTER TABLE budget_categories ADD COLUMN uuid TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE budget_categories ADD COLUMN device_id TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE budget_categories ADD COLUMN row_version INTEGER DEFAULT 1;`); } catch {}
+  try { database.execSync(`ALTER TABLE budget_categories ADD COLUMN updated_at TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE budget_categories ADD COLUMN is_deleted INTEGER DEFAULT 0;`); } catch {}
+  try { database.execSync(`ALTER TABLE budget_categories ADD COLUMN deleted_at TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE budget_categories ADD COLUMN is_synced INTEGER DEFAULT 1;`); } catch {}
+
+  // Sync columns for budget_adjustments (shared entity with desktop hub)
+  try { database.execSync(`ALTER TABLE budget_adjustments ADD COLUMN uuid TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE budget_adjustments ADD COLUMN device_id TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE budget_adjustments ADD COLUMN row_version INTEGER DEFAULT 1;`); } catch {}
+  try { database.execSync(`ALTER TABLE budget_adjustments ADD COLUMN updated_at TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE budget_adjustments ADD COLUMN is_deleted INTEGER DEFAULT 0;`); } catch {}
+  try { database.execSync(`ALTER TABLE budget_adjustments ADD COLUMN deleted_at TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE budget_adjustments ADD COLUMN is_synced INTEGER DEFAULT 1;`); } catch {}
 
   // Budget over-budget events — records every expense that pushed a budget
   // over its limit so analytics/reports can track historical overages.
@@ -1479,6 +1642,22 @@ export const initDB = () => {
   `);
   console.log('Table "subscriptions" checked/created.');
 
+  // Sync columns + businessId for subscriptions (shared entity with desktop hub)
+  try { database.execSync(`ALTER TABLE subscriptions ADD COLUMN businessId INTEGER;`); } catch {}
+  try { database.execSync(`ALTER TABLE subscriptions ADD COLUMN planId TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE subscriptions ADD COLUMN tier TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE subscriptions ADD COLUMN trialStartedAt TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE subscriptions ADD COLUMN trialEndsAt TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE subscriptions ADD COLUMN isTrial INTEGER DEFAULT 0;`); } catch {}
+  try { database.execSync(`ALTER TABLE subscriptions ADD COLUMN autoRenew INTEGER DEFAULT 1;`); } catch {}
+  try { database.execSync(`ALTER TABLE subscriptions ADD COLUMN uuid TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE subscriptions ADD COLUMN device_id TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE subscriptions ADD COLUMN row_version INTEGER DEFAULT 1;`); } catch {}
+  try { database.execSync(`ALTER TABLE subscriptions ADD COLUMN updated_at TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE subscriptions ADD COLUMN is_deleted INTEGER DEFAULT 0;`); } catch {}
+  try { database.execSync(`ALTER TABLE subscriptions ADD COLUMN deleted_at TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE subscriptions ADD COLUMN is_synced INTEGER DEFAULT 1;`); } catch {}
+
   database.execSync(`
     CREATE TABLE IF NOT EXISTS subscription_payments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1515,6 +1694,24 @@ export const initDB = () => {
   `);
   console.log('Table "subscription_renewals" checked/created.');
 
+  // Sync columns for subscription_payments (shared entity with desktop hub)
+  try { database.execSync(`ALTER TABLE subscription_payments ADD COLUMN uuid TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE subscription_payments ADD COLUMN device_id TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE subscription_payments ADD COLUMN row_version INTEGER DEFAULT 1;`); } catch {}
+  try { database.execSync(`ALTER TABLE subscription_payments ADD COLUMN updated_at TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE subscription_payments ADD COLUMN is_deleted INTEGER DEFAULT 0;`); } catch {}
+  try { database.execSync(`ALTER TABLE subscription_payments ADD COLUMN deleted_at TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE subscription_payments ADD COLUMN is_synced INTEGER DEFAULT 1;`); } catch {}
+
+  // Sync columns for subscription_renewals (shared entity with desktop hub)
+  try { database.execSync(`ALTER TABLE subscription_renewals ADD COLUMN uuid TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE subscription_renewals ADD COLUMN device_id TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE subscription_renewals ADD COLUMN row_version INTEGER DEFAULT 1;`); } catch {}
+  try { database.execSync(`ALTER TABLE subscription_renewals ADD COLUMN updated_at TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE subscription_renewals ADD COLUMN is_deleted INTEGER DEFAULT 0;`); } catch {}
+  try { database.execSync(`ALTER TABLE subscription_renewals ADD COLUMN deleted_at TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE subscription_renewals ADD COLUMN is_synced INTEGER DEFAULT 1;`); } catch {}
+
   database.execSync(`
     CREATE TABLE IF NOT EXISTS subscription_audit (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1527,6 +1724,317 @@ export const initDB = () => {
     );
   `);
   console.log('Table "subscription_audit" checked/created.');
+
+  // ========== SHARED ENTITIES (sync with desktop hub) ==========
+  // Suppliers (desktop hub's dedicated suppliers table)
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS suppliers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      businessId INTEGER,
+      supplierCode TEXT,
+      supplierName TEXT NOT NULL,
+      companyName TEXT,
+      contactPerson TEXT,
+      phone TEXT,
+      secondaryPhone TEXT,
+      email TEXT,
+      address TEXT,
+      city TEXT,
+      country TEXT,
+      taxNumber TEXT,
+      paymentTerms TEXT,
+      creditLimit REAL DEFAULT 0,
+      notes TEXT,
+      status TEXT DEFAULT 'active',
+      isActive INTEGER DEFAULT 1,
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      uuid TEXT,
+      device_id TEXT,
+      row_version INTEGER DEFAULT 1,
+      is_deleted INTEGER DEFAULT 0,
+      deleted_at TEXT,
+      is_synced INTEGER DEFAULT 1
+    );
+  `);
+  console.log('Table "suppliers" checked/created.');
+
+  // Orders
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS orders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      businessId INTEGER,
+      orderNumber TEXT UNIQUE NOT NULL,
+      customerName TEXT,
+      customerPhone TEXT,
+      notes TEXT,
+      status TEXT NOT NULL DEFAULT 'Order',
+      totalAmount REAL NOT NULL DEFAULT 0,
+      createdBy INTEGER,
+      createdByName TEXT,
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      convertedAt TEXT,
+      convertedBy TEXT,
+      cancelledAt TEXT,
+      cancelledBy TEXT,
+      cancelReason TEXT,
+      uuid TEXT UNIQUE,
+      device_id TEXT,
+      row_version INTEGER DEFAULT 1,
+      updated_at TEXT,
+      is_deleted INTEGER DEFAULT 0,
+      deleted_at TEXT,
+      is_synced INTEGER DEFAULT 1,
+      FOREIGN KEY (businessId) REFERENCES businesses(id)
+    );
+  `);
+  console.log('Table "orders" checked/created.');
+
+  // Order items
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS order_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      orderId INTEGER NOT NULL,
+      itemId INTEGER,
+      itemName TEXT NOT NULL,
+      quantity REAL NOT NULL,
+      unit TEXT,
+      unitType TEXT DEFAULT 'base',
+      unitPrice REAL NOT NULL DEFAULT 0,
+      totalPrice REAL NOT NULL DEFAULT 0,
+      uuid TEXT,
+      device_id TEXT,
+      row_version INTEGER DEFAULT 1,
+      updated_at TEXT,
+      is_deleted INTEGER DEFAULT 0,
+      deleted_at TEXT,
+      is_synced INTEGER DEFAULT 1,
+      FOREIGN KEY (orderId) REFERENCES orders(id) ON DELETE CASCADE,
+      FOREIGN KEY (itemId) REFERENCES items(id)
+    );
+  `);
+  console.log('Table "order_items" checked/created.');
+
+  // Shipments
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS shipments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      businessId INTEGER,
+      origin TEXT,
+      destination TEXT NOT NULL,
+      driverName TEXT,
+      driverPhone TEXT,
+      vehicleInfo TEXT,
+      status TEXT DEFAULT 'pending',
+      notes TEXT,
+      scheduledDate TEXT,
+      deliveredAt TEXT,
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      uuid TEXT,
+      device_id TEXT,
+      row_version INTEGER DEFAULT 1,
+      is_deleted INTEGER DEFAULT 0,
+      deleted_at TEXT,
+      is_synced INTEGER DEFAULT 1,
+      FOREIGN KEY (businessId) REFERENCES businesses(id)
+    );
+  `);
+  console.log('Table "shipments" checked/created.');
+
+  // Shipment items
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS shipment_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      shipmentId INTEGER NOT NULL,
+      itemId INTEGER,
+      itemName TEXT,
+      quantity REAL NOT NULL,
+      unit TEXT,
+      uuid TEXT,
+      device_id TEXT,
+      row_version INTEGER DEFAULT 1,
+      is_deleted INTEGER DEFAULT 0,
+      deleted_at TEXT,
+      is_synced INTEGER DEFAULT 1,
+      FOREIGN KEY (shipmentId) REFERENCES shipments(id) ON DELETE CASCADE,
+      FOREIGN KEY (itemId) REFERENCES items(id)
+    );
+  `);
+  console.log('Table "shipment_items" checked/created.');
+
+  // Employee roles
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS employee_roles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      description TEXT,
+      permissions TEXT DEFAULT '[]',
+      isSystem INTEGER DEFAULT 0,
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      uuid TEXT,
+      device_id TEXT,
+      row_version INTEGER DEFAULT 1,
+      is_deleted INTEGER DEFAULT 0,
+      deleted_at TEXT,
+      is_synced INTEGER DEFAULT 1
+    );
+  `);
+  console.log('Table "employee_roles" checked/created.');
+
+  // Employees
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS employees (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      employeeCode TEXT,
+      firstName TEXT NOT NULL,
+      lastName TEXT NOT NULL,
+      phone TEXT,
+      email TEXT,
+      address TEXT,
+      emergencyContact TEXT,
+      gender TEXT,
+      dateOfBirth TEXT,
+      roleId INTEGER REFERENCES employee_roles(id),
+      department TEXT,
+      warehouseId INTEGER REFERENCES warehouses(id),
+      isActive INTEGER DEFAULT 1,
+      employmentStatus TEXT DEFAULT 'active',
+      avatar TEXT,
+      hireDate TEXT,
+      notes TEXT,
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      uuid TEXT,
+      device_id TEXT,
+      row_version INTEGER DEFAULT 1,
+      is_deleted INTEGER DEFAULT 0,
+      deleted_at TEXT,
+      is_synced INTEGER DEFAULT 1
+    );
+  `);
+  console.log('Table "employees" checked/created.');
+
+  // Employee accounts
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS employee_accounts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      employeeId INTEGER UNIQUE REFERENCES employees(id) ON DELETE CASCADE,
+      username TEXT UNIQUE NOT NULL,
+      pin TEXT NOT NULL,
+      isActive INTEGER DEFAULT 1,
+      forcePasswordChange INTEGER DEFAULT 0,
+      failedLoginAttempts INTEGER DEFAULT 0,
+      lockedUntil TEXT,
+      lastPasswordChange TEXT,
+      lastLogin TEXT,
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      uuid TEXT,
+      device_id TEXT,
+      row_version INTEGER DEFAULT 1,
+      is_deleted INTEGER DEFAULT 0,
+      deleted_at TEXT,
+      is_synced INTEGER DEFAULT 1
+    );
+  `);
+  console.log('Table "employee_accounts" checked/created.');
+
+  // Attendance
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS attendance (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      employeeId INTEGER REFERENCES employees(id) ON DELETE CASCADE,
+      date TEXT NOT NULL,
+      clockIn TEXT,
+      clockOut TEXT,
+      status TEXT DEFAULT 'present',
+      notes TEXT,
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      uuid TEXT,
+      device_id TEXT,
+      row_version INTEGER DEFAULT 1,
+      is_deleted INTEGER DEFAULT 0,
+      deleted_at TEXT,
+      is_synced INTEGER DEFAULT 1,
+      UNIQUE(employeeId, date)
+    );
+  `);
+  console.log('Table "attendance" checked/created.');
+
+  // Employee performance
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS employee_performance (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      employeeId INTEGER REFERENCES employees(id) ON DELETE CASCADE,
+      period TEXT NOT NULL,
+      salesAmount REAL DEFAULT 0,
+      ordersProcessed INTEGER DEFAULT 0,
+      attendanceScore REAL DEFAULT 0,
+      tasksCompleted INTEGER DEFAULT 0,
+      rating REAL,
+      notes TEXT,
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      uuid TEXT,
+      device_id TEXT,
+      row_version INTEGER DEFAULT 1,
+      is_deleted INTEGER DEFAULT 0,
+      deleted_at TEXT,
+      is_synced INTEGER DEFAULT 1,
+      UNIQUE(employeeId, period)
+    );
+  `);
+  console.log('Table "employee_performance" checked/created.');
+
+  // Order history
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS order_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      orderId INTEGER NOT NULL,
+      status TEXT NOT NULL,
+      changedBy TEXT,
+      notes TEXT,
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (orderId) REFERENCES orders(id) ON DELETE CASCADE
+    );
+  `);
+  console.log('Table "order_history" checked/created.');
+
+  // Sync columns for order_history
+  try { database.execSync(`ALTER TABLE order_history ADD COLUMN uuid TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE order_history ADD COLUMN device_id TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE order_history ADD COLUMN row_version INTEGER DEFAULT 1;`); } catch {}
+  try { database.execSync(`ALTER TABLE order_history ADD COLUMN updated_at TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE order_history ADD COLUMN is_deleted INTEGER DEFAULT 0;`); } catch {}
+  try { database.execSync(`ALTER TABLE order_history ADD COLUMN deleted_at TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE order_history ADD COLUMN is_synced INTEGER DEFAULT 1;`); } catch {}
+
+  // Shipment history
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS shipment_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      shipmentId INTEGER NOT NULL,
+      status TEXT NOT NULL,
+      changedBy TEXT,
+      notes TEXT,
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (shipmentId) REFERENCES shipments(id) ON DELETE CASCADE
+    );
+  `);
+  console.log('Table "shipment_history" checked/created.');
+
+  // Sync columns for shipment_history
+  try { database.execSync(`ALTER TABLE shipment_history ADD COLUMN uuid TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE shipment_history ADD COLUMN device_id TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE shipment_history ADD COLUMN row_version INTEGER DEFAULT 1;`); } catch {}
+  try { database.execSync(`ALTER TABLE shipment_history ADD COLUMN updated_at TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE shipment_history ADD COLUMN is_deleted INTEGER DEFAULT 0;`); } catch {}
+  try { database.execSync(`ALTER TABLE shipment_history ADD COLUMN deleted_at TEXT;`); } catch {}
+  try { database.execSync(`ALTER TABLE shipment_history ADD COLUMN is_synced INTEGER DEFAULT 1;`); } catch {}
+
+  // Notification reminders (alias for scheduled_reminders for desktop compatibility)
+  // Already created as scheduled_reminders above.
 
   // Initialize default trial subscription if none exists
   const subCount = database.getFirstSync<{ count: number }>('SELECT COUNT(*) as count FROM subscriptions');
@@ -1609,8 +2117,8 @@ export const getAuditLogs = (limit: number = 100): any[] => {
 export const insertCategory = (name: string, icon: string, isCustom: boolean) => {
   try {
     const database = getDB();
-    const statement = database.prepareSync('INSERT INTO categories (name, icon, isCustom) VALUES (?, ?, ?)');
-    const result = statement.executeSync([name, icon, isCustom ? 1 : 0]);
+    const statement = database.prepareSync('INSERT INTO categories (name, icon, isCustom, businessId) VALUES (?, ?, ?, ?)');
+    const result = statement.executeSync([name, icon, isCustom ? 1 : 0, getScopedBusinessId()]);
     return result.lastInsertRowId;
   } catch (error) {
     console.error('Insert category error:', error);
@@ -1621,7 +2129,9 @@ export const insertCategory = (name: string, icon: string, isCustom: boolean) =>
 export const getCategories = () => {
   try {
     const database = getDB();
-    return database.getAllSync('SELECT * FROM categories');
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
+    return database.getAllSync('SELECT * FROM categories WHERE businessId = ?', [bizId]);
   } catch (error) {
     console.error('Get categories error:', error);
     return [];
@@ -1631,7 +2141,9 @@ export const getCategories = () => {
 export const getUserCategories = () => {
   try {
     const database = getDB();
-    return database.getAllSync('SELECT * FROM categories WHERE isCustom = 1');
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
+    return database.getAllSync('SELECT * FROM categories WHERE isCustom = 1 AND businessId = ?', [bizId]);
   } catch (error) {
     console.error('Get user categories error:', error);
     return [];
@@ -1641,12 +2153,14 @@ export const getUserCategories = () => {
 export const seedDefaultCategories = (categories: { name: string, icon: string }[]) => {
   try {
     const database = getDB();
-    const existingCount = database.getFirstSync<{ count: number }>('SELECT COUNT(*) as count FROM categories');
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return false;
+    const existingCount = database.getFirstSync<{ count: number }>('SELECT COUNT(*) as count FROM categories WHERE businessId = ?', [bizId]);
 
     if (existingCount && existingCount.count === 0) {
-      const statement = database.prepareSync('INSERT INTO categories (name, icon, isCustom) VALUES (?, ?, 0)');
+      const statement = database.prepareSync('INSERT INTO categories (name, icon, isCustom, businessId) VALUES (?, ?, 0, ?)');
       for (const cat of categories) {
-        statement.executeSync([cat.name, cat.icon]);
+        statement.executeSync([cat.name, cat.icon, bizId]);
       }
       return true;
     }
@@ -1751,7 +2265,9 @@ export interface InsertItemData {
 export const getNextItemId = () => {
   try {
     const database = getDB();
-    const result = database.getFirstSync<{ maxId: number }>('SELECT MAX(id) as maxId FROM items');
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return 1;
+    const result = database.getFirstSync<{ maxId: number }>('SELECT MAX(id) as maxId FROM items WHERE businessId = ?', [bizId]);
     return (result?.maxId || 0) + 1;
   } catch (error) {
     console.error('Get next item ID error:', error);
@@ -1852,11 +2368,11 @@ export const insertItem = (data: InsertItemData) => {
   try {
     const database = getDB();
     const statement = database.prepareSync(`
-      INSERT INTO items (name, categoryId, sku, barcode, image, taxType, companyName, purchaseUnit, baseUnit, unitsPerPack, totalPackQuantity, totalBaseQuantity, packPurchasePrice, basePurchasePrice, baseSellingPrice, packSellingPrice, allowSellByBaseUnit, allowSellByPackUnit, expiryDate, qualityGrade, notes, isCredit, supplierPhone, supplierAccount, supplierCallEnabled, warehouseId, dueDate, lastPriceCheckAt, isActive, wholesaleSellingPrice, minWholesaleQty, transportCost, importCost, packagingCost, handlingCost, otherCost, targetMargin, taxTreatment, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
+      INSERT INTO items (name, categoryId, sku, barcode, image, taxType, companyName, purchaseUnit, baseUnit, unitsPerPack, totalPackQuantity, totalBaseQuantity, packPurchasePrice, basePurchasePrice, baseSellingPrice, packSellingPrice, allowSellByBaseUnit, allowSellByPackUnit, expiryDate, qualityGrade, notes, isCredit, supplierPhone, supplierAccount, supplierCallEnabled, warehouseId, dueDate, lastPriceCheckAt, isActive, wholesaleSellingPrice, minWholesaleQty, transportCost, importCost, packagingCost, handlingCost, otherCost, targetMargin, taxTreatment, businessId, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
     `);
     const result = statement.executeSync([
-      data.name, data.categoryId, data.sku || null, data.barcode || null, data.image || null, data.taxType || null, data.companyName || null, data.purchaseUnit || 'pcs', data.baseUnit || 'pcs', data.unitsPerPack || 0, data.totalPackQuantity || 0, data.totalBaseQuantity || 0, data.packPurchasePrice || 0, data.basePurchasePrice || 0, data.baseSellingPrice || 0, data.packSellingPrice || 0, data.allowSellByBaseUnit ? 1 : 0, data.allowSellByPackUnit ? 1 : 0, data.expiryDate || null, data.qualityGrade || null, data.notes || null, data.isCredit ? 1 : 0, data.supplierPhone || null, data.supplierAccount || null, data.supplierCallEnabled ? 1 : 0, data.warehouseId ?? null, data.dueDate || null, data.lastPriceCheckAt || null, data.isActive === false ? 0 : 1, data.wholesaleSellingPrice ?? null, data.minWholesaleQty ?? null, data.transportCost ?? 0, data.importCost ?? 0, data.packagingCost ?? 0, data.handlingCost ?? 0, data.otherCost ?? 0, data.targetMargin ?? null, data.taxTreatment || null, null
+      data.name, data.categoryId, data.sku || null, data.barcode || null, data.image || null, data.taxType || null, data.companyName || null, data.purchaseUnit || 'pcs', data.baseUnit || 'pcs', data.unitsPerPack || 0, data.totalPackQuantity || 0, data.totalBaseQuantity || 0, data.packPurchasePrice || 0, data.basePurchasePrice || 0, data.baseSellingPrice || 0, data.packSellingPrice || 0, data.allowSellByBaseUnit ? 1 : 0, data.allowSellByPackUnit ? 1 : 0, data.expiryDate || null, data.qualityGrade || null, data.notes || null, data.isCredit ? 1 : 0, data.supplierPhone || null, data.supplierAccount || null, data.supplierCallEnabled ? 1 : 0, data.warehouseId ?? null, data.dueDate || null, data.lastPriceCheckAt || null, data.isActive === false ? 0 : 1, data.wholesaleSellingPrice ?? null, data.minWholesaleQty ?? null, data.transportCost ?? 0, data.importCost ?? 0, data.packagingCost ?? 0, data.handlingCost ?? 0, data.otherCost ?? 0, data.targetMargin ?? null, data.taxTreatment || null, getScopedBusinessId(), null
     ]);
     const newId = result.lastInsertRowId;
     // Log the initial stock as a movement so it appears in the activity feed.
@@ -1893,14 +2409,16 @@ export const insertItem = (data: InsertItemData) => {
 export const getItems = (activeOnly: boolean = true) => {
   try {
     const database = getDB();
-    const whereClause = activeOnly ? 'WHERE items.is_deleted = 0 AND items.isActive = 1' : 'WHERE items.is_deleted = 0';
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
+    const whereClause = activeOnly ? 'WHERE items.is_deleted = 0 AND items.isActive = 1 AND items.businessId = ?' : 'WHERE items.is_deleted = 0 AND items.businessId = ?';
     return database.getAllSync(`
       SELECT items.*, categories.name as categoryName 
       FROM items 
-      LEFT JOIN categories ON items.categoryId = categories.id 
+      LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId 
       ${whereClause}
       ORDER BY items.id DESC
-    `);
+    `, [bizId]);
   } catch (error) {
     console.error('Get items error:', error);
     return [];
@@ -1910,9 +2428,11 @@ export const getItems = (activeOnly: boolean = true) => {
 export const toggleItemActive = (itemId: number, isActive: boolean) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return false;
     database.runSync(`
-      UPDATE items SET isActive = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
-    `, [isActive ? 1 : 0, itemId]);
+      UPDATE items SET isActive = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND businessId = ?
+    `, [isActive ? 1 : 0, itemId, bizId]);
     return true;
   } catch (error) {
     console.error('Toggle item active error:', error);
@@ -1923,13 +2443,15 @@ export const toggleItemActive = (itemId: number, isActive: boolean) => {
 export const getItemById = (id: number, activeOnly: boolean = true) => {
   try {
     const database = getDB();
-    const whereClause = activeOnly ? 'WHERE items.id = ? AND items.is_deleted = 0 AND items.isActive = 1' : 'WHERE items.id = ? AND items.is_deleted = 0';
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
+    const whereClause = activeOnly ? 'WHERE items.id = ? AND items.is_deleted = 0 AND items.isActive = 1 AND items.businessId = ?' : 'WHERE items.id = ? AND items.is_deleted = 0 AND items.businessId = ?';
     return database.getFirstSync(`
       SELECT items.*, categories.name as categoryName
       FROM items
-      LEFT JOIN categories ON items.categoryId = categories.id
+      LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId
       ${whereClause}
-    `, [id]);
+    `, [id, bizId]);
   } catch (error) {
     console.error('Get item by ID error:', error);
     return null;
@@ -1939,11 +2461,13 @@ export const getItemById = (id: number, activeOnly: boolean = true) => {
 export const getItemByBarcode = (code: string, activeOnly: boolean = true) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     const activeClause = activeOnly ? 'AND items.is_deleted = 0 AND items.isActive = 1' : 'AND items.is_deleted = 0';
     return database.getFirstSync(`
       SELECT items.*, categories.name as categoryName
       FROM items
-      LEFT JOIN categories ON items.categoryId = categories.id
+      LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId
       WHERE (items.barcode = ? COLLATE NOCASE 
          OR items.sku = ? COLLATE NOCASE
          OR EXISTS (
@@ -1951,10 +2475,12 @@ export const getItemByBarcode = (code: string, activeOnly: boolean = true) => {
            WHERE ib.itemId = items.id 
            AND ib.barcode = ? COLLATE NOCASE 
            AND ib.is_deleted = 0
+           AND ib.businessId = items.businessId
          ))
+      AND items.businessId = ?
       ${activeClause}
       LIMIT 1
-    `, [code, code, code]);
+    `, [code, code, code, bizId]);
   } catch (error) {
     console.error('Get item by barcode error:', error);
     return null;
@@ -1964,11 +2490,13 @@ export const getItemByBarcode = (code: string, activeOnly: boolean = true) => {
 export const getItemBarcodes = (itemId: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     return database.getAllSync(`
       SELECT * FROM item_barcodes 
-      WHERE itemId = ? AND is_deleted = 0
+      WHERE itemId = ? AND is_deleted = 0 AND businessId = ?
       ORDER BY isPrimary DESC, id ASC
-    `, [itemId]);
+    `, [itemId, bizId]);
   } catch (error) {
     console.error('Get item barcodes error:', error);
     return [];
@@ -1978,19 +2506,21 @@ export const getItemBarcodes = (itemId: number) => {
 export const addItemBarcode = (itemId: number, barcode: string, isPrimary: boolean = false) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     
     // If setting as primary, unset other primary barcodes for this item
     if (isPrimary) {
       database.runSync(`
-        UPDATE item_barcodes SET isPrimary = 0 WHERE itemId = ? AND is_deleted = 0
-      `, [itemId]);
+        UPDATE item_barcodes SET isPrimary = 0 WHERE itemId = ? AND is_deleted = 0 AND businessId = ?
+      `, [itemId, bizId]);
     }
     
     const statement = database.prepareSync(`
-      INSERT INTO item_barcodes (itemId, barcode, isPrimary)
-      VALUES (?, ?, ?)
+      INSERT INTO item_barcodes (itemId, barcode, isPrimary, businessId)
+      VALUES (?, ?, ?, ?)
     `);
-    const result = statement.executeSync([itemId, barcode, isPrimary ? 1 : 0]);
+    const result = statement.executeSync([itemId, barcode, isPrimary ? 1 : 0, bizId]);
     return result.lastInsertRowId;
   } catch (error) {
     console.error('Add item barcode error:', error);
@@ -2001,9 +2531,11 @@ export const addItemBarcode = (itemId: number, barcode: string, isPrimary: boole
 export const removeItemBarcode = (barcodeId: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return false;
     database.runSync(`
-      UPDATE item_barcodes SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE id = ?
-    `, [barcodeId]);
+      UPDATE item_barcodes SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND businessId = ?
+    `, [barcodeId, bizId]);
     return true;
   } catch (error) {
     console.error('Remove item barcode error:', error);
@@ -2014,12 +2546,14 @@ export const removeItemBarcode = (barcodeId: number) => {
 export const setPrimaryBarcode = (barcodeId: number, itemId: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return false;
     database.runSync(`
-      UPDATE item_barcodes SET isPrimary = 0 WHERE itemId = ? AND is_deleted = 0
-    `, [itemId]);
+      UPDATE item_barcodes SET isPrimary = 0 WHERE itemId = ? AND is_deleted = 0 AND businessId = ?
+    `, [itemId, bizId]);
     database.runSync(`
-      UPDATE item_barcodes SET isPrimary = 1 WHERE id = ?
-    `, [barcodeId]);
+      UPDATE item_barcodes SET isPrimary = 1 WHERE id = ? AND businessId = ?
+    `, [barcodeId, bizId]);
     return true;
   } catch (error) {
     console.error('Set primary barcode error:', error);
@@ -2031,14 +2565,16 @@ export const setPrimaryBarcode = (barcodeId: number, itemId: number) => {
 export const getQuickProducts = () => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     return database.getAllSync(`
       SELECT items.*, categories.name as categoryName, qp.position
       FROM quick_products qp
-      JOIN items ON qp.itemId = items.id
-      LEFT JOIN categories ON items.categoryId = categories.id
-      WHERE qp.is_deleted = 0 AND items.is_deleted = 0
+      JOIN items ON qp.itemId = items.id AND items.businessId = qp.businessId
+      LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId
+      WHERE qp.is_deleted = 0 AND items.is_deleted = 0 AND qp.businessId = ?
       ORDER BY qp.position ASC
-    `);
+    `, [bizId]);
   } catch (error) {
     console.error('Get quick products error:', error);
     return [];
@@ -2048,22 +2584,25 @@ export const getQuickProducts = () => {
 export const addQuickProduct = (itemId: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return false;
     const existing = database.getFirstSync<{ id: number }>(
-      'SELECT id FROM quick_products WHERE itemId = ? AND is_deleted = 0',
-      [itemId]
+      'SELECT id FROM quick_products WHERE itemId = ? AND is_deleted = 0 AND businessId = ?',
+      [itemId, bizId]
     );
     if (existing) return true;
     // Get the next position
     const maxPos = database.getFirstSync<{ maxPos: number }>(
-      'SELECT MAX(position) as maxPos FROM quick_products WHERE is_deleted = 0'
+      'SELECT MAX(position) as maxPos FROM quick_products WHERE is_deleted = 0 AND businessId = ?',
+      [bizId]
     );
     const nextPosition = (maxPos?.maxPos ?? -1) + 1;
     
     const statement = database.prepareSync(`
-      INSERT INTO quick_products (itemId, position)
-      VALUES (?, ?)
+      INSERT INTO quick_products (itemId, position, businessId)
+      VALUES (?, ?, ?)
     `);
-    statement.executeSync([itemId, nextPosition]);
+    statement.executeSync([itemId, nextPosition, bizId]);
     return true;
   } catch (error) {
     console.error('Add quick product error:', error);
@@ -2074,9 +2613,11 @@ export const addQuickProduct = (itemId: number) => {
 export const removeQuickProduct = (itemId: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return false;
     database.runSync(`
-      UPDATE quick_products SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE itemId = ?
-    `, [itemId]);
+      UPDATE quick_products SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE itemId = ? AND businessId = ?
+    `, [itemId, bizId]);
     return true;
   } catch (error) {
     console.error('Remove quick product error:', error);
@@ -2087,11 +2628,13 @@ export const removeQuickProduct = (itemId: number) => {
 export const reorderQuickProducts = (itemIds: number[]) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return false;
     const statement = database.prepareSync(`
-      UPDATE quick_products SET position = ?, updated_at = CURRENT_TIMESTAMP WHERE itemId = ?
+      UPDATE quick_products SET position = ?, updated_at = CURRENT_TIMESTAMP WHERE itemId = ? AND businessId = ?
     `);
     itemIds.forEach((itemId, index) => {
-      statement.executeSync([index, itemId]);
+      statement.executeSync([index, itemId, bizId]);
     });
     return true;
   } catch (error) {
@@ -2103,9 +2646,11 @@ export const reorderQuickProducts = (itemIds: number[]) => {
 export const isQuickProduct = (itemId: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return false;
     const result = database.getFirstSync<{ count: number }>(
-      'SELECT COUNT(*) as count FROM quick_products WHERE itemId = ? AND is_deleted = 0',
-      [itemId]
+      'SELECT COUNT(*) as count FROM quick_products WHERE itemId = ? AND is_deleted = 0 AND businessId = ?',
+      [itemId, bizId]
     );
     return (result?.count ?? 0) > 0;
   } catch (error) {
@@ -2119,6 +2664,8 @@ export const isQuickProduct = (itemId: number) => {
 export const getItemsWithRecentPriceChanges = (days: number = 7) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     return database.getAllSync(`
       SELECT
         i.id              AS itemId,
@@ -2135,19 +2682,21 @@ export const getItemsWithRecentPriceChanges = (days: number = 7) => {
         a.date            AS changeDate,
         a.createdAt       AS changeCreatedAt
       FROM items i
-      INNER JOIN adjustments a ON a.itemId = i.id
+      INNER JOIN adjustments a ON a.itemId = i.id AND a.businessId = i.businessId
       WHERE i.supplierCallEnabled = 1
+        AND i.businessId = ?
         AND a.type IN ('price_up', 'price_down')
         AND date(a.createdAt) >= date('now', ?)
         AND a.id = (
           SELECT a2.id FROM adjustments a2
           WHERE a2.itemId = i.id
+            AND a2.businessId = i.businessId
             AND a2.type IN ('price_up', 'price_down')
           ORDER BY a2.createdAt DESC
           LIMIT 1
         )
       ORDER BY a.createdAt DESC
-    `, [`-${days} days`]);
+    `, [bizId, `-${days} days`]);
   } catch (error) {
     console.error('getItemsWithRecentPriceChanges error:', error);
     return [];
@@ -2160,14 +2709,17 @@ export const getItemsWithRecentPriceChanges = (days: number = 7) => {
 export const getItemsDueForSupplierCheck = (days: number = 7) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     return database.getAllSync(`
       SELECT id AS itemId, name AS itemName, companyName, supplierPhone, supplierAccount,
              baseSellingPrice AS currentPrice, lastPriceCheckAt
       FROM items
       WHERE supplierCallEnabled = 1
+        AND businessId = ?
         AND (lastPriceCheckAt IS NULL OR date(lastPriceCheckAt) < date('now', ?))
       ORDER BY name ASC
-    `, [`-${days} days`]);
+    `, [bizId, `-${days} days`]);
   } catch (error) {
     console.error('getItemsDueForSupplierCheck error:', error);
     return [];
@@ -2177,12 +2729,14 @@ export const getItemsDueForSupplierCheck = (days: number = 7) => {
 export const getSaleById = (id: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     return database.getFirstSync(`
       SELECT sales.*, items.name as itemName, items.baseUnit 
       FROM sales 
-      LEFT JOIN items ON sales.itemId = items.id 
-      WHERE sales.id = ?
-    `, [id]);
+      LEFT JOIN items ON sales.itemId = items.id AND items.businessId = sales.businessId 
+      WHERE sales.id = ? AND sales.businessId = ?
+    `, [id, bizId]);
   } catch (error) {
     console.error('Get sale by ID error:', error);
     return null;
@@ -2192,6 +2746,8 @@ export const getSaleById = (id: number) => {
 export const getSaleWithItemsById = (id: number | string) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
 
     // If id is a string, it could be a batchId or a numeric ID cast to string
     if (typeof id === 'string') {
@@ -2199,10 +2755,10 @@ export const getSaleWithItemsById = (id: number | string) => {
       const items = database.getAllSync(`
         SELECT s.*, i.name as itemName, i.baseUnit
         FROM sales s
-        LEFT JOIN items i ON s.itemId = i.id
-        WHERE s.batchId = ?
+        LEFT JOIN items i ON s.itemId = i.id AND i.businessId = s.businessId
+        WHERE s.batchId = ? AND s.businessId = ?
         ORDER BY s.id ASC
-      `, [id]);
+      `, [id, bizId]);
       if (items.length > 0) {
         const first = items[0] as any;
         return {
@@ -2231,19 +2787,19 @@ export const getSaleWithItemsById = (id: number | string) => {
         const single = database.getFirstSync(`
           SELECT sales.*, items.name as itemName, items.baseUnit
           FROM sales
-          LEFT JOIN items ON sales.itemId = items.id
-          WHERE sales.id = ?
-        `, [numId]);
+          LEFT JOIN items ON sales.itemId = items.id AND items.businessId = sales.businessId
+          WHERE sales.id = ? AND sales.businessId = ?
+        `, [numId, bizId]);
         if (!single) return null;
         const bId = (single as any).batchId;
         if (!bId) return { ...single, isBatch: false };
         const batchItems = database.getAllSync(`
           SELECT s.*, i.name as itemName, i.baseUnit
           FROM sales s
-          LEFT JOIN items i ON s.itemId = i.id
-          WHERE s.batchId = ?
+          LEFT JOIN items i ON s.itemId = i.id AND i.businessId = s.businessId
+          WHERE s.batchId = ? AND s.businessId = ?
           ORDER BY s.id ASC
-        `, [bId]);
+        `, [bId, bizId]);
         return {
           isBatch: true,
           batchId: bId,
@@ -2271,9 +2827,9 @@ export const getSaleWithItemsById = (id: number | string) => {
     const first = database.getFirstSync(`
       SELECT sales.*, items.name as itemName, items.baseUnit 
       FROM sales 
-      LEFT JOIN items ON sales.itemId = items.id 
-      WHERE sales.id = ?
-    `, [id]);
+      LEFT JOIN items ON sales.itemId = items.id AND items.businessId = sales.businessId 
+      WHERE sales.id = ? AND sales.businessId = ?
+    `, [id, bizId]);
     if (!first) return null;
 
     const bId = (first as any).batchId;
@@ -2284,10 +2840,10 @@ export const getSaleWithItemsById = (id: number | string) => {
     const items = database.getAllSync(`
       SELECT s.*, i.name as itemName, i.baseUnit
       FROM sales s
-      LEFT JOIN items i ON s.itemId = i.id
-      WHERE s.batchId = ?
+      LEFT JOIN items i ON s.itemId = i.id AND i.businessId = s.businessId
+      WHERE s.batchId = ? AND s.businessId = ?
       ORDER BY s.id ASC
-    `, [bId]);
+    `, [bId, bizId]);
 
     return {
       isBatch: true,
@@ -2325,9 +2881,12 @@ export interface FilterOptions {
 export const getFilteredItems = (options: FilterOptions) => {
   try {
     const database = getDB();
-    let query = `SELECT items.*, categories.name as categoryName FROM items LEFT JOIN categories ON items.categoryId = categories.id`;
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
+    let query = `SELECT items.*, categories.name as categoryName FROM items LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId`;
     const params: any[] = [];
-    const conditions: string[] = [];
+    const conditions: string[] = ['items.businessId = ?'];
+    params.push(bizId);
 
     if (options.search) {
       conditions.push('(items.name LIKE ? OR items.companyName LIKE ?)');
@@ -2391,9 +2950,10 @@ export const insertSale = (saleData: {
   const database = getDB();
   beginTransaction(database);
   try {
+    const bizId = getScopedBusinessId();
     const item = database.getFirstSync<{ unitsPerPack: number; totalBaseQuantity: number; totalPackQuantity: number }>(
-      'SELECT unitsPerPack, totalBaseQuantity, totalPackQuantity FROM items WHERE id = ?',
-      [saleData.itemId]
+      'SELECT unitsPerPack, totalBaseQuantity, totalPackQuantity FROM items WHERE id = ? AND businessId = ?',
+      [saleData.itemId, bizId]
     );
     if (!item) {
       throw new Error(`Item ${saleData.itemId} not found`);
@@ -2412,8 +2972,8 @@ export const insertSale = (saleData: {
 
     // Insert the sale record
     const statement = database.prepareSync(`
-      INSERT INTO sales (itemId, quantity, unit, unitType, discount, vat, taxType, totalPrice, paymentMethod, paymentStatus, customerName, customerPhone, packId, batchId, dueDate, notes, paidAmount, orderNumber, convertedAt, cancelledAt, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
+      INSERT INTO sales (itemId, quantity, unit, unitType, discount, vat, taxType, totalPrice, paymentMethod, paymentStatus, customerName, customerPhone, packId, batchId, dueDate, notes, paidAmount, orderNumber, convertedAt, cancelledAt, businessId, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
     `);
     const result = statement.executeSync([
       saleData.itemId, saleData.quantity, saleData.unit, saleData.unitType,
@@ -2424,13 +2984,14 @@ export const insertSale = (saleData: {
       saleData.dueDate || null, saleData.notes || null,
       saleData.paidAmount ?? (saleData.paymentStatus === 'Paid' ? saleData.totalPrice : null),
       saleData.orderNumber || null, saleData.convertedAt || null,
-      saleData.cancelledAt || null, saleData.createdAt || null
+      saleData.cancelledAt || null, bizId || null,
+      saleData.createdAt || null
     ]);
 
     // Update inventory quantities
     database.runSync(
-      'UPDATE items SET totalBaseQuantity = totalBaseQuantity - ?, totalPackQuantity = totalPackQuantity - ? WHERE id = ?',
-      [baseQty, packQty, saleData.itemId]
+      'UPDATE items SET totalBaseQuantity = totalBaseQuantity - ?, totalPackQuantity = totalPackQuantity - ? WHERE id = ? AND businessId = ?',
+      [baseQty, packQty, saleData.itemId, bizId]
     );
 
     commitTransaction(database);
@@ -2447,13 +3008,15 @@ export const insertSale = (saleData: {
 export const getSales = () => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     return database.getAllSync(`
       SELECT sales.*, items.name as itemName, items.baseUnit 
       FROM sales 
-      LEFT JOIN items ON sales.itemId = items.id 
-      WHERE paymentStatus != 'Order'
+      LEFT JOIN items ON sales.itemId = items.id AND items.businessId = sales.businessId 
+      WHERE paymentStatus != 'Order' AND sales.businessId = ?
       ORDER BY sales.id DESC
-    `);
+    `, [bizId]);
   } catch (error) {
     console.error('Get sales error:', error);
     return [];
@@ -2463,13 +3026,15 @@ export const getSales = () => {
 export const getSalesByDateRange = (startDate: string, endDate: string) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     return database.getAllSync(`
       SELECT sales.*, items.name as itemName, items.baseUnit 
       FROM sales 
-      LEFT JOIN items ON sales.itemId = items.id 
-      WHERE date(sales.createdAt) >= ? AND date(sales.createdAt) <= ? AND paymentStatus != 'Order'
+      LEFT JOIN items ON sales.itemId = items.id AND items.businessId = sales.businessId 
+      WHERE date(sales.createdAt) >= ? AND date(sales.createdAt) <= ? AND paymentStatus != 'Order' AND sales.businessId = ?
       ORDER BY sales.createdAt DESC
-    `, [startDate, endDate]);
+    `, [startDate, endDate, bizId]);
   } catch (error) {
     console.error('Get sales by date range error:', error);
     return [];
@@ -2479,9 +3044,12 @@ export const getSalesByDateRange = (startDate: string, endDate: string) => {
 export const getFilteredSales = (options: FilterOptions) => {
   try {
     const database = getDB();
-    let query = `SELECT sales.*, items.name as itemName, items.baseUnit FROM sales LEFT JOIN items ON sales.itemId = items.id LEFT JOIN categories ON items.categoryId = categories.id`;
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
+    let query = `SELECT sales.*, items.name as itemName, items.baseUnit FROM sales LEFT JOIN items ON sales.itemId = items.id AND items.businessId = sales.businessId LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId`;
     const params: any[] = [];
-    const conditions: string[] = [];
+    const conditions: string[] = ['sales.businessId = ?'];
+    params.push(bizId);
 
     if (options.search) {
       conditions.push('(items.name LIKE ? OR sales.customerName LIKE ?)');
@@ -2526,27 +3094,28 @@ export const insertAdjustment = (adj: any) => {
   const database = getDB();
   beginTransaction(database);
   try {
+    const bizId = getScopedBusinessId();
     // 1. Log the adjustment
     const statement = database.prepareSync(`
-      INSERT INTO adjustments (itemId, type, oldValue, newValue, quantity, unitType, reason, date, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
+      INSERT INTO adjustments (itemId, type, oldValue, newValue, quantity, unitType, reason, date, businessId, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
     `);
     const result = statement.executeSync([
-      adj.itemId, adj.type, adj.oldValue, adj.newValue, adj.quantity, adj.unitType, adj.reason, adj.date, adj.createdAt || null
+      adj.itemId, adj.type, adj.oldValue, adj.newValue, adj.quantity, adj.unitType, adj.reason, adj.date, bizId || null, adj.createdAt || null
     ]);
 
     // 2. Update the item based on adjustment type
     if (adj.type === 'price_up' || adj.type === 'price_down') {
-      database.runSync('UPDATE items SET baseSellingPrice = ? WHERE id = ?', [adj.newValue, adj.itemId]);
+      database.runSync('UPDATE items SET baseSellingPrice = ? WHERE id = ? AND businessId = ?', [adj.newValue, adj.itemId, bizId]);
       
       // Also update pack price proportionally if unitsPerPack exists
-      const item = database.getFirstSync('SELECT * FROM items WHERE id = ?', [adj.itemId]) as any;
+      const item = database.getFirstSync('SELECT * FROM items WHERE id = ? AND businessId = ?', [adj.itemId, bizId]) as any;
       if (item && item.unitsPerPack) {
         const newPackPrice = adj.newValue * item.unitsPerPack;
-        database.runSync('UPDATE items SET packSellingPrice = ? WHERE id = ?', [newPackPrice, adj.itemId]);
+        database.runSync('UPDATE items SET packSellingPrice = ? WHERE id = ? AND businessId = ?', [newPackPrice, adj.itemId, bizId]);
       }
     } else if (adj.type === 'damaged') {
-      const item = database.getFirstSync('SELECT * FROM items WHERE id = ?', [adj.itemId]) as any;
+      const item = database.getFirstSync('SELECT * FROM items WHERE id = ? AND businessId = ?', [adj.itemId, bizId]) as any;
       if (item) {
         let baseDeduction = adj.quantity;
         let packDeduction = 0;
@@ -2559,8 +3128,8 @@ export const insertAdjustment = (adj: any) => {
         }
 
         database.runSync(
-          'UPDATE items SET totalBaseQuantity = totalBaseQuantity - ?, totalPackQuantity = totalPackQuantity - ? WHERE id = ?',
-          [baseDeduction, packDeduction, adj.itemId]
+          'UPDATE items SET totalBaseQuantity = totalBaseQuantity - ?, totalPackQuantity = totalPackQuantity - ? WHERE id = ? AND businessId = ?',
+          [baseDeduction, packDeduction, adj.itemId, bizId]
         );
       }
     }
@@ -2577,16 +3146,20 @@ export const insertAdjustment = (adj: any) => {
 export const getRecentAdjustments = (type?: string, limit: number = 20) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     let query = `
       SELECT adjustments.*, items.name as itemName, items.baseUnit, items.basePurchasePrice, items.baseSellingPrice, items.packPurchasePrice
       FROM adjustments 
-      LEFT JOIN items ON adjustments.itemId = items.id
+      LEFT JOIN items ON adjustments.itemId = items.id AND items.businessId = adjustments.businessId
     `;
-    const params: any[] = [];
+    const params: any[] = [bizId];
     
     if (type) {
-      query += ' WHERE type = ?';
+      query += ' WHERE adjustments.businessId = ? AND type = ?';
       params.push(type);
+    } else {
+      query += ' WHERE adjustments.businessId = ?';
     }
     
     query += ' ORDER BY createdAt DESC LIMIT ?';
@@ -2602,6 +3175,8 @@ export const getRecentAdjustments = (type?: string, limit: number = 20) => {
 export const getFilteredAdjustments = (filters: { type?: string; period?: string; search?: string } = {}) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     const conditions: string[] = [];
     const params: any[] = [];
 
@@ -2633,11 +3208,14 @@ export const getFilteredAdjustments = (filters: { type?: string; period?: string
       params.push(`%${filters.search}%`, `%${filters.search}%`);
     }
 
+    conditions.push('adjustments.businessId = ?');
+    params.push(bizId);
+
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     const query = `
       SELECT adjustments.*, items.name as itemName, items.baseUnit, items.basePurchasePrice, items.baseSellingPrice, items.packPurchasePrice
       FROM adjustments
-      LEFT JOIN items ON adjustments.itemId = items.id
+      LEFT JOIN items ON adjustments.itemId = items.id AND items.businessId = adjustments.businessId
       ${where}
       ORDER BY adjustments.createdAt DESC
     `;
@@ -2652,12 +3230,14 @@ export const getFilteredAdjustments = (filters: { type?: string; period?: string
 export const deleteAdjustment = (id: number) => {
   try {
     const database = getDB();
-    const adj = database.getFirstSync('SELECT * FROM adjustments WHERE id = ?', [id]) as any;
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return false;
+    const adj = database.getFirstSync('SELECT * FROM adjustments WHERE id = ? AND businessId = ?', [id, bizId]) as any;
     if (!adj) return false;
 
     // Only restore items quantity if it was damaged
     if (adj.type === 'damaged') {
-      const item = database.getFirstSync('SELECT * FROM items WHERE id = ?', [adj.itemId]) as any;
+      const item = database.getFirstSync('SELECT * FROM items WHERE id = ? AND businessId = ?', [adj.itemId, bizId]) as any;
       if (item) {
         let baseRefund = adj.quantity;
         let packRefund = 0;
@@ -2668,14 +3248,14 @@ export const deleteAdjustment = (id: number) => {
           packRefund = adj.quantity / (item.unitsPerPack || 1);
         }
         database.runSync(
-          'UPDATE items SET totalBaseQuantity = totalBaseQuantity + ?, totalPackQuantity = totalPackQuantity + ? WHERE id = ?',
-          [baseRefund, packRefund, adj.itemId]
+          'UPDATE items SET totalBaseQuantity = totalBaseQuantity + ?, totalPackQuantity = totalPackQuantity + ? WHERE id = ? AND businessId = ?',
+          [baseRefund, packRefund, adj.itemId, bizId]
         );
       }
     }
     
     // For price_up/price_down, reverting price is risky if new adjustments exist, so we only delete the log.
-    database.runSync('DELETE FROM adjustments WHERE id = ?', id);
+    database.runSync('DELETE FROM adjustments WHERE id = ? AND businessId = ?', [id, bizId]);
     return true;
   } catch (error) {
     console.error('Delete adjustment error:', error);
@@ -2686,7 +3266,9 @@ export const deleteAdjustment = (id: number) => {
 export const updateAdjustment = (adjId: number, data: { quantity?: number, newValue?: number, reason?: string }) => {
   try {
     const database = getDB();
-    const existing = database.getFirstSync('SELECT * FROM adjustments WHERE id = ?', [adjId]) as any;
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return false;
+    const existing = database.getFirstSync('SELECT * FROM adjustments WHERE id = ? AND businessId = ?', [adjId, bizId]) as any;
     if (!existing) return false;
 
     // Update the record
@@ -2699,7 +3281,7 @@ export const updateAdjustment = (adjId: number, data: { quantity?: number, newVa
       if (existing.type === 'damaged') {
         const diff = data.quantity - existing.quantity;
         if (diff !== 0) {
-          const item = database.getFirstSync('SELECT * FROM items WHERE id = ?', [existing.itemId]) as any;
+          const item = database.getFirstSync('SELECT * FROM items WHERE id = ? AND businessId = ?', [existing.itemId, bizId]) as any;
           if (item) {
             let baseDiff = diff;
             let packDiff = 0;
@@ -2710,8 +3292,8 @@ export const updateAdjustment = (adjId: number, data: { quantity?: number, newVa
               packDiff = diff / (item.unitsPerPack || 1);
             }
             database.runSync(
-              'UPDATE items SET totalBaseQuantity = totalBaseQuantity - ?, totalPackQuantity = totalPackQuantity - ? WHERE id = ?',
-              [baseDiff, packDiff, existing.itemId]
+              'UPDATE items SET totalBaseQuantity = totalBaseQuantity - ?, totalPackQuantity = totalPackQuantity - ? WHERE id = ? AND businessId = ?',
+              [baseDiff, packDiff, existing.itemId, bizId]
             );
           }
         }
@@ -2724,11 +3306,11 @@ export const updateAdjustment = (adjId: number, data: { quantity?: number, newVa
       
       // Affect the current price
       if (existing.type === 'price_up' || existing.type === 'price_down') {
-         database.runSync('UPDATE items SET baseSellingPrice = ? WHERE id = ?', [data.newValue, existing.itemId]);
-         const item = database.getFirstSync('SELECT * FROM items WHERE id = ?', [existing.itemId]) as any;
+         database.runSync('UPDATE items SET baseSellingPrice = ? WHERE id = ? AND businessId = ?', [data.newValue, existing.itemId, bizId]);
+         const item = database.getFirstSync('SELECT * FROM items WHERE id = ? AND businessId = ?', [existing.itemId, bizId]) as any;
          if (item && item.unitsPerPack) {
            const newPackPrice = data.newValue * item.unitsPerPack;
-           database.runSync('UPDATE items SET packSellingPrice = ? WHERE id = ?', [newPackPrice, existing.itemId]);
+           database.runSync('UPDATE items SET packSellingPrice = ? WHERE id = ? AND businessId = ?', [newPackPrice, existing.itemId, bizId]);
          }
       }
     }
@@ -2740,7 +3322,8 @@ export const updateAdjustment = (adjId: number, data: { quantity?: number, newVa
 
     if (updates.length > 0) {
       params.push(adjId);
-      database.runSync(`UPDATE adjustments SET ${updates.join(', ')} WHERE id = ?`, ...params);
+      params.push(bizId);
+      database.runSync(`UPDATE adjustments SET ${updates.join(', ')} WHERE id = ? AND businessId = ?`, ...params);
     }
     return true;
   } catch (error) {
@@ -2752,12 +3335,14 @@ export const updateAdjustment = (adjId: number, data: { quantity?: number, newVa
 export const getActivityFeed = (options: { search?: string, date?: string, limit?: number } = {}) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     const limit = options.limit || 50;
 
     // Build date condition
-    const saleDateWhere = options.date ? "WHERE date(s.createdAt) = '" + options.date + "'" : '';
-    const adjDateWhere = options.date ? "WHERE date(a.createdAt) = '" + options.date + "'" : '';
-    const expDateWhere = options.date ? "WHERE date(e.date) = '" + options.date + "'" : '';
+    const saleDateWhere = options.date ? "WHERE date(s.createdAt) = '" + options.date + "' AND s.businessId = '" + bizId + "'" : "WHERE s.businessId = '" + bizId + "'";
+    const adjDateWhere = options.date ? "WHERE date(a.createdAt) = '" + options.date + "' AND a.businessId = '" + bizId + "'" : "WHERE a.businessId = '" + bizId + "'";
+    const expDateWhere = options.date ? "WHERE date(e.date) = '" + options.date + "' AND e.businessId = '" + bizId + "'" : "WHERE e.businessId = '" + bizId + "'";
 
     // Sales (grouped by batchId)
     const sales = database.getAllSync(`
@@ -2770,13 +3355,13 @@ export const getActivityFeed = (options: { search?: string, date?: string, limit
         COALESCE(s.batchId, CAST(s.id AS TEXT)) as id,
         CASE 
           WHEN s.batchId IS NOT NULL THEN (
-            SELECT SUM(sub.totalPrice) FROM sales sub WHERE sub.batchId = s.batchId
+            SELECT SUM(sub.totalPrice) FROM sales sub WHERE sub.batchId = s.batchId AND sub.businessId = s.businessId
           )
           ELSE s.totalPrice 
         END as value,
         CASE 
           WHEN s.batchId IS NOT NULL THEN (
-            SELECT COUNT(*) FROM sales sub WHERE sub.batchId = s.batchId
+            SELECT COUNT(*) FROM sales sub WHERE sub.batchId = s.batchId AND sub.businessId = s.businessId
           )
           ELSE s.quantity 
         END as quantity,
@@ -2787,14 +3372,14 @@ export const getActivityFeed = (options: { search?: string, date?: string, limit
           WHEN s.batchId IS NOT NULL THEN (
             SELECT GROUP_CONCAT(i2.name, ', ')
             FROM sales sub2
-            JOIN items i2 ON sub2.itemId = i2.id
-            WHERE sub2.batchId = s.batchId
+            JOIN items i2 ON sub2.itemId = i2.id AND i2.businessId = sub2.businessId
+            WHERE sub2.batchId = s.batchId AND sub2.businessId = s.businessId
           )
           ELSE i.name 
         END as label,
         CASE 
           WHEN s.batchId IS NOT NULL THEN (
-            SELECT MIN(sub3.createdAt) FROM sales sub3 WHERE sub3.batchId = s.batchId
+            SELECT MIN(sub3.createdAt) FROM sales sub3 WHERE sub3.batchId = s.batchId AND sub3.businessId = s.businessId
           )
           ELSE s.createdAt 
         END as createdAt,
@@ -2802,7 +3387,7 @@ export const getActivityFeed = (options: { search?: string, date?: string, limit
         s.vat,
         s.batchId
       FROM sales s
-      JOIN items i ON s.itemId = i.id
+      JOIN items i ON s.itemId = i.id AND i.businessId = s.businessId
       ${saleDateWhere}
       GROUP BY COALESCE(s.batchId, CAST(s.id AS TEXT))
       ORDER BY createdAt DESC
@@ -2813,7 +3398,7 @@ export const getActivityFeed = (options: { search?: string, date?: string, limit
     const adjustments = database.getAllSync(`
       SELECT 'adjustment' as type, 'adjustment' as category, a.id, a.newValue as value, a.quantity, a.type as adjType, a.oldValue, COALESCE(i.name, 'Item') as label, a.createdAt, i.basePurchasePrice
       FROM adjustments a
-      LEFT JOIN items i ON a.itemId = i.id
+      LEFT JOIN items i ON a.itemId = i.id AND i.businessId = a.businessId
       ${adjDateWhere}
       ORDER BY a.createdAt DESC
       LIMIT ${limit}
@@ -2866,14 +3451,14 @@ export const insertExpense = (expense: { name: string; amount: number; category:
     const database = getDB();
     const today = toLocalDateString(new Date());
     const statement = database.prepareSync(`
-      INSERT INTO expenses (name, amount, category, date, isRecurring, frequency, nextBillingDate, budgetCategoryId, budgetId, paymentStatus, isOverdue, overdueDays, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
+      INSERT INTO expenses (name, amount, category, date, isRecurring, frequency, nextBillingDate, budgetCategoryId, budgetId, paymentStatus, isOverdue, overdueDays, businessId, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
     `);
     const result = statement.executeSync([
       expense.name, expense.amount, expense.category || 'General', expense.date || today,
       expense.isRecurring ? 1 : 0, expense.frequency || null, expense.nextBillingDate || null,
       expense.budgetCategoryId || null, expense.budgetId || null,
-      expense.paymentStatus || 'pending', expense.isOverdue ? 1 : 0, expense.overdueDays || 0, null
+      expense.paymentStatus || 'pending', expense.isOverdue ? 1 : 0, expense.overdueDays || 0, getScopedBusinessId(), null
     ]);
     return result.lastInsertRowId;
   } catch (error) {
@@ -2885,10 +3470,12 @@ export const insertExpense = (expense: { name: string; amount: number; category:
 export const getRecentExpenses = (limit: number = 10, targetDate?: string) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     if (targetDate) {
-      return database.getAllSync('SELECT * FROM expenses WHERE date(date) <= date(?) ORDER BY date DESC, createdAt DESC LIMIT ?', [targetDate, limit]);
+      return database.getAllSync('SELECT * FROM expenses WHERE date(date) <= date(?) AND businessId = ? ORDER BY date DESC, createdAt DESC LIMIT ?', [targetDate, bizId, limit]);
     }
-    return database.getAllSync('SELECT * FROM expenses ORDER BY date DESC, createdAt DESC LIMIT ?', [limit]);
+    return database.getAllSync('SELECT * FROM expenses WHERE businessId = ? ORDER BY date DESC, createdAt DESC LIMIT ?', [bizId, limit]);
   } catch (error) {
     console.error('Get recent expenses error:', error);
     return [];
@@ -2898,8 +3485,10 @@ export const getRecentExpenses = (limit: number = 10, targetDate?: string) => {
 export const getTodaysExpenses = () => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     const today = toLocalDateString(new Date());
-    return database.getAllSync('SELECT * FROM expenses WHERE date(date) = ? ORDER BY createdAt DESC', [today]);
+    return database.getAllSync('SELECT * FROM expenses WHERE date(date) = ? AND businessId = ? ORDER BY createdAt DESC', [today, bizId]);
   } catch (error) {
     console.error('Get todays expenses error:', error);
     return [];
@@ -2910,9 +3499,14 @@ export const getTodaysExpenses = () => {
 export const getFilteredExpenses = (options: FilterOptions) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     let query = `SELECT * FROM expenses`;
     const params: any[] = [];
     const conditions: string[] = [];
+
+    conditions.push('businessId = ?');
+    params.push(bizId);
 
     if (options.search) {
       conditions.push('(name LIKE ? OR category LIKE ?)');
@@ -2955,12 +3549,14 @@ export const getFilteredExpenses = (options: FilterOptions) => {
 export const getUpcomingExpenses = () => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     const now = new Date().toISOString().split('T')[0];
     return database.getAllSync(`
       SELECT * FROM expenses 
-      WHERE isRecurring = 1 AND nextBillingDate >= ?
+      WHERE isRecurring = 1 AND nextBillingDate >= ? AND businessId = ?
       ORDER BY nextBillingDate ASC
-    `, [now]);
+    `, [now, bizId]);
   } catch (error) {
     console.error('Get upcoming expenses error:', error);
     return [];
@@ -2972,14 +3568,17 @@ export const getUpcomingExpenses = () => {
 export const getRecurringExpensesDueToday = () => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     const today = new Date().toISOString().split('T')[0];
     return database.getAllSync(`
       SELECT * FROM expenses 
       WHERE isRecurring = 1 
         AND nextBillingDate <= ? 
         AND paymentStatus != 'paid'
+        AND businessId = ?
       ORDER BY nextBillingDate ASC
-    `, [today]);
+    `, [today, bizId]);
   } catch (error) {
     console.error('getRecurringExpensesDueToday error:', error);
     return [];
@@ -2989,11 +3588,13 @@ export const getRecurringExpensesDueToday = () => {
 export const getOverdueExpenses = () => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     return database.getAllSync(`
       SELECT * FROM expenses 
-      WHERE isOverdue = 1 AND paymentStatus = 'overdue'
+      WHERE isOverdue = 1 AND paymentStatus = 'overdue' AND businessId = ?
       ORDER BY overdueDays DESC
-    `);
+    `, [bizId]);
   } catch (error) {
     console.error('getOverdueExpenses error:', error);
     return [];
@@ -3003,17 +3604,19 @@ export const getOverdueExpenses = () => {
 export const getRecurringExpensesForDashboard = () => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return { dueTodayCount: 0, overdueCount: 0 };
     const today = new Date().toISOString().split('T')[0];
     
     const dueToday = database.getFirstSync<{ count: number }>(`
       SELECT COUNT(*) as count FROM expenses 
-      WHERE isRecurring = 1 AND nextBillingDate <= ? AND paymentStatus != 'paid'
-    `, [today]);
+      WHERE isRecurring = 1 AND nextBillingDate <= ? AND paymentStatus != 'paid' AND businessId = ?
+    `, [today, bizId]);
 
     const overdue = database.getFirstSync<{ count: number }>(`
       SELECT COUNT(*) as count FROM expenses 
-      WHERE isOverdue = 1 AND paymentStatus = 'overdue'
-    `);
+      WHERE isOverdue = 1 AND paymentStatus = 'overdue' AND businessId = ?
+    `, [bizId]);
 
     return {
       dueTodayCount: dueToday?.count || 0,
@@ -3028,6 +3631,8 @@ export const getRecurringExpensesForDashboard = () => {
 export const getRecurringExpensesDueTomorrow = () => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowStr = tomorrow.toISOString().split('T')[0];
@@ -3037,8 +3642,9 @@ export const getRecurringExpensesDueTomorrow = () => {
       WHERE isRecurring = 1
         AND nextBillingDate > ? AND nextBillingDate <= ?
         AND paymentStatus != 'paid'
+        AND businessId = ?
       ORDER BY nextBillingDate ASC
-    `, [todayStr, tomorrowStr]);
+    `, [todayStr, tomorrowStr, bizId]);
   } catch (error) {
     console.error('getRecurringExpensesDueTomorrow error:', error);
     return [];
@@ -3048,12 +3654,15 @@ export const getRecurringExpensesDueTomorrow = () => {
 export const getUpcomingRecurringExpenses = (limit: number = 5) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     return database.getAllSync(`
       SELECT * FROM expenses 
       WHERE isRecurring = 1 
+        AND businessId = ?
       ORDER BY nextBillingDate ASC 
       LIMIT ?
-    `, [limit]);
+    `, [bizId, limit]);
   } catch (error) {
     console.error('getUpcomingRecurringExpenses error:', error);
     return [];
@@ -3063,7 +3672,9 @@ export const getUpcomingRecurringExpenses = (limit: number = 5) => {
 export const markRecurringAsPaid = (id: number) => {
   try {
     const database = getDB();
-    const expense = database.getFirstSync<any>('SELECT * FROM expenses WHERE id = ?', [id]);
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return false;
+    const expense = database.getFirstSync<any>('SELECT * FROM expenses WHERE id = ? AND businessId = ?', [id, bizId]);
     if (!expense) return false;
 
     if (expense.isRecurring) {
@@ -3090,8 +3701,8 @@ export const markRecurringAsPaid = (id: number) => {
             overdueDays = 0, 
             nextBillingDate = ?,
             lastNotified = NULL
-        WHERE id = ?
-      `, [nextBilling, id]);
+        WHERE id = ? AND businessId = ?
+      `, [nextBilling, id, bizId]);
     } else {
       database.runSync(`
         UPDATE expenses 
@@ -3099,8 +3710,8 @@ export const markRecurringAsPaid = (id: number) => {
             isOverdue = 0, 
             overdueDays = 0, 
             lastNotified = NULL
-        WHERE id = ?
-      `, [id]);
+        WHERE id = ? AND businessId = ?
+      `, [id, bizId]);
     }
     return true;
   } catch (error) {
@@ -3112,7 +3723,9 @@ export const markRecurringAsPaid = (id: number) => {
 export const markRecurringAsOverdue = (id: number) => {
   try {
     const database = getDB();
-    const expense = database.getFirstSync<any>('SELECT * FROM expenses WHERE id = ?', [id]);
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return false;
+    const expense = database.getFirstSync<any>('SELECT * FROM expenses WHERE id = ? AND businessId = ?', [id, bizId]);
     if (!expense) return false;
 
     const dueDate = new Date(expense.nextBillingDate || expense.date);
@@ -3126,8 +3739,8 @@ export const markRecurringAsOverdue = (id: number) => {
           overdueDays = ?, 
           paymentStatus = 'overdue',
           lastNotified = ?
-      WHERE id = ?
-    `, [overdueDays, new Date().toISOString().split('T')[0], id]);
+      WHERE id = ? AND businessId = ?
+    `, [overdueDays, new Date().toISOString().split('T')[0], id, bizId]);
     return true;
   } catch (error) {
     console.error('markRecurringAsOverdue error:', error);
@@ -3138,8 +3751,10 @@ export const markRecurringAsOverdue = (id: number) => {
 export const updateLastNotified = (id: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return false;
     const today = new Date().toISOString().split('T')[0];
-    database.runSync('UPDATE expenses SET lastNotified = ? WHERE id = ?', [today, id]);
+    database.runSync('UPDATE expenses SET lastNotified = ? WHERE id = ? AND businessId = ?', [today, id, bizId]);
     return true;
   } catch (error) {
     console.error('updateLastNotified error:', error);
@@ -3150,7 +3765,9 @@ export const updateLastNotified = (id: number) => {
 export const shouldSendReminder = (id: number): boolean => {
   try {
     const database = getDB();
-    const expense = database.getFirstSync<any>('SELECT * FROM expenses WHERE id = ?', [id]);
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return false;
+    const expense = database.getFirstSync<any>('SELECT * FROM expenses WHERE id = ? AND businessId = ?', [id, bizId]);
     if (!expense) return false;
 
     // If no notification sent yet, should send
@@ -3171,12 +3788,14 @@ export const shouldSendReminder = (id: number): boolean => {
 export const getMonthlyExpenseTotal = () => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return 0;
     const now = new Date();
     const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
     const result = database.getFirstSync<{ total: number }>(`
       SELECT SUM(amount) as total FROM expenses 
-      WHERE date >= ?
-    `, [firstDay]);
+      WHERE date >= ? AND businessId = ?
+    `, [firstDay, bizId]);
     return result?.total || 0;
   } catch (error) {
     console.error('Get monthly expense total error:', error);
@@ -3187,45 +3806,47 @@ export const getMonthlyExpenseTotal = () => {
 export const getSalesSummary = () => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     const today = new Date().toISOString().split('T')[0];
     
     // Total sales revenue and count today
     const salesToday = database.getFirstSync<{ total: number, count: number }>(`
-      SELECT SUM(totalPrice) as total, COUNT(*) as count FROM sales WHERE date(createdAt) = ? AND paymentStatus != 'Order'
-    `, [today]);
+      SELECT SUM(totalPrice) as total, COUNT(*) as count FROM sales WHERE date(createdAt) = ? AND paymentStatus != 'Order' AND businessId = ?
+    `, [today, bizId]);
 
     // Total returns refund today
     const returnsToday = database.getFirstSync<{ total: number }>(`
-      SELECT SUM(totalRefund) as total FROM returns WHERE date(createdAt) = ?
-    `, [today]);
+      SELECT SUM(totalRefund) as total FROM returns WHERE date(createdAt) = ? AND businessId = ?
+    `, [today, bizId]);
 
     // Total volume (units) today
     const totalUnits = database.getFirstSync<{ volume: number }>(`
-      SELECT SUM(quantity) as volume FROM sales WHERE date(createdAt) = ? AND paymentStatus != 'Order'
-    `, [today]);
+      SELECT SUM(quantity) as volume FROM sales WHERE date(createdAt) = ? AND paymentStatus != 'Order' AND businessId = ?
+    `, [today, bizId]);
 
     // Total returned quantity today
     const returnedQty = database.getFirstSync<{ qty: number }>(`
-      SELECT SUM(CASE WHEN itemCondition = 'Resellable' THEN quantity ELSE 0 END) as qty FROM returns WHERE date(createdAt) = ?
-    `, [today]);
+      SELECT SUM(CASE WHEN itemCondition = 'Resellable' THEN quantity ELSE 0 END) as qty FROM returns WHERE date(createdAt) = ? AND businessId = ?
+    `, [today, bizId]);
 
     // Best hour of the day
     const bestHour = database.getFirstSync<{ hour: string }>(`
       SELECT strftime('%H', datetime(createdAt, 'localtime')) as hour, COUNT(*) as count 
       FROM sales 
-      WHERE paymentStatus != 'Order'
+      WHERE paymentStatus != 'Order' AND businessId = ?
       GROUP BY hour 
       ORDER BY count DESC 
       LIMIT 1
-    `);
+    `, [bizId]);
 
     // Payment method distribution
     const paymentDist = database.getAllSync<{ method: string, count: number }>(`
       SELECT paymentMethod as method, COUNT(*) as count 
       FROM sales 
-      WHERE paymentStatus != 'Order'
+      WHERE paymentStatus != 'Order' AND businessId = ?
       GROUP BY method
-    `);
+    `, [bizId]);
 
     const totalRev = salesToday?.total || 0;
     const totalRef = returnsToday?.total || 0;
@@ -3246,6 +3867,8 @@ export const getSalesSummary = () => {
 export const getTopSellingItems = (limit: number = 5) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     const today = new Date().toISOString().split('T')[0];
     const results = database.getAllSync(`
       SELECT items.*,
@@ -3253,19 +3876,19 @@ export const getTopSellingItems = (limit: number = 5) => {
         SUM(sales.totalPrice) - COALESCE(r.returnedRefund, 0) as totalRevenue,
         categories.name as categoryName
       FROM sales
-      JOIN items ON sales.itemId = items.id
+      JOIN items ON sales.itemId = items.id AND items.businessId = sales.businessId
       LEFT JOIN (
         SELECT itemId, SUM(quantity) as returnedQty, SUM(totalRefund) as returnedRefund
         FROM returns
-        WHERE date(createdAt) = ?
+        WHERE date(createdAt) = ? AND businessId = ?
         GROUP BY itemId
       ) r ON items.id = r.itemId
-      LEFT JOIN categories ON items.categoryId = categories.id
-      WHERE date(sales.createdAt) = ? AND paymentStatus != 'Order'
+      LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId
+      WHERE date(sales.createdAt) = ? AND paymentStatus != 'Order' AND sales.businessId = ?
       GROUP BY items.id
       ORDER BY totalQty DESC
       LIMIT ?
-    `, [today, today, limit]);
+    `, [today, bizId, today, bizId, limit]);
     return results;
   } catch (error) {
     console.error('Get top selling items error:', error);
@@ -3276,15 +3899,18 @@ export const getTopSellingItems = (limit: number = 5) => {
 export const getSlowMovingItems = (limit: number = 5) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     const results = database.getAllSync(`
       SELECT items.*, COALESCE(SUM(sales.quantity), 0) as totalQty, categories.name as categoryName
       FROM items
-      LEFT JOIN sales ON items.id = sales.itemId AND sales.createdAt >= date('now', '-30 days')
-      LEFT JOIN categories ON items.categoryId = categories.id
+      LEFT JOIN sales ON items.id = sales.itemId AND sales.createdAt >= date('now', '-30 days') AND sales.businessId = items.businessId
+      LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId
+      WHERE items.businessId = ?
       GROUP BY items.id
       ORDER BY totalQty ASC
       LIMIT ?
-    `, [limit]);
+    `, [bizId, limit]);
     return results;
   } catch (error) {
     console.error('Get slow moving items error:', error);
@@ -3295,14 +3921,16 @@ export const getSlowMovingItems = (limit: number = 5) => {
 export const getExpiringItems = (days: number = 30) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     const expiryLimit = new Date(Date.now() + days * 86400000).toISOString().split('T')[0];
     const results = database.getAllSync(`
       SELECT items.*, categories.name as categoryName
       FROM items
-      LEFT JOIN categories ON items.categoryId = categories.id
-      WHERE expiryDate IS NOT NULL AND expiryDate <= ? AND expiryDate >= date('now')
+      LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId
+      WHERE expiryDate IS NOT NULL AND expiryDate <= ? AND expiryDate >= date('now') AND items.businessId = ?
       ORDER BY expiryDate ASC
-    `, [expiryLimit]);
+    `, [expiryLimit, bizId]);
     return results;
   } catch (error) {
     console.error('Get expiring items error:', error);
@@ -3315,54 +3943,56 @@ export const getExpiringItems = (days: number = 30) => {
 export const getDashboardStats = (targetDate?: string) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     const today = targetDate || new Date().toISOString().split('T')[0];
     const yesterdayDate = new Date(new Date(today + 'T00:00:00').getTime() - 86400000);
     const yesterday = yesterdayDate.toISOString().split('T')[0];
 
     // Today's Stats
     const todaySales = database.getFirstSync<{ revenue: number, count: number }>(`
-      SELECT SUM(totalPrice) as revenue, COUNT(*) as count FROM sales WHERE date(createdAt) = ? AND paymentStatus != 'Order' AND totalPrice >= 0
-    `, [today]);
+      SELECT SUM(totalPrice) as revenue, COUNT(*) as count FROM sales WHERE date(createdAt) = ? AND paymentStatus != 'Order' AND totalPrice >= 0 AND businessId = ?
+    `, [today, bizId]);
 
     const todayExpenses = database.getFirstSync<{ total: number }>(`
-      SELECT SUM(amount) as total FROM expenses WHERE date(date) = ?
-    `, [today]);
+      SELECT SUM(amount) as total FROM expenses WHERE date(date) = ? AND businessId = ?
+    `, [today, bizId]);
 
     const todayDebt = database.getFirstSync<{ total: number }>(`
-      SELECT SUM(totalPrice) as total FROM sales WHERE date(createdAt) = ? AND paymentStatus = 'Debt' AND paymentStatus != 'Order'
-    `, [today]);
+      SELECT SUM(totalPrice) as total FROM sales WHERE date(createdAt) = ? AND paymentStatus = 'Debt' AND paymentStatus != 'Order' AND businessId = ?
+    `, [today, bizId]);
 
     const todayReturns = database.getFirstSync<{ totalRefund: number }>(`
-      SELECT COALESCE(SUM(totalRefund), 0) as totalRefund FROM returns WHERE date(createdAt) = ?
-    `, [today]);
+      SELECT COALESCE(SUM(totalRefund), 0) as totalRefund FROM returns WHERE date(createdAt) = ? AND businessId = ?
+    `, [today, bizId]);
 
     // Yesterday's Stats for comparison
     const yesterdaySales = database.getFirstSync<{ revenue: number, count: number }>(`
-      SELECT SUM(totalPrice) as revenue, COUNT(*) as count FROM sales WHERE date(createdAt) = ? AND paymentStatus != 'Order' AND totalPrice >= 0
-    `, [yesterday]);
+      SELECT SUM(totalPrice) as revenue, COUNT(*) as count FROM sales WHERE date(createdAt) = ? AND paymentStatus != 'Order' AND totalPrice >= 0 AND businessId = ?
+    `, [yesterday, bizId]);
 
     const yesterdayExpenses = database.getFirstSync<{ total: number }>(`
-      SELECT SUM(amount) as total FROM expenses WHERE date(date) = ?
-    `, [yesterday]);
+      SELECT SUM(amount) as total FROM expenses WHERE date(date) = ? AND businessId = ?
+    `, [yesterday, bizId]);
 
     const yesterdayProfitData = database.getFirstSync<{ gross: number }>(`
       SELECT SUM(s.totalPrice - (s.quantity * (CASE WHEN s.unitType = 'pack' THEN i.packPurchasePrice ELSE i.basePurchasePrice END))) as gross
       FROM sales s
-      JOIN items i ON s.itemId = i.id
-      WHERE date(s.createdAt) = ? AND paymentStatus != 'Order' AND s.totalPrice >= 0
-    `, [yesterday]);
+      JOIN items i ON s.itemId = i.id AND i.businessId = s.businessId
+      WHERE date(s.createdAt) = ? AND paymentStatus != 'Order' AND s.totalPrice >= 0 AND s.businessId = ?
+    `, [yesterday, bizId]);
 
     const yesterdayReturns = database.getFirstSync<{ totalRefund: number }>(`
-      SELECT COALESCE(SUM(totalRefund), 0) as totalRefund FROM returns WHERE date(createdAt) = ?
-    `, [yesterday]);
+      SELECT COALESCE(SUM(totalRefund), 0) as totalRefund FROM returns WHERE date(createdAt) = ? AND businessId = ?
+    `, [yesterday, bizId]);
 
     // Profit Calculation (Today) - EXCLUDING debt (not realized until paid)
     const profitData = database.getFirstSync<{ gross: number }>(`
       SELECT SUM(s.totalPrice - (s.quantity * (CASE WHEN s.unitType = 'pack' THEN i.packPurchasePrice ELSE i.basePurchasePrice END))) as gross
       FROM sales s
-      JOIN items i ON s.itemId = i.id
-      WHERE date(s.createdAt) = ? AND s.paymentStatus != 'Debt' AND s.paymentStatus != 'Order' AND s.totalPrice >= 0
-    `, [today]);
+      JOIN items i ON s.itemId = i.id AND i.businessId = s.businessId
+      WHERE date(s.createdAt) = ? AND s.paymentStatus != 'Debt' AND s.paymentStatus != 'Order' AND s.totalPrice >= 0 AND s.businessId = ?
+    `, [today, bizId]);
 
     const todayNetSales = (todaySales?.revenue || 0) - (todayReturns?.totalRefund || 0);
     const yesterdayNetSales = (yesterdaySales?.revenue || 0) - (yesterdayReturns?.totalRefund || 0);
@@ -3393,23 +4023,26 @@ export const getDashboardStats = (targetDate?: string) => {
 export const getInventorySummary = (warehouseId?: number | null) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     
     // Build queries dynamically based on warehouseId
-    let totalsQuery = `SELECT SUM(totalBaseQuantity * basePurchasePrice) as value, COUNT(*) as count FROM items`;
-    let lowStockQuery = `SELECT COUNT(*) as count FROM items WHERE totalBaseQuantity < 10`;
-    let highValueQuery = `SELECT name, (totalBaseQuantity * basePurchasePrice) as value FROM items`;
+    let totalsQuery = `SELECT SUM(totalBaseQuantity * basePurchasePrice) as value, COUNT(*) as count FROM items WHERE businessId = ?`;
+    let lowStockQuery = `SELECT COUNT(*) as count FROM items WHERE totalBaseQuantity < 10 AND businessId = ?`;
+    let highValueQuery = `SELECT name, (totalBaseQuantity * basePurchasePrice) as value FROM items WHERE businessId = ?`;
     let categoriesQuery = `
       SELECT c.name, COUNT(i.id) as count, SUM(i.totalBaseQuantity * i.basePurchasePrice) as value
       FROM categories c
-      JOIN items i ON i.categoryId = c.id
+      JOIN items i ON i.categoryId = c.id AND i.businessId = c.businessId
+      WHERE c.businessId = ?
     `;
     
-    const params: any[] = [];
+    const params: any[] = [bizId];
     if (warehouseId) {
-      totalsQuery += ` WHERE warehouseId = ?`;
+      totalsQuery += ` AND warehouseId = ?`;
       lowStockQuery += ` AND warehouseId = ?`;
-      highValueQuery += ` WHERE warehouseId = ?`;
-      categoriesQuery += ` WHERE i.warehouseId = ?`;
+      highValueQuery += ` AND warehouseId = ?`;
+      categoriesQuery += ` AND i.warehouseId = ?`;
       params.push(warehouseId);
     }
     
@@ -3449,19 +4082,22 @@ export const getInventorySummary = (warehouseId?: number | null) => {
 export const getExpenseHealth = () => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return { totalCount: 0, problemCount: 0, expenseHealth: 100, hasIssues: false };
     const today = new Date().toISOString().split('T')[0];
 
     // Total expenses
     const totalExpenses = database.getFirstSync<{ count: number }>(`
-      SELECT COUNT(*) as count FROM expenses
-    `);
+      SELECT COUNT(*) as count FROM expenses WHERE businessId = ?
+    `, [bizId]);
 
     // Overdue or due expenses (problematic)
     const problematicExpenses = database.getFirstSync<{ count: number }>(`
       SELECT COUNT(*) as count FROM expenses 
-      WHERE (isOverdue = 1 AND paymentStatus = 'overdue')
-         OR (isRecurring = 1 AND nextBillingDate <= ? AND paymentStatus != 'paid')
-    `, [today]);
+      WHERE businessId = ?
+         AND ((isOverdue = 1 AND paymentStatus = 'overdue')
+         OR (isRecurring = 1 AND nextBillingDate <= ? AND paymentStatus != 'paid'))
+    `, [bizId, today]);
 
     const totalCount = totalExpenses?.count || 0;
     const problemCount = problematicExpenses?.count || 0;
@@ -3482,20 +4118,23 @@ export const getExpenseHealth = () => {
 export const getInventoryStats = (warehouseId?: number | null) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     
-    let totalValueQuery = `SELECT SUM(totalBaseQuantity * basePurchasePrice) as value FROM items`;
-    let lowStockQuery = `SELECT COUNT(*) as count FROM items WHERE totalBaseQuantity < 10`;
+    let totalValueQuery = `SELECT SUM(totalBaseQuantity * basePurchasePrice) as value FROM items WHERE businessId = ?`;
+    let lowStockQuery = `SELECT COUNT(*) as count FROM items WHERE totalBaseQuantity < 10 AND businessId = ?`;
     let categoriesQuery = `
       SELECT c.name, COUNT(i.id) as count 
       FROM categories c
-      JOIN items i ON i.categoryId = c.id
+      JOIN items i ON i.categoryId = c.id AND i.businessId = c.businessId
+      WHERE c.businessId = ?
     `;
     
-    const params: any[] = [];
+    const params: any[] = [bizId];
     if (warehouseId) {
-      totalValueQuery += ` WHERE warehouseId = ?`;
+      totalValueQuery += ` AND warehouseId = ?`;
       lowStockQuery += ` AND warehouseId = ?`;
-      categoriesQuery += ` WHERE i.warehouseId = ?`;
+      categoriesQuery += ` AND i.warehouseId = ?`;
       params.push(warehouseId);
     }
     
@@ -3521,10 +4160,11 @@ export const getInventoryStats = (warehouseId?: number | null) => {
     `;
     const movingParams: any[] = [];
     if (warehouseId) {
-      movingQuery += ` JOIN items ON sales.itemId = items.id WHERE items.warehouseId = ? AND sales.createdAt >= date('now', '-30 days')`;
-      movingParams.push(warehouseId);
+      movingQuery += ` JOIN items ON sales.itemId = items.id WHERE items.warehouseId = ? AND items.businessId = ? AND sales.createdAt >= date('now', '-30 days')`;
+      movingParams.push(warehouseId, bizId);
     } else {
-      movingQuery += ` WHERE sales.createdAt >= date('now', '-30 days')`;
+      movingQuery += ` WHERE sales.createdAt >= date('now', '-30 days') AND sales.businessId = ?`;
+      movingParams.push(bizId);
     }
     movingQuery += ` GROUP BY sales.itemId )`;
 
@@ -3546,13 +4186,15 @@ export const getInventoryStats = (warehouseId?: number | null) => {
 export const getLowStockItems = () => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     return database.getAllSync(`
       SELECT items.*, categories.name as categoryName 
       FROM items 
-      LEFT JOIN categories ON items.categoryId = categories.id
-      WHERE totalBaseQuantity < COALESCE(reorderPoint, 10)
+      LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId
+      WHERE totalBaseQuantity < COALESCE(reorderPoint, 10) AND items.businessId = ?
       ORDER BY totalBaseQuantity ASC
-    `);
+    `, [bizId]);
   } catch (error) {
     console.error('Get low stock items error:', error);
     return [];
@@ -3562,15 +4204,17 @@ export const getLowStockItems = () => {
 export const getReorderSuggestions = () => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     return database.getAllSync(`
       SELECT items.*, categories.name as categoryName,
              COALESCE(reorderPoint, 10) as reorderPoint,
              MAX(COALESCE(reorderQty, 0), COALESCE(reorderPoint, 10) - totalBaseQuantity) as suggestedQty
       FROM items
-      LEFT JOIN categories ON items.categoryId = categories.id
-      WHERE totalBaseQuantity < COALESCE(reorderPoint, 10)
+      LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId
+      WHERE totalBaseQuantity < COALESCE(reorderPoint, 10) AND items.businessId = ?
       ORDER BY (totalBaseQuantity - COALESCE(reorderPoint, 10)) ASC
-    `);
+    `, [bizId]);
   } catch (error) {
     console.error('Get reorder suggestions error:', error);
     return [];
@@ -3580,6 +4224,8 @@ export const getReorderSuggestions = () => {
 export const getDebtCustomers = () => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     return database.getAllSync(`
       SELECT 
         TRIM(customerName) as customerName, 
@@ -3589,10 +4235,10 @@ export const getDebtCustomers = () => {
         MIN(dueDate) as earliestDue,
         COUNT(*) as totalDebts
       FROM sales 
-      WHERE paymentStatus = 'Debt' AND customerName IS NOT NULL AND TRIM(customerName) != ''
+      WHERE paymentStatus = 'Debt' AND customerName IS NOT NULL AND TRIM(customerName) != '' AND businessId = ?
       GROUP BY TRIM(customerName), customerPhone
       ORDER BY oweAmount DESC
-    `);
+    `, [bizId]);
   } catch (error) {
     console.error('Get debt customers error:', error);
     return [];
@@ -3602,13 +4248,15 @@ export const getDebtCustomers = () => {
 export const getDebtSales = (customerName?: string) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     let query = `
       SELECT sales.*, items.name as itemName, items.baseUnit
       FROM sales
-      LEFT JOIN items ON sales.itemId = items.id
-      WHERE (paymentStatus IN ('Debt', 'Loss') OR (paymentStatus = 'Paid' AND COALESCE(paidAmount, 0) > 0))
+      LEFT JOIN items ON sales.itemId = items.id AND items.businessId = sales.businessId
+      WHERE (paymentStatus IN ('Debt', 'Loss') OR (paymentStatus = 'Paid' AND COALESCE(paidAmount, 0) > 0)) AND sales.businessId = ?
     `;
-    const params: any[] = [];
+    const params: any[] = [bizId];
     if (customerName && customerName.trim()) {
       query += ' AND LOWER(TRIM(customerName)) = LOWER(TRIM(?))';
       params.push(customerName.trim());
@@ -3629,24 +4277,26 @@ export const processDebtPayment = (
 ) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return false;
     const method = options?.paymentMethod || null;
     if (type === 'full') {
       if (method) {
         database.runSync(
-          "UPDATE sales SET paymentStatus = 'Paid', paidAmount = totalPrice, paymentMethod = ? WHERE customerName = ? AND paymentStatus = 'Debt'",
-          [method, customerName]
+          "UPDATE sales SET paymentStatus = 'Paid', paidAmount = totalPrice, paymentMethod = ? WHERE customerName = ? AND paymentStatus = 'Debt' AND businessId = ?",
+          [method, customerName, bizId]
         );
       } else {
         database.runSync(
-          "UPDATE sales SET paymentStatus = 'Paid', paidAmount = totalPrice WHERE customerName = ? AND paymentStatus = 'Debt'",
-          [customerName]
+          "UPDATE sales SET paymentStatus = 'Paid', paidAmount = totalPrice WHERE customerName = ? AND paymentStatus = 'Debt' AND businessId = ?",
+          [customerName, bizId]
         );
       }
     } else {
       // Partial payment logic: distribute across sales
       const sales = database.getAllSync<{id: number, totalPrice: number, paidAmount: number}>(
-        "SELECT id, totalPrice, paidAmount FROM sales WHERE customerName = ? AND paymentStatus = 'Debt' ORDER BY createdAt ASC",
-        [customerName]
+        "SELECT id, totalPrice, paidAmount FROM sales WHERE customerName = ? AND paymentStatus = 'Debt' AND businessId = ? ORDER BY createdAt ASC",
+        [customerName, bizId]
       );
 
       let remaining = amount;
@@ -3658,8 +4308,8 @@ export const processDebtPayment = (
         const newStatus = newPaid >= sale.totalPrice ? 'Paid' : 'Debt';
 
         database.runSync(
-          "UPDATE sales SET paidAmount = ?, paymentStatus = ? WHERE id = ?",
-          [newPaid, newStatus, sale.id]
+          "UPDATE sales SET paidAmount = ?, paymentStatus = ? WHERE id = ? AND businessId = ?",
+          [newPaid, newStatus, sale.id, bizId]
         );
         remaining -= apply;
       }
@@ -3667,7 +4317,7 @@ export const processDebtPayment = (
     // Record this payment in the history table
     try {
       database.runSync(
-        'INSERT INTO debt_payments (saleId, customerName, customerPhone, amount, type, note) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO debt_payments (saleId, customerName, customerPhone, amount, type, note, businessId) VALUES (?, ?, ?, ?, ?, ?, ?)',
         [
           options?.saleId ?? null,
           customerName,
@@ -3675,6 +4325,7 @@ export const processDebtPayment = (
           amount,
           type,
           options?.note ?? null,
+          bizId,
         ],
       );
     } catch (e) {
@@ -3685,12 +4336,12 @@ export const processDebtPayment = (
     try {
       const batchId = 'PAY_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
       const firstDebt = database.getFirstSync<any>(
-        "SELECT itemId, unit, unitType FROM sales WHERE customerName = ? AND paymentStatus = 'Paid' ORDER BY id DESC LIMIT 1",
-        [customerName]
+        "SELECT itemId, unit, unitType FROM sales WHERE customerName = ? AND paymentStatus = 'Paid' AND businessId = ? ORDER BY id DESC LIMIT 1",
+        [customerName, bizId]
       );
       database.runSync(
-        `INSERT INTO sales (itemId, quantity, unit, unitType, discount, vat, totalPrice, paymentMethod, paymentStatus, customerName, customerPhone, batchId, createdAt)
-         VALUES (?, 1, ?, ?, 0, 0, ?, ?, 'Paid', ?, ?, ?, ?)`,
+        `INSERT INTO sales (itemId, quantity, unit, unitType, discount, vat, totalPrice, paymentMethod, paymentStatus, customerName, customerPhone, batchId, businessId, createdAt)
+         VALUES (?, 1, ?, ?, 0, 0, ?, ?, 'Paid', ?, ?, ?, ?, ?)`,
         [
           firstDebt?.itemId ?? 1,
           firstDebt?.unit || 'pcs',
@@ -3700,6 +4351,7 @@ export const processDebtPayment = (
           customerName,
           options?.customerPhone ?? null,
           batchId,
+          bizId,
           new Date().toISOString(),
         ]
       );
@@ -3716,29 +4368,32 @@ export const processDebtPayment = (
 export const markDebtAsLoss = (customerName: string, options?: { customerPhone?: string; note?: string }) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return false;
     const sales = database.getAllSync<{ id: number; totalPrice: number; paidAmount: number }>(
-      "SELECT id, totalPrice, paidAmount FROM sales WHERE customerName = ? AND paymentStatus = 'Debt'",
-      [customerName],
+      "SELECT id, totalPrice, paidAmount FROM sales WHERE customerName = ? AND paymentStatus = 'Debt' AND businessId = ?",
+      [customerName, bizId],
     );
     const outstanding = sales.reduce(
       (sum, s) => sum + Math.max(0, (s.totalPrice || 0) - (s.paidAmount || 0)),
       0,
     );
     database.runSync(
-      "UPDATE sales SET paymentStatus = 'Loss' WHERE customerName = ? AND paymentStatus = 'Debt'",
-      [customerName]
+      "UPDATE sales SET paymentStatus = 'Loss' WHERE customerName = ? AND paymentStatus = 'Debt' AND businessId = ?",
+      [customerName, bizId]
     );
     // Record write-off as a history entry (negative direction, type='loss')
     try {
       if (outstanding > 0) {
         database.runSync(
-          'INSERT INTO debt_payments (customerName, customerPhone, amount, type, note) VALUES (?, ?, ?, ?, ?)',
+          'INSERT INTO debt_payments (customerName, customerPhone, amount, type, note, businessId) VALUES (?, ?, ?, ?, ?, ?)',
           [
             customerName,
             options?.customerPhone ?? null,
             outstanding,
             'loss',
             options?.note ?? null,
+            bizId,
           ],
         );
       }
@@ -3756,6 +4411,8 @@ export const markDebtAsLoss = (customerName: string, options?: { customerPhone?:
 export const getDebtSummary = () => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return { totalOwed: 0, debtorCount: 0, overdueCount: 0, overdueAmount: 0 };
     const rows = database.getFirstSync<{
       totalOwed: number | null;
       debtorCount: number | null;
@@ -3768,8 +4425,8 @@ export const getDebtSummary = () => {
         SUM(CASE WHEN dueDate IS NOT NULL AND dueDate < date('now') THEN 1 ELSE 0 END) as overdueCount,
         COALESCE(SUM(CASE WHEN dueDate IS NOT NULL AND dueDate < date('now') THEN (totalPrice - COALESCE(paidAmount, 0)) ELSE 0 END), 0) as overdueAmount
       FROM sales
-      WHERE paymentStatus = 'Debt'
-    `);
+      WHERE paymentStatus = 'Debt' AND businessId = ?
+    `, [bizId]);
     return {
       totalOwed: Number(rows?.totalOwed || 0),
       debtorCount: Number(rows?.debtorCount || 0),
@@ -3787,13 +4444,15 @@ export const getDebtSummary = () => {
 export const getCustomerPaymentHistory = (customerName: string) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     return database.getAllSync(
       `SELECT id, saleId, customerName, customerPhone, amount, type, note, createdAt
        FROM debt_payments
-       WHERE customerName = ?
+       WHERE customerName = ? AND businessId = ?
        ORDER BY datetime(createdAt) DESC
        LIMIT 100`,
-      [customerName],
+      [customerName, bizId],
     );
   } catch (error) {
     console.error('Get customer payment history error:', error);
@@ -3805,11 +4464,13 @@ export const getCustomerPaymentHistory = (customerName: string) => {
 export const getCustomerTotalPaid = (customerName: string) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return 0;
     const row = database.getFirstSync<{ total: number | null }>(
       `SELECT COALESCE(SUM(amount), 0) as total
        FROM debt_payments
-       WHERE customerName = ? AND type IN ('full', 'partial')`,
-      [customerName],
+       WHERE customerName = ? AND type IN ('full', 'partial') AND businessId = ?`,
+      [customerName, bizId],
     );
     return Number(row?.total || 0);
   } catch (error) {
@@ -3821,7 +4482,9 @@ export const getCustomerTotalPaid = (customerName: string) => {
 export const settleItemCredit = (itemId: number) => {
   try {
     const database = getDB();
-    database.runSync("UPDATE items SET isCredit = 0 WHERE id = ?", [itemId]);
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return false;
+    database.runSync("UPDATE items SET isCredit = 0 WHERE id = ? AND businessId = ?", [itemId, bizId]);
     return true;
   } catch (error) {
     console.error('Settle item credit error:', error);
@@ -3832,6 +4495,8 @@ export const settleItemCredit = (itemId: number) => {
 export const getOnCreditItems = () => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     const rows = database.getAllSync<any>(`
       SELECT
         items.*,
@@ -3839,12 +4504,12 @@ export const getOnCreditItems = () => {
         COALESCE(SUM(CASE WHEN sm.paymentStatus IN ('Unpaid', 'Partial') THEN sm.quantityAdded ELSE 0 END), 0) as creditQuantity,
         COALESCE(SUM(CASE WHEN sm.paymentStatus IN ('Unpaid', 'Partial') THEN sm.quantityAdded * COALESCE(sm.unitPrice, 0) - COALESCE(sm.paidAmount, 0) ELSE 0 END), 0) as creditAmount
       FROM items
-      LEFT JOIN categories ON items.categoryId = categories.id
+      LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId
       LEFT JOIN stock_movements sm ON sm.itemId = items.id
-      WHERE isCredit = 1
+      WHERE isCredit = 1 AND items.businessId = ?
       GROUP BY items.id
       ORDER BY items.createdAt DESC
-    `);
+    `, [bizId]);
     return rows.map((r: any) => {
       let creditQuantity = Number(r.creditQuantity || 0);
       let creditAmount = Number(r.creditAmount || 0);
@@ -3867,6 +4532,8 @@ export const getOnCreditItems = () => {
 export const getSalesChartData = (period: 'W' | 'M' | 'Y', offset: number = 0, calendarType?: string) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     const now = new Date();
     let results: { label: string, value: number }[] = [];
 
@@ -3884,20 +4551,20 @@ export const getSalesChartData = (period: 'W' | 'M' | 'Y', offset: number = 0, c
           strftime('%w', createdAt) as label,
           SUM(totalPrice) as value
         FROM sales 
-        WHERE date(createdAt) >= ? AND date(createdAt) <= ? AND paymentStatus != 'Order'
+        WHERE date(createdAt) >= ? AND date(createdAt) <= ? AND paymentStatus != 'Order' AND businessId = ?
         GROUP BY label
         ORDER BY label
-      `, [startStr, endStr]);
+      `, [startStr, endStr, bizId]);
 
       const returnRefunds = database.getAllSync<{ label: string, value: number }>(`
         SELECT 
           strftime('%w', createdAt) as label,
           SUM(totalRefund) as value
         FROM returns 
-        WHERE date(createdAt) >= ? AND date(createdAt) <= ?
+        WHERE date(createdAt) >= ? AND date(createdAt) <= ? AND businessId = ?
         GROUP BY label
         ORDER BY label
-      `, [startStr, endStr]);
+      `, [startStr, endStr, bizId]);
 
       // Fill in missing days with 0, subtracting returns
       const fullWeek: { label: string, value: number }[] = [];
@@ -3926,13 +4593,13 @@ export const getSalesChartData = (period: 'W' | 'M' | 'Y', offset: number = 0, c
 
         const allSales = database.getAllSync<{ createdAt: string, totalPrice: number }>(`
           SELECT createdAt, totalPrice FROM sales
-          WHERE date(createdAt) >= ? AND date(createdAt) < ? AND paymentStatus != 'Order'
-        `, [startStr, endStr]);
+          WHERE date(createdAt) >= ? AND date(createdAt) < ? AND paymentStatus != 'Order' AND businessId = ?
+        `, [startStr, endStr, bizId]);
 
         const allReturns = database.getAllSync<{ createdAt: string, totalRefund: number }>(`
           SELECT createdAt, totalRefund FROM returns
-          WHERE date(createdAt) >= ? AND date(createdAt) < ?
-        `, [startStr, endStr]);
+          WHERE date(createdAt) >= ? AND date(createdAt) < ? AND businessId = ?
+        `, [startStr, endStr, bizId]);
 
         const weekMap: Record<number, number> = {};
         allSales.forEach(sale => {
@@ -3971,18 +4638,18 @@ export const getSalesChartData = (period: 'W' | 'M' | 'Y', offset: number = 0, c
       results = database.getAllSync<{ label: string, value: number }>(`
         SELECT ((CAST(strftime('%d', createdAt) AS INTEGER) - 1) / 7 + 1) as label, SUM(totalPrice) as value
         FROM sales
-        WHERE strftime('%Y-%m', createdAt) = ? AND paymentStatus != 'Order'
+        WHERE strftime('%Y-%m', createdAt) = ? AND paymentStatus != 'Order' AND businessId = ?
         GROUP BY label
         ORDER BY label
-      `, [`${y}-${m}`]);
+      `, [`${y}-${m}`, bizId]);
 
       const returnRefunds = database.getAllSync<{ label: string, value: number }>(`
         SELECT ((CAST(strftime('%d', createdAt) AS INTEGER) - 1) / 7 + 1) as label, SUM(totalRefund) as value
         FROM returns
-        WHERE strftime('%Y-%m', createdAt) = ?
+        WHERE strftime('%Y-%m', createdAt) = ? AND businessId = ?
         GROUP BY label
         ORDER BY label
-      `, [`${y}-${m}`]);
+      `, [`${y}-${m}`, bizId]);
 
       const fullMonth: { label: string, value: number }[] = [];
       const lastDay = new Date(y, monthDate.getMonth() + 1, 0).getDate();
@@ -4000,13 +4667,13 @@ export const getSalesChartData = (period: 'W' | 'M' | 'Y', offset: number = 0, c
       if (isEthiopian) {
         const allSales = database.getAllSync<{ createdAt: string, totalPrice: number }>(`
           SELECT createdAt, totalPrice FROM sales
-          WHERE strftime('%Y', createdAt) = ? AND paymentStatus != 'Order'
-        `, [String(yr)]);
+          WHERE strftime('%Y', createdAt) = ? AND paymentStatus != 'Order' AND businessId = ?
+        `, [String(yr), bizId]);
 
         const allReturns = database.getAllSync<{ createdAt: string, totalRefund: number }>(`
           SELECT createdAt, totalRefund FROM returns
-          WHERE strftime('%Y', createdAt) = ?
-        `, [String(yr)]);
+          WHERE strftime('%Y', createdAt) = ? AND businessId = ?
+        `, [String(yr), bizId]);
 
         const ethMonthMap: Record<number, number> = {};
         allSales.forEach(sale => {
@@ -4046,18 +4713,18 @@ export const getSalesChartData = (period: 'W' | 'M' | 'Y', offset: number = 0, c
       results = database.getAllSync<{ label: string, value: number }>(`
         SELECT CAST(strftime('%m', createdAt) AS INTEGER) as label, SUM(totalPrice) as value
         FROM sales
-        WHERE strftime('%Y', createdAt) = ? AND paymentStatus != 'Order'
+        WHERE strftime('%Y', createdAt) = ? AND paymentStatus != 'Order' AND businessId = ?
         GROUP BY label
         ORDER BY label
-      `, [String(yr)]);
+      `, [String(yr), bizId]);
 
       const returnRefunds = database.getAllSync<{ label: string, value: number }>(`
         SELECT CAST(strftime('%m', createdAt) AS INTEGER) as label, SUM(totalRefund) as value
         FROM returns
-        WHERE strftime('%Y', createdAt) = ?
+        WHERE strftime('%Y', createdAt) = ? AND businessId = ?
         GROUP BY label
         ORDER BY label
-      `, [String(yr)]);
+      `, [String(yr), bizId]);
 
       // Fill in missing months with 0
       const fullYear: { label: string, value: number }[] = [];
@@ -4093,6 +4760,8 @@ const CHART_LABELS: Record<string, string[]> = {
 export const getExpenseChartData = (period: string, language: string = 'en', targetDate?: string, timeSystem: 'device' | 'ethiopian' = 'device') => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
 
     if (period === 'today' || period === 'yesterday') {
       const refDate = period === 'today'
@@ -4103,9 +4772,9 @@ export const getExpenseChartData = (period: string, language: string = 'en', tar
           strftime('%H', datetime(createdAt, 'localtime')) as hour,
           SUM(amount) as value
         FROM expenses
-        WHERE date(date) = ?
+        WHERE date(date) = ? AND businessId = ?
         GROUP BY hour
-      `, [refDate]);
+      `, [refDate, bizId]);
 
       const hours = ['09', '12', '15', '18', '21'];
       const hourLabels = CHART_LABELS[`${language}_hours`] || CHART_LABELS.en_hours;
@@ -4139,9 +4808,9 @@ export const getExpenseChartData = (period: string, language: string = 'en', tar
       const results = database.getAllSync<{ day_num: string, value: number }>(`
         SELECT strftime('%w', date) as day_num, SUM(amount) as value
         FROM expenses
-        WHERE date >= ? AND date <= ?
+        WHERE date >= ? AND date <= ? AND businessId = ?
         GROUP BY day_num
-      `, [startStr, endStr]);
+      `, [startStr, endStr, bizId]);
 
       const dayLabels = CHART_LABELS[`${language}_days`] || CHART_LABELS.en_days;
       return dayLabels.map((day, index) => {
@@ -4158,9 +4827,9 @@ export const getExpenseChartData = (period: string, language: string = 'en', tar
       const results = database.getAllSync<{ week_num: number, value: number }>(`
         SELECT ((CAST(strftime('%d', date) AS INTEGER) - 1) / 7 + 1) as week_num, SUM(amount) as value
         FROM expenses
-        WHERE date >= ? AND date <= ?
+        WHERE date >= ? AND date <= ? AND businessId = ?
         GROUP BY week_num
-      `, [startStr, endStr]);
+      `, [startStr, endStr, bizId]);
 
       const weekPrefix: Record<string, string> = { en: 'Week', am: 'ሳምንት', om: 'Torban', ti: 'ሳምንት' };
       const prefix = weekPrefix[language] || 'Week';
@@ -4179,9 +4848,9 @@ export const getExpenseChartData = (period: string, language: string = 'en', tar
       const results = database.getAllSync<{ month_num: number, value: number }>(`
         SELECT CAST(strftime('%m', date) AS INTEGER) as month_num, SUM(amount) as value
         FROM expenses
-        WHERE date >= ? AND date <= ?
+        WHERE date >= ? AND date <= ? AND businessId = ?
         GROUP BY month_num
-      `, [startStr, endStr]);
+      `, [startStr, endStr, bizId]);
 
       const monthLabels = CHART_LABELS[`${language}_months`] || CHART_LABELS.en_months;
       return monthLabels.map((month, index) => {
@@ -4198,7 +4867,9 @@ export const getExpenseChartData = (period: string, language: string = 'en', tar
 export const deleteExpense = (id: number) => {
   try {
     const database = getDB();
-    database.execSync(`DELETE FROM expenses WHERE id = ${id}`);
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return false;
+    database.runSync('DELETE FROM expenses WHERE id = ? AND businessId = ?', [id, bizId]);
     auditLog('expense', id, 'expense.delete', null, null, `Expense #${id} deleted`);
     return true;
   } catch (error) {
@@ -4210,7 +4881,9 @@ export const deleteExpense = (id: number) => {
 export const deleteItem = (id: number) => {
   try {
     const database = getDB();
-    database.runSync('DELETE FROM items WHERE id = ?', [id]);
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return false;
+    database.runSync('DELETE FROM items WHERE id = ? AND businessId = ?', [id, bizId]);
     return true;
   } catch (error) {
     console.error('Delete item error:', error);
@@ -4221,10 +4894,12 @@ export const deleteItem = (id: number) => {
 export const deleteSale = (id: number) => {
   try {
     const database = getDB();
-    const sale = database.getFirstSync<{ itemId: number, quantity: number, unitType: string }>('SELECT * FROM sales WHERE id = ?', [id]);
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return false;
+    const sale = database.getFirstSync<{ itemId: number, quantity: number, unitType: string }>('SELECT * FROM sales WHERE id = ? AND businessId = ?', [id, bizId]);
     
     if (sale) {
-      const item = database.getFirstSync<{ unitsPerPack: number }>('SELECT unitsPerPack FROM items WHERE id = ?', [sale.itemId]);
+      const item = database.getFirstSync<{ unitsPerPack: number }>('SELECT unitsPerPack FROM items WHERE id = ? AND businessId = ?', [sale.itemId, bizId]);
       
       let baseRefund = sale.quantity;
       let packRefund = 0;
@@ -4237,12 +4912,12 @@ export const deleteSale = (id: number) => {
       }
 
       database.runSync(
-        'UPDATE items SET totalBaseQuantity = totalBaseQuantity + ?, totalPackQuantity = totalPackQuantity + ? WHERE id = ?',
-        [baseRefund, packRefund, sale.itemId]
+        'UPDATE items SET totalBaseQuantity = totalBaseQuantity + ?, totalPackQuantity = totalPackQuantity + ? WHERE id = ? AND businessId = ?',
+        [baseRefund, packRefund, sale.itemId, bizId]
       );
     }
 
-    database.runSync('DELETE FROM sales WHERE id = ?', [id]);
+    database.runSync('DELETE FROM sales WHERE id = ? AND businessId = ?', [id, bizId]);
     auditLog('sale', id, 'sale.delete', JSON.stringify(sale), null, `Sale #${id} deleted/voided`);
     return true;
   } catch (error) {
@@ -4254,11 +4929,13 @@ export const deleteSale = (id: number) => {
 export const deleteSalesByBatchId = (batchId: string) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return false;
     const batchSales = database.getAllSync<{ id: number, itemId: number, quantity: number, unitType: string }>(
-      'SELECT * FROM sales WHERE batchId = ?', [batchId]
+      'SELECT * FROM sales WHERE batchId = ? AND businessId = ?', [batchId, bizId]
     );
     for (const sale of batchSales) {
-      const item = database.getFirstSync<{ unitsPerPack: number }>('SELECT unitsPerPack FROM items WHERE id = ?', [sale.itemId]);
+      const item = database.getFirstSync<{ unitsPerPack: number }>('SELECT unitsPerPack FROM items WHERE id = ? AND businessId = ?', [sale.itemId, bizId]);
       let baseRefund = sale.quantity;
       let packRefund = 0;
       if (sale.unitType === 'pack' && item?.unitsPerPack) {
@@ -4268,11 +4945,11 @@ export const deleteSalesByBatchId = (batchId: string) => {
         packRefund = sale.quantity / item.unitsPerPack;
       }
       database.runSync(
-        'UPDATE items SET totalBaseQuantity = totalBaseQuantity + ?, totalPackQuantity = totalPackQuantity + ? WHERE id = ?',
-        [baseRefund, packRefund, sale.itemId]
+        'UPDATE items SET totalBaseQuantity = totalBaseQuantity + ?, totalPackQuantity = totalPackQuantity + ? WHERE id = ? AND businessId = ?',
+        [baseRefund, packRefund, sale.itemId, bizId]
       );
     }
-    database.runSync('DELETE FROM sales WHERE batchId = ?', [batchId]);
+    database.runSync('DELETE FROM sales WHERE batchId = ? AND businessId = ?', [batchId, bizId]);
     return true;
   } catch (error) {
     console.error('Delete sales by batchId error:', error);
@@ -4283,20 +4960,22 @@ export const deleteSalesByBatchId = (batchId: string) => {
 export const getInventoryComparisonStats = () => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     const d = new Date();
     const currentMonthPrefix = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     const previousMonthDate = new Date(d.getFullYear(), d.getMonth() - 1, 1);
     const lastMonthPrefix = `${previousMonthDate.getFullYear()}-${String(previousMonthDate.getMonth() + 1).padStart(2, '0')}`;
     
     const currentStats = database.getFirstSync<{ count: number }>(`
-      SELECT COUNT(*) as count FROM items WHERE createdAt LIKE ?
-    `, [`${currentMonthPrefix}%`]);
+      SELECT COUNT(*) as count FROM items WHERE createdAt LIKE ? AND businessId = ?
+    `, [`${currentMonthPrefix}%`, bizId]);
     
     const previousStats = database.getFirstSync<{ count: number }>(`
-      SELECT COUNT(*) as count FROM items WHERE createdAt LIKE ?
-    `, [`${lastMonthPrefix}%`]);
+      SELECT COUNT(*) as count FROM items WHERE createdAt LIKE ? AND businessId = ?
+    `, [`${lastMonthPrefix}%`, bizId]);
     
-    const currentTotal = database.getFirstSync<{ count: number }>('SELECT COUNT(*) as count FROM items');
+    const currentTotal = database.getFirstSync<{ count: number }>('SELECT COUNT(*) as count FROM items WHERE businessId = ?', [bizId]);
 
     return {
       totalItems: currentTotal?.count || 0,
@@ -4313,20 +4992,22 @@ export const getInventoryComparisonStats = () => {
 export const getExpenseComparisonStats = () => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     const d = new Date();
     const currentMonthPrefix = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     const previousMonthDate = new Date(d.getFullYear(), d.getMonth() - 1, 1);
     const lastMonthPrefix = `${previousMonthDate.getFullYear()}-${String(previousMonthDate.getMonth() + 1).padStart(2, '0')}`;
 
     const currentStats = database.getFirstSync<{ total: number }>(`
-      SELECT SUM(amount) as total FROM expenses WHERE date LIKE ?
-    `, [`${currentMonthPrefix}%`]);
+      SELECT SUM(amount) as total FROM expenses WHERE date LIKE ? AND businessId = ?
+    `, [`${currentMonthPrefix}%`, bizId]);
 
     const previousStats = database.getFirstSync<{ total: number }>(`
-      SELECT SUM(amount) as total FROM expenses WHERE date LIKE ?
-    `, [`${lastMonthPrefix}%`]);
+      SELECT SUM(amount) as total FROM expenses WHERE date LIKE ? AND businessId = ?
+    `, [`${lastMonthPrefix}%`, bizId]);
 
-    const allTotal = database.getFirstSync<{ total: number }>('SELECT SUM(amount) as total FROM expenses');
+    const allTotal = database.getFirstSync<{ total: number }>('SELECT SUM(amount) as total FROM expenses WHERE businessId = ?', [bizId]);
 
     return {
       totalLoss: allTotal?.total || 0,
@@ -4343,6 +5024,8 @@ export const getExpenseComparisonStats = () => {
 export const getCapitalSummary = (period: string = 'this_month', targetDate?: string) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     const d = targetDate ? parseLocalDate(targetDate) || new Date() : new Date();
     let startStr = '';
     let endStr = '';
@@ -4372,28 +5055,28 @@ export const getCapitalSummary = (period: string = 'this_month', targetDate?: st
 
     // 1. Total Disbursement in this period
     const currentTotal = database.getFirstSync<{ total: number }>(
-      'SELECT SUM(amount) as total FROM expenses WHERE date >= ? AND date <= ?',
-      [startStr, endStr]
+      'SELECT SUM(amount) as total FROM expenses WHERE date >= ? AND date <= ? AND businessId = ?',
+      [startStr, endStr, bizId]
     );
 
     // 2. Top Category
     const topCategory = database.getFirstSync<{ name: string, total: number }>(`
       SELECT category as name, SUM(amount) as total 
       FROM expenses 
-      WHERE date >= ? AND date <= ?
+      WHERE date >= ? AND date <= ? AND businessId = ?
       GROUP BY category 
       ORDER BY total DESC 
       LIMIT 1
-    `, [startStr, endStr]);
+    `, [startStr, endStr, bizId]);
 
     // 3. Category Distribution
     const categories = database.getAllSync<{ name: string, total: number }>(`
       SELECT category as name, SUM(amount) as total 
       FROM expenses 
-      WHERE date >= ? AND date <= ? 
+      WHERE date >= ? AND date <= ? AND businessId = ?
       GROUP BY category 
       ORDER BY total DESC
-    `, [startStr, endStr]);
+    `, [startStr, endStr, bizId]);
 
     // 4. Budget from budgets table
     let budget = 50000;
@@ -4439,6 +5122,8 @@ export const getCapitalSummary = (period: string = 'this_month', targetDate?: st
 export const updateItem = (id: number, updates: any) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return false;
     const validColumns = [
       'name', 'categoryId', 'companyName', 'purchaseUnit', 'baseUnit',
       'unitsPerPack', 'totalPackQuantity', 'totalBaseQuantity',
@@ -4466,7 +5151,7 @@ export const updateItem = (id: number, updates: any) => {
     // When a supplier is attached the movement doubles as a purchase record.
     if (filteredUpdates.totalBaseQuantity !== undefined) {
       const current = database.getFirstSync<{ totalBaseQuantity: number, baseUnit: string }>(
-        'SELECT totalBaseQuantity, baseUnit FROM items WHERE id = ?', [id]
+        'SELECT totalBaseQuantity, baseUnit FROM items WHERE id = ? AND businessId = ?', [id, bizId]
       );
       if (current) {
         const added = filteredUpdates.totalBaseQuantity - (current.totalBaseQuantity || 0);
@@ -4499,8 +5184,8 @@ export const updateItem = (id: number, updates: any) => {
     const setQuery = Object.keys(filteredUpdates).map(k => `${k} = ?`).join(', ');
     const values = Object.values(filteredUpdates);
     
-    const itemsSql = `UPDATE items SET ${setQuery} WHERE id = ?`;
-    const itemsParams = [...values, id] as any[];
+    const itemsSql = `UPDATE items SET ${setQuery} WHERE id = ? AND businessId = ?`;
+    const itemsParams = [...values, id, bizId] as any[];
     database.runSync(itemsSql, ...itemsParams);
     const auditFields = Object.keys(filteredUpdates).filter(k => ['name', 'baseSellingPrice', 'packSellingPrice', 'basePurchasePrice', 'totalBaseQuantity', 'totalPackQuantity'].includes(k));
     if (auditFields.length) {
@@ -4516,6 +5201,8 @@ export const updateItem = (id: number, updates: any) => {
 export const updateSale = (id: number, updates: any) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return false;
     const validColumns = [
       'itemId', 'quantity', 'unit', 'unitType', 'discount', 'vat', 'taxType',
       'totalPrice', 'paymentMethod', 'paymentStatus', 
@@ -4535,8 +5222,8 @@ export const updateSale = (id: number, updates: any) => {
     const setQuery = Object.keys(filteredUpdates).map(k => `${k} = ?`).join(', ');
     const values = Object.values(filteredUpdates);
     
-    const salesSql = `UPDATE sales SET ${setQuery} WHERE id = ?`;
-    const salesParams = [...values, id] as any[];
+    const salesSql = `UPDATE sales SET ${setQuery} WHERE id = ? AND businessId = ?`;
+    const salesParams = [...values, id, bizId] as any[];
     database.runSync(salesSql, ...salesParams);
     auditLog('sale', id, 'sale.update', null, JSON.stringify(filteredUpdates), `Sale #${id} updated`);
     return true;
@@ -4549,7 +5236,9 @@ export const updateSale = (id: number, updates: any) => {
 export const updateSaleItem = (id: number, updates: any) => {
   try {
     const database = getDB();
-    const old = database.getFirstSync<{ itemId: number, quantity: number, unitType: string }>('SELECT * FROM sales WHERE id = ?', [id]);
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return false;
+    const old = database.getFirstSync<{ itemId: number, quantity: number, unitType: string }>('SELECT * FROM sales WHERE id = ? AND businessId = ?', [id, bizId]);
     if (!old) return false;
 
     const validColumns = [
@@ -4572,7 +5261,7 @@ export const updateSaleItem = (id: number, updates: any) => {
     const newQty = filteredUpdates.quantity !== undefined ? filteredUpdates.quantity : old.quantity;
     if (newQty !== old.quantity) {
       const diff = old.quantity - newQty; // positive = refund (return to stock), negative = more sold
-      const item = database.getFirstSync<{ unitsPerPack: number }>('SELECT unitsPerPack FROM items WHERE id = ?', [old.itemId]);
+      const item = database.getFirstSync<{ unitsPerPack: number }>('SELECT unitsPerPack FROM items WHERE id = ? AND businessId = ?', [old.itemId, bizId]);
       let baseQty = diff;
       let packQty = 0;
       if (old.unitType === 'pack' && item?.unitsPerPack) {
@@ -4582,15 +5271,15 @@ export const updateSaleItem = (id: number, updates: any) => {
         packQty = diff / item.unitsPerPack;
       }
       database.runSync(
-        'UPDATE items SET totalBaseQuantity = totalBaseQuantity + ?, totalPackQuantity = totalPackQuantity + ? WHERE id = ?',
-        [baseQty, packQty, old.itemId]
+        'UPDATE items SET totalBaseQuantity = totalBaseQuantity + ?, totalPackQuantity = totalPackQuantity + ? WHERE id = ? AND businessId = ?',
+        [baseQty, packQty, old.itemId, bizId]
       );
     }
 
     const setQuery = Object.keys(filteredUpdates).map(k => `${k} = ?`).join(', ');
     const values = Object.values(filteredUpdates);
-    const sql = `UPDATE sales SET ${setQuery} WHERE id = ?`;
-    database.runSync(sql, ...([...values, id] as any[]));
+    const sql = `UPDATE sales SET ${setQuery} WHERE id = ? AND businessId = ?`;
+    database.runSync(sql, ...([...values, id, bizId] as any[]));
     return true;
   } catch (error) {
     console.error('Update sale item error:', error);
@@ -4601,6 +5290,8 @@ export const updateSaleItem = (id: number, updates: any) => {
 export const updateExpense = (id: number, updates: any) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return false;
     const validColumns = [
       'name', 'amount', 'category', 'date', 
       'isRecurring', 'frequency', 'nextBillingDate', 'createdAt',
@@ -4619,8 +5310,8 @@ export const updateExpense = (id: number, updates: any) => {
     const setQuery = Object.keys(filteredUpdates).map(k => `${k} = ?`).join(', ');
     const values = Object.values(filteredUpdates);
     
-    const expensesSql = `UPDATE expenses SET ${setQuery} WHERE id = ?`;
-    const expensesParams = [...values, id] as any[];
+    const expensesSql = `UPDATE expenses SET ${setQuery} WHERE id = ? AND businessId = ?`;
+    const expensesParams = [...values, id, bizId] as any[];
     database.runSync(expensesSql, ...expensesParams);
     return true;
   } catch (error) {
@@ -4664,44 +5355,46 @@ export const clearDatabase = () => {
 export const getAdjustmentSummary = () => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     const d = new Date();
     const currentMonthPrefix = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 
     const totalRecords = database.getFirstSync<{ count: number }>(
-      'SELECT COUNT(*) as count FROM adjustments WHERE createdAt LIKE ?',
-      [`${currentMonthPrefix}%`]
+      'SELECT COUNT(*) as count FROM adjustments WHERE createdAt LIKE ? AND businessId = ?',
+      [`${currentMonthPrefix}%`, bizId]
     );
 
     const priceDecreaseLeakage = database.getFirstSync<{ total: number }>(`
       SELECT SUM((oldValue - newValue) * i.totalBaseQuantity) as total 
       FROM adjustments a
-      JOIN items i ON a.itemId = i.id
-      WHERE a.type = 'price_down' AND a.createdAt LIKE ?
-    `, [`${currentMonthPrefix}%`]);
+      JOIN items i ON a.itemId = i.id AND i.businessId = a.businessId
+      WHERE a.type = 'price_down' AND a.createdAt LIKE ? AND a.businessId = ?
+    `, [`${currentMonthPrefix}%`, bizId]);
 
     const damagedLeakage = database.getFirstSync<{ total: number }>(`
       SELECT SUM(a.quantity * i.basePurchasePrice) as total 
       FROM adjustments a
-      JOIN items i ON a.itemId = i.id
-      WHERE a.type = 'damaged' AND a.createdAt LIKE ?
-    `, [`${currentMonthPrefix}%`]);
+      JOIN items i ON a.itemId = i.id AND i.businessId = a.businessId
+      WHERE a.type = 'damaged' AND a.createdAt LIKE ? AND a.businessId = ?
+    `, [`${currentMonthPrefix}%`, bizId]);
 
     const topAdjusted = database.getFirstSync<{ name: string, count: number }>(`
       SELECT i.name, COUNT(a.id) as count 
       FROM adjustments a
-      JOIN items i ON a.itemId = i.id
-      WHERE a.createdAt LIKE ?
+      JOIN items i ON a.itemId = i.id AND i.businessId = a.businessId
+      WHERE a.createdAt LIKE ? AND a.businessId = ?
       GROUP BY a.itemId 
       ORDER BY count DESC 
       LIMIT 1
-    `, [`${currentMonthPrefix}%`]);
+    `, [`${currentMonthPrefix}%`, bizId]);
 
     const types = database.getAllSync<{ type: string, count: number }>(`
       SELECT type, COUNT(*) as count 
       FROM adjustments 
-      WHERE createdAt LIKE ?
+      WHERE createdAt LIKE ? AND businessId = ?
       GROUP BY type
-    `, [`${currentMonthPrefix}%`]);
+    `, [`${currentMonthPrefix}%`, bizId]);
 
     return {
       totalRecords: totalRecords?.count || 0,
@@ -4719,17 +5412,19 @@ export const getAdjustmentSummary = () => {
 export const getSummaryAnalytics = (targetDate?: string) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     const today = targetDate || new Date().toISOString().split('T')[0];
     
     const topItem = database.getFirstSync<{ name: string, quantity: number }>(`
       SELECT i.name, SUM(s.quantity) as quantity
       FROM sales s
-      JOIN items i ON s.itemId = i.id
-      WHERE date(s.createdAt) = ?
+      JOIN items i ON s.itemId = i.id AND i.businessId = s.businessId
+      WHERE date(s.createdAt) = ? AND s.businessId = ?
       GROUP BY s.itemId
       ORDER BY quantity DESC
       LIMIT 1
-    `, [today]);
+    `, [today, bizId]);
 
     const stats = getDashboardStats(targetDate);
     let healthScore = 100;
@@ -4761,14 +5456,17 @@ export const getSummaryAnalytics = (targetDate?: string) => {
 export const getTopHighestValueItems = (limit: number = 10) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     const results = database.getAllSync(`
       SELECT items.*, categories.name as categoryName,
              (items.totalBaseQuantity * items.baseSellingPrice) as totalValue
       FROM items
-      LEFT JOIN categories ON items.categoryId = categories.id
+      LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId
+      WHERE items.businessId = ?
       ORDER BY totalValue DESC
       LIMIT ?
-    `, [limit]);
+    `, [bizId, limit]);
     return results;
   } catch (error) {
     console.error('Get top highest value items error:', error);
@@ -4779,6 +5477,8 @@ export const getTopHighestValueItems = (limit: number = 10) => {
 export const getInventoryItemsByPeriod = (period: 'today' | 'yesterday' | 'date' | 'week' | 'month' | 'year', targetDate?: string, offset?: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     const now = new Date();
     let params: any[] = [];
     let query = '';
@@ -4789,11 +5489,11 @@ export const getInventoryItemsByPeriod = (period: 'today' | 'yesterday' | 'date'
         SELECT items.*, categories.name as categoryName,
                strftime('%H:%M', items.createdAt) as timeStr
         FROM items
-        LEFT JOIN categories ON items.categoryId = categories.id
+        LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId
         WHERE date(items.createdAt) = ?
         ORDER BY items.createdAt DESC
       `;
-      params = [todayStr];
+      params = [todayStr, bizId];
     } else if (period === 'yesterday') {
       const yesterday = new Date(now);
       yesterday.setDate(yesterday.getDate() - 1);
@@ -4802,22 +5502,22 @@ export const getInventoryItemsByPeriod = (period: 'today' | 'yesterday' | 'date'
         SELECT items.*, categories.name as categoryName,
                strftime('%H:%M', items.createdAt) as timeStr
         FROM items
-        LEFT JOIN categories ON items.categoryId = categories.id
+        LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId
         WHERE date(items.createdAt) = ?
         ORDER BY items.createdAt DESC
       `;
-      params = [yesterdayStr];
+      params = [yesterdayStr, bizId];
     } else if (period === 'date') {
       const dateStr = targetDate || now.toISOString().split('T')[0];
       query = `
         SELECT items.*, categories.name as categoryName,
                strftime('%H:%M', items.createdAt) as timeStr
         FROM items
-        LEFT JOIN categories ON items.categoryId = categories.id
+        LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId
         WHERE date(items.createdAt) = ?
         ORDER BY items.createdAt DESC
       `;
-      params = [dateStr];
+      params = [dateStr, bizId];
     } else if (period === 'week') {
       const safeOffset = offset || 0;
       const weekStart = new Date(now);
@@ -4832,11 +5532,11 @@ export const getInventoryItemsByPeriod = (period: 'today' | 'yesterday' | 'date'
                strftime('%w', items.createdAt) as dayOfWeek,
                strftime('%Y-%m-%d', items.createdAt) as dateStr
         FROM items
-        LEFT JOIN categories ON items.categoryId = categories.id
+        LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId
         WHERE date(items.createdAt) >= ? AND date(items.createdAt) <= ?
         ORDER BY items.createdAt DESC
       `;
-      params = [startStr, endStr];
+      params = [startStr, endStr, bizId];
     } else if (period === 'month') {
       const monthOffset = offset || 0;
       const monthDate = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
@@ -4848,11 +5548,11 @@ export const getInventoryItemsByPeriod = (period: 'today' | 'yesterday' | 'date'
                ((CAST(strftime('%d', items.createdAt) AS INTEGER) - 1) / 7 + 1) as weekNum,
                strftime('%Y-%m-%d', items.createdAt) as dateStr
         FROM items
-        LEFT JOIN categories ON items.categoryId = categories.id
-        WHERE strftime('%m', items.createdAt) = ? AND strftime('%Y', items.createdAt) = ?
+        LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId
+        WHERE strftime('%m', items.createdAt) = ? AND strftime('%Y', items.createdAt) = ? AND items.businessId = ?
         ORDER BY items.createdAt
       `;
-      params = [monthStr, yearStr];
+      params = [monthStr, yearStr, bizId];
     } else if (period === 'year') {
       const yearOffset = offset || 0;
       const yearDate = new Date(now.getFullYear() + yearOffset, 0, 1);
@@ -4863,11 +5563,11 @@ export const getInventoryItemsByPeriod = (period: 'today' | 'yesterday' | 'date'
                CAST(strftime('%m', items.createdAt) AS INTEGER) as monthNum,
                strftime('%Y-%m-%d', items.createdAt) as dateStr
         FROM items
-        LEFT JOIN categories ON items.categoryId = categories.id
-        WHERE strftime('%Y', items.createdAt) = ?
+        LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId
+        WHERE strftime('%Y', items.createdAt) = ? AND items.businessId = ?
         ORDER BY items.createdAt
       `;
-      params = [yearStr];
+      params = [yearStr, bizId];
     }
 
     return database.getAllSync(query, params);
@@ -4883,6 +5583,8 @@ export const getMovingItemsWithFilters = (
 ) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     const now = new Date();
     let dateCondition = '';
 
@@ -4910,9 +5612,9 @@ export const getMovingItemsWithFilters = (
                COALESCE(SUM(sales.quantity), 0) as totalQty,
                COUNT(sales.id) as totalSales
         FROM sales
-        JOIN items ON sales.itemId = items.id
-        LEFT JOIN categories ON items.categoryId = categories.id
-        WHERE 1=1 AND paymentStatus != 'Order' ${dateCondition}
+        JOIN items ON sales.itemId = items.id AND items.businessId = sales.businessId
+        LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId
+        WHERE 1=1 AND paymentStatus != 'Order' ${dateCondition} AND sales.businessId = '${bizId}'
         GROUP BY categories.name
         ORDER BY totalQty DESC
       `);
@@ -4932,9 +5634,9 @@ export const getMovingItemsWithFilters = (
              COALESCE(SUM(sales.quantity), 0) as totalQty,
              COUNT(sales.id) as totalSales
       FROM items
-      LEFT JOIN sales ON items.id = sales.itemId
-      LEFT JOIN categories ON items.categoryId = categories.id
-      WHERE 1=1 AND paymentStatus != 'Order' ${dateCondition}
+      LEFT JOIN sales ON items.id = sales.itemId AND sales.businessId = items.businessId
+      LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId
+      WHERE 1=1 AND paymentStatus != 'Order' ${dateCondition} AND items.businessId = '${bizId}'
       GROUP BY items.id
       HAVING totalQty >= ? AND totalQty <= ?
       ${orderClause}
@@ -4951,13 +5653,15 @@ export const getMovingItemsWithFilters = (
 export const getInStockItems = (): ItemData[] => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     return database.getAllSync<ItemData>(`
       SELECT items.*, categories.name as categoryName 
       FROM items 
-      LEFT JOIN categories ON items.categoryId = categories.id
-      WHERE totalBaseQuantity > 0
+      LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId
+      WHERE totalBaseQuantity > 0 AND items.businessId = ?
       ORDER BY totalBaseQuantity DESC
-    `);
+    `, [bizId]);
   } catch (error) {
     console.error('Get in stock items error:', error);
     return [];
@@ -4967,6 +5671,8 @@ export const getInStockItems = (): ItemData[] => {
 export const getItemsFilteredByStockStatus = (status: 'in_stock' | 'low_stock'): ItemData[] => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     let condition = status === 'in_stock' 
       ? 'totalBaseQuantity > 0'
       : 'totalBaseQuantity < 10';
@@ -4974,10 +5680,10 @@ export const getItemsFilteredByStockStatus = (status: 'in_stock' | 'low_stock'):
     return database.getAllSync<ItemData>(`
       SELECT items.*, categories.name as categoryName 
       FROM items 
-      LEFT JOIN categories ON items.categoryId = categories.id
-      WHERE ${condition}
+      LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId
+      WHERE ${condition} AND items.businessId = ?
       ORDER BY totalBaseQuantity ${status === 'in_stock' ? 'DESC' : 'ASC'}
-    `);
+    `, [bizId]);
   } catch (error) {
     console.error('Get items filtered by stock status error:', error);
     return [];
@@ -4992,6 +5698,8 @@ export const getItemsFilteredByStockStatus = (status: 'in_stock' | 'low_stock'):
 export const getAdjustmentDashboardMetrics = (startDate?: string, endDate?: string) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     
     // Default to current month if no dates provided
     const d = new Date();
@@ -5002,23 +5710,23 @@ export const getAdjustmentDashboardMetrics = (startDate?: string, endDate?: stri
     const increasedCount = database.getFirstSync<{ count: number, total: number }>(`
       SELECT COUNT(*) as count, COALESCE(SUM(newValue - oldValue), 0) as total
       FROM adjustments 
-      WHERE type = 'price_up' AND date(createdAt) >= ? AND date(createdAt) <= ?
-    `, [defaultStart, defaultEnd]);
+      WHERE type = 'price_up' AND date(createdAt) >= ? AND date(createdAt) <= ? AND businessId = ?
+    `, [defaultStart, defaultEnd, bizId]);
 
     // Items Decreased in Price
     const decreasedCount = database.getFirstSync<{ count: number, total: number }>(`
       SELECT COUNT(*) as count, COALESCE(SUM(oldValue - newValue), 0) as total
       FROM adjustments 
-      WHERE type = 'price_down' AND date(createdAt) >= ? AND date(createdAt) <= ?
-    `, [defaultStart, defaultEnd]);
+      WHERE type = 'price_down' AND date(createdAt) >= ? AND date(createdAt) <= ? AND businessId = ?
+    `, [defaultStart, defaultEnd, bizId]);
 
     // Damaged Items
     const damagedData = database.getFirstSync<{ count: number, total: number }>(`
       SELECT COUNT(*) as count, COALESCE(SUM(a.quantity * i.basePurchasePrice), 0) as total
       FROM adjustments a
-      JOIN items i ON a.itemId = i.id
-      WHERE a.type = 'damaged' AND date(a.createdAt) >= ? AND date(a.createdAt) <= ?
-    `, [defaultStart, defaultEnd]);
+      JOIN items i ON a.itemId = i.id AND i.businessId = a.businessId
+      WHERE a.type = 'damaged' AND date(a.createdAt) >= ? AND date(a.createdAt) <= ? AND a.businessId = ?
+    `, [defaultStart, defaultEnd, bizId]);
 
     const itemsIncreased = increasedCount?.count || 0;
     const itemsDecreased = decreasedCount?.count || 0;
@@ -5052,52 +5760,54 @@ export const getSummaryMetricsByDateRange = (
 ) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
 
     // Sales (Cash)
     const salesCash = database.getFirstSync<{ total: number }>(`
       SELECT COALESCE(SUM(totalPrice), 0) as total FROM sales 
-      WHERE date(createdAt) >= ? AND date(createdAt) <= ? AND paymentStatus != 'Order'
-    `, [startDate, endDate]);
+      WHERE date(createdAt) >= ? AND date(createdAt) <= ? AND paymentStatus != 'Order' AND businessId = ?
+    `, [startDate, endDate, bizId]);
 
     // Sales (Items count)
     const salesItems = database.getFirstSync<{ total: number }>(`
       SELECT COALESCE(SUM(quantity), 0) as total FROM sales 
-      WHERE date(createdAt) >= ? AND date(createdAt) <= ? AND paymentStatus != 'Order'
-    `, [startDate, endDate]);
+      WHERE date(createdAt) >= ? AND date(createdAt) <= ? AND paymentStatus != 'Order' AND businessId = ?
+    `, [startDate, endDate, bizId]);
 
     // Profit (Gross Profit = Revenue - COGS)
     const profitData = database.getFirstSync<{ total: number }>(`
       SELECT COALESCE(SUM(s.totalPrice - (s.quantity * (CASE WHEN s.unitType = 'pack' THEN i.packPurchasePrice ELSE i.basePurchasePrice END))), 0) as total
       FROM sales s
-      JOIN items i ON s.itemId = i.id
-      WHERE date(s.createdAt) >= ? AND date(s.createdAt) <= ? AND paymentStatus != 'Order'
-    `, [startDate, endDate]);
+      JOIN items i ON s.itemId = i.id AND i.businessId = s.businessId
+      WHERE date(s.createdAt) >= ? AND date(s.createdAt) <= ? AND paymentStatus != 'Order' AND s.businessId = ?
+    `, [startDate, endDate, bizId]);
 
     // Expenses
     const expenses = database.getFirstSync<{ total: number }>(`
       SELECT COALESCE(SUM(amount), 0) as total FROM expenses 
-      WHERE date(date) >= ? AND date(date) <= ?
-    `, [startDate, endDate]);
+      WHERE date(date) >= ? AND date(date) <= ? AND businessId = ?
+    `, [startDate, endDate, bizId]);
 
     // Debt
     const debt = database.getFirstSync<{ total: number }>(`
       SELECT COALESCE(SUM(totalPrice - COALESCE(paidAmount, 0)), 0) as total FROM sales 
-      WHERE paymentStatus = 'Debt' AND date(createdAt) >= ? AND date(createdAt) <= ?
-    `, [startDate, endDate]);
+      WHERE paymentStatus = 'Debt' AND date(createdAt) >= ? AND date(createdAt) <= ? AND businessId = ?
+    `, [startDate, endDate, bizId]);
 
     // Returns (total refunds in the period)
     const returnData = database.getFirstSync<{ totalRefund: number, returnCount: number }>(`
       SELECT COALESCE(SUM(totalRefund), 0) as totalRefund, COUNT(*) as returnCount FROM returns 
-      WHERE date(createdAt) >= ? AND date(createdAt) <= ?
-    `, [startDate, endDate]);
+      WHERE date(createdAt) >= ? AND date(createdAt) <= ? AND businessId = ?
+    `, [startDate, endDate, bizId]);
 
     // Damage Loss
     const damageLoss = database.getFirstSync<{ total: number }>(`
       SELECT COALESCE(SUM(a.quantity * i.basePurchasePrice), 0) as total
       FROM adjustments a
-      JOIN items i ON a.itemId = i.id
-      WHERE a.type = 'damaged' AND date(a.createdAt) >= ? AND date(a.createdAt) <= ?
-    `, [startDate, endDate]);
+      JOIN items i ON a.itemId = i.id AND i.businessId = a.businessId
+      WHERE a.type = 'damaged' AND date(a.createdAt) >= ? AND date(a.createdAt) <= ? AND a.businessId = ?
+    `, [startDate, endDate, bizId]);
 
     // Price Changes (net gain from price increases - decreases)
     const priceChanges = database.getFirstSync<{ total: number }>(`
@@ -5109,14 +5819,14 @@ export const getSummaryMetricsByDateRange = (
         END
       ), 0) as total
       FROM adjustments
-      WHERE date(createdAt) >= ? AND date(createdAt) <= ?
-    `, [startDate, endDate]);
+      WHERE date(createdAt) >= ? AND date(createdAt) <= ? AND businessId = ?
+    `, [startDate, endDate, bizId]);
 
     // Other Losses (debt marked as loss)
     const otherLosses = database.getFirstSync<{ total: number }>(`
       SELECT COALESCE(SUM(totalPrice - COALESCE(paidAmount, 0)), 0) as total FROM sales 
-      WHERE paymentStatus = 'Loss' AND date(createdAt) >= ? AND date(createdAt) <= ?
-    `, [startDate, endDate]);
+      WHERE paymentStatus = 'Loss' AND date(createdAt) >= ? AND date(createdAt) <= ? AND businessId = ?
+    `, [startDate, endDate, bizId]);
 
     const salesCashVal = salesCash?.total || 0;
     const salesItemsVal = salesItems?.total || 0;
@@ -5176,10 +5886,12 @@ export const getVatSummaryByDateRange = (
 ) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     const rows = database.getAllSync<{ vat: number; totalPrice: number; discount: number }>(`
       SELECT vat, totalPrice, discount FROM sales
-      WHERE date(createdAt) >= ? AND date(createdAt) <= ? AND (is_deleted = 0 OR is_deleted IS NULL)
-    `, [startDate, endDate]);
+      WHERE date(createdAt) >= ? AND date(createdAt) <= ? AND (is_deleted = 0 OR is_deleted IS NULL) AND businessId = ?
+    `, [startDate, endDate, bizId]);
 
     const rateTotals: Record<string, { count: number; taxable: number; vat: number; sales: number }> = {};
     let totalTaxable = 0, totalVAT = 0, totalSales = 0, totalCount = 0, totalDiscount = 0;
@@ -5223,8 +5935,11 @@ export const getVatSummaryByDateRange = (
 // 4.12: Gift cards / store credit.
 export const getGiftCards = () => {
   try {
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     return getDB().getAllSync(
-      `SELECT * FROM gift_cards WHERE (is_deleted = 0 OR is_deleted IS NULL) ORDER BY createdAt DESC`
+      `SELECT * FROM gift_cards WHERE (is_deleted = 0 OR is_deleted IS NULL) AND businessId = ? ORDER BY createdAt DESC`,
+      [bizId]
     );
   } catch (error) {
     console.error('getGiftCards error:', error);
@@ -5234,10 +5949,12 @@ export const getGiftCards = () => {
 
 export const findGiftCardByCode = (code: string) => {
   try {
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return { ok: false as const, message: 'Failed to lookup gift card' };
     const c = code.trim().toUpperCase();
     const row = getDB().getFirstSync<{ id: number; balance: number; status: string; expiryDate?: string }>(
-      `SELECT id, balance, status, expiryDate FROM gift_cards WHERE upper(code) = ? AND (is_deleted = 0 OR is_deleted IS NULL)`,
-      [c]
+      `SELECT id, balance, status, expiryDate FROM gift_cards WHERE upper(code) = ? AND (is_deleted = 0 OR is_deleted IS NULL) AND businessId = ?`,
+      [c, bizId]
     );
     if (!row) return { ok: false as const, message: 'Gift card not found' };
     if (row.status !== 'active') return { ok: false as const, message: 'Gift card is not active' };
@@ -5252,6 +5969,8 @@ export const findGiftCardByCode = (code: string) => {
 export const redeemGiftCard = (code: string, amount: number, refId?: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return { ok: false as const, message: 'Failed to redeem gift card' };
     const found = findGiftCardByCode(code);
     if (!found.ok) return { ok: false as const, message: found.message };
     const card = found.card;
@@ -5260,10 +5979,10 @@ export const redeemGiftCard = (code: string, amount: number, refId?: number) => 
     const tx = () => {
       beginTransaction(database);
       try {
-        database.runSync('UPDATE gift_cards SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [amount, card.id]);
+        database.runSync('UPDATE gift_cards SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND businessId = ?', [amount, card.id, bizId]);
         database.runSync(
-          `INSERT INTO gift_card_transactions (giftCardId, type, amount, refType, refId) VALUES (?, 'redeem', ?, 'sale', ?)`,
-          [card.id, amount, refId || null]
+          `INSERT INTO gift_card_transactions (giftCardId, type, amount, refType, refId, businessId) VALUES (?, 'redeem', ?, 'sale', ?, ?)`,
+          [card.id, amount, refId || null, bizId]
         );
         commitTransaction(database);
         return card.balance - amount;
@@ -5281,9 +6000,11 @@ export const redeemGiftCard = (code: string, amount: number, refId?: number) => 
 
 export const getGiftCardTransactions = (cardId: number) => {
   try {
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     return getDB().getAllSync(
-      `SELECT * FROM gift_card_transactions WHERE giftCardId = ? ORDER BY createdAt DESC`,
-      [cardId]
+      `SELECT * FROM gift_card_transactions WHERE giftCardId = ? AND businessId = ? ORDER BY createdAt DESC`,
+      [cardId, bizId]
     );
   } catch (error) {
     console.error('getGiftCardTransactions error:', error);
@@ -5297,8 +6018,10 @@ export const getDrilldownSummaryByDateRange = (
 ) => {
   try {
     const database = getDB();
-    const salesWhere = `date(s.createdAt) >= ? AND date(s.createdAt) <= ? AND (s.is_deleted = 0 OR s.is_deleted IS NULL)`;
-    const salesParams = [startDate, endDate];
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
+    const salesWhere = `date(s.createdAt) >= ? AND date(s.createdAt) <= ? AND (s.is_deleted = 0 OR s.is_deleted IS NULL) AND s.businessId = ?`;
+    const salesParams = [startDate, endDate, bizId];
 
     const byHour = database.getAllSync(`
       SELECT CAST(strftime('%H', s.createdAt) AS INTEGER) AS hour, COUNT(*) AS saleCount,
@@ -5316,8 +6039,8 @@ export const getDrilldownSummaryByDateRange = (
              COALESCE(SUM((CASE WHEN s.unitType = 'pack' THEN s.quantity * COALESCE(i.unitsPerPack, 1) ELSE s.quantity END) * COALESCE(i.basePurchasePrice, 0)), 0) AS cogs,
              COALESCE(SUM(s.totalPrice - (CASE WHEN s.unitType = 'pack' THEN s.quantity * COALESCE(i.unitsPerPack, 1) ELSE s.quantity END) * COALESCE(i.basePurchasePrice, 0)), 0) AS profit
       FROM sales s
-      LEFT JOIN items i ON s.itemId = i.id
-      LEFT JOIN categories c ON i.categoryId = c.id
+      LEFT JOIN items i ON s.itemId = i.id AND i.businessId = s.businessId
+      LEFT JOIN categories c ON i.categoryId = c.id AND c.businessId = i.businessId
       WHERE ${salesWhere}
       GROUP BY i.id
       ORDER BY profit DESC
@@ -5326,14 +6049,14 @@ export const getDrilldownSummaryByDateRange = (
     const today = new Date().toISOString().split('T')[0];
     const debtAging = database.getAllSync(`
       SELECT s.customerName, s.customerPhone,
-             COALESCE(SUM(s.totalPrice), 0) - COALESCE((SELECT SUM(dp.amount) FROM debt_payments dp WHERE dp.saleId = s.id), 0) AS outstanding,
+             COALESCE(SUM(s.totalPrice), 0) - COALESCE((SELECT SUM(dp.amount) FROM debt_payments dp WHERE dp.saleId = s.id AND dp.businessId = s.businessId), 0) AS outstanding,
              CAST(julianday(?) - julianday(MAX(s.createdAt)) AS INTEGER) AS daysOverdue
       FROM sales s
-      WHERE s.paymentStatus = 'Debt' AND (s.is_deleted = 0 OR s.is_deleted IS NULL)
+      WHERE s.paymentStatus = 'Debt' AND (s.is_deleted = 0 OR s.is_deleted IS NULL) AND s.businessId = ?
       GROUP BY s.customerName, s.customerPhone
       HAVING outstanding > 0
       ORDER BY daysOverdue DESC
-    `, [today]);
+    `, [today, bizId]);
 
     const movers = database.getAllSync(`
       SELECT i.id, i.name,
@@ -5343,11 +6066,11 @@ export const getDrilldownSummaryByDateRange = (
              CAST(julianday(?) - julianday(MAX(s.createdAt)) AS INTEGER) AS daysSinceLastSale
       FROM items i
       LEFT JOIN sales s ON s.itemId = i.id AND ${salesWhere}
-      WHERE i.is_deleted = 0
+      WHERE i.is_deleted = 0 AND i.businessId = ?
       GROUP BY i.id
       ORDER BY unitsSold DESC
       LIMIT 50
-    `, [today, ...salesParams]);
+    `, [today, ...salesParams, bizId]);
 
     return {
       startDate, endDate,
@@ -5372,6 +6095,8 @@ export const getRecordsByPeriod = (
 ) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     const now = new Date();
     let startDate = '';
     let endDate = '';
@@ -5405,24 +6130,24 @@ export const getRecordsByPeriod = (
     const sales = database.getAllSync(`
       SELECT s.*, i.name as itemName, 'sale' as sourceType
       FROM sales s
-      JOIN items i ON s.itemId = i.id
-      WHERE date(s.createdAt) >= ? AND date(s.createdAt) <= ?
+      JOIN items i ON s.itemId = i.id AND i.businessId = s.businessId
+      WHERE date(s.createdAt) >= ? AND date(s.createdAt) <= ? AND s.businessId = ?
       ORDER BY s.createdAt DESC
-    `, [startDate, endDate]);
+    `, [startDate, endDate, bizId]);
 
     const adjustments = database.getAllSync(`
       SELECT a.*, i.name as itemName, 'adjustment' as sourceType
       FROM adjustments a
-      JOIN items i ON a.itemId = i.id
-      WHERE date(a.createdAt) >= ? AND date(a.createdAt) <= ?
+      JOIN items i ON a.itemId = i.id AND i.businessId = a.businessId
+      WHERE date(a.createdAt) >= ? AND date(a.createdAt) <= ? AND a.businessId = ?
       ORDER BY a.createdAt DESC
-    `, [startDate, endDate]);
+    `, [startDate, endDate, bizId]);
 
     const expenses = database.getAllSync(`
       SELECT *, 'expense' as sourceType FROM expenses
-      WHERE date(date) >= ? AND date(date) <= ?
+      WHERE date(date) >= ? AND date(date) <= ? AND businessId = ?
       ORDER BY date DESC
-    `, [startDate, endDate]);
+    `, [startDate, endDate, bizId]);
 
     return {
       startDate,
@@ -5440,15 +6165,17 @@ export const getRecordsByPeriod = (
 export const getEarliestRecordDate = (): string | undefined => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return undefined;
     const dates = database.getFirstSync<{ minDate: string }>(`
       SELECT MIN(minDate) as minDate FROM (
-        SELECT MIN(date(createdAt)) as minDate FROM sales
+        SELECT MIN(date(createdAt)) as minDate FROM sales WHERE businessId = ?
         UNION ALL
-        SELECT MIN(date(date)) as minDate FROM expenses
+        SELECT MIN(date(date)) as minDate FROM expenses WHERE businessId = ?
         UNION ALL
-        SELECT MIN(date(createdAt)) as minDate FROM adjustments
+        SELECT MIN(date(createdAt)) as minDate FROM adjustments WHERE businessId = ?
       )
-    `);
+    `, [bizId, bizId, bizId]);
     return dates?.minDate || undefined;
   } catch (error) {
     console.error('getEarliestRecordDate error:', error);
@@ -5462,13 +6189,16 @@ export const getEarliestRecordDate = (): string | undefined => {
 export const getRecentSales = (limit: number = 20) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     return database.getAllSync(`
       SELECT sales.*, items.name as itemName, items.baseUnit 
       FROM sales 
-      LEFT JOIN items ON sales.itemId = items.id 
+      LEFT JOIN items ON sales.itemId = items.id AND items.businessId = sales.businessId
+      WHERE sales.businessId = ?
       ORDER BY sales.createdAt DESC 
       LIMIT ?
-    `, [limit]);
+    `, [bizId, limit]);
   } catch (error) {
     console.error('Get recent sales error:', error);
     return [];
@@ -5478,13 +6208,16 @@ export const getRecentSales = (limit: number = 20) => {
 export const getRecentSalesGrouped = (limit: number = 20) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     const sales = database.getAllSync(`
       SELECT sales.*, items.name as itemName, items.baseUnit 
       FROM sales 
-      LEFT JOIN items ON sales.itemId = items.id 
+      LEFT JOIN items ON sales.itemId = items.id AND items.businessId = sales.businessId
+      WHERE sales.businessId = ?
       ORDER BY sales.createdAt DESC 
       LIMIT ?
-    `, [limit]);
+    `, [bizId, limit]);
     
     const groups = new Map<string, any[]>();
     const standalone: any[] = [];
@@ -5526,13 +6259,16 @@ export const getRecentSalesGrouped = (limit: number = 20) => {
 export const getRecentItems = (limit: number = 10) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     return database.getAllSync(`
       SELECT items.*, categories.name as categoryName 
       FROM items 
-      LEFT JOIN categories ON items.categoryId = categories.id 
+      LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId 
+      WHERE items.businessId = ?
       ORDER BY items.id DESC 
       LIMIT ?
-    `, [limit]);
+    `, [bizId, limit]);
   } catch (error) {
     console.error('Get recent items error:', error);
     return [];
@@ -5584,6 +6320,8 @@ export const updateMonthlyBudget = (amount: number) => {
 export const getCustomerActivity = (customerName?: string) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
 
     if (customerName) {
       // Return debt-related transaction timeline for this customer.
@@ -5613,15 +6351,15 @@ export const getCustomerActivity = (customerName?: string) => {
             ELSE 'purchase'
           END AS activityType
         FROM sales s
-        LEFT JOIN items i ON s.itemId = i.id
-        WHERE s.customerName = ?
+        LEFT JOIN items i ON s.itemId = i.id AND i.businessId = s.businessId
+        WHERE s.customerName = ? AND s.businessId = ?
           AND (
             s.paymentStatus = 'Debt'
             OR s.paymentStatus = 'Loss'
             OR (s.paymentStatus = 'Paid' AND COALESCE(s.paidAmount, 0) > 0)
           )
         ORDER BY s.createdAt DESC
-      `, [customerName]);
+      `, [customerName, bizId]);
     }
 
     // No customer — aggregated summary
@@ -5632,10 +6370,10 @@ export const getCustomerActivity = (customerName?: string) => {
         SUM(totalPrice) AS totalSpent,
         MAX(createdAt)  AS lastVisit
       FROM sales
-      WHERE customerName IS NOT NULL AND customerName != '' AND paymentStatus != 'Order'
+      WHERE customerName IS NOT NULL AND customerName != '' AND paymentStatus != 'Order' AND businessId = ?
       GROUP BY customerName
       ORDER BY lastVisit DESC
-    `);
+    `, [bizId]);
   } catch (error) {
     console.error('Get customer activity error:', error);
     return [];
@@ -5645,9 +6383,14 @@ export const getCustomerActivity = (customerName?: string) => {
 export const getPaymentMethodBreakdown = (startDate?: string, endDate?: string) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     let query = `SELECT s.paymentMethod, COUNT(*) as count, SUM(s.totalPrice) - COALESCE(r.refunded, 0) as total FROM sales s`;
     const params: any[] = [];
     const conditions: string[] = [];
+
+    conditions.push('s.businessId = ?');
+    params.push(bizId);
 
     if (startDate) {
       conditions.push('date(s.createdAt) >= ?');
@@ -5686,9 +6429,11 @@ export const getPaymentMethodBreakdown = (startDate?: string, endDate?: string) 
 export const getPeakSalesHoursByItem = (itemId?: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     const today = new Date().toISOString().split('T')[0];
-    let query = `SELECT strftime('%H', datetime(createdAt, 'localtime')) as hour, COUNT(*) as count, SUM(quantity) as totalQty FROM sales WHERE date(createdAt) = ? AND paymentStatus != 'Order'`;
-    const params: any[] = [today];
+    let query = `SELECT strftime('%H', datetime(createdAt, 'localtime')) as hour, COUNT(*) as count, SUM(quantity) as totalQty FROM sales WHERE date(createdAt) = ? AND paymentStatus != 'Order' AND businessId = ?`;
+    const params: any[] = [today, bizId];
     
     if (itemId) {
       query += ' AND itemId = ?';
@@ -5709,9 +6454,9 @@ export const insertWarehouse = (data: { name: string; location?: string; contact
   try {
     const database = getDB();
     const result = database.prepareSync(`
-      INSERT INTO warehouses (name, location, contactPerson, phone, notes)
-      VALUES (?, ?, ?, ?, ?)
-    `).executeSync([data.name, data.location || null, data.contactPerson || null, data.phone || null, data.notes || null]);
+      INSERT INTO warehouses (name, location, contactPerson, phone, notes, businessId)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).executeSync([data.name, data.location || null, data.contactPerson || null, data.phone || null, data.notes || null, getScopedBusinessId()]);
     return result.lastInsertRowId;
   } catch (error) {
     console.error('Insert warehouse error:', error);
@@ -5722,7 +6467,9 @@ export const insertWarehouse = (data: { name: string; location?: string; contact
 export const getWarehouses = () => {
   try {
     const database = getDB();
-    return database.getAllSync('SELECT * FROM warehouses ORDER BY name ASC');
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
+    return database.getAllSync('SELECT * FROM warehouses WHERE businessId = ? ORDER BY name ASC', [bizId]);
   } catch (error) {
     console.error('Get warehouses error:', error);
     return [];
@@ -5732,7 +6479,9 @@ export const getWarehouses = () => {
 export const getWarehouseById = (id: number) => {
   try {
     const database = getDB();
-    return database.getFirstSync('SELECT * FROM warehouses WHERE id = ?', [id]);
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
+    return database.getFirstSync('SELECT * FROM warehouses WHERE id = ? AND businessId = ?', [id, bizId]);
   } catch (error) {
     console.error('Get warehouse by ID error:', error);
     return null;
@@ -5742,6 +6491,8 @@ export const getWarehouseById = (id: number) => {
 export const updateWarehouse = (id: number, data: { name?: string; location?: string; contactPerson?: string; phone?: string; notes?: string }) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return false;
     const validColumns = ['name', 'location', 'contactPerson', 'phone', 'notes'];
     const updates: string[] = [];
     const params: any[] = [];
@@ -5754,8 +6505,8 @@ export const updateWarehouse = (id: number, data: { name?: string; location?: st
     }
 
     if (updates.length === 0) return true;
-    params.push(id);
-    database.runSync(`UPDATE warehouses SET ${updates.join(', ')} WHERE id = ?`, ...params);
+    params.push(id, bizId);
+    database.runSync(`UPDATE warehouses SET ${updates.join(', ')} WHERE id = ? AND businessId = ?`, ...params);
     return true;
   } catch (error) {
     console.error('Update warehouse error:', error);
@@ -5766,13 +6517,15 @@ export const updateWarehouse = (id: number, data: { name?: string; location?: st
 export const deleteWarehouse = (id: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return false;
     // Check if any items reference this warehouse
-    const itemsUsing = database.getFirstSync<{ count: number }>('SELECT COUNT(*) as count FROM items WHERE warehouseId = ?', [id]);
+    const itemsUsing = database.getFirstSync<{ count: number }>('SELECT COUNT(*) as count FROM items WHERE warehouseId = ? AND businessId = ?', [id, bizId]);
     if (itemsUsing && itemsUsing.count > 0) {
       // Set warehouseId to NULL for those items first
-      database.runSync('UPDATE items SET warehouseId = NULL WHERE warehouseId = ?', [id]);
+      database.runSync('UPDATE items SET warehouseId = NULL WHERE warehouseId = ? AND businessId = ?', [id, bizId]);
     }
-    database.runSync('DELETE FROM warehouses WHERE id = ?', [id]);
+    database.runSync('DELETE FROM warehouses WHERE id = ? AND businessId = ?', [id, bizId]);
     return true;
   } catch (error) {
     console.error('Delete warehouse error:', error);
@@ -5783,13 +6536,15 @@ export const deleteWarehouse = (id: number) => {
 export const getWarehouseStats = (id: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     return database.getFirstSync(`
       SELECT 
         COUNT(*) as itemCount,
         COALESCE(SUM(totalBaseQuantity * basePurchasePrice), 0) as totalValue,
         COALESCE(SUM(totalBaseQuantity), 0) as totalStock
-      FROM items WHERE warehouseId = ?
-    `, [id]);
+      FROM items WHERE warehouseId = ? AND businessId = ?
+    `, [id, bizId]);
   } catch (error) {
     console.error('Get warehouse stats error:', error);
     return null;
@@ -5799,8 +6554,10 @@ export const getWarehouseStats = (id: number) => {
 export const processIndividualPayment = (saleId: number, amount: number, paymentMethod?: string) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return false;
     const sale = database.getFirstSync<{ totalPrice: number, paidAmount: number, itemId: number, unit: string, unitType: string, customerName: string, customerPhone: string }>(
-      'SELECT totalPrice, paidAmount, itemId, unit, unitType, customerName, customerPhone FROM sales WHERE id = ?', [saleId]
+      'SELECT totalPrice, paidAmount, itemId, unit, unitType, customerName, customerPhone FROM sales WHERE id = ? AND businessId = ?', [saleId, bizId]
     );
     if (!sale) return false;
 
@@ -5809,13 +6566,13 @@ export const processIndividualPayment = (saleId: number, amount: number, payment
 
     if (paymentMethod) {
       database.runSync(
-        'UPDATE sales SET paidAmount = ?, paymentStatus = ?, paymentMethod = ? WHERE id = ?',
-        [newPaid, newStatus, paymentMethod, saleId]
+        'UPDATE sales SET paidAmount = ?, paymentStatus = ?, paymentMethod = ? WHERE id = ? AND businessId = ?',
+        [newPaid, newStatus, paymentMethod, saleId, bizId]
       );
     } else {
       database.runSync(
-        'UPDATE sales SET paidAmount = ?, paymentStatus = ? WHERE id = ?',
-        [newPaid, newStatus, saleId]
+        'UPDATE sales SET paidAmount = ?, paymentStatus = ? WHERE id = ? AND businessId = ?',
+        [newPaid, newStatus, saleId, bizId]
       );
     }
 
@@ -5823,8 +6580,8 @@ export const processIndividualPayment = (saleId: number, amount: number, payment
     try {
       const batchId = 'PAY_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
       database.runSync(
-        `INSERT INTO sales (itemId, quantity, unit, unitType, discount, vat, totalPrice, paymentMethod, paymentStatus, customerName, customerPhone, batchId, createdAt)
-         VALUES (?, 1, ?, ?, 0, 0, ?, ?, 'Paid', ?, ?, ?, ?)`,
+        `INSERT INTO sales (itemId, quantity, unit, unitType, discount, vat, totalPrice, paymentMethod, paymentStatus, customerName, customerPhone, batchId, businessId, createdAt)
+         VALUES (?, 1, ?, ?, 0, 0, ?, ?, 'Paid', ?, ?, ?, ?, ?)`,
         [
           sale.itemId ?? 1,
           sale.unit || 'pcs',
@@ -5834,6 +6591,7 @@ export const processIndividualPayment = (saleId: number, amount: number, payment
           sale.customerName,
           sale.customerPhone ?? null,
           batchId,
+          bizId,
           new Date().toISOString(),
         ]
       );
@@ -5853,15 +6611,17 @@ export const processIndividualPayment = (saleId: number, amount: number, payment
 export const settleDebt = (customerName: string, amount: number): number => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return 0;
     let remaining = Math.max(0, amount);
     if (remaining <= 0) return 0;
 
     const sales = database.getAllSync<{ id: number, totalPrice: number, paidAmount: number }>(`
       SELECT id, totalPrice, paidAmount FROM sales
-      WHERE customerName = ?
+      WHERE customerName = ? AND businessId = ?
         AND (paymentStatus = 'Debt' OR (paymentStatus = 'Paid' AND totalPrice > paidAmount))
       ORDER BY createdAt ASC
-    `, [customerName]);
+    `, [customerName, bizId]);
 
     let affected = 0;
     for (const s of sales) {
@@ -5872,8 +6632,8 @@ export const settleDebt = (customerName: string, amount: number): number => {
       const newPaid = (s.paidAmount || 0) + pay;
       const newStatus = newPaid >= s.totalPrice ? 'Paid' : 'Debt';
       database.runSync(
-        'UPDATE sales SET paidAmount = ?, paymentStatus = ? WHERE id = ?',
-        [newPaid, newStatus, s.id],
+        'UPDATE sales SET paidAmount = ?, paymentStatus = ? WHERE id = ? AND businessId = ?',
+        [newPaid, newStatus, s.id, bizId],
       );
       remaining -= pay;
       affected += 1;
@@ -6502,6 +7262,8 @@ export const getSalesGroupedByDateRange = (
 ) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     const now = new Date();
     let whereClause = '';
 
@@ -6529,6 +7291,7 @@ export const getSalesGroupedByDateRange = (
       const yr = now.getFullYear() + offset;
       whereClause = `WHERE strftime('%Y', s.createdAt) = '${yr}'`;
     }
+    whereClause += `${whereClause ? ' AND' : ' WHERE'} s.businessId = '${bizId}'`;
 
     const rows = database.getAllSync(`
       SELECT
@@ -6540,7 +7303,7 @@ export const getSalesGroupedByDateRange = (
         ((CAST(strftime('%d', s.createdAt) AS INTEGER) - 1) / 7 + 1) AS weekNum,
         CAST(strftime('%m', s.createdAt) AS INTEGER) AS monthNum
       FROM sales s
-      LEFT JOIN items i ON s.itemId = i.id
+      LEFT JOIN items i ON s.itemId = i.id AND i.businessId = s.businessId
       ${whereClause}
       ORDER BY s.createdAt DESC
     `);
@@ -6600,6 +7363,8 @@ export const getPaidOutstandingSummary = (
 ) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     const now = new Date();
     let whereClause = '';
 
@@ -6627,6 +7392,7 @@ export const getPaidOutstandingSummary = (
       const yr = now.getFullYear() + offset;
       whereClause = `WHERE strftime('%Y', createdAt) = '${yr}'`;
     }
+    whereClause += `${whereClause ? ' AND' : ' WHERE'} businessId = '${bizId}'`;
 
     const paid = database.getFirstSync<{ count: number; total: number }>(`
       SELECT COUNT(*) AS count, COALESCE(SUM(totalPrice), 0) AS total
@@ -6658,13 +7424,35 @@ export const getActiveBusiness = () => {
   return null;
 };
 
+/**
+ * Resolves the business-scoping key for the current session: the UUID of the
+ * active business, falling back to the default business, then any live business.
+ * Returns null before onboarding (no business exists yet) so newly created rows
+ * stay NULL and are not visible under any active filter.
+ */
+export const getScopedBusinessId = (): string | null => {
+  try {
+    const database = getDB();
+    const active = database.getFirstSync(`SELECT value FROM app_settings WHERE key = 'active_business_id'`) as any;
+    if (active?.value) {
+      const ok = database.getFirstSync('SELECT id FROM businesses WHERE id = ? AND is_deleted = 0', [active.value]) as any;
+      if (ok?.id) return String(active.value);
+    }
+    const fb = database.getFirstSync(`SELECT id FROM businesses WHERE is_deleted = 0 ORDER BY (is_default = 1) DESC, id LIMIT 1`) as any;
+    return fb?.id ? String(fb.id) : null;
+  } catch (error) {
+    console.warn('getScopedBusinessId error:', error);
+    return null;
+  }
+};
+
 export const insertPack = (data: { itemId: number; packNumber: number; quantity: number; unit: string }) => {
   try {
     const database = getDB();
     return database.prepareSync(`
-      INSERT INTO item_packs (itemId, packNumber, initialQuantity, currentQuantity, unit)
-      VALUES (?, ?, ?, ?, ?)
-    `).executeSync([data.itemId, data.packNumber, data.quantity, data.quantity, data.unit]) as any;
+      INSERT INTO item_packs (itemId, packNumber, initialQuantity, currentQuantity, unit, businessId)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).executeSync([data.itemId, data.packNumber, data.quantity, data.quantity, data.unit, getScopedBusinessId()]) as any;
   } catch (error) {
     console.error('Insert pack error:', error);
     return null;
@@ -6675,11 +7463,11 @@ export const insertPacksBatch = (packs: Array<{ itemId: number; packNumber: numb
   try {
     const database = getDB();
     const stmt = database.prepareSync(`
-      INSERT INTO item_packs (itemId, packNumber, initialQuantity, currentQuantity, unit)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO item_packs (itemId, packNumber, initialQuantity, currentQuantity, unit, businessId)
+      VALUES (?, ?, ?, ?, ?, ?)
     `);
     for (const pack of packs) {
-      stmt.executeSync([pack.itemId, pack.packNumber, pack.quantity, pack.quantity, pack.unit]);
+      stmt.executeSync([pack.itemId, pack.packNumber, pack.quantity, pack.quantity, pack.unit, getScopedBusinessId()]);
     }
     return packs.length;
   } catch (error) {
@@ -6691,14 +7479,16 @@ export const insertPacksBatch = (packs: Array<{ itemId: number; packNumber: numb
 export const insertReturn = (data: { saleId: number; itemId: number; quantity: number; unit: string; unitType: string; totalRefund: number; reason: string; createdAt: string }) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
 
     const statement = database.prepareSync(`
-      INSERT INTO returns (saleId, itemId, quantity, unit, unitType, totalRefund, reason, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO returns (saleId, itemId, quantity, unit, unitType, totalRefund, reason, createdAt, businessId)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    const result = statement.executeSync([data.saleId, data.itemId, data.quantity, data.unit, data.unitType, data.totalRefund, data.reason, data.createdAt]);
+    const result = statement.executeSync([data.saleId, data.itemId, data.quantity, data.unit, data.unitType, data.totalRefund, data.reason, data.createdAt, bizId]);
 
-    const item = database.getFirstSync<{ unitsPerPack: number }>('SELECT unitsPerPack FROM items WHERE id = ?', [data.itemId]);
+    const item = database.getFirstSync<{ unitsPerPack: number }>('SELECT unitsPerPack FROM items WHERE id = ? AND businessId = ?', [data.itemId, bizId]);
     let baseQty = data.quantity;
     let packQty = 0;
 
@@ -6708,8 +7498,8 @@ export const insertReturn = (data: { saleId: number; itemId: number; quantity: n
     }
 
     database.runSync(
-      'UPDATE items SET totalBaseQuantity = totalBaseQuantity + ?, totalPackQuantity = totalPackQuantity + ? WHERE id = ?',
-      [baseQty, packQty, data.itemId]
+      'UPDATE items SET totalBaseQuantity = totalBaseQuantity + ?, totalPackQuantity = totalPackQuantity + ? WHERE id = ? AND businessId = ?',
+      [baseQty, packQty, data.itemId, bizId]
     );
 
     return true;
@@ -6722,13 +7512,15 @@ export const insertReturn = (data: { saleId: number; itemId: number; quantity: n
 export const getReturnsBySaleId = (saleId: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     return database.getAllSync(`
       SELECT r.*, i.name as itemName, i.baseUnit
       FROM returns r
-      LEFT JOIN items i ON r.itemId = i.id
-      WHERE r.saleId = ?
+      LEFT JOIN items i ON r.itemId = i.id AND i.businessId = r.businessId
+      WHERE r.saleId = ? AND r.businessId = ?
       ORDER BY r.createdAt DESC
-    `, [saleId]);
+    `, [saleId, bizId]);
   } catch (error) {
     console.error('getReturnsBySaleId error:', error);
     return [];
@@ -6738,6 +7530,8 @@ export const getReturnsBySaleId = (saleId: number) => {
 export const getReturnStats = (saleId: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return { totalReturnedQty: 0, totalRefundAmount: 0, returnCount: 0, originalQty: 0, remainingQty: 0, status: 'no_return' as const };
     const stats = database.getFirstSync<{
       totalReturnedQty: number;
       totalRefundAmount: number;
@@ -6750,10 +7544,10 @@ export const getReturnStats = (saleId: number) => {
         COUNT(r.id) as returnCount,
         COALESCE(s.quantity, 0) as originalQty
       FROM sales s
-      LEFT JOIN returns r ON r.saleId = s.id
-      WHERE s.id = ?
+      LEFT JOIN returns r ON r.saleId = s.id AND r.businessId = s.businessId
+      WHERE s.id = ? AND s.businessId = ?
       GROUP BY s.id
-    `, [saleId]);
+    `, [saleId, bizId]);
 
     if (!stats) {
       return { totalReturnedQty: 0, totalRefundAmount: 0, returnCount: 0, originalQty: 0, remainingQty: 0, status: 'no_return' as const };
@@ -6798,18 +7592,20 @@ export const processReturn = (data: {
   createdAt: string;
 }) => {
   const database = getDB();
+  const bizId = getScopedBusinessId();
+  if (bizId == null) return null;
   beginTransaction(database);
   try {
     // Validate: check cumulative returns against original sale quantity
-    const saleCheck = database.getFirstSync<{ quantity: number }>('SELECT quantity FROM sales WHERE id = ?', [data.saleId]);
+    const saleCheck = database.getFirstSync<{ quantity: number }>('SELECT quantity FROM sales WHERE id = ? AND businessId = ?', [data.saleId, bizId]);
     if (!saleCheck) {
       rollbackTransaction(database);
       console.error('processReturn error: Sale not found');
       return null;
     }
     const returnTotal = database.getFirstSync<{ totalQty: number }>(
-      'SELECT COALESCE(SUM(quantity), 0) as totalQty FROM returns WHERE saleId = ?',
-      [data.saleId]
+      'SELECT COALESCE(SUM(quantity), 0) as totalQty FROM returns WHERE saleId = ? AND businessId = ?',
+      [data.saleId, bizId]
     );
     const cumulativeQty = (returnTotal?.totalQty || 0) + data.quantity;
     if (cumulativeQty > saleCheck.quantity) {
@@ -6819,13 +7615,13 @@ export const processReturn = (data: {
     }
 
     const insertStmt = database.prepareSync(`
-      INSERT INTO returns (saleId, itemId, quantity, unit, unitType, totalRefund, reason, itemCondition, refundType, notes, returnDate, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO returns (saleId, itemId, quantity, unit, unitType, totalRefund, reason, itemCondition, refundType, notes, returnDate, createdAt, businessId)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     insertStmt.executeSync([
       data.saleId, data.itemId, data.quantity, data.unit, data.unitType,
       data.totalRefund, data.reason, data.itemCondition, data.refundType,
-      data.notes || null, data.returnDate || null, data.createdAt,
+      data.notes || null, data.returnDate || null, data.createdAt, bizId,
     ]);
 
     const item = database.getFirstSync<{
@@ -6835,7 +7631,7 @@ export const processReturn = (data: {
       packPurchasePrice: number;
       packSellingPrice: number;
       name: string;
-    }>('SELECT unitsPerPack, basePurchasePrice, baseSellingPrice, packPurchasePrice, packSellingPrice, name FROM items WHERE id = ?', [data.itemId]);
+    }>('SELECT unitsPerPack, basePurchasePrice, baseSellingPrice, packPurchasePrice, packSellingPrice, name FROM items WHERE id = ? AND businessId = ?', [data.itemId, bizId]);
 
     let baseQty = data.quantity;
     let packQty = 0;
@@ -6851,18 +7647,18 @@ export const processReturn = (data: {
     // Handle inventory based on condition
     if (data.itemCondition === 'Resellable') {
       database.runSync(
-        'UPDATE items SET totalBaseQuantity = totalBaseQuantity + ?, totalPackQuantity = totalPackQuantity + ? WHERE id = ?',
-        [baseQty, packQty, data.itemId]
+        'UPDATE items SET totalBaseQuantity = totalBaseQuantity + ?, totalPackQuantity = totalPackQuantity + ? WHERE id = ? AND businessId = ?',
+        [baseQty, packQty, data.itemId, bizId]
       );
     } else {
       const adjStmt = database.prepareSync(`
-        INSERT INTO adjustments (itemId, type, oldValue, newValue, quantity, unitType, reason, date, createdAt)
-        VALUES (?, 'damaged', 0, 0, ?, ?, ?, ?, ?)
+        INSERT INTO adjustments (itemId, type, oldValue, newValue, quantity, unitType, reason, date, createdAt, businessId)
+        VALUES (?, 'damaged', 0, 0, ?, ?, ?, ?, ?, ?)
       `);
       adjStmt.executeSync([
         data.itemId, data.quantity, data.unitType,
         `Returned: ${data.itemCondition} - ${data.reason}`,
-        data.createdAt.split('T')[0], data.createdAt
+        data.createdAt.split('T')[0], data.createdAt, bizId
       ]);
     }
 
@@ -6870,16 +7666,16 @@ export const processReturn = (data: {
     if (data.refundType === 'Store Credit' && data.totalRefund > 0) {
       const creditBatch = `SCR_${Date.now()}_${data.saleId}`;
       const saleData = database.getFirstSync<{ customerName: string; customerPhone: string }>(
-        'SELECT customerName, customerPhone FROM sales WHERE id = ?', [data.saleId]
+        'SELECT customerName, customerPhone FROM sales WHERE id = ? AND businessId = ?', [data.saleId, bizId]
       );
       const creditStmt = database.prepareSync(`
-        INSERT INTO sales (itemId, quantity, unit, unitType, totalPrice, discount, paymentMethod, paymentStatus, customerName, customerPhone, batchId, notes, createdAt)
-        VALUES (?, ?, ?, ?, ?, 0, 'Credit', 'Paid', ?, ?, ?, 'Store credit issued for return', ?)
+        INSERT INTO sales (itemId, quantity, unit, unitType, totalPrice, discount, paymentMethod, paymentStatus, customerName, customerPhone, batchId, notes, createdAt, businessId)
+        VALUES (?, ?, ?, ?, ?, 0, 'Credit', 'Paid', ?, ?, ?, 'Store credit issued for return', ?, ?)
       `);
       creditStmt.executeSync([
         data.itemId, data.quantity, data.unit, data.unitType,
         -data.totalRefund, saleData?.customerName || '',
-        saleData?.customerPhone || '', creditBatch, data.createdAt
+        saleData?.customerPhone || '', creditBatch, data.createdAt, bizId
       ]);
     }
 
@@ -6895,12 +7691,14 @@ export const processReturn = (data: {
 export const getAdjustmentById = (id: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     const result = database.getFirstSync(`
       SELECT adjustments.*, items.name as itemName, items.baseUnit, items.basePurchasePrice, items.baseSellingPrice, items.packPurchasePrice
       FROM adjustments 
-      LEFT JOIN items ON adjustments.itemId = items.id 
-      WHERE adjustments.id = ?
-    `, [id]);
+      LEFT JOIN items ON adjustments.itemId = items.id AND items.businessId = adjustments.businessId
+      WHERE adjustments.id = ? AND adjustments.businessId = ?
+    `, [id, bizId]);
     return result;
   } catch (error) {
     console.error('getAdjustmentById error:', error);
@@ -6911,7 +7709,9 @@ export const getAdjustmentById = (id: number) => {
 export const getExpenseById = (id: number) => {
   try {
     const database = getDB();
-    const result = database.getFirstSync('SELECT * FROM expenses WHERE id = ?', [id]);
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
+    const result = database.getFirstSync('SELECT * FROM expenses WHERE id = ? AND businessId = ?', [id, bizId]);
     return result;
   } catch (error) {
     console.error('getExpenseById error:', error);
@@ -6966,13 +7766,15 @@ export const getAppSetting = (key: string, fallback: string | null = null): stri
 export const generateShegaCode = (): string => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return 'SHG-' + String(Date.now()).slice(-6);
     const row = database.getFirstSync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', ['shega_barcode_seq']);
     let seq = row ? parseInt(row.value, 10) || 0 : 0;
     for (let i = 0; i < 100; i++) {
       seq += 1;
       const code = 'SHG-' + String(seq).padStart(6, '0');
       const clash = database.getFirstSync<{ n: number }>(
-        'SELECT COUNT(*) as n FROM items WHERE (barcode = ? OR sku = ?) AND is_deleted = 0', [code, code]
+        'SELECT COUNT(*) as n FROM items WHERE (barcode = ? OR sku = ?) AND is_deleted = 0 AND businessId = ?', [code, code, bizId]
       );
       if (!clash || clash.n === 0) {
         database.runSync('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)', ['shega_barcode_seq', String(seq)]);
@@ -6989,12 +7791,14 @@ export const generateShegaCode = (): string => {
 export const searchInventory = (query: string) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     const q = `%${query}%`;
     return database.getAllSync(
       `SELECT items.*, categories.name as categoryName
       FROM items
-      LEFT JOIN categories ON items.categoryId = categories.id
-      WHERE items.is_deleted = 0
+      LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId
+      WHERE items.is_deleted = 0 AND items.businessId = ?
         AND (
           items.name LIKE ? 
           OR categories.name LIKE ?
@@ -7003,13 +7807,14 @@ export const searchInventory = (query: string) => {
           OR EXISTS (
             SELECT 1 FROM item_barcodes ib 
             WHERE ib.itemId = items.id 
+            AND ib.businessId = items.businessId
             AND ib.barcode LIKE ? 
             AND ib.is_deleted = 0
           )
         )
       ORDER BY items.id DESC
       LIMIT 20`,
-      [q, q, q, q, q]
+      [bizId, q, q, q, q, q]
     );
   } catch (error) {
     console.error('Search inventory error:', error);
@@ -7034,6 +7839,7 @@ export const insertOrder = (data: {
 }) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
     const batchId = Date.now().toString() + '_' + Math.random().toString(36).substring(2, 8);
     const orderNumber = getNextOrderNumber();
     const now = new Date().toISOString();
@@ -7041,8 +7847,8 @@ export const insertOrder = (data: {
     for (const item of data.items) {
       const totalPrice = item.price * item.quantity;
       database.runSync(
-        `INSERT INTO sales (itemId, quantity, unit, unitType, discount, vat, totalPrice, paymentMethod, paymentStatus, customerName, customerPhone, batchId, orderNumber, notes, createdAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO sales (itemId, quantity, unit, unitType, discount, vat, totalPrice, paymentMethod, paymentStatus, customerName, customerPhone, batchId, orderNumber, notes, businessId, createdAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         item.itemId || null,
         item.quantity,
         item.unit || 'pcs',
@@ -7050,7 +7856,7 @@ export const insertOrder = (data: {
         0, 0, totalPrice, null, 'Order',
         data.customerName || null,
         data.customerPhone || null,
-        batchId, orderNumber, data.notes || null, now
+        batchId, orderNumber, data.notes || null, bizId, now
       );
     }
     return batchId;
@@ -7063,9 +7869,11 @@ export const insertOrder = (data: {
 export const getOrders = (statusFilter?: string) => {
   try {
     const database = getDB();
-    let whereClause = `WHERE s.paymentStatus IN ('Order', 'Sale', 'Debt', 'Cancelled')`;
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
+    let whereClause = `WHERE s.paymentStatus IN ('Order', 'Sale', 'Debt', 'Cancelled') AND s.businessId = '${bizId}'`;
     if (statusFilter) {
-      whereClause = `WHERE s.paymentStatus = '${statusFilter}'`;
+      whereClause = `WHERE s.paymentStatus = '${statusFilter}' AND s.businessId = '${bizId}'`;
     }
 
     const rows = database.getAllSync(`
@@ -7087,7 +7895,7 @@ export const getOrders = (statusFilter?: string) => {
         GROUP_CONCAT(s.unit) as units,
         MIN(s.id) as firstId
       FROM sales s
-      LEFT JOIN items i ON s.itemId = i.id
+      LEFT JOIN items i ON s.itemId = i.id AND i.businessId = s.businessId
       ${whereClause}
       GROUP BY s.batchId
       ORDER BY MAX(s.createdAt) DESC
@@ -7133,14 +7941,16 @@ export const getOrders = (statusFilter?: string) => {
 export const getOrderSummary = () => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     const active = database.getFirstSync<{ count: number }>(
-      `SELECT COUNT(DISTINCT batchId) as count FROM sales WHERE paymentStatus = 'Order'`
+      `SELECT COUNT(DISTINCT batchId) as count FROM sales WHERE paymentStatus = 'Order' AND businessId = ?`, [bizId]
     );
     const converted = database.getFirstSync<{ count: number }>(
-      `SELECT COUNT(DISTINCT batchId) as count FROM sales WHERE paymentStatus IN ('Sale', 'Debt')`
+      `SELECT COUNT(DISTINCT batchId) as count FROM sales WHERE paymentStatus IN ('Sale', 'Debt') AND businessId = ?`, [bizId]
     );
     const cancelled = database.getFirstSync<{ count: number }>(
-      `SELECT COUNT(DISTINCT batchId) as count FROM sales WHERE paymentStatus = 'Cancelled'`
+      `SELECT COUNT(DISTINCT batchId) as count FROM sales WHERE paymentStatus = 'Cancelled' AND businessId = ?`, [bizId]
     );
     return {
       active: active?.count || 0,
@@ -7156,12 +7966,14 @@ export const getOrderSummary = () => {
 export const getOrderById = (id: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     const first = database.getFirstSync(`
       SELECT s.*, i.name as itemName
       FROM sales s
-      LEFT JOIN items i ON s.itemId = i.id
-      WHERE s.id = ?
-    `, [id]);
+      LEFT JOIN items i ON s.itemId = i.id AND i.businessId = s.businessId
+      WHERE s.id = ? AND s.businessId = ?
+    `, [id, bizId]);
     if (!first) return null;
 
     const bId = (first as any).batchId;
@@ -7171,10 +7983,10 @@ export const getOrderById = (id: number) => {
         SELECT s.id, s.quantity, s.unit, s.unitType, s.totalPrice, s.discount, s.vat,
                COALESCE(i.name, 'Unknown') as itemName
         FROM sales s
-        LEFT JOIN items i ON s.itemId = i.id
-        WHERE s.batchId = ?
+        LEFT JOIN items i ON s.itemId = i.id AND i.businessId = s.businessId
+        WHERE s.batchId = ? AND s.businessId = ?
         ORDER BY s.id ASC
-      `, [bId]);
+      `, [bId, bizId]);
     } else {
       items = [{
         id: (first as any).id,
@@ -7217,6 +8029,8 @@ export const getOrderById = (id: number) => {
 
 export const convertOrderToSale = (idOrBatchId: number | string): { success: boolean; error?: string } => {
   const database = getDB();
+  const bizId = getScopedBusinessId();
+  if (bizId == null) return { success: false, error: 'Order not found' };
   beginTransaction(database);
   try {
     let order: any;
@@ -7224,9 +8038,9 @@ export const convertOrderToSale = (idOrBatchId: number | string): { success: boo
 
     if (typeof idOrBatchId === 'string') {
       targetBatchId = idOrBatchId;
-      order = database.getFirstSync<any>('SELECT * FROM sales WHERE batchId = ? AND paymentStatus = ? LIMIT 1', [targetBatchId, 'Order']);
+      order = database.getFirstSync<any>('SELECT * FROM sales WHERE batchId = ? AND paymentStatus = ? AND businessId = ? LIMIT 1', [targetBatchId, 'Order', bizId]);
     } else {
-      order = database.getFirstSync<any>('SELECT * FROM sales WHERE id = ?', [idOrBatchId]);
+      order = database.getFirstSync<any>('SELECT * FROM sales WHERE id = ? AND businessId = ?', [idOrBatchId, bizId]);
       targetBatchId = order?.batchId || null;
     }
     if (!order) {
@@ -7241,12 +8055,12 @@ export const convertOrderToSale = (idOrBatchId: number | string): { success: boo
     const now = new Date().toISOString();
     if (targetBatchId) {
       database.runSync(
-        `UPDATE sales SET paymentStatus = 'Paid', convertedAt = ? WHERE batchId = ? AND paymentStatus = 'Order'`,
-        [now, targetBatchId]
+        `UPDATE sales SET paymentStatus = 'Paid', convertedAt = ? WHERE batchId = ? AND paymentStatus = 'Order' AND businessId = ?`,
+        [now, targetBatchId, bizId]
       );
-      const items = database.getAllSync<any>('SELECT * FROM sales WHERE batchId = ?', [targetBatchId]);
+      const items = database.getAllSync<any>('SELECT * FROM sales WHERE batchId = ? AND businessId = ?', [targetBatchId, bizId]);
       for (const item of items) {
-        const invItem = database.getFirstSync<any>('SELECT * FROM items WHERE id = ?', [item.itemId]);
+        const invItem = database.getFirstSync<any>('SELECT * FROM items WHERE id = ? AND businessId = ?', [item.itemId, bizId]);
         if (invItem) {
           let baseQty = item.quantity;
           let packQty = 0;
@@ -7255,17 +8069,17 @@ export const convertOrderToSale = (idOrBatchId: number | string): { success: boo
             packQty = item.quantity;
           }
           database.runSync(
-            'UPDATE items SET totalBaseQuantity = totalBaseQuantity - ?, totalPackQuantity = totalPackQuantity - ? WHERE id = ?',
-            [baseQty, packQty, item.itemId]
+            'UPDATE items SET totalBaseQuantity = totalBaseQuantity - ?, totalPackQuantity = totalPackQuantity - ? WHERE id = ? AND businessId = ?',
+            [baseQty, packQty, item.itemId, bizId]
           );
         }
       }
     } else {
       database.runSync(
-        `UPDATE sales SET paymentStatus = 'Paid', convertedAt = ? WHERE id = ?`,
-        [now, order.id]
+        `UPDATE sales SET paymentStatus = 'Paid', convertedAt = ? WHERE id = ? AND businessId = ?`,
+        [now, order.id, bizId]
       );
-      const invItem = database.getFirstSync<any>('SELECT * FROM items WHERE id = ?', [order.itemId]);
+      const invItem = database.getFirstSync<any>('SELECT * FROM items WHERE id = ? AND businessId = ?', [order.itemId, bizId]);
       if (invItem) {
         let baseQty = order.quantity;
         let packQty = 0;
@@ -7274,8 +8088,8 @@ export const convertOrderToSale = (idOrBatchId: number | string): { success: boo
           packQty = order.quantity;
         }
         database.runSync(
-          'UPDATE items SET totalBaseQuantity = totalBaseQuantity - ?, totalPackQuantity = totalPackQuantity - ? WHERE id = ?',
-          [baseQty, packQty, order.itemId]
+          'UPDATE items SET totalBaseQuantity = totalBaseQuantity - ?, totalPackQuantity = totalPackQuantity - ? WHERE id = ? AND businessId = ?',
+          [baseQty, packQty, order.itemId, bizId]
         );
       }
     }
@@ -7292,14 +8106,16 @@ export const convertOrderToSale = (idOrBatchId: number | string): { success: boo
 export const convertOrderToDebt = (idOrBatchId: number | string): { success: boolean; error?: string } => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return { success: false, error: 'Order not found' };
     let order: any;
     let targetBatchId: string | null;
 
     if (typeof idOrBatchId === 'string') {
       targetBatchId = idOrBatchId;
-      order = database.getFirstSync<any>('SELECT * FROM sales WHERE batchId = ? AND paymentStatus = ? LIMIT 1', [targetBatchId, 'Order']);
+      order = database.getFirstSync<any>('SELECT * FROM sales WHERE batchId = ? AND paymentStatus = ? AND businessId = ? LIMIT 1', [targetBatchId, 'Order', bizId]);
     } else {
-      order = database.getFirstSync<any>('SELECT * FROM sales WHERE id = ?', [idOrBatchId]);
+      order = database.getFirstSync<any>('SELECT * FROM sales WHERE id = ? AND businessId = ?', [idOrBatchId, bizId]);
       targetBatchId = order?.batchId || null;
     }
     if (!order) return { success: false, error: 'Order not found' };
@@ -7309,13 +8125,13 @@ export const convertOrderToDebt = (idOrBatchId: number | string): { success: boo
     const dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
     if (targetBatchId) {
       database.runSync(
-        `UPDATE sales SET paymentStatus = 'Debt', convertedAt = ?, dueDate = ? WHERE batchId = ? AND paymentStatus = 'Order'`,
-        [now, dueDate, targetBatchId]
+        `UPDATE sales SET paymentStatus = 'Debt', convertedAt = ?, dueDate = ? WHERE batchId = ? AND paymentStatus = 'Order' AND businessId = ?`,
+        [now, dueDate, targetBatchId, bizId]
       );
     } else {
       database.runSync(
-        `UPDATE sales SET paymentStatus = 'Debt', convertedAt = ?, dueDate = ? WHERE id = ?`,
-        [now, dueDate, order.id]
+        `UPDATE sales SET paymentStatus = 'Debt', convertedAt = ?, dueDate = ? WHERE id = ? AND businessId = ?`,
+        [now, dueDate, order.id, bizId]
       );
     }
 
@@ -7329,14 +8145,16 @@ export const convertOrderToDebt = (idOrBatchId: number | string): { success: boo
 export const cancelOrder = (idOrBatchId: number | string): { success: boolean; error?: string } => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return { success: false, error: 'Order not found' };
     let order: any;
     let targetBatchId: string | null;
 
     if (typeof idOrBatchId === 'string') {
       targetBatchId = idOrBatchId;
-      order = database.getFirstSync<any>('SELECT * FROM sales WHERE batchId = ? AND paymentStatus = ? LIMIT 1', [targetBatchId, 'Order']);
+      order = database.getFirstSync<any>('SELECT * FROM sales WHERE batchId = ? AND paymentStatus = ? AND businessId = ? LIMIT 1', [targetBatchId, 'Order', bizId]);
     } else {
-      order = database.getFirstSync<any>('SELECT * FROM sales WHERE id = ?', [idOrBatchId]);
+      order = database.getFirstSync<any>('SELECT * FROM sales WHERE id = ? AND businessId = ?', [idOrBatchId, bizId]);
       targetBatchId = order?.batchId || null;
     }
     if (!order) return { success: false, error: 'Order not found' };
@@ -7345,13 +8163,13 @@ export const cancelOrder = (idOrBatchId: number | string): { success: boolean; e
     const now = new Date().toISOString();
     if (targetBatchId) {
       database.runSync(
-        `UPDATE sales SET paymentStatus = 'Cancelled', cancelledAt = ? WHERE batchId = ? AND paymentStatus = 'Order'`,
-        [now, targetBatchId]
+        `UPDATE sales SET paymentStatus = 'Cancelled', cancelledAt = ? WHERE batchId = ? AND paymentStatus = 'Order' AND businessId = ?`,
+        [now, targetBatchId, bizId]
       );
     } else {
       database.runSync(
-        `UPDATE sales SET paymentStatus = 'Cancelled', cancelledAt = ? WHERE id = ?`,
-        [now, order.id]
+        `UPDATE sales SET paymentStatus = 'Cancelled', cancelledAt = ? WHERE id = ? AND businessId = ?`,
+        [now, order.id, bizId]
       );
     }
 
@@ -7365,23 +8183,25 @@ export const cancelOrder = (idOrBatchId: number | string): { success: boolean; e
 export const getLatestItemsByPeriod = (period: 'today' | 'yesterday' | 'date' | 'week' | 'month' | 'year', targetDate?: string, offset?: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     const now = new Date();
     let params: any[] = [];
     let query = '';
 
     if (period === 'today') {
       const todayStr = now.toISOString().split('T')[0];
-      query = `SELECT items.*, categories.name as categoryName, strftime('%H:%M', items.createdAt) as timeStr FROM items LEFT JOIN categories ON items.categoryId = categories.id WHERE date(items.createdAt) = ? ORDER BY items.createdAt DESC`;
-      params = [todayStr];
+      query = `SELECT items.*, categories.name as categoryName, strftime('%H:%M', items.createdAt) as timeStr FROM items LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId WHERE date(items.createdAt) = ? AND items.businessId = ? ORDER BY items.createdAt DESC`;
+      params = [todayStr, bizId];
     } else if (period === 'yesterday') {
       const yesterday = new Date(now); yesterday.setDate(yesterday.getDate() - 1);
       const yesterdayStr = yesterday.toISOString().split('T')[0];
-      query = `SELECT items.*, categories.name as categoryName, strftime('%H:%M', items.createdAt) as timeStr FROM items LEFT JOIN categories ON items.categoryId = categories.id WHERE date(items.createdAt) = ? ORDER BY items.createdAt DESC`;
-      params = [yesterdayStr];
+      query = `SELECT items.*, categories.name as categoryName, strftime('%H:%M', items.createdAt) as timeStr FROM items LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId WHERE date(items.createdAt) = ? AND items.businessId = ? ORDER BY items.createdAt DESC`;
+      params = [yesterdayStr, bizId];
     } else if (period === 'date') {
       const dateStr = targetDate || now.toISOString().split('T')[0];
-      query = `SELECT items.*, categories.name as categoryName, strftime('%H:%M', items.createdAt) as timeStr FROM items LEFT JOIN categories ON items.categoryId = categories.id WHERE date(items.createdAt) = ? ORDER BY items.createdAt DESC`;
-      params = [dateStr];
+      query = `SELECT items.*, categories.name as categoryName, strftime('%H:%M', items.createdAt) as timeStr FROM items LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId WHERE date(items.createdAt) = ? AND items.businessId = ? ORDER BY items.createdAt DESC`;
+      params = [dateStr, bizId];
     } else if (period === 'week') {
       const safeOffset = offset || 0;
       const weekStart = new Date(now);
@@ -7390,21 +8210,21 @@ export const getLatestItemsByPeriod = (period: 'today' | 'yesterday' | 'date' | 
       weekEnd.setDate(weekStart.getDate() + 6);
       const startStr = weekStart.toISOString().split('T')[0];
       const endStr = weekEnd.toISOString().split('T')[0];
-      query = `SELECT items.*, categories.name as categoryName, strftime('%w', items.createdAt) as dayOfWeek, strftime('%Y-%m-%d', items.createdAt) as dateStr FROM items LEFT JOIN categories ON items.categoryId = categories.id WHERE date(items.createdAt) >= ? AND date(items.createdAt) <= ? ORDER BY items.createdAt DESC`;
-      params = [startStr, endStr];
+      query = `SELECT items.*, categories.name as categoryName, strftime('%w', items.createdAt) as dayOfWeek, strftime('%Y-%m-%d', items.createdAt) as dateStr FROM items LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId WHERE date(items.createdAt) >= ? AND date(items.createdAt) <= ? AND items.businessId = ? ORDER BY items.createdAt DESC`;
+      params = [startStr, endStr, bizId];
     } else if (period === 'month') {
       const monthOffset = offset || 0;
       const monthDate = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
       const y = monthDate.getFullYear();
       const m = String(monthDate.getMonth() + 1).padStart(2, '0');
-      query = `SELECT items.*, categories.name as categoryName, ((CAST(strftime('%d', items.createdAt) AS INTEGER) - 1) / 7 + 1) as weekNum, strftime('%Y-%m-%d', items.createdAt) as dateStr FROM items LEFT JOIN categories ON items.categoryId = categories.id WHERE strftime('%m', items.createdAt) = ? AND strftime('%Y', items.createdAt) = ? ORDER BY items.createdAt`;
-      params = [m, y];
+      query = `SELECT items.*, categories.name as categoryName, ((CAST(strftime('%d', items.createdAt) AS INTEGER) - 1) / 7 + 1) as weekNum, strftime('%Y-%m-%d', items.createdAt) as dateStr FROM items LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId WHERE strftime('%m', items.createdAt) = ? AND strftime('%Y', items.createdAt) = ? AND items.businessId = ? ORDER BY items.createdAt`;
+      params = [m, y, bizId];
     } else if (period === 'year') {
       const yearOffset = offset || 0;
       const yearDate = new Date(now.getFullYear() + yearOffset, 0, 1);
       const yearStr = yearDate.getFullYear().toString();
-      query = `SELECT items.*, categories.name as categoryName, CAST(strftime('%m', items.createdAt) AS INTEGER) as monthNum, strftime('%Y-%m-%d', items.createdAt) as dateStr FROM items LEFT JOIN categories ON items.categoryId = categories.id WHERE strftime('%Y', items.createdAt) = ? ORDER BY items.createdAt`;
-      params = [yearStr];
+      query = `SELECT items.*, categories.name as categoryName, CAST(strftime('%m', items.createdAt) AS INTEGER) as monthNum, strftime('%Y-%m-%d', items.createdAt) as dateStr FROM items LEFT JOIN categories ON items.categoryId = categories.id AND categories.businessId = items.businessId WHERE strftime('%Y', items.createdAt) = ? AND items.businessId = ? ORDER BY items.createdAt`;
+      params = [yearStr, bizId];
     }
 
     return database.getAllSync(query, params);
@@ -7489,6 +8309,8 @@ export const getBudgets = (filters?: {
 }) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     const conditions: string[] = [];
     const params: any[] = [];
     if (filters?.type) { conditions.push('b.type = ?'); params.push(filters.type); }
@@ -7496,6 +8318,7 @@ export const getBudgets = (filters?: {
     if (filters?.year) { conditions.push('b.year = ?'); params.push(filters.year); }
     if (filters?.month) { conditions.push('b.month = ?'); params.push(filters.month); }
     if (filters?.status) { conditions.push('b.status = ?'); params.push(filters.status); }
+    params.unshift(bizId, bizId);
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     return database.getAllSync(`
@@ -7505,11 +8328,11 @@ export const getBudgets = (filters?: {
         COALESCE((
           SELECT SUM(e.amount) FROM expenses e
           JOIN budget_categories bc2 ON e.budgetCategoryId = bc2.id
-          WHERE bc2.budgetId = b.id AND e.date >= date('now', '-1 year')
+          WHERE bc2.budgetId = b.id AND e.date >= date('now', '-1 year') AND e.businessId = ?
         ), 0)
         + COALESCE((
           SELECT SUM(e.amount) FROM expenses e
-          WHERE e.budgetId = b.id AND e.budgetCategoryId IS NULL AND e.date >= date('now', '-1 year')
+          WHERE e.budgetId = b.id AND e.budgetCategoryId IS NULL AND e.date >= date('now', '-1 year') AND e.businessId = ?
         ), 0) as totalActual
       FROM budgets b
       LEFT JOIN budget_categories bc ON bc.budgetId = b.id
@@ -7526,6 +8349,8 @@ export const getBudgets = (filters?: {
 export const getBudgetById = (id: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     const budget = database.getFirstSync<any>('SELECT * FROM budgets WHERE id = ?', [id]);
     if (!budget) return null;
 
@@ -7536,6 +8361,7 @@ export const getBudgetById = (id: number) => {
           SELECT SUM(e.amount) FROM expenses e
           WHERE e.budgetCategoryId = bc.id
             AND e.date >= date('now', '-1 year')
+            AND e.businessId = ?
         ), 0) as actualAmount,
         COALESCE((
           SELECT COUNT(*) FROM budget_adjustments ba
@@ -7544,7 +8370,7 @@ export const getBudgetById = (id: number) => {
       FROM budget_categories bc
       WHERE bc.budgetId = ?
       ORDER BY bc.category ASC
-    `, [id]);
+    `, [bizId, id]);
 
     const totalPlanned = (budget?.plannedAmount || 0) > 0
       ? budget.plannedAmount
@@ -7552,8 +8378,8 @@ export const getBudgetById = (id: number) => {
     const categoryActual = categories.reduce((s: number, c: any) => s + c.actualAmount, 0);
     const unlinkedActual = database.getFirstSync<{ total: number }>(
       `SELECT COALESCE(SUM(e.amount), 0) as total FROM expenses e
-       WHERE e.budgetId = ? AND e.budgetCategoryId IS NULL AND e.date >= date('now', '-1 year')`,
-      [id]
+       WHERE e.budgetId = ? AND e.budgetCategoryId IS NULL AND e.date >= date('now', '-1 year') AND e.businessId = ?`,
+      [id, bizId]
     );
     const totalActual = categoryActual + (unlinkedActual?.total || 0);
 
@@ -7567,12 +8393,14 @@ export const getBudgetById = (id: number) => {
 export const deleteBudget = (id: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return false;
     const catIds = database.getAllSync<any>('SELECT id FROM budget_categories WHERE budgetId = ?', [id]);
     const ids = catIds.map((c: any) => c.id);
-    database.runSync('UPDATE expenses SET budgetId = NULL WHERE budgetId = ?', [id]);
+    database.runSync('UPDATE expenses SET budgetId = NULL WHERE budgetId = ? AND businessId = ?', [id, bizId]);
     if (ids.length > 0) {
       const ph = ids.map(() => '?').join(',');
-      database.runSync(`UPDATE expenses SET budgetCategoryId = NULL WHERE budgetCategoryId IN (${ph})`, ...ids);
+      database.runSync(`UPDATE expenses SET budgetCategoryId = NULL WHERE budgetCategoryId IN (${ph}) AND businessId = ?`, ...ids, bizId);
       database.runSync(`UPDATE recurring_expense_templates SET budgetCategoryId = NULL WHERE budgetCategoryId IN (${ph})`, ...ids);
       database.runSync(`DELETE FROM budget_adjustments WHERE budgetCategoryId IN (${ph})`, ...ids);
       database.runSync(`DELETE FROM budget_categories WHERE id IN (${ph})`, ...ids);
@@ -7638,24 +8466,26 @@ export const deleteBudgetCategory = (id: number) => {
 export const getBudgetDashboard = () => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     const activeBudgets = database.getAllSync<any>(`
       SELECT b.*,
         CASE WHEN b.plannedAmount > 0 THEN b.plannedAmount ELSE COALESCE(SUM(bc.plannedAmount), 0) END as totalPlanned,
         COALESCE((
           SELECT SUM(e.amount) FROM expenses e
           JOIN budget_categories bc3 ON e.budgetCategoryId = bc3.id
-          WHERE bc3.budgetId = b.id
+          WHERE bc3.budgetId = b.id AND e.businessId = ?
         ), 0)
         + COALESCE((
           SELECT SUM(e.amount) FROM expenses e
-          WHERE e.budgetId = b.id AND e.budgetCategoryId IS NULL
+          WHERE e.budgetId = b.id AND e.budgetCategoryId IS NULL AND e.businessId = ?
         ), 0) as totalActual
       FROM budgets b
       LEFT JOIN budget_categories bc ON bc.budgetId = b.id
       WHERE b.status = 'active'
       GROUP BY b.id
       ORDER BY b.createdAt DESC
-    `);
+    `, [bizId, bizId]);
 
     const totalBudget = activeBudgets.reduce((s: number, b: any) => s + (b.totalPlanned || 0), 0);
     const totalSpent = activeBudgets.reduce((s: number, b: any) => s + (b.totalActual || 0), 0);
@@ -7668,11 +8498,11 @@ export const getBudgetDashboard = () => {
       FROM expenses e
       JOIN budget_categories bc ON e.budgetCategoryId = bc.id
       JOIN budgets b ON bc.budgetId = b.id
-      WHERE b.status = 'active'
+      WHERE b.status = 'active' AND e.businessId = ?
       GROUP BY bc.category
       ORDER BY spent DESC
       LIMIT 5
-    `);
+    `, [bizId]);
 
     return { activeBudgets, totalBudget, totalSpent, remaining, healthScore, topCategories };
   } catch (error) {
@@ -7684,17 +8514,19 @@ export const getBudgetDashboard = () => {
 export const getBudgetCategorySpending = (budgetId: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     return database.getAllSync(`
       SELECT
         bc.id, bc.category, bc.plannedAmount,
         COALESCE(SUM(e.amount), 0) as actualAmount,
         COUNT(e.id) as expenseCount
       FROM budget_categories bc
-      LEFT JOIN expenses e ON e.budgetCategoryId = bc.id
+      LEFT JOIN expenses e ON e.budgetCategoryId = bc.id AND e.businessId = ?
       WHERE bc.budgetId = ?
       GROUP BY bc.id
       ORDER BY bc.category ASC
-    `, [budgetId]);
+    `, [bizId, budgetId]);
   } catch (error) {
     console.error('Get budget category spending error:', error);
     return [];
@@ -7704,16 +8536,18 @@ export const getBudgetCategorySpending = (budgetId: number) => {
 export const getBudgetMonthlyTrends = (budgetId: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     return database.getAllSync(`
       SELECT
         strftime('%Y-%m', e.date) as month,
         SUM(e.amount) as actual
       FROM expenses e
       JOIN budget_categories bc ON e.budgetCategoryId = bc.id
-      WHERE bc.budgetId = ?
+      WHERE bc.budgetId = ? AND e.businessId = ?
       GROUP BY strftime('%Y-%m', e.date)
       ORDER BY month ASC
-    `, [budgetId]);
+    `, [budgetId, bizId]);
   } catch (error) {
     console.error('Get budget monthly trends error:', error);
     return [];
@@ -7787,6 +8621,8 @@ export const adjustBudgetCategory = (
 export const getBudgetForecast = (budgetId: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     const categories = database.getAllSync<any>(
       'SELECT id, category, plannedAmount FROM budget_categories WHERE budgetId = ?', [budgetId]
     );
@@ -7794,10 +8630,10 @@ export const getBudgetForecast = (budgetId: number) => {
     const forecast = categories.map((cat: any) => {
       const history = database.getAllSync<any>(
         `SELECT strftime('%Y-%m', e.date) as month, SUM(e.amount) as total
-         FROM expenses e WHERE e.budgetCategoryId = ?
+         FROM expenses e WHERE e.budgetCategoryId = ? AND e.businessId = ?
          GROUP BY strftime('%Y-%m', e.date)
          ORDER BY month ASC`,
-        [cat.id]
+        [cat.id, bizId]
       );
 
       const avgMonthly = history.length > 0
@@ -7851,6 +8687,8 @@ export const getBudgetReportData = (budgetId: number) => {
 export const getBudgetAlerts = (thresholdPercent: number = 80) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     const categories = database.getAllSync<any>(`
       SELECT
         bc.id, bc.category, bc.plannedAmount, bc.budgetId,
@@ -7858,13 +8696,13 @@ export const getBudgetAlerts = (thresholdPercent: number = 80) => {
         b.name as budgetName
       FROM budget_categories bc
       JOIN budgets b ON bc.budgetId = b.id
-      LEFT JOIN expenses e ON e.budgetCategoryId = bc.id
+      LEFT JOIN expenses e ON e.budgetCategoryId = bc.id AND e.businessId = ?
       WHERE b.status = 'active'
       GROUP BY bc.id
       HAVING bc.plannedAmount > 0
         AND (spent >= bc.plannedAmount * (CAST(? AS REAL) / 100.0) OR spent > bc.plannedAmount)
       ORDER BY (CAST(spent AS REAL) / bc.plannedAmount) DESC
-    `, [thresholdPercent]);
+    `, [bizId, thresholdPercent]);
 
     return categories.map((c: any) => {
       const pct = c.plannedAmount > 0 ? Math.round((c.spent / c.plannedAmount) * 100) : 0;
@@ -7895,6 +8733,8 @@ export const connectExpenseToBudget = (expenseId: number, budgetCategoryId: numb
 export const getUncategorizedExpenses = (budgetId: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     const categories = database.getAllSync<any>(
       'SELECT category FROM budget_categories WHERE budgetId = ?', [budgetId]
     );
@@ -7903,8 +8743,8 @@ export const getUncategorizedExpenses = (budgetId: number) => {
 
     const placeholders = categoryNames.map(() => '?').join(',');
     return database.getAllSync(
-      `SELECT * FROM expenses WHERE category NOT IN (${placeholders}) AND date >= date('now', '-1 year') ORDER BY date DESC LIMIT 50`,
-      categoryNames
+      `SELECT * FROM expenses WHERE businessId = ? AND category NOT IN (${placeholders}) AND date >= date('now', '-1 year') ORDER BY date DESC LIMIT 50`,
+      [bizId, ...categoryNames]
     );
   } catch (error) {
     console.error('Get uncategorized expenses error:', error);
@@ -7990,6 +8830,8 @@ export const deleteRecurringTemplate = (id: number) => {
 export const getCurrentMonthBudget = () => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth() + 1;
@@ -8004,6 +8846,7 @@ export const getCurrentMonthBudget = () => {
          FROM budget_categories bc3
          LEFT JOIN expenses e ON e.budgetCategoryId = bc3.id
            AND strftime('%Y-%m', e.date) = ?
+           AND e.businessId = ?
          GROUP BY bc3.id
        ) bc2 ON bc2.catId = bc.id
        WHERE b.year = ? AND (b.month = ? OR b.month IS NULL)
@@ -8011,7 +8854,7 @@ export const getCurrentMonthBudget = () => {
        GROUP BY b.id
        ORDER BY b.month DESC
        LIMIT 1`,
-      [`${year}-${String(month).padStart(2, '0')}`, year, month]
+      [`${year}-${String(month).padStart(2, '0')}`, bizId, year, month]
     );
     if (!budget) return null;
     return { ...budget, remaining: budget.totalPlanned - budget.totalActual };
@@ -8024,14 +8867,16 @@ export const getCurrentMonthBudget = () => {
 export const getCategoryBudgetStatus = (budgetId: number, categoryName: string) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     const cat = database.getFirstSync<any>(
       `SELECT bc.*,
         COALESCE(SUM(e.amount), 0) as spent
        FROM budget_categories bc
-       LEFT JOIN expenses e ON e.budgetCategoryId = bc.id
+       LEFT JOIN expenses e ON e.budgetCategoryId = bc.id AND e.businessId = ?
        WHERE bc.budgetId = ? AND bc.category = ?
        GROUP BY bc.id`,
-      [budgetId, categoryName]
+      [bizId, budgetId, categoryName]
     );
     if (!cat) return null;
     const pct = cat.plannedAmount > 0 ? Math.round((cat.spent / cat.plannedAmount) * 100) : 0;
@@ -8049,6 +8894,8 @@ export const getCategoryBudgetStatus = (budgetId: number, categoryName: string) 
 export const getActiveBudgetForExpenses = () => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth() + 1;
@@ -8068,12 +8915,12 @@ export const getActiveBudgetForExpenses = () => {
     );
     if (!budget) return null;
     const spent = database.getFirstSync<{ total: number }>(
-      `SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE budgetId = ?`,
-      [budget.id]
+      `SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE budgetId = ? AND businessId = ?`,
+      [budget.id, bizId]
     );
     const totalSpent = database.getFirstSync<{ total: number }>(
-      `SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE strftime('%Y-%m', date) = ? AND (budgetId = ? OR budgetId IS NULL)`,
-      [yymm, budget.id]
+      `SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE strftime('%Y-%m', date) = ? AND (budgetId = ? OR budgetId IS NULL) AND businessId = ?`,
+      [yymm, budget.id, bizId]
     );
     const totalPlanned = budget.totalPlanned || 0;
     const actual = Math.max(totalSpent?.total || 0, spent?.total || 0);
@@ -8100,6 +8947,8 @@ const getBudgetUsageStatus = (percentUsed: number): 'on_track' | 'warning' | 're
 export const getMonthlyBudgetExpenseSummary = (budgetId: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     const budget = database.getFirstSync<any>(
       `SELECT b.*,
         CASE WHEN b.plannedAmount > 0 THEN b.plannedAmount ELSE COALESCE(SUM(bc.plannedAmount), 0) END as totalPlanned
@@ -8111,8 +8960,8 @@ export const getMonthlyBudgetExpenseSummary = (budgetId: number) => {
     );
     if (!budget) return null;
     const totalSpent = database.getFirstSync<{ total: number }>(
-      `SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE budgetId = ?`,
-      [budgetId]
+      `SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE budgetId = ? AND businessId = ?`,
+      [budgetId, bizId]
     );
     const actual = totalSpent?.total || 0;
     const totalPlanned = budget.totalPlanned || 0;
@@ -8159,11 +9008,13 @@ export const checkBudgetPeriodEnd = (budgetId: number) => {
 export const getExpensesForActiveBudget = (limit: number = 50) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     const active = getActiveBudgetForExpenses();
     if (!active) return [];
     return database.getAllSync(
-      `SELECT * FROM expenses WHERE budgetId = ? ORDER BY date DESC, createdAt DESC LIMIT ?`,
-      [active.id, limit]
+      `SELECT * FROM expenses WHERE budgetId = ? AND businessId = ? ORDER BY date DESC, createdAt DESC LIMIT ?`,
+      [active.id, bizId, limit]
     );
   } catch (error) {
     console.error('Get expenses for active budget error:', error);
@@ -8270,6 +9121,8 @@ export const archiveBudget = (budgetId: number): boolean => {
 export const getBudgetFinalStats = (budgetId: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     const budget = database.getFirstSync<any>('SELECT * FROM budgets WHERE id = ?', [budgetId]);
     if (!budget) return null;
     const planned = database.getFirstSync<{ total: number }>(
@@ -8280,15 +9133,15 @@ export const getBudgetFinalStats = (budgetId: number) => {
       `SELECT COALESCE(SUM(e.amount), 0) as total
        FROM expenses e
        LEFT JOIN budget_categories bc ON e.budgetCategoryId = bc.id
-       WHERE e.budgetId = ? OR bc.budgetId = ?`,
-      [budgetId, budgetId],
+       WHERE (e.budgetId = ? OR bc.budgetId = ?) AND e.businessId = ?`,
+      [budgetId, budgetId, bizId],
     );
     const countRow = database.getFirstSync<{ count: number }>(
       `SELECT COUNT(*) as count
        FROM expenses e
        LEFT JOIN budget_categories bc ON e.budgetCategoryId = bc.id
-       WHERE e.budgetId = ? OR bc.budgetId = ?`,
-      [budgetId, budgetId],
+       WHERE (e.budgetId = ? OR bc.budgetId = ?) AND e.businessId = ?`,
+      [budgetId, budgetId, bizId],
     );
     const totalPlanned = (budget?.plannedAmount || 0) > 0 ? budget.plannedAmount : (planned?.total || 0);
     const totalSpent = spentRow?.total || 0;
@@ -8439,9 +9292,11 @@ export const getBudgetSpendingAlerts = (budgetId: number) => {
 export const getBudgetExpensesForCategory = (budgetCategoryId: number, limit: number = 50) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     return database.getAllSync(
-      `SELECT * FROM expenses WHERE budgetCategoryId = ? ORDER BY date DESC LIMIT ?`,
-      [budgetCategoryId, limit]
+      `SELECT * FROM expenses WHERE budgetCategoryId = ? AND businessId = ? ORDER BY date DESC LIMIT ?`,
+      [budgetCategoryId, bizId, limit]
     );
   } catch (error) {
     console.error('Get budget expenses for category error:', error);
@@ -8452,6 +9307,8 @@ export const getBudgetExpensesForCategory = (budgetCategoryId: number, limit: nu
 export const getBudgetWithCategoryProgress = (budgetId: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     const budget = database.getFirstSync<any>('SELECT * FROM budgets WHERE id = ?', [budgetId]);
     if (!budget) return null;
 
@@ -8460,11 +9317,11 @@ export const getBudgetWithCategoryProgress = (budgetId: number) => {
         COALESCE(SUM(e.amount), 0) as spent,
         COUNT(e.id) as expenseCount
       FROM budget_categories bc
-      LEFT JOIN expenses e ON e.budgetCategoryId = bc.id
+      LEFT JOIN expenses e ON e.budgetCategoryId = bc.id AND e.businessId = ?
       WHERE bc.budgetId = ?
       GROUP BY bc.id
       ORDER BY bc.category ASC
-    `, [budgetId]);
+    `, [bizId, budgetId]);
 
     // Include expense categories the user actually used against this budget but
     // that have no budget category allocation, so they show their spent amount
@@ -8482,9 +9339,10 @@ export const getBudgetWithCategoryProgress = (budgetId: number) => {
         AND LOWER(COALESCE(e.category, '')) NOT IN (
           SELECT LOWER(category) FROM budget_categories WHERE budgetId = ?
         )
+        AND e.businessId = ?
       GROUP BY e.category
       ORDER BY spent DESC
-    `, [budgetId, budgetId]);
+    `, [budgetId, budgetId, bizId]);
     const allCategories = [...categories, ...usedCategories];
 
     const totalPlanned = (budget?.plannedAmount || 0) > 0
@@ -8498,8 +9356,8 @@ export const getBudgetWithCategoryProgress = (budgetId: number) => {
        WHERE e.budgetId = ? AND e.budgetCategoryId IS NULL
          AND LOWER(COALESCE(e.category, '')) IN (
            SELECT LOWER(category) FROM budget_categories WHERE budgetId = ?
-         )`,
-      [budgetId, budgetId]
+         ) AND e.businessId = ?`,
+      [budgetId, budgetId, bizId]
     );
     const totalSpent = categorySpent + (unlinkedSpent?.total || 0);
 
@@ -8537,6 +9395,8 @@ export const getBudgetWithCategoryProgress = (budgetId: number) => {
 export const getBudgetLimitOverview = (budgetId: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     const budget = database.getFirstSync<any>('SELECT * FROM budgets WHERE id = ?', [budgetId]);
     if (!budget) return null;
 
@@ -8549,15 +9409,15 @@ export const getBudgetLimitOverview = (budgetId: number) => {
       `SELECT COALESCE(SUM(e.amount), 0) as total
        FROM expenses e
        JOIN budget_categories bc ON e.budgetCategoryId = bc.id
-       WHERE bc.budgetId = ?`,
-      [budgetId],
+       WHERE bc.budgetId = ? AND e.businessId = ?`,
+      [budgetId, bizId],
     );
 
     const unlinkedSpent = database.getFirstSync<{ total: number }>(
       `SELECT COALESCE(SUM(e.amount), 0) as total
        FROM expenses e
-       WHERE e.budgetId = ? AND e.budgetCategoryId IS NULL`,
-      [budgetId],
+       WHERE e.budgetId = ? AND e.budgetCategoryId IS NULL AND e.businessId = ?`,
+      [budgetId, bizId],
     );
 
     const totalBudget = (budget?.plannedAmount || 0) > 0 ? budget.plannedAmount : (planned?.total || 0);
@@ -8711,6 +9571,8 @@ export const getBudgetsOverBudget = () => {
 export const getMonthlyBudgetSummary = (year: number, month: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     const yymm = `${year}-${String(month).padStart(2, '0')}`;
 
     const budget = database.getFirstSync<any>(
@@ -8724,8 +9586,8 @@ export const getMonthlyBudgetSummary = (year: number, month: number) => {
     );
 
     const totalSpent = database.getFirstSync<{ total: number }>(
-      `SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE strftime('%Y-%m', date) = ?`,
-      [yymm]
+      `SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE strftime('%Y-%m', date) = ? AND businessId = ?`,
+      [yymm, bizId]
     );
 
     let byCategory: any[] = [];
@@ -8752,10 +9614,11 @@ export const getMonthlyBudgetSummary = (year: number, month: number) => {
                AND LOWER(COALESCE(e.category, '')) = LOWER(bc.category)
              )
            )
+           AND e.businessId = ?
          WHERE bc.budgetId = ?
          GROUP BY bc.id
          ORDER BY spent DESC, bc.category ASC`,
-        [yymm, budget.id, budget.id]
+        [yymm, budget.id, bizId, budget.id]
       );
 
       // Include this month's expense categories that are not linked and don't
@@ -8769,9 +9632,10 @@ export const getMonthlyBudgetSummary = (year: number, month: number) => {
            AND LOWER(COALESCE(e.category, '')) NOT IN (
              SELECT LOWER(category) FROM budget_categories WHERE budgetId = ?
            )
+           AND e.businessId = ?
          GROUP BY e.category
          ORDER BY spent DESC`,
-        [yymm, budget.id, budget.id]
+        [yymm, budget.id, budget.id, bizId]
       );
       byCategory = [...byCategory, ...unlinked];
     } else {
@@ -8780,9 +9644,10 @@ export const getMonthlyBudgetSummary = (year: number, month: number) => {
         `SELECT e.category as name, SUM(e.amount) as spent, 0 as planned
          FROM expenses e
          WHERE strftime('%Y-%m', e.date) = ?
+           AND e.businessId = ?
          GROUP BY e.category
          ORDER BY spent DESC`,
-        [yymm]
+        [yymm, bizId]
       );
     }
 
@@ -8819,6 +9684,8 @@ export const getMonthlyBudgetSummary = (year: number, month: number) => {
 export const getAllBudgetsSummary = () => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     const activeBudgets = database.getAllSync<any>(`SELECT id FROM budgets WHERE status = 'active'`);
     if (activeBudgets.length === 0) {
       return {
@@ -8866,16 +9733,18 @@ export const getAllBudgetsSummary = () => {
        FROM expenses e
        JOIN budget_categories bc ON e.budgetCategoryId = bc.id
        JOIN budgets b ON bc.budgetId = b.id
-       WHERE b.status = 'active'
-       GROUP BY LOWER(bc.category)`
+       WHERE b.status = 'active' AND e.businessId = ?
+       GROUP BY LOWER(bc.category)`,
+      [bizId]
     );
 
     // Unlinked expenses assigned to an active budget (budgetId set, no category link).
     const unlinkedRows = database.getAllSync<any>(
       `SELECT e.category AS name, e.budgetId AS budgetId, SUM(e.amount) AS spent
        FROM expenses e
-       WHERE e.budgetCategoryId IS NULL AND e.budgetId IN (${placeholders})
+       WHERE e.businessId = ? AND e.budgetCategoryId IS NULL AND e.budgetId IN (${placeholders})
        GROUP BY e.category, e.budgetId`,
+      bizId,
       ...ids
     );
 
@@ -9079,6 +9948,8 @@ export const getRecommendedBudget = () => {
 export const getBudgetWithRecurringProjection = (budgetId: number) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     const budget = database.getFirstSync<any>('SELECT * FROM budgets WHERE id = ?', [budgetId]);
     if (!budget) return null;
 
@@ -9087,11 +9958,11 @@ export const getBudgetWithRecurringProjection = (budgetId: number) => {
         COALESCE(SUM(e.amount), 0) as spent,
         COUNT(e.id) as expenseCount
        FROM budget_categories bc
-       LEFT JOIN expenses e ON e.budgetCategoryId = bc.id
+       LEFT JOIN expenses e ON e.budgetCategoryId = bc.id AND e.businessId = ?
        WHERE bc.budgetId = ?
        GROUP BY bc.id
        ORDER BY bc.category ASC`,
-      [budgetId]
+      [bizId, budgetId]
     );
 
     const projection = getRecurringProjection();
@@ -9099,8 +9970,8 @@ export const getBudgetWithRecurringProjection = (budgetId: number) => {
     const categorySpent = categories.reduce((s: number, c: any) => s + (c.spent || 0), 0);
     const unlinkedSpent = database.getFirstSync<{ total: number }>(
       `SELECT COALESCE(SUM(e.amount), 0) as total FROM expenses e
-       WHERE e.budgetId = ? AND e.budgetCategoryId IS NULL`,
-      [budgetId]
+       WHERE e.budgetId = ? AND e.budgetCategoryId IS NULL AND e.businessId = ?`,
+      [budgetId, bizId]
     );
     const totalSpent = categorySpent + (unlinkedSpent?.total || 0);
 
@@ -9207,6 +10078,8 @@ export const getBudgetStatusForCategory = (
 } | null => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return null;
     const expenseDate = new Date(date);
     const year = expenseDate.getFullYear();
     const month = expenseDate.getMonth() + 1;
@@ -9223,8 +10096,8 @@ export const getBudgetStatusForCategory = (
 
     const spent = database.getFirstSync<{ total: number }>(
       `SELECT COALESCE(SUM(amount), 0) as total FROM expenses
-       WHERE budgetCategoryId = ? AND strftime('%Y-%m', date) = ?`,
-      [budget.catId, yymm]
+       WHERE budgetCategoryId = ? AND strftime('%Y-%m', date) = ? AND businessId = ?`,
+      [budget.catId, yymm, bizId]
     );
 
     const spentAmount = spent?.total || 0;
@@ -9248,9 +10121,11 @@ export const getBudgetStatusForCategory = (
 export const getCategoryExpenses = (budgetCategoryId: number, limit: number = 100) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     return database.getAllSync(
-      'SELECT * FROM expenses WHERE budgetCategoryId = ? ORDER BY date DESC LIMIT ?',
-      [budgetCategoryId, limit]
+      'SELECT * FROM expenses WHERE budgetCategoryId = ? AND businessId = ? ORDER BY date DESC LIMIT ?',
+      [budgetCategoryId, bizId, limit]
     );
   } catch (error) {
     console.error('Get category expenses error:', error);
@@ -9261,6 +10136,8 @@ export const getCategoryExpenses = (budgetCategoryId: number, limit: number = 10
 export const getBudgetThresholdNotifications = (threshold: number = 80) => {
   try {
     const database = getDB();
+    const bizId = getScopedBusinessId();
+    if (bizId == null) return [];
     const now = new Date();
     const yymm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
@@ -9271,11 +10148,12 @@ export const getBudgetThresholdNotifications = (threshold: number = 80) => {
        JOIN budgets b ON bc.budgetId = b.id
        LEFT JOIN expenses e ON e.budgetCategoryId = bc.id
          AND strftime('%Y-%m', e.date) = ?
+         AND e.businessId = ?
        WHERE b.status = 'active'
          AND bc.plannedAmount > 0
        GROUP BY bc.id
        HAVING (CAST(SUM(e.amount) AS REAL) / bc.plannedAmount) >= CAST(? AS REAL) / 100.0`,
-      [yymm, threshold]
+      [yymm, bizId, threshold]
     );
   } catch (error) {
     console.error('Get budget threshold notifications error:', error);

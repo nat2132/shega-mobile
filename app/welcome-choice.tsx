@@ -13,6 +13,9 @@ export default function WelcomeChoice() {
       onJoin={() => {
         router.replace('/join-existing' as any);
       }}
+      onScanJoin={() => {
+        router.replace('/scan-join' as any);
+      }}
     />
   );
 }

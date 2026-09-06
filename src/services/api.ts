@@ -248,7 +248,7 @@ export async function refreshAccessToken(): Promise<boolean> {
   return refreshPromise;
 }
 
-async function request<T = unknown>(path: string, options: HttpOptions = {}): Promise<T> {
+export async function request<T = unknown>(path: string, options: HttpOptions = {}): Promise<T> {
   const { method = 'GET', body, auth = false, retried = false } = options;
 
   const headers: Record<string, string> = {
