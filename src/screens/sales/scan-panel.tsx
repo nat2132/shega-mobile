@@ -3,6 +3,7 @@ import { AppNumber, AppText } from '@/components/ui';
 import { Fonts } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
 import { useBarcodeScanner, ScannedProduct } from '@/hooks/useBarcodeScanner';
+import { Image } from 'expo-image';
 import { Check, Package, Search, ShoppingCart, X } from 'lucide-react-native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
@@ -169,7 +170,11 @@ const ScanPanel: React.FC<ScanPanelProps> = ({
                   onPress={() => handleQuickProduct(item)}
                   activeOpacity={0.8}
                 >
-                  <Package size={14} color="#fff" style={{ marginRight: 6 }} />
+                  {item.image ? (
+                    <Image source={{ uri: item.image }} style={styles.quickThumb} contentFit="cover" transition={150} />
+                  ) : (
+                    <Package size={14} color="#fff" style={{ marginRight: 6 }} />
+                  )}
                   <View style={{ flexShrink: 1 }}>
                     <AppText variant="micro" weight="bold" style={{ color: '#fff' }} numberOfLines={1}>
                       {item.name}
@@ -315,6 +320,12 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     maxWidth: 180,
+  },
+  quickThumb: {
+    width: 22,
+    height: 22,
+    borderRadius: 8,
+    marginRight: 6,
   },
   cartBar: {
     flexDirection: 'row',

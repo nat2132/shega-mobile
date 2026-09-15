@@ -95,8 +95,6 @@ const categoryColor = (cat: NotificationCategory) => {
   switch (cat) {
     case 'inventory': return '#FF9500';
     case 'sales': return '#34C759';
-    case 'expense': return '#FF3B30';
-    case 'budget': return '#AF52DE';
     case 'recurring': return '#FF9500';
     case 'customer': return '#5856D6';
     case 'supplier': return '#8E8E93';
@@ -286,9 +284,6 @@ const styles = StyleSheet.create({
 
 const CATEGORIES: { key: 'all' | NotificationCategory; labelKey: string }[] = [
   { key: 'all', labelKey: 'common.all' },
-  { key: 'budget', labelKey: 'notif.cat.budget' },
-  { key: 'expense', labelKey: 'notif.cat.expense' },
-  { key: 'recurring', labelKey: 'notif.cat.recurring' },
   { key: 'reminder', labelKey: 'notif.cat.reminder' },
   { key: 'inventory', labelKey: 'notif.cat.inventory' },
   { key: 'sales', labelKey: 'notif.cat.sales' },
@@ -401,48 +396,6 @@ const NotificationRow = ({
               <PhoneCall size={14} color={colors.primary} />
               <AppText variant="caption" weight="bold" shrink={false} style={{ color: colors.primary }} numberOfLines={1}>
                 {t('notif.call_now')}
-              </AppText>
-            </TouchableOpacity>
-          ) : null}
-          {(item.type === 'budget_created' || item.type === 'budget_approaching_limit' || item.type === 'budget_limit_reached' || item.type === 'budget_category_exceeded') ? (
-            <TouchableOpacity
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                alignSelf: 'flex-start',
-                gap: 6,
-                marginTop: 8,
-                paddingHorizontal: 10,
-                paddingVertical: 6,
-                borderRadius: 10,
-                backgroundColor: iconColor + '18',
-              }}
-              onPress={() => onPress(item)}
-            >
-              <Info size={14} color={iconColor} />
-              <AppText variant="caption" weight="bold" shrink={false} style={{ color: iconColor }} numberOfLines={1}>
-                {t('notif.view_budget')}
-              </AppText>
-            </TouchableOpacity>
-          ) : null}
-          {item.type === 'recurring_due' || item.type === 'recurring_due_tomorrow' ? (
-            <TouchableOpacity
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                alignSelf: 'flex-start',
-                gap: 6,
-                marginTop: 8,
-                paddingHorizontal: 10,
-                paddingVertical: 6,
-                borderRadius: 10,
-                backgroundColor: colors.success + '18',
-              }}
-              onPress={() => onPress(item)}
-            >
-              <Check size={14} color={colors.success} />
-              <AppText variant="caption" weight="bold" shrink={false} style={{ color: colors.success }} numberOfLines={1}>
-                {t('notif.mark_paid')}
               </AppText>
             </TouchableOpacity>
           ) : null}

@@ -4,9 +4,12 @@ import * as SecureStore from 'expo-secure-store';
 
 const ATTEMPTS_KEY = 'auth_pin_attempts';
 const LOCKOUT_KEY = 'auth_lockout_until';
+const LOCKOUT_COUNT_KEY = 'auth_lockout_count';
 const SESSION_KEY = 'auth_session_active';
 const MAX_ATTEMPTS = 5;
-const LOCKOUT_DURATION_MS = 60_000;
+// Escalating cool-down: 1 min → 2 min → 5 min (capped), so brute-forcing the
+// PIN gets progressively more expensive.
+const LOCKOUT_STEPS_MS = [60_000, 120_000, 300_000];
 const INACTIVITY_TIMEOUT_MS = 300_000;
 
 interface AuthContextType {
@@ -39,10 +42,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const startLockoutCountdown = useCallback(async () => {
-    const lockoutUntil = Date.now() + LOCKOUT_DURATION_MS;
+    let lockoutCount = 0;
+    try {
+      lockoutCount = parseInt((await SecureStore.getItemAsync(LOCKOUT_COUNT_KEY)) ?? '0', 10) || 0;
+    } catch { /* default 0 */ }
+    const step = Math.min(lockoutCount, LOCKOUT_STEPS_MS.length - 1);
+    const duration = LOCKOUT_STEPS_MS[step];
+    await SecureStore.setItemAsync(LOCKOUT_COUNT_KEY, String(Math.min(lockoutCount + 1, LOCKOUT_STEPS_MS.length)));
+    const lockoutUntil = Date.now() + duration;
     await SecureStore.setItemAsync(LOCKOUT_KEY, String(lockoutUntil));
     setIsLocked(true);
-    setLockoutRemaining(LOCKOUT_DURATION_MS / 1000);
+    setLockoutRemaining(duration / 1000);
 
     clearLockoutTimer();
     lockoutTimerRef.current = setInterval(async () => {
@@ -58,6 +68,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }, 1000);
   }, [clearLockoutTimer]);
+
+  const successfulAuth = useCallback(async () => {
+    // A successful sign-in clears the escalation counter.
+    try { await SecureStore.deleteItemAsync(LOCKOUT_COUNT_KEY); } catch { /* ignore */ }
+  }, []);
 
   const checkLockoutOnMount = useCallback(async () => {
     const lockoutUntil = await SecureStore.getItemAsync(LOCKOUT_KEY);
@@ -103,7 +118,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const authenticate = useCallback(() => {
     setIsAuthenticated(true);
     lastActivityRef.current = Date.now();
-  }, []);
+    void successfulAuth();
+  }, [successfulAuth]);
 
   const recordFailedAttempt = useCallback(async (): Promise<number> => {
     const attemptsStr = await SecureStore.getItemAsync(ATTEMPTS_KEY);

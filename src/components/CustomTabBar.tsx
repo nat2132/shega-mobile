@@ -122,7 +122,7 @@ export const CustomTabBar = (props: BottomTabBarProps) => {
   const activeIndexRef = useRef(props.state.index);
 
   const routes = props.state.routes.filter(
-    (r) => !['expense', 'adjustment', 'summary', 'contacts', 'orders', 'budget', 'suppliers'].includes(r.name),
+    (r) => !['summary', 'orders', 'suppliers'].includes(r.name),
   );
 
   const pillX = useSharedValue(0);

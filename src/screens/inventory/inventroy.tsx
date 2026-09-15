@@ -6,6 +6,7 @@ import { useDialog } from '@/context/DialogContext';
 import { PROFILE_IMAGES, useSettings } from '@/context/SettingsContext';
 import { useSidebar } from '@/context/SidebarContext';
 import { useWarehouse } from '@/context/WarehouseContext';
+import { Image } from 'expo-image';
 import {
   getExpiringItems,
   getFilteredItems,
@@ -21,6 +22,7 @@ import {
   updateItem
 } from '@/database/db';
 import { useAutoHideScroll } from '@/hooks/useAutoHideScroll';
+import { useDataChangedRefresh } from '@/hooks/useDataChangedRefresh';
 import { useNotifications } from '@/hooks/useNotifications';
 import { TutorialButton, TutorialScrollView, TutorialTarget, useTutorial } from '@/tutorials';
 import { inventoryTutorial } from '@/tutorials/definitions';
@@ -52,7 +54,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   Dimensions,
   FlatList,
-  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -170,7 +171,11 @@ const InventoryLedgerItem = React.memo(({ item, onPress }: { item: ItemData, onP
       activeOpacity={0.7}
     >
       <View style={[styles.ledgerIconCircle, { backgroundColor: G.accentGlass }]}>
-        <Package size={22} color={isLow ? G.fg : G.muted} />
+        {item.image ? (
+          <Image source={{ uri: item.image }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
+        ) : (
+          <Package size={22} color={isLow ? G.fg : G.muted} />
+        )}
       </View>
       <View style={styles.ledgerMain}>
         <AppText variant="body" weight="bold" style={[styles.ledgerName, { color: G.fg }]} numberOfLines={1}>{item.name}</AppText>
@@ -277,6 +282,8 @@ const InventoryDashboard = () => {
     const expiring = getExpiringItems(30);
     setExpiringItems(expiring);
   }, [activeWarehouseId]);
+
+  useDataChangedRefresh(loadAllData);
 
   const { width } = Dimensions.get('window');
   const expandedWidth = useSharedValue(56);
@@ -742,7 +749,11 @@ const InventoryDashboard = () => {
                   key={item.id}
                   left={
                     <View style={[styles.qsIconBox, { backgroundColor: colors.text }]}>
-                      <Package size={20} color={colors.background} />
+                      {item.image ? (
+                        <Image source={{ uri: item.image }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
+                      ) : (
+                        <Package size={20} color={colors.background} />
+                      )}
                     </View>
                   }
                   title={item.name}
@@ -785,7 +796,11 @@ const InventoryDashboard = () => {
                     key={item.id}
                     left={
                       <View style={[styles.qsIconBox, { backgroundColor: G.fg }]}>
-                        <Package size={20} color={G.bg} />
+                        {item.image ? (
+                          <Image source={{ uri: item.image }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
+                        ) : (
+                          <Package size={20} color={G.bg} />
+                        )}
                       </View>
                     }
                     title={item.name}
@@ -1661,6 +1676,7 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 14,
+    overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
@@ -1801,6 +1817,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 14,
+    overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
   },

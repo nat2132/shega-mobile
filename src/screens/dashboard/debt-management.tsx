@@ -20,6 +20,7 @@
 // English is forbidden here — see constraint in README.
 
 import { BorderRadius, Fonts } from '@/constants/theme';
+import { useDataChangedRefresh } from '@/hooks/useDataChangedRefresh';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSettings } from '@/context/SettingsContext';
 import {
@@ -153,6 +154,8 @@ const DebtManagementScreen: React.FC = () => {
       console.error('Debt management load error:', e);
     }
   }, []);
+
+  useDataChangedRefresh(load);
 
   useEffect(() => {
     let active = true;

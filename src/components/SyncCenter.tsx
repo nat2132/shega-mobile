@@ -10,10 +10,7 @@ import {
 import {
   AlertTriangle,
   CheckCircle2,
-  Cloud,
-  CloudOff,
   FileClock,
-  Globe,
   RefreshCw,
   Server,
   Smartphone,
@@ -27,16 +24,13 @@ import { useSync } from '@/context/SyncContext';
 import { AppText } from '@/components/ui';
 import { getSettingsGlass } from '@/screens/settings/glass-settings';
 import {
-  cloudSelfStatus,
-  getCloudEnabled,
-  setCloudEnabled,
   type PendingChange,
   type SyncHistoryEntry,
   type UnifiedSyncStatus,
 } from '@/services/syncService';
 
-// §24 Sync Center — unified LAN + Cloud synchronization status, pending
-// changes, online devices, conflicts, history and manual sync controls.
+// §24 Sync Center — unified LAN synchronization status, pending changes,
+// online devices, conflicts, history and manual sync controls.
 
 const HEALTH_LABEL: Record<string, string> = {
   synced: 'Everything synchronized',
@@ -71,10 +65,7 @@ function healthDot(health: string) {
 
 function modeLabel(status: UnifiedSyncStatus): string {
   const lan = status.lan.configured;
-  const cloud = status.cloud.configured && status.cloud.enabled;
-  if (lan && cloud) return 'LAN + Cloud';
   if (lan) return 'LAN';
-  if (cloud) return 'Cloud';
   return 'Offline';
 }
 
@@ -84,7 +75,6 @@ export default function SyncCenter() {
   const { showToast } = useToast();
   const {
     status,
-    cloudStatus,
     unifiedStatus: unified,
     busy,
     lastError,
@@ -126,8 +116,6 @@ export default function SyncCenter() {
       load();
     }
   };
-
-  const cloud = cloudStatus;
 
   return (
     <View style={styles.container}>
@@ -216,16 +204,8 @@ export default function SyncCenter() {
           <View style={styles.connRow}>
             {status?.hub ? <Wifi size={16} color={G.accent} /> : <WifiOff size={16} color={G.muted} />}
             <AppText variant="body" weight="bold" style={[styles.connLabel, { color: G.fg }]}>POS Hub (LAN)</AppText>
-            <AppText variant="caption" style={{ color: G.muted, flex: 1, textAlign: 'right' }}>
-              {status?.hub ? status.hub : 'Not configured'}
-            </AppText>
-          </View>
-          <View style={[styles.divider, { backgroundColor: G.border }]} />
-          <View style={styles.connRow}>
-            {cloud.configured ? <Cloud size={16} color={G.accent} /> : <CloudOff size={16} color={G.muted} />}
-            <AppText variant="body" weight="bold" style={[styles.connLabel, { color: G.fg }]}>Cloud</AppText>
-            <AppText variant="caption" style={{ color: G.muted, flex: 1, textAlign: 'right' }}>
-              {cloud.configured ? (cloud.enabled ? 'Enabled' : 'Enabled') : 'Not configured'}
+            <AppText variant="caption" style={{ color: status?.hub ? '#2ECC71' : G.muted, flex: 1, textAlign: 'right' }}>
+              {status?.hub ? 'Connected' : 'Not configured'}
             </AppText>
           </View>
         </View>
@@ -296,11 +276,10 @@ export default function SyncCenter() {
         </View>
 
         {/* Errors */}
-        {lastError || cloud.lastError ? (
+        {lastError ? (
           <View style={[styles.card, { backgroundColor: G.bgCard, borderColor: G.border }]}>
             <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.cardTitle, { color: '#FF3B30' }]}>Errors</AppText>
             {lastError ? <AppText variant="caption" style={{ color: '#FF3B30' }}>{lastError}</AppText> : null}
-            {cloud.lastError ? <AppText variant="caption" style={{ color: '#FF3B30' }}>{cloud.lastError}</AppText> : null}
           </View>
         ) : null}
       </ScrollView>

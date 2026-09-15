@@ -1,24 +1,20 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 import { getDB } from '@/database/db';
-import { getHubUrl, getSyncStatus, syncNow, type SyncStatus, type UnifiedSyncStatus, type PendingChange, type DeviceStatus, type SyncHistoryEntry, getUnifiedSyncStatus, getPendingChanges, getDeviceStatusList, getSyncHistory, recordSyncHistory } from '@/services/syncService';
-import {
-  cloudSyncNow,
-  getCloudStatus,
-  getCloudUrl,
-  type CloudSyncStatus,
-} from '@/services/syncService';
+import { getHubUrl, getHubToken, getSyncStatus, syncNow, type SyncStatus, type UnifiedSyncStatus, type PendingChange, type DeviceStatus, type SyncHistoryEntry, getUnifiedSyncStatus, getPendingChanges, getDeviceStatusList, getSyncHistory, recordSyncHistory } from '@/services/syncService';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { startPeerSyncManager, stopPeerSyncManager, getPeerSyncState, type PeerSyncState } from '@/services/peerSyncManager';
+import { mobileP2pSync } from '@/services/p2p-sync-manager';
+import { wsSyncClient } from '@/services/wsSyncClient';
+import { getActiveBusiness } from '@/services/businessService';
 
 interface SyncContextValue {
   status: SyncStatus;
-  cloudStatus: CloudSyncStatus;
   unifiedStatus: UnifiedSyncStatus | null;
   peerSyncState: PeerSyncState | null;
   busy: boolean;
   lastError: string | null;
-  lastResult: { pushed: number; pulled: number; conflicts: number; transport?: 'lan' | 'cloud' | null } | null;
+  lastResult: { pushed: number; pulled: number; conflicts: number; transport?: 'lan' | null } | null;
   enabled: boolean;
   setEnabled: (v: boolean) => void;
   runSync: () => Promise<boolean>;
@@ -36,7 +32,7 @@ interface SyncContextValue {
 
 const SyncContext = createContext<SyncContextValue | null>(null);
 
-const PERIOD_MS = 60 * 1000;
+const PERIOD_MS = 20 * 1000;
 const BACKOFF_BASE_MS = 5 * 1000;
 const BACKOFF_MAX_MS = 5 * 60 * 1000;
 
@@ -53,15 +49,6 @@ function writeEnabled(v: boolean): void {
 
 export function SyncProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<SyncStatus>(getSyncStatus);
-  const [cloudStatus, setCloudStatus] = useState<CloudSyncStatus>({
-    configured: false,
-    enabled: false,
-    hasToken: false,
-    url: '',
-    lastError: null,
-    lastAt: null,
-    cursor: 0,
-  });
   const [unifiedStatus, setUnifiedStatus] = useState<UnifiedSyncStatus | null>(null);
   const [peerSyncState, setPeerSyncState] = useState<PeerSyncState | null>(null);
   const [busy, setBusy] = useState(false);
@@ -76,7 +63,6 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
 
   const refresh = useCallback(() => {
     setStatus(getSyncStatus());
-    getCloudStatus().then(setCloudStatus).catch(() => {});
   }, []);
 
   const refreshUnifiedStatus = useCallback(async () => {
@@ -111,6 +97,24 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       stopPeerSyncManager();
     };
   }, [enabled]);
+
+  // P2P Yjs+WebRTC sync — keyed to the active business so switching businesses
+  // swaps the Y.Doc context (start() closes the old business doc and
+  // bootstraps the new one). The active-business tick re-runs this effect
+  // whenever the user switches businesses, keeping sync business-isolated.
+  const activeBizId = getActiveBusiness()?.id ?? null;
+  useEffect(() => {
+    try {
+      if (activeBizId) {
+        mobileP2pSync.start(String(activeBizId));
+        mobileP2pSync.announce();
+      }
+    } catch (e) {
+      console.warn('[SyncContext] P2P sync start failed:', e);
+    }
+    const t = setInterval(() => { try { mobileP2pSync.announce(); } catch {} }, 30000);
+    return () => clearInterval(t);
+  }, [activeBizId]);
 
   const registerPushToken = useCallback(async () => {
     if (!expoPushToken) return;
@@ -149,42 +153,25 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   }, [expoPushToken, enabled, registerPushToken]);
 
   /**
-   * Combined runSync (spec §20/§18):
-   *  - Prefer LAN when a hub is configured and reachable (no unnecessary cloud
-   *    round-trips for changes that can cross the local network).
-   *  - Fall back to the Internet/cloud transport when the LAN hub is absent or
-   *    unreachable.
-   * The shared outbox is only cleared after whichever transport succeeds, so a
-   * change is delivered once regardless of path (no duplicates).
+   * Combined runSync (spec §20/§18): push/pull over the LAN hub when configured.
+   * The outbox is only cleared after the hub ACKs, so a change is delivered
+   * once regardless of path (no duplicates).
    */
   const runSync = useCallback(async (): Promise<boolean> => {
     if (running.current) return false;
     const hubUrl = getHubUrl();
-    const cloudUrl = getCloudUrl();
-    if (!hubUrl && !cloudUrl) return false;
+    if (!hubUrl) return false;
     running.current = true;
     setBusy(true);
     try {
       let result: SyncContextValue['lastResult'] = null;
       let err: unknown = null;
 
-      if (hubUrl) {
-        try {
-          const res = await syncNow();
-          result = { ...res, transport: 'lan' };
-        } catch (e) {
-          err = e;
-        }
-      }
-
-      if (!result && cloudUrl) {
-        try {
-          const res = await cloudSyncNow();
-          result = { ...res, transport: 'cloud' };
-          err = null;
-        } catch (e) {
-          if (!err) err = e;
-        }
+      try {
+        const res = await syncNow();
+        result = { ...res, transport: 'lan' };
+      } catch (e) {
+        err = e;
       }
 
       if (result) {
@@ -221,7 +208,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     }
   }, [refresh]);
 
-  // Debounced best-effort trigger (used right after a sale/expense is recorded).
+  // Debounced best-effort trigger (used right after a sale is recorded).
   const pending = useRef(false);
   const requestSync = useCallback(() => {
     if (!enabled) return;
@@ -272,11 +259,53 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     };
   }, [enabled, refresh, runSync]);
 
+  // Live LAN path (BREAK-03 fix): keep ONE persistent WebSocket to the hub from
+  // app launch (not just the join-existing flow). The hub pushes DATA_CHANGED
+  // whenever any device persists data, which triggers an immediate pull below
+  // while the WS client's own SYNC_PULL converges SQLite. This also keeps the
+  // WebRTC signalling channel alive for dev builds.
+  useEffect(() => {
+    if (!enabled) return;
+    const hubUrl = getHubUrl();
+    if (!hubUrl) return;
+    const device = getDB().getFirstSync('SELECT device_id FROM sync_meta WHERE id = 1') as any;
+    if (!device?.device_id) return;
+
+    // Desktop WS sync server listens on 5758 (the HTTP hub is 5757). The client
+    // appends '/sync' itself, so hand it the http-form URL for the WS port.
+    const wsHubUrl = hubUrl.replace(':5757', ':5758');
+
+    const onLive = () => {
+      refresh();
+      refreshUnifiedStatus();
+      // The WS path converged/pushed; also drive the HTTP path so its cursor
+      // and status stay in sync, then refresh the UI via data-version bumps.
+      runSync();
+    };
+    const onConnected = () => {
+      refresh();
+      refreshUnifiedStatus();
+    };
+
+    wsSyncClient.on('dataChanged', onLive);
+    wsSyncClient.on('connected', onConnected);
+    wsSyncClient.on('syncCompleted', onConnected);
+
+    wsSyncClient.connect({ hubUrl: wsHubUrl, hubToken: getHubToken(), deviceId: device.device_id })
+      .catch((e) => console.warn('[SyncContext] WS connect failed:', e));
+
+    return () => {
+      wsSyncClient.off('dataChanged', onLive);
+      wsSyncClient.off('connected', onConnected);
+      wsSyncClient.off('syncCompleted', onConnected);
+      try { wsSyncClient.disconnect(); } catch {}
+    };
+  }, [enabled, refresh, refreshUnifiedStatus, runSync]);
+
   return (
     <SyncContext.Provider
       value={{
         status,
-        cloudStatus,
         unifiedStatus,
         peerSyncState,
         busy,

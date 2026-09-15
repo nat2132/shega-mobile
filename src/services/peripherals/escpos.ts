@@ -301,3 +301,60 @@ export function buildSampleReceiptPreview(opts: { businessName?: string; paperWi
   lines.push('*** THANK YOU ***');
   return lines.join('\n');
 }
+// ============================================
+// Barcode label printing (shelf/price labels)
+// ============================================
+
+export interface LabelBytesOptions {
+  name: string;
+  barcode?: string | null;
+  sku?: string | null;
+  price: number;
+  businessName?: string;
+  copies?: number;
+  /** 'ean13' uses the printer's native EAN-13 encoder; anything else falls back to CODE128. */
+  barcodeType?: 'ean13' | 'code128';
+}
+
+/** Build ESC/POS bytes for one or more barcode labels. */
+export function buildLabelBytes(opts: LabelBytesOptions): Uint8Array {
+  const w = new EscposWriter();
+  const copies = Math.max(1, Math.min(50, opts.copies ?? 1));
+  const code = (opts.barcode || opts.sku || '').trim();
+
+  for (let i = 0; i < copies; i++) {
+    w.init().codePage(0);
+    if (opts.businessName) w.align(1).text(truncate(opts.businessName, widthFor(58))).lineFeed();
+    w.align(1).bold(true).text(truncate(opts.name || 'Product', 32)).lineFeed().bold(false);
+    if (code) {
+      const fmt = detectBarcodeFormat(code);
+      try {
+        if (opts.barcodeType === 'code128' || fmt.escposType === 4) w.barcode(4, code.slice(0, 40));
+        else w.barcode(fmt.escposType as 0 | 2 | 3, code);
+      } catch {
+        // barcode is a nicety; keep printing the rest of the label
+      }
+      w.align(1).text(code.slice(0, 24)).lineFeed();
+    }
+    if (opts.sku && opts.sku !== code) w.align(1).text(truncate(`SKU ${opts.sku}`, 24)).lineFeed();
+    w.align(1).bold(true).text(`${money(opts.price)} ETB`).lineFeed().bold(false);
+    w.lineFeed(2);
+  }
+  w.cut(true);
+  return w.toUint8Array();
+}
+
+/** Plain-text preview of what the label would print. */
+export function buildLabelPreview(opts: LabelBytesOptions): string {
+  const lines: string[] = [];
+  const code = (opts.barcode || opts.sku || '').trim();
+  if (opts.businessName) lines.push(opts.businessName);
+  lines.push(opts.name || 'Product');
+  if (code) {
+    lines.push(`||| ${detectBarcodeFormat(code).format} |||`);
+    lines.push(code);
+  }
+  if (opts.sku && opts.sku !== code) lines.push(`SKU ${opts.sku}`);
+  lines.push(`${money(opts.price)} ETB`);
+  return lines.join('\n');
+}

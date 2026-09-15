@@ -6,12 +6,12 @@ import {
   Platform,
 } from "react-native";
 import { Fonts } from "@/constants/theme";
+import { Image } from "expo-image";
 import {
   Package,
   Plus,
   Minus,
   Trash2,
-  Repeat,
   ShoppingCart,
   ArrowRight,
   PlusCircle,
@@ -58,14 +58,6 @@ const PendingRow = React.memo(
       onUpdate?.(item.id, { quantity: (item.quantity || 0) + 1 });
     }, [item, onUpdate]);
 
-    const toggleUnit = useCallback(() => {
-      if (item.allowSellByPackUnit && item.allowSellByBaseUnit) {
-        onUpdate?.(item.id, {
-          unitType: item.unitType === "pack" ? "base" : "pack",
-        });
-      }
-    }, [item, onUpdate]);
-
     const handleRemove = useCallback(
       () => onRemove?.(item.id),
       [item.id, onRemove],
@@ -85,7 +77,11 @@ const PendingRow = React.memo(
             <View
               style={[styles.iconBox, { backgroundColor: SALES_GLASS.fg + "08" }]}
             >
-              <Package size={20} color={SALES_GLASS.fg} />
+              {item.image ? (
+                <Image source={{ uri: item.image }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
+              ) : (
+                <Package size={20} color={SALES_GLASS.fg} />
+              )}
             </View>
             <View style={styles.nameArea}>
               <AppText
@@ -96,18 +92,12 @@ const PendingRow = React.memo(
               >
                 {item.name}
               </AppText>
-              <TouchableOpacity
+              <View
                 style={[
                   styles.unitBadge,
                   { backgroundColor: colors.primary + "15" },
                 ]}
-                onPress={toggleUnit}
               >
-                <Repeat
-                  size={10}
-                  color={colors.primary}
-                  style={{ marginRight: 4 }}
-                />
                 <AppText
                   variant="micro"
                   weight="bold"
@@ -118,7 +108,7 @@ const PendingRow = React.memo(
                 >
                   {currentUnitLabel}
                 </AppText>
-              </TouchableOpacity>
+              </View>
             </View>
             <View style={styles.costArea}>
               <AppNumber
@@ -452,6 +442,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 14,
+    overflow: "hidden",
     justifyContent: "center",
     alignItems: "center",
   },

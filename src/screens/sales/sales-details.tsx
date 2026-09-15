@@ -4,9 +4,6 @@ import { Fonts, LightTheme } from "@/constants/theme";
 import { useSettings } from "@/context/SettingsContext";
 import { useToast } from "@/context/ToastContext";
 import {
-  cancelOrder,
-  convertOrderToDebt,
-  convertOrderToSale,
   deleteSale,
   deleteSalesByBatchId,
   getItems,
@@ -20,6 +17,7 @@ import {
 import { formatDate } from "@/utils/date-utils";
 import { generateReceiptPDF } from "@/utils/pdf-utils";
 import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
 import {
   Activity,
   AlertCircle,
@@ -57,6 +55,8 @@ import {
 } from "react-native";
 import { AppText, AppNumber } from "@/components/ui";
 import { getSalesGlass } from './glass-sales';
+import { getActiveTaxType } from '@/services/taxService';
+import { getScopedBusinessId } from "@/database/db";
 import Animated, { FadeInDown, ZoomIn } from "react-native-reanimated";
 import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
 import { salesDetailsTutorial } from '@/tutorials/definitions';
@@ -72,6 +72,10 @@ const SaleDetailsScreen = ({
   const { userProfile, colors, calendarType, language, timeSystem, t, theme } =
     useSettings();
   const SALES_GLASS = useMemo(() => getSalesGlass(colors), [colors]);
+  const bizTax = useMemo(() => {
+    const at = getActiveTaxType();
+    return { name: at?.name || 'VAT', rate: at?.rate ?? 15 };
+  }, [getScopedBusinessId()]);
   const { showToast } = useToast();
   const tutorial = useTutorial({ tutorial: salesDetailsTutorial });
   const [isEditing, setIsEditing] = useState(false);
@@ -234,8 +238,8 @@ const SaleDetailsScreen = ({
             unit: found.baseUnit,
             unitType: found.unitType || "base",
             discount: ni.discount || 0,
-            vat: ni.vat || 0,
-            taxType: ni.taxType || "VAT",
+            vat: ni.vat ?? 0,
+            taxType: ni.taxType || bizTax.name,
             totalPrice,
             paymentMethod: editForm.paymentMethod,
             paymentStatus: editForm.paymentStatus,
@@ -399,8 +403,7 @@ const SaleDetailsScreen = ({
     }
   };
 
-  const debtFieldsSection = (editForm.paymentStatus === "Debt" ||
-    editForm.paymentStatus === "Order") && (
+  const debtFieldsSection = editForm.paymentStatus === "Debt" && (
     <TutorialTarget id="sd-customer">
     <Animated.View style={styles.section}>
       <AppText
@@ -652,11 +655,9 @@ const SaleDetailsScreen = ({
                 backgroundColor:
                   editForm.paymentStatus === "Paid"
                     ? colors.success + "15"
-                    : editForm.paymentStatus === "Order"
-                      ? colors.primary + "15"
-                      : editForm.paymentStatus === "Cancelled"
-                        ? colors.error + "15"
-                        : colors.warning + "15",
+                    : editForm.paymentStatus === "Cancelled"
+                      ? colors.error + "15"
+                      : colors.warning + "15",
               },
             ]}
           >
@@ -665,11 +666,9 @@ const SaleDetailsScreen = ({
               color={
                 editForm.paymentStatus === "Paid"
                   ? colors.success
-                  : editForm.paymentStatus === "Order"
-                    ? colors.primary
-                    : editForm.paymentStatus === "Cancelled"
-                      ? colors.error
-                      : colors.warning
+                  : editForm.paymentStatus === "Cancelled"
+                    ? colors.error
+                    : colors.warning
               }
             />
           </View>
@@ -888,8 +887,8 @@ const SaleDetailsScreen = ({
                   color={
                     editForm.paymentStatus === "Paid"
                       ? colors.success
-                      : editForm.paymentStatus === "Order"
-                        ? colors.primary
+                      : editForm.paymentStatus === "Cancelled"
+                        ? colors.error
                         : colors.warning
                   }
                 />
@@ -980,22 +979,18 @@ const SaleDetailsScreen = ({
                       color:
                         editForm.paymentStatus === "Paid"
                           ? colors.success
-                          : editForm.paymentStatus === "Order"
-                            ? colors.primary
-                            : editForm.paymentStatus === "Cancelled"
-                              ? colors.error
-                              : colors.warning,
+                          : editForm.paymentStatus === "Cancelled"
+                            ? colors.error
+                            : colors.warning,
                     },
                   ]}
                   numberOfLines={1}
                 >
                   {editForm.paymentStatus === "Paid"
                     ? t("sale.settled")
-                    : editForm.paymentStatus === "Order"
-                      ? t("sale.order")
-                      : editForm.paymentStatus === "Cancelled"
-                        ? t("sale.cancelled")
-                        : t("sale.credit")}
+                    : editForm.paymentStatus === "Cancelled"
+                      ? t("sale.cancelled")
+                      : t("sale.credit")}
                 </AppText>
               )}
             </View>
@@ -1038,7 +1033,13 @@ const SaleDetailsScreen = ({
                         style={styles.node}
                       >
                         <View style={styles.nodeInfo}>
-                          <Package size={16} color={SALES_GLASS.fgSecondary} />
+                          <View style={[styles.nodeThumb, { backgroundColor: SALES_GLASS.bgCard }]}>
+                            {item.image ? (
+                              <Image source={{ uri: item.image }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
+                            ) : (
+                              <Package size={16} color={SALES_GLASS.fgSecondary} />
+                            )}
+                          </View>
                           <View style={{ flex: 1 }}>
                             <AppText
                               variant="body-sm"
@@ -1158,57 +1159,18 @@ const SaleDetailsScreen = ({
                               <AppText variant="caption" weight="bold" style={[styles.nodeLabel, { color: SALES_GLASS.fgSecondary }]} numberOfLines={1}>
                                 {t("sale.tax_type")}
                               </AppText>
-                              {isEditing ? (
-                                <View style={{ flexDirection: "row", gap: 4 }}>
-                                  {(["VAT", "TOT", "Other", "None"] as const).map((type) => {
-                                    const current = itemEdits[item.id]?.taxType ?? (item.taxType || "VAT");
-                                    return (
-                                      <TouchableOpacity
-                                        key={type}
-                                        style={[
-                                          { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: SALES_GLASS.border },
-                                          current === type && { backgroundColor: SALES_GLASS.fg, borderColor: SALES_GLASS.fg },
-                                        ]}
-                                        onPress={() => {
-                                          const edits = { ...(itemEdits[item.id] || {}), taxType: type };
-                                          if (type === "None") edits.vat = 0;
-                                          if (type === "VAT" && (!itemEdits[item.id]?.vat || itemEdits[item.id]?.vat === 0)) edits.vat = 15;
-                                          setItemEdits((prev: any) => ({ ...prev, [item.id]: edits }));
-                                        }}
-                                      >
-                                        <AppText variant="micro" weight="bold" shrink={false} style={{ fontSize: 10, color: current === type ? SALES_GLASS.bg : SALES_GLASS.fgSecondary }} numberOfLines={1}>
-                                          {type}
-                                        </AppText>
-                                      </TouchableOpacity>
-                                    );
-                                  })}
-                                </View>
-                              ) : (
-                                <AppText variant="body-sm" weight="bold" style={[styles.nodeValue, { color: SALES_GLASS.fg }]} numberOfLines={1}>
-                                  {item.taxType || "VAT"}
-                                </AppText>
-                              )}
+                              <AppText variant="body-sm" weight="bold" style={[styles.nodeValue, { color: SALES_GLASS.fg }]} numberOfLines={1}>
+                                {item.taxType || (bizTax.name !== 'VAT' ? bizTax.name : "VAT")}
+                              </AppText>
                             </View>
-                            {(itemEdits[item.id]?.taxType ?? (item.taxType || "VAT")) !== "None" && (
+                            {(item.taxType || "VAT") !== "None" && (
                               <View style={styles.expandedRow}>
                                 <AppText variant="caption" weight="bold" style={[styles.nodeLabel, { color: SALES_GLASS.fgSecondary }]} numberOfLines={1}>
                                   {t("sale.tax_rate")}
                                 </AppText>
-                                {isEditing ? (
-                                  <TextInput
-                                    style={[styles.nodeInput, { color: SALES_GLASS.fg, borderColor: SALES_GLASS.border }]}
-                                    value={String(itemEdits[item.id]?.vat !== undefined ? itemEdits[item.id].vat : (item.vat || 0))}
-                                    keyboardType="numeric"
-                                    onChangeText={(t) => {
-                                      const val = parseFloat(t) || 0;
-                                      setItemEdits((prev: any) => ({ ...prev, [item.id]: { ...prev[item.id], vat: val } }));
-                                    }}
-                                  />
-                                ) : (
-                                  <AppText variant="body-sm" weight="bold" style={[styles.nodeValue, { color: SALES_GLASS.fg }]} numberOfLines={1}>
-                                    {item.vat || 0}%
-                                  </AppText>
-                                )}
+                                <AppText variant="body-sm" weight="bold" style={[styles.nodeValue, { color: SALES_GLASS.fg }]} numberOfLines={1}>
+                                  {item.vat || 0}%
+                                </AppText>
                               </View>
                             )}
                           </View>
@@ -1249,8 +1211,8 @@ const SaleDetailsScreen = ({
                         itemName: "",
                         quantity: 1,
                         discount: 0,
-                        vat: 15,
-                        taxType: "VAT",
+                        vat: bizTax.rate,
+                        taxType: bizTax.name,
                       },
                     ])
                   }
@@ -1323,7 +1285,13 @@ const SaleDetailsScreen = ({
                         }}
                         activeOpacity={0.7}
                       >
-                        <Package size={14} color={SALES_GLASS.fgSecondary} />
+                        <View style={styles.itemSearchThumb}>
+                          {ni?.image ? (
+                            <Image source={{ uri: ni.image }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
+                          ) : (
+                            <Package size={14} color={SALES_GLASS.fgSecondary} />
+                          )}
+                        </View>
                         <AppText
                           variant="body-sm"
                           weight="medium"
@@ -1422,41 +1390,7 @@ const SaleDetailsScreen = ({
                                 {ni.baseUnit || "pcs"}
                               </AppText>
                             </TouchableOpacity>
-                            {ni.unitsPerPack ? (
-                              <TouchableOpacity
-                                style={[
-                                  styles.unitToggle,
-                                  { borderColor: SALES_GLASS.border },
-                                  ni.unitType === "pack" && {
-                                    backgroundColor: colors.primary,
-                                    borderColor: colors.primary,
-                                  },
-                                ]}
-                                onPress={() => {
-                                  const copy = [...newItems];
-                                  copy[niIdx] = {
-                                    ...copy[niIdx],
-                                    unitType: "pack",
-                                    unit: "pack",
-                                  };
-                                  setNewItems(copy);
-                                }}
-                              >
-                                <AppText
-                                  variant="micro"
-                                  weight="bold"
-                                  style={{
-                                    color:
-                                      ni.unitType === "pack"
-                                        ? SALES_GLASS.fg
-                                        : SALES_GLASS.fgSecondary,
-                                  }}
-                                  numberOfLines={1}
-                                >
-                                  {t('form.pack')}
-                                </AppText>
-                              </TouchableOpacity>
-                            ) : null}
+                            
                           </View>
                         </View>
                       </View>
@@ -1506,74 +1440,9 @@ const SaleDetailsScreen = ({
                           >
                             {t("sale.tax_type")}
                           </AppText>
-                          <View style={{ flexDirection: "row", gap: 4 }}>
-                            {(["VAT", "TOT", "Other", "None"] as const).map((type) => (
-                              <TouchableOpacity
-                                key={type}
-                                style={[
-                                  styles.unitToggle,
-                                  { borderColor: SALES_GLASS.border },
-                                  (ni.taxType || "VAT") === type && {
-                                    backgroundColor: colors.primary,
-                                    borderColor: colors.primary,
-                                  },
-                                ]}
-                                onPress={() => {
-                                  const copy = [...newItems];
-                                  copy[niIdx] = { ...copy[niIdx], taxType: type };
-                                  if (type === "None") copy[niIdx].vat = 0;
-                                  if (type === "VAT" && (!ni.vat || ni.vat === 0)) copy[niIdx].vat = 15;
-                                  setNewItems(copy);
-                                }}
-                              >
-                                <AppText
-                                  variant="micro"
-                                  weight="bold"
-                                  style={{
-                                    color:
-                                      (ni.taxType || "VAT") === type
-                                        ? SALES_GLASS.fg
-                                        : SALES_GLASS.fgSecondary,
-                                  }}
-                                  numberOfLines={1}
-                                >
-                                  {type}
-                                </AppText>
-                              </TouchableOpacity>
-                            ))}
-                          </View>
-                        </View>
-                        <View style={styles.newItemField}>
-                          <AppText
-                            variant="micro"
-                            weight="bold"
-                            transform="uppercase"
-                            style={[
-                              styles.newItemFieldLabel,
-                              { color: SALES_GLASS.fgSecondary },
-                            ]}
-                            numberOfLines={1}
-                          >
-                            {t("sale.tax_rate")}
+                          <AppText variant="body-sm" weight="bold" style={[styles.nodeValue, { color: SALES_GLASS.fg }]} numberOfLines={1}>
+                            {bizTax.name} ({bizTax.rate}%)
                           </AppText>
-                          <TextInput
-                            style={[
-                              styles.newItemFieldInput,
-                              {
-                                color: SALES_GLASS.fg,
-                                borderColor: SALES_GLASS.border,
-                              },
-                            ]}
-                            value={String(ni.vat ?? 0)}
-                            keyboardType="numeric"
-                            onChangeText={(text) => {
-                              const val = parseFloat(text) || 0;
-                              const copy = [...newItems];
-                              copy[niIdx] = { ...copy[niIdx], vat: val };
-                              setNewItems(copy);
-                            }}
-                            editable={(ni.taxType || "VAT") !== "None"}
-                          />
                         </View>
                       </View>
 
@@ -1729,33 +1598,9 @@ const SaleDetailsScreen = ({
                       <Percent size={16} color={SALES_GLASS.fgSecondary} />
                       <AppText variant="caption" weight="bold" style={[styles.nodeLabel, { color: SALES_GLASS.fgSecondary }]} numberOfLines={1}>{t("sale.tax_type")}</AppText>
                     </View>
-                    {isEditing ? (
-                      <View style={{ flexDirection: "row", gap: 4 }}>
-                        {(["VAT", "TOT", "Other", "None"] as const).map((type) => (
-                          <TouchableOpacity
-                            key={type}
-                            style={[
-                              { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: SALES_GLASS.border },
-                              (editForm.taxType || "VAT") === type && { backgroundColor: SALES_GLASS.fg, borderColor: SALES_GLASS.fg },
-                            ]}
-                            onPress={() => {
-                              setEditForm((prev: any) => ({
-                                ...prev, taxType: type,
-                                vat: type === "None" ? 0 : type === "VAT" && (!prev.vat || prev.vat === 0) ? 15 : prev.vat,
-                              }));
-                            }}
-                          >
-                            <AppText variant="micro" weight="bold" shrink={false} style={{ fontSize: 10, color: (editForm.taxType || "VAT") === type ? SALES_GLASS.bg : SALES_GLASS.fgSecondary }} numberOfLines={1}>
-                              {type}
-                            </AppText>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    ) : (
-                      <AppText variant="body-sm" weight="bold" style={[styles.nodeValue, { color: SALES_GLASS.fg }]} numberOfLines={1}>
-                        {editForm.taxType || "VAT"}
-                      </AppText>
-                    )}
+                    <AppText variant="body-sm" weight="bold" style={[styles.nodeValue, { color: SALES_GLASS.fg }]} numberOfLines={1}>
+                      {editForm.taxType || (bizTax.name !== 'VAT' ? bizTax.name : "VAT")}
+                    </AppText>
                   </View>
                   {(editForm.taxType || "VAT") !== "None" && (
                     <>
@@ -1765,21 +1610,9 @@ const SaleDetailsScreen = ({
                           <Percent size={16} color={SALES_GLASS.fgSecondary} />
                           <AppText variant="caption" weight="bold" style={[styles.nodeLabel, { color: SALES_GLASS.fgSecondary }]} numberOfLines={1}>{t("sale.tax_rate")}</AppText>
                         </View>
-                        {isEditing ? (
-                          <TextInput
-                            style={[styles.nodeInput, { color: SALES_GLASS.fg, borderColor: SALES_GLASS.border }]}
-                            value={String(editForm.vat ?? 0)}
-                            keyboardType="numeric"
-                            onChangeText={(t) => {
-                              const val = parseFloat(t);
-                              setEditForm((prev: any) => ({ ...prev, vat: isNaN(val) ? 0 : val }));
-                            }}
-                          />
-                        ) : (
-                          <AppText variant="body-sm" weight="bold" style={[styles.nodeValue, { color: SALES_GLASS.fg }]} numberOfLines={1}>
-                            {editForm.vat ?? 0}%
-                          </AppText>
-                        )}
+                        <AppText variant="body-sm" weight="bold" style={[styles.nodeValue, { color: SALES_GLASS.fg }]} numberOfLines={1}>
+                          {editForm.vat ?? 0}%
+                        </AppText>
                       </View>
                     </>
                   )}
@@ -1863,127 +1696,31 @@ const SaleDetailsScreen = ({
       </ScrollView>
 
       {/* Action Float */}
-      {editForm.paymentStatus === "Order" ? (
-        <View
-          style={[styles.actionFloat, { backgroundColor: colors.background }]}
+      <View
+        style={[styles.actionFloat, { backgroundColor: colors.background }]}
+      >
+        <TouchableOpacity
+          style={[styles.primaryAction, { backgroundColor: SALES_GLASS.fg }]}
+          onPress={isEditing ? handleSave : handleEditClick}
         >
-          <View style={{ flexDirection: "row", gap: 10 }}>
-            <TouchableOpacity
-              style={[
-                styles.primaryAction,
-                { backgroundColor: colors.success + "15", flex: 1 },
-              ]}
-              onPress={() => {
-                const ref = sale.batchId || sale.id;
-                const res = convertOrderToSale(ref);
-                if (res.success) {
-                  Haptics.notificationAsync(
-                    Haptics.NotificationFeedbackType.Success,
-                  );
-                  if (onClose) onClose();
-                } else {
-                  alert(res.error || t("common.error"));
-                }
-              }}
-            >
-              <Check size={18} color={colors.success} />
-              <AppText
-                variant="body"
-                weight="bold"
-                shrink={false}
-                style={[styles.actionText, { color: colors.success }]}
-                numberOfLines={1}
-              >
-                {t("sale.convert_to_sale")}
-              </AppText>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.primaryAction,
-                { backgroundColor: colors.warning + "18", flex: 1 },
-              ]}
-              onPress={() => {
-                const ref = sale.batchId || sale.id;
-                const res = convertOrderToDebt(ref);
-                if (res.success) {
-                  Haptics.notificationAsync(
-                    Haptics.NotificationFeedbackType.Success,
-                  );
-                  if (onClose) onClose();
-                } else {
-                  alert(res.error || t("common.error"));
-                }
-              }}
-            >
-              <CreditCard size={18} color={colors.warning} />
-              <AppText
-                variant="body"
-                weight="bold"
-                shrink={false}
-                style={[styles.actionText, { color: colors.warning }]}
-                numberOfLines={1}
-              >
-                {t("sale.convert_to_debt")}
-              </AppText>
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity
-            style={[
-              styles.primaryAction,
-              { backgroundColor: colors.error + "12", marginTop: 10 },
-            ]}
-            onPress={() => {
-              const ref = sale.batchId || sale.id;
-              const res = cancelOrder(ref);
-              if (res.success) {
-                Haptics.notificationAsync(
-                  Haptics.NotificationFeedbackType.Success,
-                );
-                if (onClose) onClose();
-              } else {
-                alert(res.error || t("common.error"));
-              }
-            }}
+          {isEditing ? (
+            <ShieldCheck size={20} color={SALES_GLASS.bg} />
+          ) : (
+            <Edit2 size={18} color={SALES_GLASS.bg} />
+          )}
+          <AppText
+            variant="body"
+            weight="bold"
+            shrink={false}
+            style={[styles.actionText, { color: SALES_GLASS.bg }]}
+            numberOfLines={1}
           >
-            <X size={18} color={colors.error} />
-            <AppText
-              variant="body"
-              weight="bold"
-              shrink={false}
-              style={[styles.actionText, { color: colors.error }]}
-              numberOfLines={1}
-            >
-              {t("sale.cancel_order")}
-            </AppText>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <View
-          style={[styles.actionFloat, { backgroundColor: colors.background }]}
-        >
-          <TouchableOpacity
-            style={[styles.primaryAction, { backgroundColor: SALES_GLASS.fg }]}
-            onPress={isEditing ? handleSave : handleEditClick}
-          >
-            {isEditing ? (
-              <ShieldCheck size={20} color={SALES_GLASS.bg} />
-            ) : (
-              <Edit2 size={18} color={SALES_GLASS.bg} />
-            )}
-            <AppText
-              variant="body"
-              weight="bold"
-              shrink={false}
-              style={[styles.actionText, { color: SALES_GLASS.bg }]}
-              numberOfLines={1}
-            >
-              {isEditing
-                ? t("sale.commit_settlement")
-                : t("sale.modify_transaction")}
-            </AppText>
-          </TouchableOpacity>
-        </View>
-      )}
+            {isEditing
+              ? t("sale.commit_settlement")
+              : t("sale.modify_transaction")}
+          </AppText>
+        </TouchableOpacity>
+      </View>
 
       {/* Return Item Modal */}
       <Modal visible={showReturnModal} transparent animationType="slide">
@@ -2575,7 +2312,6 @@ const SaleDetailsScreen = ({
                         unitPrice: item.baseSellingPrice || 0,
                         unit: item.baseUnit || "pcs",
                         unitType: "base",
-                        unitsPerPack: item.unitsPerPack || 0,
                       };
                       setNewItems(copy);
                       setItemSearchVisible(null);
@@ -2588,7 +2324,11 @@ const SaleDetailsScreen = ({
                         { backgroundColor: colors.primary + "15" },
                       ]}
                     >
-                      <Package size={14} color={colors.primary} />
+                      {item.image ? (
+                        <Image source={{ uri: item.image }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
+                      ) : (
+                        <Package size={14} color={colors.primary} />
+                      )}
                     </View>
                     <View style={styles.itemSearchInfo}>
                       <AppText
@@ -2756,6 +2496,22 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   nodeInfo: { flexDirection: "row", alignItems: "center", gap: 10 },
+  nodeThumb: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    overflow: "hidden",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  itemSearchThumb: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    overflow: "hidden",
+    justifyContent: "center",
+    alignItems: "center",
+  },
   nodeLabel: { fontSize: 11, fontFamily: Fonts.bold },
   nodeValue: { fontSize: 15, fontFamily: Fonts.bold },
   nodeInput: {
@@ -3042,6 +2798,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 8,
+    overflow: "hidden",
     justifyContent: "center",
     alignItems: "center",
   },

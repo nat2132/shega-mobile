@@ -1,13 +1,6 @@
-import * as Crypto from 'expo-crypto';
+﻿import * as Crypto from 'expo-crypto';
 import { getDB } from '../database/db';
-import {
-  cloudSyncPush,
-  cloudSyncPull,
-  cloudDeviceStatus,
-  getStoredToken,
-  type CloudChange,
-  type CloudPushResult,
-} from './api';
+import { bumpDataVersion } from './dataVersion';
 
 // Phase 3 offline-first sync client. Talks to the Shega Desktop hub
 // (HTTP JSON on port 5757) using the same payload format the hub expects.
@@ -19,7 +12,6 @@ export const SYNC_ENTITIES = [
   'item_packs',
   'sales',
   'debt_payments',
-  'expenses',
   'adjustments',
   'returns',
   'customers',
@@ -46,9 +38,6 @@ export const SYNC_ENTITIES = [
   'subscription_payments',
   'subscription_renewals',
   'scheduled_reminders',
-  'budgets',
-  'budget_categories',
-  'budget_adjustments',
   'notifications',
   'contacts'
 ] as const;
@@ -56,11 +45,11 @@ export const SYNC_ENTITIES = [
 type SyncEntity = (typeof SYNC_ENTITIES)[number];
 
 // Entities whose primary key is a UUID (canonical business model) rather than an
-// autoincrement integer — their id must be set to the sync uuid on apply.
+// autoincrement integer â€” their id must be set to the sync uuid on apply.
 const UUID_KEYED_ENTITIES: readonly string[] = ['businesses', 'locations', 'registers', 'business_roles', 'users', 'devices'];
 
 // Apply order so FK references resolve before they are needed.
-const APPLY_ORDER: SyncEntity[] = ['businesses', 'categories', 'items', 'item_packs', 'customers', 'suppliers', 'orders', 'order_items', 'order_history', 'shipments', 'shipment_items', 'shipment_history', 'employee_roles', 'employees', 'employee_accounts', 'attendance', 'employee_performance', 'sales', 'debt_payments', 'expenses', 'adjustments', 'returns', 'locations', 'registers', 'business_roles', 'users', 'devices', 'stock_movements', 'audit_logs', 'subscriptions', 'subscription_payments', 'subscription_renewals', 'scheduled_reminders', 'budgets', 'budget_categories', 'budget_adjustments', 'notifications', 'contacts'];
+const APPLY_ORDER: SyncEntity[] = ['businesses', 'categories', 'items', 'item_packs', 'customers', 'suppliers', 'orders', 'order_items', 'order_history', 'shipments', 'shipment_items', 'shipment_history', 'employee_roles', 'employees', 'employee_accounts', 'attendance', 'employee_performance', 'sales', 'debt_payments', 'adjustments', 'returns', 'locations', 'registers', 'business_roles', 'users', 'devices', 'stock_movements', 'audit_logs', 'subscriptions', 'subscription_payments', 'subscription_renewals', 'scheduled_reminders', 'notifications', 'contacts'];
 
 interface OutboxRow {
   seq: number;
@@ -77,6 +66,9 @@ interface HubChange {
   payload: Record<string, any>;
   device_id?: string;
   checksum?: string;
+  /** Local outbox seq â€” echoed back per-change by the hub so the client can
+   * prune only the deltas that were actually merged (3.7 retry semantics). */
+  client_seq?: number;
 }
 
 export interface SyncStatus {
@@ -87,8 +79,8 @@ export interface SyncStatus {
   token: string;
 }
 
-// §24 Sync Center — unified synchronization status & diagnostics
-export type SyncTransport = 'lan' | 'cloud' | 'offline';
+// Â§24 Sync Center â€” unified synchronization status & diagnostics
+export type SyncTransport = 'lan' | 'offline';
 export type SyncHealth = 'synced' | 'pending' | 'syncing' | 'error' | 'offline';
 
 export interface PendingChange {
@@ -131,20 +123,25 @@ export interface UnifiedSyncStatus {
   pendingInbound: number;
   failedChanges: number;
   conflicts: number;
+  /** Coarse external status used by the Sync Center / header pill. */
+  status: SyncDetailStatus;
   lan: {
     configured: boolean;
     hubUrl: string | null;
     lastSyncAt: string | null;
     outboxCount: number;
   };
-  cloud: {
-    configured: boolean;
-    enabled: boolean;
-    lastSyncAt: string | null;
-    cursor: number;
-    lastError: string | null;
-  };
 }
+
+/** The user-facing sync state machine: 7 distinct states. */
+export type SyncDetailStatus =
+  | 'connecting'
+  | 'connected'
+  | 'syncing'
+  | 'changes-pending'
+  | 'synced'
+  | 'sync-failed'
+  | 'offline';
 
 let columnCache: Record<string, string[]> = {};
 function columnsOf(entity: string): string[] {
@@ -200,9 +197,26 @@ export function getSyncStatus(): SyncStatus {
   };
 }
 
+/**
+ * Canonical epoch for a write timestamp, insensitive to the format skew between
+ * SQLite CURRENT_TIMESTAMP (`2026-09-15 10:00:00`, UTC) and ISO strings
+ * (`2026-09-15T10:00:00.000Z`). Raw string comparison makes the space format
+ * ALWAYS lose to the ISO format at the same wall-clock time; both formats are
+ * UTC on this app's write paths, so normalize both to the epoch before comparing.
+ */
+function tsValue(v: any): number {
+  if (v == null || v === '') return -Infinity;
+  if (typeof v === 'number') return v;
+  const s = String(v).trim();
+  if (/^[0-9]+$/.test(s)) return Number(s);
+  const norm = s.replace(' ', 'T');
+  const ms = Date.parse(norm.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(norm) ? norm : `${norm}Z`);
+  return Number.isNaN(ms) ? -Infinity : ms;
+}
+
 function lastWriteWins(incoming: Record<string, any>, existing: Record<string, any>): boolean {
-  const iTs = (incoming.updated_at ?? incoming.createdAt ?? '') as string;
-  const eTs = (existing.updated_at ?? existing.createdAt ?? '') as string;
+  const iTs = tsValue(incoming.updated_at ?? incoming.createdAt ?? '');
+  const eTs = tsValue(existing.updated_at ?? existing.createdAt ?? '');
   if (iTs !== eTs) return iTs > eTs;
   const iVer = Number(incoming.row_version ?? 0);
   const eVer = Number(existing.row_version ?? 0);
@@ -219,13 +233,35 @@ function cleanPayload(entity: string, payload: Record<string, any>): Record<stri
   return clean;
 }
 
+/**
+ * Bridge the cross-wire column-name drift for the history tables. Desktop's
+ * schema uses `action`/`performedBy`; mobile names them `status`/`changedBy`.
+ * Synced symmetrically with the hub's bridgeHistoryColumns so history rows
+ * survive the relay in both directions instead of being silently dropped by
+ * cleanPayload's column filter.
+ */
+const HISTORY_COLUMN_BRIDGE: Record<string, [string, string]> = {
+  order_history: ['status', 'action'],
+  shipment_history: ['status', 'action']
+};
+
+function bridgeHistoryColumns(entity: string, payload: Record<string, any>): Record<string, any> {
+  const bridge = HISTORY_COLUMN_BRIDGE[entity];
+  if (!bridge) return payload;
+  const [mobileCol, desktopCol] = bridge;
+  const out = { ...payload };
+  if (out[mobileCol] == null && out[desktopCol] != null) out[mobileCol] = out[desktopCol];
+  if (out[desktopCol] == null && out[mobileCol] != null) out[desktopCol] = out[mobileCol];
+  return out;
+}
+
 // Entities carrying a `business_id` column (multi-device business model). The
 // local schema declares it NOT NULL for users/devices/locations/registers, but
-// peers (desktop hub / cloud) may predate that column and send rows without a
+// peers (desktop hub) may predate that column and send rows without a
 // business_id, as camelCase `businessId`, or explicitly null. Those rows
 // belong to the business this device operates as, so they are backfilled at
 // apply time instead of violating the constraint.
-const BUSINESS_SCOPED_ENTITIES: readonly string[] = ['users', 'devices', 'locations', 'registers', 'business_roles', 'audit_logs', 'suppliers', 'orders', 'order_items', 'shipments', 'shipment_items', 'employee_roles', 'employees', 'employee_accounts', 'subscriptions', 'scheduled_reminders', 'budgets', 'contacts'];
+const BUSINESS_SCOPED_ENTITIES: readonly string[] = ['users', 'devices', 'locations', 'registers', 'business_roles', 'audit_logs', 'suppliers', 'orders', 'order_items', 'shipments', 'shipment_items', 'employee_roles', 'employees', 'employee_accounts', 'subscriptions', 'scheduled_reminders', 'contacts'];
 
 // Core POS tables carrying the camelCase `businessId` column (the mobile
 // business UUID). Desktop peers relay these with the business UUID after the
@@ -233,14 +269,14 @@ const BUSINESS_SCOPED_ENTITIES: readonly string[] = ['users', 'devices', 'locati
 // nothing. Those are normalized to the operating business at apply time so a
 // row can never surface under another business' filter.
 const CORE_BUSINESS_SCOPED_ENTITIES: readonly string[] = [
-  'categories', 'items', 'item_packs', 'sales', 'debt_payments', 'expenses',
+  'categories', 'items', 'item_packs', 'sales', 'debt_payments',
   'adjustments', 'returns', 'customers',
   'employee_roles', 'employees', 'employee_accounts', 'attendance', 'employee_performance'
 ];
 
 /**
- * Id of the business this device currently operates as — mirrors
- * businessService.getActiveBusiness() (active → default → first) but reads the
+ * Id of the business this device currently operates as â€” mirrors
+ * businessService.getActiveBusiness() (active â†’ default â†’ first) but reads the
  * DB directly so the sync layer does not depend on the service layer.
  */
 function resolveLocalBusinessId(): string | null {
@@ -321,15 +357,37 @@ export async function resolveConflict(id: number, keepTheirs: boolean): Promise<
 }
 
 /**
+ * Current high-water mark of sync_outbox (max seq) used to isolate trigger-
+ * created echo rows created by THIS apply call.
+ */
+export function currentOutboxSeq(): number {
+  const db = getDB();
+  const r = db.getFirstSync('SELECT COALESCE(MAX(seq), 0) AS m FROM sync_outbox') as any;
+  return r?.m ?? 0;
+}
+
+/**
+ * Remove trigger-enqueued outbox rows produced as a side effect of applying a
+ * REMOTE change. Such rows are echoes of rows the hub already owns; re-pushing
+ * them is pure waste (and can wedge the client outbox behind dead rows). Local
+ * edits made before this apply are untouched (seq <= `sinceSeq`).
+ */
+export function pruneOutboxEchoes(entity: string, entityUuid: string, sinceSeq: number): void {
+  if (sinceSeq < 0) return;
+  getDB().runSync('DELETE FROM sync_outbox WHERE entity = ? AND entity_uuid = ? AND seq > ?', [entity, entityUuid, sinceSeq]);
+}
+
+/**
  * Apply one pulled change locally (upsert by uuid, LWW). Triggers capture the
  * local write into sync_outbox so it can be re-pushed later, but the hub
  * dedupes identical changes so this does not loop.
  * When `force` is true, LWW is skipped and the incoming row wins (manual conflict resolution).
  */
-function applyChange(change: HubChange, force = false): void {
+export function applyChange(change: HubChange, force = false): void {
   const db = getDB();
   const entity = change.entity as SyncEntity;
   if (!SYNC_ENTITIES.includes(entity)) return; // e.g. customers (desktop-only)
+  const outboxPreSeq = currentOutboxSeq();
   // Business-scoped rows may arrive without a business_id (or as camelCase
   // `businessId`) from peers that predate the multi-business model.
   const rawPayload = { ...change.payload };
@@ -337,13 +395,15 @@ function applyChange(change: HubChange, force = false): void {
     if (rawPayload.business_id == null && rawPayload.businessId != null) rawPayload.business_id = rawPayload.businessId;
     delete rawPayload.businessId;
   }
-  const data = cleanPayload(entity, rawPayload);
+  const data = cleanPayload(entity, bridgeHistoryColumns(entity, rawPayload));
 
   if (change.op === 'DELETE') {
     db.runSync(`UPDATE ${entity} SET is_deleted = 1, deleted_at = COALESCE(?, deleted_at) WHERE uuid = ?`, [
       change.payload?.deleted_at ?? new Date().toISOString(),
       change.entity_uuid
     ]);
+    pruneOutboxEchoes(entity, change.entity_uuid, outboxPreSeq);
+    bumpDataVersion();
     return;
   }
 
@@ -353,7 +413,7 @@ function applyChange(change: HubChange, force = false): void {
     return;
   }
   if (!existing) {    const insertData: Record<string, any> = { ...data };
-    delete insertData.id; // local ids stay local — remap via sync_refs
+    delete insertData.id; // local ids stay local â€” remap via sync_refs
     if (UUID_KEYED_ENTITIES.includes(entity)) {
       // Canonical business tables use the sync uuid as their TEXT primary key.
       insertData.id = change.entity_uuid;
@@ -372,7 +432,7 @@ function applyChange(change: HubChange, force = false): void {
     }
     if (BUSINESS_SCOPED_ENTITIES.includes(entity) && insertData.business_id == null) {
       // Attach hub rows that predate the multi-business model to the business
-      // this device operates as, instead of violating NOT NULL (users/devices/…).
+      // this device operates as, instead of violating NOT NULL (users/devices/â€¦).
       insertData.business_id = resolveLocalBusinessId();
     }
     if ((entity === 'sales' || entity === 'returns' || entity === 'stock_movements') && insertData.itemId != null) {
@@ -383,10 +443,14 @@ function applyChange(change: HubChange, force = false): void {
       const localPackId = resolveFk(change.device_id ?? getDeviceId(), 'item_packs', insertData.packId);
       if (localPackId != null) insertData.packId = localPackId;
     }
+    if (entity === 'stock_movements' && insertData.warehouseId != null) {
+      const localWhId = resolveFk(change.device_id ?? getDeviceId(), 'warehouses', insertData.warehouseId);
+      if (localWhId != null) insertData.warehouseId = localWhId;
+    }
     if (entity === 'stock_movements') {
       // Addition-only bridge: a relayed `restock_in` becomes a mobile addition
       // (feeds the activity view) and is stored as sync history. On-hand stock
-      // is NOT altered here — it converges via the synced `items` rows.
+      // is NOT altered here â€” it converges via the synced `items` rows.
       const type = String(insertData.type ?? 'restock_in');
       if (type === 'restock_in') {
         insertData.quantityAdded = insertData.quantity ?? insertData.quantityAdded;
@@ -422,19 +486,21 @@ function applyChange(change: HubChange, force = false): void {
     db.runSync(`INSERT INTO ${entity} (${cols.join(', ')}) VALUES (${placeholders})`, cols.map((c) => insertData[c]));
     const inserted = db.getFirstSync(`SELECT id FROM ${entity} WHERE uuid = ?`, [change.entity_uuid]) as any;
     recordRef(change.device_id ?? getDeviceId(), entity, { id: inserted?.id, uuid: change.entity_uuid });
+    pruneOutboxEchoes(entity, change.entity_uuid, outboxPreSeq);
+    bumpDataVersion();
     return;
   }
 
   const incoming = { ...data, uuid: change.entity_uuid, updated_at: data.updated_at ?? new Date().toISOString() };
   if (!force && !lastWriteWins(incoming, existing)) {
-    recordConflict(change); // existing wins — surface for manual resolution (3.5)
+    recordConflict(change); // existing wins â€” surface for manual resolution (3.5)
     return;
   }
   const updateData: Record<string, any> = { ...data };
   delete updateData.id;
   updateData.device_id = change.device_id ?? getDeviceId();
   if (BUSINESS_SCOPED_ENTITIES.includes(entity) && updateData.business_id === null) {
-    // Preserve the local business scope — a peer without the column must not
+    // Preserve the local business scope â€” a peer without the column must not
     // null it out (the local columns are NOT NULL).
     delete updateData.business_id;
   }
@@ -447,6 +513,8 @@ function applyChange(change: HubChange, force = false): void {
     const sets = cols.map((c) => `${c} = ?`).join(', ');
     db.runSync(`UPDATE ${entity} SET ${sets} WHERE uuid = ?`, [...cols.map((c) => updateData[c]), change.entity_uuid]);
   }
+  pruneOutboxEchoes(entity, change.entity_uuid, outboxPreSeq);
+  bumpDataVersion();
 }
 
 function canonicalChange(c: { entity: string; entity_uuid: string; op: string; payload: Record<string, any> }): string {
@@ -480,13 +548,14 @@ async function buildChangesFromOutbox(): Promise<{ changes: HubChange[]; seqs: n
     } else if (row.row_id != null) {
       const r = db.getFirstSync(`SELECT * FROM ${entity} WHERE id = ?`, [row.row_id]) as any;
       if (!r) {
-        seqs.push(row.seq); // row gone — nothing to send
+        seqs.push(row.seq); // row gone â€” nothing to send
         continue;
       }
       for (const c of columnsOf(entity)) payload[c] = r[c];
     }
     const change: HubChange = { entity, entity_uuid: row.entity_uuid, op: row.op, payload };
     change.checksum = await changeChecksum(change);
+    change.client_seq = row.seq;
     changes.push(change);
     seqs.push(row.seq);
   }
@@ -530,14 +599,27 @@ export async function syncNow(): Promise<{ pushed: number; pulled: number; confl
     pushed = changes.length;
     conflicts = Number(res?.conflicts ?? 0);
     const db = getDB();
-    db.runSync('DELETE FROM sync_outbox WHERE seq IN (' + seqs.map(() => '?').join(',') + ')', seqs);
+    // Prune only the outbox rows the hub actually merged. Per-change outcomes
+    // (`results`) come back keyed to client_seq; without them, fall back to
+    // deleting everything on a successful push response. Rows the hub could
+    // not apply yet (pending FK) or rejected are retried next round.
+    const outcome = Array.isArray(res?.results)
+      ? new Map((res.results as { client_seq: number | null; status: string }[]).map((r) => [r.client_seq, r.status]))
+      : null;
+    const prune = outcome ? seqs.filter((seq) => {
+      const status = outcome.get(seq);
+      return status === 'applied' || status === 'conflict' || status === undefined;
+    }) : seqs;
+    if (prune.length) {
+      db.runSync('DELETE FROM sync_outbox WHERE seq IN (' + prune.map(() => '?').join(',') + ')', prune);
+    }
   }
 
   const db = getDB();
   const cursor = db.getFirstSync('SELECT hub_seq FROM sync_cursor WHERE id = 1') as any;
   const since = cursor?.hub_seq ?? 0;
   const pulled = await httpJson(`${hubUrl}/sync/pull?device=${encodeURIComponent(deviceId)}&since=${since}&token=${encodeURIComponent(token)}`);
-  // 3.10: hub asked for a full re-snapshot — trust the response even if it was
+  // 3.10: hub asked for a full re-snapshot â€” trust the response even if it was
   // larger than `since`; the cursor below already points at the new lastSeq.
   const changesIn = (pulled?.changes ?? []) as HubChange[];
   if (changesIn.length > 0) {
@@ -579,159 +661,16 @@ export async function pairDevice(): Promise<any> {
   });
 }
 
-// ---------------------------------------------------------------------------
-// Cloud synchronization (spec §20)
-//
-// Internet/cloud transport over Django. Reuses the SAME outbox, apply (LWW) and
-// conflict path as LAN sync so the canonical records are transport-independent.
-// Auth reuses the existing JWT + refresh flow in api.ts.
-// ---------------------------------------------------------------------------
-
-export interface CloudSyncStatus {
-  configured: boolean;
-  enabled: boolean;
-  hasToken: boolean;
-  url: string;
-  lastError: string | null;
-  lastAt: string | null;
-  cursor: number;
-}
-
-function readSetting(key: string): string | null {
-  const db = getDB();
-  const row = db.getFirstSync('SELECT value FROM app_settings WHERE key = ?', [key]) as any;
-  return row?.value ?? null;
-}
-function writeSetting(key: string, value: string): void {
-  const db = getDB();
-  db.runSync('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)', [key, value]);
-}
-
-export function getCloudUrl(): string {
-  return readSetting('cloud_sync_url') || '';
-}
-export function setCloudUrl(url: string): void {
-  writeSetting('cloud_sync_url', url.trim().replace(/\/+$/, ''));
-}
-export function getCloudEnabled(): boolean {
-  return readSetting('cloud_sync_enabled') === 'true';
-}
-export function setCloudEnabled(v: boolean): void {
-  writeSetting('cloud_sync_enabled', String(v));
-}
-export function getCloudCursor(): number {
-  const v = Number(readSetting('cloud_sync_cursor') || 0);
-  return Number.isFinite(v) ? v : 0;
-}
-
-export async function getCloudStatus(): Promise<CloudSyncStatus> {
-  const url = getCloudUrl();
-  const token = await getStoredToken();
-  return {
-    configured: !!url,
-    enabled: getCloudEnabled(),
-    hasToken: !!token,
-    url: url || '',
-    lastError: readSetting('cloud_sync_last_error'),
-    lastAt: readSetting('cloud_sync_last_at'),
-    cursor: getCloudCursor(),
-  };
-}
-
-/**
- * Push the local outbox to Django and pull other-branch changes back, applying
- * them with the same LWW/conflict path used for LAN sync.
- *
- * Idempotent & retry-safe: each change carries its local outbox `seq`; the
- * server dedupes by (device, seq), so a retry after a lost response cannot
- * duplicate a sale, stock movement, customer, etc. Outbox rows are removed only
- * after a successful push response.
- */
-export async function cloudSyncNow(): Promise<{ pushed: number; pulled: number; conflicts: number }> {
-  const url = getCloudUrl();
-  if (!url) throw new Error('Cloud sync not configured');
-  const token = await getStoredToken();
-  if (!token) throw new Error('Cloud sync requires an account login');
-
-  const deviceId = getDeviceId();
-  const db = getDB();
-  let pushed = 0;
-  let conflicts = 0;
-
-  const { changes, seqs } = await buildChangesFromOutbox();
-  if (changes.length > 0) {
-    const payload = changes
-      .map((c, i) => ({ ...c, seq: seqs[i] }))
-      .filter((c): c is CloudChange => typeof c.seq === 'number');
-    let res: CloudPushResult;
-    try {
-      res = await cloudSyncPush({ device_id: deviceId, device_name: 'Shega Mobile', changes: payload });
-    } catch (e) {
-      writeSetting('cloud_sync_last_error', (e as any)?.message || String(e));
-      throw e;
-    }
-    pushed = payload.length;
-    const accepted = Number(res?.accepted ?? payload.length);
-    // Only clear outbox entries the server has accepted (server dedupes by seq,
-    // so re-pushing an already-stored seq is a no-op and loses nothing).
-    const acceptedSeqs = seqs.slice(0, payload.length);
-    db.runSync('DELETE FROM sync_outbox WHERE seq IN (' + acceptedSeqs.map(() => '?').join(',') + ')', acceptedSeqs);
-    void accepted;
-  }
-
-  const since = getCloudCursor();
-  let pulled: { ok?: boolean; changes: CloudChange[]; lastSeq: number };
-  try {
-    pulled = await cloudSyncPull({ device: deviceId, since });
-  } catch (e) {
-    writeSetting('cloud_sync_last_error', (e as any)?.message || String(e));
-    throw e;
-  }
-  const changesIn = (pulled?.changes ?? []) as HubChange[];
-  if (changesIn.length > 0) {
-    const sorted = changesIn.slice().sort((a, b) => {
-      const ia = APPLY_ORDER.indexOf(a.entity as SyncEntity);
-      const ib = APPLY_ORDER.indexOf(b.entity as SyncEntity);
-      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
-    });
-    for (const change of sorted) {
-      try {
-        applyChange({ ...change, device_id: change.device_id ?? deviceId });
-      } catch (e: any) {
-        console.warn('[cloud-sync] apply failed', change.entity, change.entity_uuid, e?.message);
-      }
-    }
-  }
-  const newSeq = Number(pulled?.lastSeq ?? since);
-  writeSetting('cloud_sync_cursor', String(newSeq));
-  writeSetting('cloud_sync_last_at', new Date().toISOString());
-  writeSetting('cloud_sync_last_error', '');
-
-  return { pushed, pulled: changesIn.length, conflicts };
-}
-
-/**
- * Fetch THIS device's roster status from the cloud (spec §17/§18 receive side).
- * Lets the mobile lock overlay observe a remote disable even when only the
- * cloud path is available.
- */
-export async function cloudSelfStatus(): Promise<{ status: string | null; blocked: boolean }> {
-  const deviceId = getDeviceId();
-  const res = await cloudDeviceStatus(deviceId);
-  return { status: res?.status ?? null, blocked: res?.blocked ?? false };
-}
-
 // ============================================================================
-// §24 Sync Center — unified status, pending changes, device status, history
+// Â§24 Sync Center â€” unified status, pending changes, device status, history
 // ============================================================================
 
 /**
- * Get unified sync status combining LAN and Cloud transports.
+ * Get unified sync status (LAN transport).
  */
 export async function getUnifiedSyncStatus(): Promise<UnifiedSyncStatus> {
   const db = getDB();
   const lanStatus = getSyncStatus();
-  const cloudStatus = await getCloudStatus();
 
   // Count pending outbound (local outbox)
   const outboxCount = (db.getFirstSync('SELECT COUNT(*) AS c FROM sync_outbox') as any)?.c ?? 0;
@@ -740,38 +679,53 @@ export async function getUnifiedSyncStatus(): Promise<UnifiedSyncStatus> {
   const failedCount = (db.getFirstSync('SELECT COUNT(*) AS c FROM sync_conflicts') as any)?.c ?? 0;
   const conflictsCount = failedCount; // conflicts table stores both
 
+  // Pending inbound = server changes the hub has but this device has not yet
+  // pulled (hub lastSeq - local cursor). `/sync/info` needs no pairing token,
+  // so a reachable hub is sufficient to compute a real count.
+  const cursorSeq = (db.getFirstSync('SELECT hub_seq FROM sync_cursor WHERE id = 1') as any)?.hub_seq ?? 0;
+  let pendingInbound = 0;
+  let hubReachable = false;
+  if (lanStatus.hub) {
+    try {
+      const info = await httpJson(`${lanStatus.hub}/sync/info`);
+      const hubLastSeq = Number(info?.lastSeq ?? 0);
+      hubReachable = true;
+      pendingInbound = Math.max(0, hubLastSeq - cursorSeq);
+    } catch {
+      hubReachable = false; // unreachable -> offline/failed below
+    }
+  }
+
   // Determine overall health
   let health: SyncHealth = 'synced';
   if (outboxCount > 0 || failedCount > 0) health = 'pending';
-  if (lanStatus.outboxCount > 0 || cloudStatus.lastError) health = 'pending';
-  if (!lanStatus.hub && !cloudStatus.configured) health = 'offline';
+  if (!lanStatus.hub) health = 'offline';
 
   // Determine active transport
-  let transport: SyncTransport = 'offline';
-  if (lanStatus.hub && (cloudStatus.enabled || cloudStatus.configured)) transport = 'lan';
-  else if (lanStatus.hub) transport = 'lan';
-  else if (cloudStatus.enabled) transport = 'cloud';
+  const transport: SyncTransport = lanStatus.hub ? 'lan' : 'offline';
+
+  // 7-state machine (connecting/syncing are driven by caller state)
+  let status: SyncDetailStatus;
+  if (!lanStatus.hub) status = 'offline';
+  else if (!hubReachable) status = 'sync-failed';
+  else if (outboxCount > 0 || pendingInbound > 0) status = 'changes-pending';
+  else if (failedCount > 0) status = 'sync-failed';
+  else status = lanStatus.lastSyncAt ? 'synced' : 'connected';
 
   return {
     health,
     transport,
-    lastSyncAt: lanStatus.lastSyncAt ?? cloudStatus.lastAt ?? null,
+    lastSyncAt: lanStatus.lastSyncAt ?? null,
     pendingOutbound: outboxCount,
-    pendingInbound: 0, // Would need server-side cursor comparison
+    pendingInbound,
     failedChanges: failedCount,
     conflicts: conflictsCount,
+    status,
     lan: {
       configured: !!lanStatus.hub,
       hubUrl: lanStatus.hub,
       lastSyncAt: lanStatus.lastSyncAt,
       outboxCount: lanStatus.outboxCount,
-    },
-    cloud: {
-      configured: cloudStatus.configured,
-      enabled: cloudStatus.enabled,
-      lastSyncAt: cloudStatus.lastAt,
-      cursor: cloudStatus.cursor,
-      lastError: cloudStatus.lastError,
     },
   };
 }
@@ -808,9 +762,10 @@ export function getDeviceStatusList(): DeviceStatus[] {
   const db = getDB();
   const selfId = getDeviceId();
 
-  // Get roster devices from local database
+  // Get roster devices from local database. `id` is the canonical device
+  // identity (this install's own device row id === sync_meta.device_id).
   const roster = db.getAllSync(
-    `SELECT d.device_id, d.name, d.last_seen_at, d.status
+    `SELECT d.id as device_id, d.name, d.last_seen_at, d.status
      FROM devices d
      WHERE d.is_active = 1`
   ) as any[];

@@ -8,8 +8,6 @@ export type NotificationPriority = 'low' | 'normal' | 'high' | 'critical';
 export type NotificationCategory =
   | 'inventory'
   | 'sales'
-  | 'expense'
-  | 'budget'
   | 'recurring'
   | 'customer'
   | 'supplier'
@@ -211,6 +209,7 @@ export interface NotificationFilter {
 
 export const getNotifications = (filter: NotificationFilter = {}): AppNotification[] => {
   try {
+    purgeLegacyExpenseNotifications();
     const database = getDB();
     const conditions: string[] = ['isDismissed = 0'];
     const params: any[] = [];
@@ -383,32 +382,7 @@ export const getReminderById = (id: number): ScheduledReminder | null => {
   }
 };
 
-// Finds the reminder row that mirrors a recurring expense template's push.
-export const getReminderByTemplate = (templateId: number): ScheduledReminder | null => {
-  try {
-    const database = getDB();
-    const row = database.getFirstSync(
-      `SELECT * FROM scheduled_reminders WHERE type = 'recurring' AND refId = ?`,
-      [templateId],
-    ) as any;
-    if (!row) return null;
-    return row as ScheduledReminder;
-  } catch {
-    return null;
-  }
-};
 
-export const getRecurringReminders = (): ScheduledReminder[] => {
-  try {
-    const database = getDB();
-    const rows = database.getAllSync(
-      `SELECT * FROM scheduled_reminders WHERE type = 'recurring'`,
-    ) as any[];
-    return rows as ScheduledReminder[];
-  } catch {
-    return [];
-  }
-};
 
 export const updateReminderNotificationId = (id: number, notificationId: string | null): boolean => {
   try {
@@ -571,6 +545,75 @@ export const cleanupExpiredNotifications = (): number => {
     );
     return (result as any).changes || 0;
   } catch {
+    return 0;
+  }
+};
+
+// The budget / expense tracker feature was fully removed from the app, but the
+// device DB still holds stale alert rows created by previous app versions.
+// This idempotent purge deletes any leftover notification (or scheduled
+// reminder) whose type or content references the removed feature, in every
+// supported language, so the dashboard alert strip stops surfacing them.
+export const purgeLegacyExpenseNotifications = (): number => {
+  try {
+    const database = getDB();
+    const types: string[] = [
+      'budget',
+      'budget_alert',
+      'budget_warning',
+      'budget_exceeded',
+      'budget_limit',
+      'expense',
+      'large_expense',
+      'expense_due',
+      'recurring_expense',
+      'recurring_due',
+      'weekly_summary',
+      'weekly_expense_summary',
+    ];
+    const typeClause =
+      'type IN (' + types.map(() => '?').join(',') + ')' +
+      " OR type LIKE '%budget%' OR type LIKE '%expense%'";
+    const words: string[] = [
+      '%budget%',
+      '%expense%',
+      '%በጀት%',
+      '%ወጪ%',
+      '%ወጻኢ%',
+      '%ወፃኢ%',
+      '%baajetii%',
+      '%baasii%',
+    ];
+    const textClause =
+      'title LIKE ? OR message LIKE ? OR title LIKE ? OR message LIKE ?' +
+      ' OR title LIKE ? OR message LIKE ? OR title LIKE ? OR message LIKE ?' +
+      ' OR title LIKE ? OR message LIKE ? OR title LIKE ? OR message LIKE ?' +
+      ' OR title LIKE ? OR message LIKE ? OR title LIKE ? OR message LIKE ?';
+    const matchingIds = database.getAllSync<{ id: number }>(
+      'SELECT id FROM notifications WHERE ((' + typeClause + ') OR ((' + textClause + ')))',
+      [...types, ...words.flatMap((w) => [w, w])],
+    ) as any[];
+    const ids = (matchingIds || []).map((r) => r.id);
+    let changes = 0;
+    if (ids.length > 0) {
+      const placeholders = ids.map(() => '?').join(',');
+      const result = database.runSync(
+        `DELETE FROM notifications WHERE id IN (${placeholders})`,
+        ids,
+      );
+      changes += (result as any).changes || 0;
+    }
+    const reminderResult = database.runSync(
+      `DELETE FROM scheduled_reminders WHERE ((type IN (${types.map(() => '?').join(',')}) OR type LIKE '%budget%' OR type LIKE '%expense%') OR (title LIKE ? OR body LIKE ? OR title LIKE ? OR body LIKE ? OR title LIKE ? OR body LIKE ? OR title LIKE ? OR body LIKE ? OR title LIKE ? OR body LIKE ? OR title LIKE ? OR body LIKE ? OR title LIKE ? OR body LIKE ? OR title LIKE ? OR body LIKE ?))`,
+      [
+        ...types,
+        ...words.flatMap((w) => [w, w]),
+      ],
+    );
+    changes += (reminderResult as any).changes || 0;
+    return changes;
+  } catch (error) {
+    console.error('purgeLegacyExpenseNotifications error:', error);
     return 0;
   }
 };

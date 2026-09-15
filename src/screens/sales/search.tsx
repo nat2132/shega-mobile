@@ -5,6 +5,7 @@ import { useSettings } from '@/context/SettingsContext';
 import { searchInventory } from '@/database/db';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useFocusEffect } from 'expo-router';
+import { Image } from 'expo-image';
 import { AlertCircle, ChevronRight, Package, Search, X, Zap } from 'lucide-react-native';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
@@ -188,7 +189,11 @@ const SearchResultRow = React.memo(({
         >
           <View style={styles.cardMain}>
             <View style={[styles.iconNode, { backgroundColor: stockConfig.bg }]}>
-              <Package size={20} color={stockConfig.text} />
+              {item.image ? (
+                <Image source={{ uri: item.image }} style={[StyleSheet.absoluteFill, { borderRadius: 14 }]} contentFit="cover" transition={150} />
+              ) : (
+                <Package size={20} color={stockConfig.text} />
+              )}
               {item.totalBaseQuantity > 100 && (
                 <View style={[styles.trendBadge, { backgroundColor: colors.primary, borderColor: SALES_GLASS.bgCard }]}>
                   <Zap size={9} color={colors.background} />
@@ -714,6 +719,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 14,
+    overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',

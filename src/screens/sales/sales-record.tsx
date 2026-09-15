@@ -15,6 +15,7 @@ import {
   formatTime,
 } from "@/utils/date-utils";
 import { useFocusEffect } from "expo-router";
+import { Image } from "expo-image";
 import { useToast } from "@/context/ToastContext";
 import {
   AlertCircle,
@@ -818,7 +819,6 @@ const SaleItemCard = React.memo(
     const { colors, timeSystem, language, t } = useSettings();
     const SALES_GLASS = useMemo(() => getSalesGlass(colors), [colors]);
     const isPaid = sale.paymentStatus === "Paid";
-    const isOrder = sale.paymentStatus === "Order";
     const isDebt = sale.paymentStatus === "Debt";
     const isCancelled = sale.paymentStatus === "Cancelled";
     const isPayment = sale.batchId && String(sale.batchId).startsWith("PAY_");
@@ -840,31 +840,25 @@ const SaleItemCard = React.memo(
       ? colors.success
       : isCancelled
         ? colors.error
-        : isOrder
-          ? colors.primary
-          : isDebt
-            ? colors.warning
-            : isPaid
-              ? colors.success
-              : colors.warning;
+        : isDebt
+          ? colors.warning
+          : isPaid
+            ? colors.success
+            : colors.warning;
     const badgeLabel = isPayment
       ? t("dashboard.activity.debt_collected")
       : isCancelled
         ? t("sale.cancelled")
-        : isOrder
-          ? "Order"
-          : isPaid
-            ? t("sales.payment_paid")
-            : t("sales.payment_debt");
+        : isPaid
+          ? t("sales.payment_paid")
+          : t("sales.payment_debt");
     const Icon = isPayment
       ? CheckCircle
       : isCancelled
         ? AlertCircle
-        : isOrder
-          ? ShoppingBag
-          : isPaid
-            ? CheckCircle
-            : AlertCircle;
+        : isPaid
+          ? CheckCircle
+          : AlertCircle;
     const displayPrice = isPayment
       ? Math.abs(sale.totalPrice)
       : sale.totalPrice;
@@ -878,7 +872,11 @@ const SaleItemCard = React.memo(
         activeOpacity={0.7}
       >
         <View style={[styles.saleIcon, { backgroundColor: badgeColor + "15" }]}>
-          <Icon size={16} color={badgeColor} />
+          {sale.image ? (
+            <Image source={{ uri: sale.image }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
+          ) : (
+            <Icon size={16} color={badgeColor} />
+          )}
         </View>
         <View style={styles.saleInfo}>
           <AppText
@@ -1045,6 +1043,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 10,
+    overflow: "hidden",
     justifyContent: "center",
     alignItems: "center",
   },

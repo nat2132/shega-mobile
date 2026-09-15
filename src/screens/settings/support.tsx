@@ -100,7 +100,7 @@ const SupportCenter = () => {
           <TutorialTarget id="su-faq">
           <View style={styles.footerNode}>
              <AppText variant="caption" weight="bold" style={[styles.footerLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('support.orchestration')} v4.2.0</AppText>
-             <AppText variant="caption" weight="medium" style={[styles.footerSub, { color: G.fgSecondary }]} numberOfLines={1}>{t('support.cloud_sync')}</AppText>
+             <AppText variant="caption" weight="medium" style={[styles.footerSub, { color: G.fgSecondary }]} numberOfLines={1}>Peer-to-peer sync · LAN + P2P · Encrypted</AppText>
           </View>
           </TutorialTarget>
         </TutorialScrollView>

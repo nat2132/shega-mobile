@@ -15,11 +15,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
 import * as ImagePicker from 'expo-image-picker';
-import { User, Briefcase, ChevronRight, Sparkles, Globe, Palette, Calendar, ChevronLeft, Check, Camera } from 'lucide-react-native';
+import { User, Briefcase, ChevronRight, Sparkles, Globe, Palette, Calendar, ChevronLeft, Check, Camera, Percent } from 'lucide-react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { getAccountGlass } from './glass-account';
 import { useSettings } from '@/context/SettingsContext';
 import { AppText } from '@/components/ui';
+import { getSaleTaxConfig, saveSaleTaxConfig } from '@/services/taxService';
 const { width } = Dimensions.get('window');
 
 const PROFILE_IMAGES = [
@@ -46,6 +47,11 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ fullName?: string; businessName?: string }>({});
   const [touched, setTouched] = useState<{ fullName?: boolean; businessName?: boolean }>({});
+
+  // Sales tax configured once here, then applied automatically to every sale.
+  const initialTax = getSaleTaxConfig();
+  const [saleTaxType, setSaleTaxType] = useState<'VAT' | 'TOT' | 'Other' | 'None'>(initialTax.taxType);
+  const [saleTaxRate, setSaleTaxRate] = useState(initialTax.taxRate);
 
   const THEMES: { id: any; color: string; name: string }[] = [
     { id: 'light', color: '#FFFFFF', name: t('theme.light') },
@@ -109,6 +115,10 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
         avatarIndex: selectedAvatar,
         avatarUri: customAvatarUri || undefined,
       });
+      
+      // Persist the sales-tax configuration — the sale form reads this
+      // automatically, so the cashier never picks tax per sale.
+      saveSaleTaxConfig({ taxType: saleTaxType, taxRate: saleTaxRate });
       
       // All other settings (theme, language, calendar) are already persisted 
       // via live calls in the UI buttons.
@@ -379,6 +389,48 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
     borderWidth: 1,
     padding: 6,
   },
+  prefSub: {
+    fontFamily: Fonts.medium,
+    marginTop: 4,
+  },
+  taxChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 12,
+    marginTop: 12,
+  },
+  taxChip: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  taxChipText: {
+    fontFamily: Fonts.bold,
+  },
+  taxRateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 12,
+    marginTop: 10,
+  },
+  taxRateLabel: {
+    fontFamily: Fonts.bold,
+  },
+  taxRateInput: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    fontFamily: Fonts.bold,
+  },
   calBtn: {
     flex: 1,
     height: 48,
@@ -636,6 +688,41 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
                      >
                         <AppText style={[styles.calBtnText, { color: calendarType === 'gregorian' ? G.bg : G.fg }]} variant="body" weight="bold" numberOfLines={1}>{t('common.gregorian')}</AppText>
                      </TouchableOpacity>
+                  </View>
+               </View>
+
+               {/* Sales Tax (applied to every sale) */}
+               <View style={styles.prefSection}>
+                  <View style={styles.prefHeader}>
+                    <Percent size={18} color={G.fg} />
+                    <AppText style={[styles.prefTitle, { color: G.fg }]} variant="title" weight="bold" numberOfLines={2}>Sales Tax</AppText>
+                  </View>
+                  <AppText style={[styles.prefSub, { color: G.fgSecondary }]} variant="caption" weight="medium" numberOfLines={2}>
+                    Applied automatically to every sale — you won't be asked at checkout.
+                  </AppText>
+                  <View style={[styles.taxChipRow, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+                    {(['VAT', 'TOT', 'Other', 'None'] as const).map((type) => (
+                      <TouchableOpacity
+                        key={type}
+                        onPress={() => { setSaleTaxType(type); if (type === 'None') setSaleTaxRate('0'); }}
+                        style={[
+                          styles.taxChip,
+                          { backgroundColor: saleTaxType === type ? G.fg : G.bgCard, borderColor: G.border },
+                        ]}
+                      >
+                        <AppText style={[styles.taxChipText, { color: saleTaxType === type ? G.bg : G.fg }]} variant="body-sm" weight="bold" numberOfLines={1}>{type}</AppText>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <View style={[styles.taxRateRow, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+                    <AppText style={[styles.taxRateLabel, { color: G.fgSecondary }]} variant="body-sm" weight="bold" numberOfLines={1}>Rate (%)</AppText>
+                    <TextInput
+                      style={[styles.taxRateInput, { color: G.fg, borderColor: G.border, backgroundColor: G.bg }]}
+                      value={saleTaxRate}
+                      onChangeText={(v) => setSaleTaxRate(v.replace(/[^0-9.]/g, ''))}
+                      keyboardType="decimal-pad"
+                      editable={saleTaxType !== 'None'}
+                    />
                   </View>
                </View>
             </View>

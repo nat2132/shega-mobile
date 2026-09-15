@@ -1,18 +1,15 @@
 // Shared cart/line math reused across the sale flow (pending cart, checkout,
 // add-product screens). Kept in one place so price/unit/stock logic never drifts.
+// Base-unit only: pack selling is no longer supported.
 
 export const getLinePrice = (item: any): number =>
-  parseFloat(item.unitType === "pack" ? item.packSellingPrice : item.baseSellingPrice) || 0;
+  parseFloat(item.baseSellingPrice) || 0;
 
 export const getLineUnitLabel = (item: any): string | undefined =>
-  item.unitType === "pack" ? item.purchaseUnit : item.baseUnit;
+  item.baseUnit;
 
 export const getLineStock = (item: any): number =>
-  Math.floor(
-    item.unitType === "pack"
-      ? item.totalPackQuantity || 0
-      : item.totalBaseQuantity || 0,
-  );
+  Math.floor(item.totalBaseQuantity || 0);
 
 export const calcLineTotal = (item: any): number =>
   getLinePrice(item) * Math.max(0, item.quantity || 0);

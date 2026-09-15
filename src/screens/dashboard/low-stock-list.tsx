@@ -17,6 +17,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { getDashGlass } from './glass-dashboard';
 import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
 import { lowStockListTutorial } from '@/tutorials/definitions';
+import { Image } from 'expo-image';
 const LowStockRow = React.memo(({
   item,
   index,
@@ -38,7 +39,11 @@ const LowStockRow = React.memo(({
         <AppListItem
           left={
             <View style={[styles.iconNode, { backgroundColor: isOut ? colors.primary + '15' : G.fg + '05' }]}>
-              <Package size={22} color={isOut ? colors.primary : G.fg} />
+              {item.image ? (
+                <Image source={{ uri: item.image }} style={[StyleSheet.absoluteFill, { borderRadius: 16 }]} contentFit="cover" transition={150} />
+              ) : (
+                <Package size={22} color={isOut ? colors.primary : G.fg} />
+              )}
               <View style={[styles.alertDot, { backgroundColor: isOut ? colors.primary : colors.warning }]} />
             </View>
           }

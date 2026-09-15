@@ -5,20 +5,16 @@ import { PDFLanguageModal } from '@/components/PDFLanguageModal';
 import { Fonts } from '@/constants/theme';
 import { PROFILE_IMAGES, useSettings } from '@/context/SettingsContext';
 import { useSidebar } from '@/context/SidebarContext';
-import { getActiveBusiness, getDB, getLowStockItems, getBudgetOverageStats } from '@/database/db';
+import { getActiveBusiness, getDB, getLowStockItems } from '@/database/db';
 import { useNotifications } from '@/hooks/useNotifications';
 import { toEthiopianDate, getEthiopianMonthNames } from '@/utils/date-utils';
 import { formatNumber } from '@/utils/formatNumber';
 import {
-  exportExpenseReportCSV,
-  exportPLReportCSV,
   exportProductCatalogCSV,
   exportSalesReportCSV,
   exportStockReportCSV,
-  generateExpenseReportPDF,
   generateLowStockOrderPDF,
   generateProductListPDF,
-  generateProfitAndLossReportPDF,
   generateSalesReportPDF,
   generateStockReportPDF,
 } from '@/utils/pdf-utils';
@@ -35,12 +31,9 @@ import {
     Minus,
     Package,
     Plus,
-    Scale,
     ShoppingCart,
     Trash2,
     TrendingUp,
-    Wallet,
-    AlertTriangle,
 } from 'lucide-react-native';
 import React, { useEffect, useState, useMemo } from 'react';
 import { ActivityIndicator, FlatList, Image, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -122,10 +115,7 @@ const ReportsHubScreenContent = () => {
   const [stats, setStats] = useState({
     salesCount: 0, salesValue: 0,
     itemsCount: 0, itemsValue: 0,
-    expensesCount: 0, expensesValue: 0,
   });
-
-  const [overageStats, setOverageStats] = useState<any>(null);
 
   const formatDisplayDate = (dateStr: string): string => {
     if (!dateStr) return '';
@@ -221,21 +211,13 @@ const ReportsHubScreenContent = () => {
         SELECT COUNT(*) as count, SUM(totalBaseQuantity * basePurchasePrice) as total FROM items
       `);
 
-      const expensesResult = db.getFirstSync<{ count: number; total: number }>(`
-        SELECT COUNT(*) as count, SUM(amount) as total FROM expenses
-        WHERE date(date) >= ? AND date(date) <= ?
-      `, [start, end]);
-
       setStats({
         salesCount: salesResult?.count || 0,
         salesValue: salesResult?.total || 0,
         itemsCount: itemsResult?.count || 0,
         itemsValue: itemsResult?.total || 0,
-        expensesCount: expensesResult?.count || 0,
-        expensesValue: expensesResult?.total || 0,
       });
 
-      setOverageStats(getBudgetOverageStats());
     } catch (e) {
       console.error('Failed to load statistics:', e);
     }
@@ -274,29 +256,6 @@ const ReportsHubScreenContent = () => {
           ORDER BY items.name ASC
         `);
         await exportStockReportCSV(items as any[]);
-      } else if (reportType === 'expenses') {
-        const expenses = db.getAllSync(`
-          SELECT * FROM expenses WHERE date(date) >= ? AND date(date) <= ?
-          ORDER BY date DESC
-        `, [start, end]);
-        await exportExpenseReportCSV(expenses as any[]);
-      } else if (reportType === 'pl') {
-        const revRes = db.getFirstSync<{ total: number }>(`
-          SELECT SUM(totalPrice) as total FROM sales WHERE date(createdAt) >= ? AND date(createdAt) <= ?
-        `, [start, end]);
-        const cogsRes = db.getFirstSync<{ total: number }>(`
-          SELECT SUM(s.quantity * (CASE WHEN s.unitType = 'pack' THEN i.packPurchasePrice ELSE i.basePurchasePrice END)) as total
-          FROM sales s JOIN items i ON s.itemId = i.id
-          WHERE date(s.createdAt) >= ? AND date(s.createdAt) <= ?
-        `, [start, end]);
-        const expRes = db.getFirstSync<{ total: number }>(`
-          SELECT SUM(amount) as total FROM expenses WHERE date(date) >= ? AND date(date) <= ?
-        `, [start, end]);
-        await exportPLReportCSV({
-          revenue: revRes?.total || 0,
-          cogs: cogsRes?.total || 0,
-          expenses: expRes?.total || 0,
-        });
       } else if (reportType === 'products') {
         const items = db.getAllSync(`
           SELECT items.*, categories.name as categoryName FROM items
@@ -361,28 +320,6 @@ const ReportsHubScreenContent = () => {
           ORDER BY items.name ASC
         `);
         await generateProductListPDF(items, activeBusiness, langCode, action, ts);
-      } else if (activeReportType === 'expenses') {
-        const expenses = db.getAllSync(`
-          SELECT * FROM expenses WHERE date(date) >= ? AND date(date) <= ?
-          ORDER BY date DESC
-        `, [start, end]);
-        await generateExpenseReportPDF(expenses, label, `${start} ~ ${end}`, activeBusiness, langCode, action, ts);
-      } else if (activeReportType === 'pl') {
-        const revRes = db.getFirstSync<{ total: number }>(`
-          SELECT SUM(totalPrice) as total FROM sales WHERE date(createdAt) >= ? AND date(createdAt) <= ?
-        `, [start, end]);
-        const cogsRes = db.getFirstSync<{ total: number }>(`
-          SELECT SUM(s.quantity * (CASE WHEN s.unitType = 'pack' THEN i.packPurchasePrice ELSE i.basePurchasePrice END)) as total
-          FROM sales s JOIN items i ON s.itemId = i.id
-          WHERE date(s.createdAt) >= ? AND date(s.createdAt) <= ?
-        `, [start, end]);
-        const expRes = db.getFirstSync<{ total: number }>(`
-          SELECT SUM(amount) as total FROM expenses WHERE date(date) >= ? AND date(date) <= ?
-        `, [start, end]);
-        await generateProfitAndLossReportPDF(
-          { revenue: revRes?.total || 0, cogs: cogsRes?.total || 0, expenses: expRes?.total || 0 },
-          label, `${start} ~ ${end}`, activeBusiness, langCode, action, ts
-        );
       }
       const reportLabel = activeReportType ? (activeReportType === 'pl' ? 'P&L' : activeReportType.charAt(0).toUpperCase() + activeReportType.slice(1)) : 'Report';
       showToast({ title: t('toast.report_pdf_ready', { label: reportLabel }), message: t('toast.report_pdf_desc'), type: 'success' });
@@ -502,47 +439,8 @@ const ReportsHubScreenContent = () => {
         <View style={styles.reportList}>
           <ReportCard title={t('reports.sales_perf_title')} description={t('reports.sales_perf_desc')} icon={TrendingUp} iconColor="#10B981" stats={t('reports.sales_count_label', { count: String(stats.salesCount), value: formatNumber(stats.salesValue) })} onExport={() => handleExportTrigger('sales')} onExportCSV={() => handleCSVExport('sales')} colors={colors} t={t} repGlass={REP_GLASS} />
           <ReportCard title={t('reports.stock_val_title')} description={t('reports.stock_val_desc')} icon={Package} iconColor="#3B82F6" stats={t('reports.stock_count_label', { count: String(stats.itemsCount), value: formatNumber(stats.itemsValue) })} onExport={() => handleExportTrigger('stock')} onExportCSV={() => handleCSVExport('stock')} colors={colors} t={t} repGlass={REP_GLASS} />
-          <ReportCard title={t('reports.expense_title')} description={t('reports.expense_desc')} icon={Wallet} iconColor="#EF4444" stats={t('reports.expense_count_label', { count: String(stats.expensesCount), value: formatNumber(stats.expensesValue) })} onExport={() => handleExportTrigger('expenses')} onExportCSV={() => handleCSVExport('expenses')} colors={colors} t={t} repGlass={REP_GLASS} />
-          <ReportCard title={t('reports.pl_title')} description={t('reports.pl_desc')} icon={Scale} iconColor="#8B5CF6" stats={t('reports.pl_net_label', { value: formatNumber(stats.salesValue - stats.expensesValue) })} onExport={() => handleExportTrigger('pl')} onExportCSV={() => handleCSVExport('pl')} colors={colors} t={t} repGlass={REP_GLASS} />
           <ReportCard title={t('reports.catalog_title')} description={t('reports.catalog_desc')} icon={ClipboardList} iconColor="#F59E0B" stats={t('reports.catalog_count_label', { count: String(stats.itemsCount) })} onExport={() => handleExportTrigger('products')} onExportCSV={() => handleCSVExport('products')} colors={colors} t={t} repGlass={REP_GLASS} />
         </View>
-
-        {/* Over Budget Analytics */}
-        {overageStats && overageStats.overageCount > 0 && (
-          <Animated.View entering={FadeInDown.duration(500)} style={[styles.overBudgetCard, { backgroundColor: REP_GLASS.bgCard, borderColor: colors.error + '40' }]}>
-            <View style={styles.cardHeader}>
-              <View style={[styles.iconBox, { backgroundColor: colors.error + '20' }]}>
-                <AlertTriangle size={22} color={colors.error} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.cardTitle, { color: colors.error }]}>{t('budget.over_budget_analytics')}</Text>
-                <Text style={[styles.cardDesc, { color: REP_GLASS.muted }]}>{t('reports.over_budget_desc')}</Text>
-              </View>
-            </View>
-            <View style={[styles.overBudgetStatsRow, { borderTopColor: REP_GLASS.border }]}>
-              <View style={styles.overBudgetStat}>
-                <Text style={[styles.overBudgetStatValue, { color: colors.error }]}>{formatNumber(overageStats.overageCount)}</Text>
-                <Text style={[styles.overBudgetStatLabel, { color: REP_GLASS.muted }]}>{t('budget.times_exceeded')}</Text>
-              </View>
-              <View style={styles.overBudgetStat}>
-                <Text style={[styles.overBudgetStatValue, { color: colors.error }]}>{formatNumber(overageStats.totalOverAmount, { prefix: `${t('common.etb')} ` })}</Text>
-                <Text style={[styles.overBudgetStatLabel, { color: REP_GLASS.muted }]}>{t('budget.total_over')}</Text>
-              </View>
-              <View style={styles.overBudgetStat}>
-                <Text style={[styles.overBudgetStatValue, { color: colors.error }]}>{formatNumber(overageStats.percentOver, { suffix: '%' })}</Text>
-                <Text style={[styles.overBudgetStatLabel, { color: REP_GLASS.muted }]}>{t('budget.percent_over')}</Text>
-              </View>
-            </View>
-            <TouchableOpacity
-              style={[styles.overBudgetViewBtn, { backgroundColor: colors.error + '15' }]}
-              activeOpacity={0.7}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)/budget' as any); }}
-            >
-              <AlertTriangle size={14} color={colors.error} style={{ marginRight: 6 }} />
-              <Text style={[styles.overBudgetViewBtnText, { color: colors.error }]}>{t('reports.view_over_budget')}</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        )}
       </ScrollView>
 
       {/* Order Bottom Sheet */}
@@ -795,14 +693,6 @@ const styles = StyleSheet.create({
   cardBtnRow: { flexDirection: 'row', gap: 8 },
   exportBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 11, paddingVertical: 8, borderRadius: 12 },
   exportBtnText: { fontSize: 11, fontFamily: Fonts.bold },
-
-  overBudgetCard: { borderRadius: 24, borderWidth: 1, padding: 20, marginTop: 16 },
-  overBudgetStatsRow: { flexDirection: 'row', borderTopWidth: 1, paddingTop: 15, marginBottom: 16 },
-  overBudgetStat: { flex: 1, alignItems: 'center' },
-  overBudgetStatValue: { fontSize: 18, fontFamily: Fonts.bold, textAlign: 'center' },
-  overBudgetStatLabel: { fontSize: 10, fontFamily: Fonts.bold, marginTop: 4, textAlign: 'center', textTransform: 'uppercase' },
-  overBudgetViewBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 11, borderRadius: 14 },
-  overBudgetViewBtnText: { fontSize: 12, fontFamily: Fonts.bold },
 
   loadingOverlay: { ...StyleSheet.absoluteFill, justifyContent: 'center', alignItems: 'center', zIndex: 9999 },
   loadingBox: { padding: 30, borderRadius: 24, alignItems: 'center', gap: 15, elevation: 5 },

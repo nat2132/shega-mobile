@@ -128,14 +128,6 @@ const SubscriptionRenewalScreen = () => {
             <View style={styles.accessItem}>
               <Lock size={16} color="#EF4444" />
               <AppText variant="body" weight="medium" style={{ color: G.muted }}>
-                {t('subscription.add_expenses')}
-              </AppText>
-            </View>
-          </View>
-          <View style={styles.accessRow}>
-            <View style={styles.accessItem}>
-              <Lock size={16} color="#EF4444" />
-              <AppText variant="body" weight="medium" style={{ color: G.muted }}>
                 {t('subscription.premium_analytics')}
               </AppText>
             </View>

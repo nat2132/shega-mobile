@@ -21,7 +21,6 @@ import { useToast } from '@/context/ToastContext';
 import {
   getItems,
   getCategories,
-  getFilteredExpenses,
   getContacts,
   getSales,
   getRecentAdjustments,
@@ -63,7 +62,6 @@ const CSVManagerScreen = () => {
   const MODULES: ModuleOption[] = [
     { key: 'items', label: t('dt.inventory_items_label'), icon: Package, descKey: 'dt.inventory_items', color: colors.primary },
     { key: 'sales', label: t('dt.sales_records_label'), icon: Wallet, descKey: 'dt.sales_records', color: colors.success },
-    { key: 'expenses', label: t('dt.expenses_label'), icon: ClipboardList, descKey: 'dt.expenses', color: colors.warning },
     { key: 'categories', label: t('dt.categories_label'), icon: Tag, descKey: 'dt.categories', color: colors.tint },
     { key: 'contacts', label: t('dt.contacts_label'), icon: Users, descKey: 'dt.contacts', color: colors.error },
     { key: 'adjustments', label: t('dt.adjustments_label'), icon: ClipboardList, descKey: 'dt.adjustments', color: colors.tint },
@@ -158,8 +156,6 @@ const CSVManagerScreen = () => {
             return getItems() as any[];
           case 'categories':
             return getCategories() as any[];
-          case 'expenses':
-            return getFilteredExpenses({}) as any[];
           case 'contacts':
             return getContacts() as any[];
           default:
@@ -229,9 +225,6 @@ const CSVManagerScreen = () => {
           break;
         case 'sales':
           data = getSales() as any[];
-          break;
-        case 'expenses':
-          data = getFilteredExpenses({}) as any[];
           break;
         case 'categories':
           data = getCategories() as any[];

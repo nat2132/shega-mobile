@@ -7,6 +7,7 @@ import { useSettings } from '@/context/SettingsContext';
 import { SwipeableItem } from '@/components/SwipeableItem';
 import { formatDate } from '@/utils/date-utils';
 import { AppText, AppNumber} from '@/components/ui';
+import { Image } from 'expo-image';
 interface RecentItemCardProps {
   item: ItemData;
   onPress?: () => void;
@@ -43,7 +44,11 @@ const RecentItemCard: React.FC<RecentItemCardProps> = React.memo(({ item, onPres
       >
         <View style={styles.itemHeader}>
         <View style={[styles.itemIcon, { backgroundColor: colors.text }]}>
-          <Package size={22} color={colors.background} />
+          {item.image ? (
+            <Image source={{ uri: item.image }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
+          ) : (
+            <Package size={22} color={colors.background} />
+          )}
         </View>
         <View style={{ flex: 1, marginLeft: 15 }}>
           <AppText variant="body" weight="bold" style={[styles.itemName, { color: colors.text }]} numberOfLines={1}>{item.name}</AppText>
@@ -98,6 +103,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
+    overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
   },

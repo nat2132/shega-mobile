@@ -36,7 +36,6 @@ import {
   ArrowUpRight,
   BadgeCheck,
   Bell,
-  Building2,
   Calendar,
   ChevronRight,
   CloudDownload,
@@ -50,10 +49,10 @@ import {
   Shield,
   Sliders,
   Trash2,
+  Truck,
   Users,
-  Volume2,
   Warehouse,
-  Zap
+  Zap,
 } from 'lucide-react-native';
 
 import { DataTransferModal } from '@/components/DataTransferModal';
@@ -61,6 +60,8 @@ import { BottomSheet } from '@/components/BottomSheet';
 import { AppListItem, AppText } from '@/components/ui';
 import { PeripheralCenter } from './devices/peripherals';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useBusinessAuth } from '@/hooks/useBusinessAuth';
+import { BusinessSwitcher } from '@/components/BusinessSwitcher';
 import PremiumFeatureGate from '@/components/PremiumFeatureGate';
 import { useWarehouse } from '@/context/WarehouseContext';
 import { translateWarehouseName, translateWarehouseLocation } from '@/utils/warehouse-labels';
@@ -76,9 +77,7 @@ import { settingsTutorial } from '@/tutorials/definitions';
 import { useUpdate } from '@/context/UpdateContext';
 import SyncSettings from '@/components/SyncSettings';
 import SyncCenter from '@/components/SyncCenter';
-import BusinessOverview from '@/components/BusinessOverview';
-import { BusinessManagement } from './business/BusinessManagement';
-import { useBusinessAuth } from '@/hooks/useBusinessAuth';
+import TaxCenterScreen from './tax-center';
 
 // →→→ Shared Sub-Components →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
 
@@ -407,7 +406,7 @@ const ResetModal = ({
 // →→→ Main Settings Screen →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
 
 const SettingsScreen = () => {
-  const { theme, setTheme, userProfile, pin, colors, t, soundEnabled, setSoundEnabled } = useSettings();
+  const { theme, setTheme, userProfile, pin, colors, t, featureFlags, setFeatureFlag } = useSettings();
   const { dashboardVisibility, toggleDashboardSection } = useDashboardVisibility();
   const G = getSettingsGlass(colors);
   const tutorial = useTutorial({ tutorial: settingsTutorial });
@@ -447,12 +446,15 @@ const SettingsScreen = () => {
   const [showImportModal, setShowImportModal] = useState(false);
   const [showWarehouse, setShowWarehouse] = useState(false);
   const [showDevices, setShowDevices] = useState(false);
-  const [showBusiness, setShowBusiness] = useState(false);
   const [showSyncCenter, setShowSyncCenter] = useState(false);
-  const [showBusinessOverview, setShowBusinessOverview] = useState(false);
+  const [showTax, setShowTax] = useState(false);
 
   const { canManageDevices } = usePermissions();
-  const { can: canManageBusiness } = useBusinessAuth();
+  const authBiz = useBusinessAuth();
+  // Cashier experience: view-only profile + the essentials only.
+  const cashierMode =
+    authBiz.role === 'cashier' ||
+    (!authBiz.can('products.edit') && !authBiz.can('inventory.adjust') && !authBiz.can('reports.viewAll'));
 
   const { activeWarehouse, warehouses } = useWarehouse();
   const { checkForUpdates, state: updateState } = useUpdate();
@@ -503,12 +505,18 @@ const SettingsScreen = () => {
         </View>
         </TutorialTarget>
 
+        {/* Active business scope selector */}
+        <View style={{ paddingHorizontal: 25, marginBottom: 18 }}>
+          <BusinessSwitcher />
+        </View>
+
         {/* Elite Profile Banner */}
         <TutorialTarget id="settings-profile">
         <Animated.View entering={FadeInDown.duration(600)} style={styles.bannerSection}>
           <TouchableOpacity 
             activeOpacity={0.9} 
-            onPress={() => handleOpenSub(setShowProfile)}
+            onPress={cashierMode ? undefined : () => handleOpenSub(setShowProfile)}
+            disabled={cashierMode}
             style={[styles.profileBanner, { backgroundColor: G.bgCard, borderColor: G.border }]}
           >
             <View style={styles.bannerAvatarBox}>
@@ -520,10 +528,12 @@ const SettingsScreen = () => {
             <View style={styles.bannerInfo}>
               <AppText variant="title" weight="bold" style={[styles.bannerName, { color: G.fg }]} numberOfLines={2}>{userProfile.name}</AppText>
               <AppText variant="body-sm" weight="medium" style={[styles.bannerBusiness, { color: G.muted }]} numberOfLines={1}>{userProfile.businessName}</AppText>
+              {!cashierMode && (
               <View style={[styles.profileLinkBtn, { backgroundColor: G.accentGlass }]}>
                 <AppText variant="caption" weight="bold" style={[styles.profileLinkText, { color: G.fg }]} numberOfLines={1}>{t('profile.edit')}</AppText>
                 <ArrowUpRight size={14} color={G.fg} />
               </View>
+              )}
             </View>
           </TouchableOpacity>
         </Animated.View>
@@ -532,6 +542,7 @@ const SettingsScreen = () => {
         {/* Service Intelligence Grid */}
         <View style={styles.gridSection}>
           <View style={styles.gridRow}>
+            {!cashierMode && (
             <TutorialTarget id="settings-security">
             <ConfigurationGridItem 
               icon={Shield} 
@@ -540,6 +551,8 @@ const SettingsScreen = () => {
               color={G.fg}
             />
             </TutorialTarget>
+            )}
+            {!cashierMode && (
             <TutorialTarget id="settings-notifications">
             <ConfigurationGridItem 
               icon={Bell} 
@@ -548,6 +561,7 @@ const SettingsScreen = () => {
               color={G.fg}
             />
             </TutorialTarget>
+            )}
           </View>
           <View style={styles.gridRow}>
             <TutorialTarget id="settings-language">
@@ -565,9 +579,20 @@ const SettingsScreen = () => {
               color={G.fg}
             />
           </View>
+          {!cashierMode && (
+          <View style={styles.gridRow}>
+            <ConfigurationGridItem
+              icon={Sliders}
+              title="Tax Settings"
+              onPress={() => handleOpenSub(setShowTax)}
+              color={G.fg}
+            />
+          </View>
+          )}
         </View>
 
         {/* Warehouse Section */}
+        {!cashierMode && featureFlags.warehousesEnabled && (
         <View style={styles.ledgerSection}>
           <View style={styles.sectionHead}>
             <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: G.muted }]} numberOfLines={1}>{t('inv.warehouses_title')}</AppText>
@@ -583,6 +608,74 @@ const SettingsScreen = () => {
             />
           </View>
         </View>
+        )}
+
+        {/* Business Features — progressive disclosure toggles */}
+        {!cashierMode && (
+        <View style={styles.ledgerSection}>
+          <View style={styles.sectionHead}>
+            <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: G.muted }]} numberOfLines={1}>Business Features</AppText>
+            <View style={{ flex: 1 }} />
+            <Warehouse size={20} color={G.muted} />
+          </View>
+          <View style={[styles.ledgerGroup, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+            <View style={[styles.soundRow, { borderBottomColor: G.border }]}>
+              <View style={[styles.ledgerIconBox, { backgroundColor: G.accentGlass }]}>
+                <Warehouse size={18} color={G.fg} strokeWidth={2.5} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <AppText variant="body" weight="bold" style={{ color: G.fg }} numberOfLines={1}>Warehouses</AppText>
+                <AppText variant="caption" weight="medium" style={{ color: G.muted }} numberOfLines={1}>Track stock across multiple locations</AppText>
+              </View>
+              <Switch
+                value={featureFlags.warehousesEnabled}
+                onValueChange={(val: boolean) => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setFeatureFlag('warehouses', val);
+                }}
+                trackColor={{ false: G.border, true: G.fg + '60' }}
+                thumbColor={featureFlags.warehousesEnabled ? G.fg : G.muted}
+              />
+            </View>
+            <View style={[styles.soundRow, { borderBottomColor: G.border }]}>
+              <View style={[styles.ledgerIconBox, { backgroundColor: G.accentGlass }]}>
+                <Truck size={18} color={G.fg} strokeWidth={2.5} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <AppText variant="body" weight="bold" style={{ color: G.fg }} numberOfLines={1}>Shipments</AppText>
+                <AppText variant="caption" weight="medium" style={{ color: G.muted }} numberOfLines={1}>Track incoming and outgoing shipments</AppText>
+              </View>
+              <Switch
+                value={featureFlags.shipmentsEnabled}
+                onValueChange={(val: boolean) => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setFeatureFlag('shipments', val);
+                }}
+                trackColor={{ false: G.border, true: G.fg + '60' }}
+                thumbColor={featureFlags.shipmentsEnabled ? G.fg : G.muted}
+              />
+            </View>
+            <View style={[styles.soundRow, { borderBottomColor: 'transparent' }]}>
+              <View style={[styles.ledgerIconBox, { backgroundColor: G.accentGlass }]}>
+                <Users size={18} color={G.fg} strokeWidth={2.5} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <AppText variant="body" weight="bold" style={{ color: G.fg }} numberOfLines={1}>Customers</AppText>
+                <AppText variant="caption" weight="medium" style={{ color: G.muted }} numberOfLines={1}>Manage customers and record credit sales</AppText>
+              </View>
+              <Switch
+                value={featureFlags.customersEnabled}
+                onValueChange={(val: boolean) => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setFeatureFlag('customers', val);
+                }}
+                trackColor={{ false: G.border, true: G.fg + '60' }}
+                thumbColor={featureFlags.customersEnabled ? G.fg : G.muted}
+              />
+            </View>
+          </View>
+        </View>
+        )}
 
         {/* Offline-first Sync (Phase 3) — compact summary + link to full §24 Sync Center */}
         <SyncSettings />
@@ -602,44 +695,8 @@ const SettingsScreen = () => {
           </View>
         </View>
 
-        {/* §38 Business Overview */}
-        <View style={styles.ledgerSection}>
-          <View style={styles.sectionHead}>
-            <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: G.muted }]} numberOfLines={1}>{t('overview.title')}</AppText>
-            <View style={{ flex: 1 }} />
-            <Building2 size={20} color={G.muted} />
-          </View>
-          <View style={[styles.ledgerGroup, { backgroundColor: G.bgCard, borderColor: G.border }]}>
-            <SettingLedgerItem
-              icon={Building2}
-              title={'Business Overview'}
-              subtitle={'Sales · Debt · Stock · Devices · Sync · Team'}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowBusinessOverview(true); }}
-            />
-          </View>
-        </View>
-
-        {/* Business Management (multi-device: people, devices, registers, permissions) */}
-        {canManageBusiness('team.manage') || canManageBusiness('devices.manage') ? (
-          <View style={styles.ledgerSection}>
-            <View style={styles.sectionHead}>
-              <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: G.muted }]} numberOfLines={1}>{t('devices.title')}</AppText>
-              <View style={{ flex: 1 }} />
-              <Users size={20} color={G.muted} />
-            </View>
-            <View style={[styles.ledgerGroup, { backgroundColor: G.bgCard, borderColor: G.border }]}>
-              <SettingLedgerItem
-                icon={Users}
-                title={'Business'}
-                subtitle={'People · Devices · Registers · Permissions'}
-                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowBusiness(true); }}
-              />
-            </View>
-          </View>
-        ) : null}
-
         {/* Devices & Peripherals */}
-        {canManageDevices ? (
+        {!cashierMode && canManageDevices ? (
           <View style={styles.ledgerSection}>
             <View style={styles.sectionHead}>
               <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: G.muted }]} numberOfLines={1}>{t('devices.title')}</AppText>
@@ -658,6 +715,7 @@ const SettingsScreen = () => {
         ) : null}
 
         {/* Dashboard Customization */}
+        {!cashierMode && (
         <View style={styles.ledgerSection}>
           <View style={styles.sectionHead}>
             <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: G.muted }]} numberOfLines={1}>{t('settings.dashboard')}</AppText>
@@ -723,6 +781,7 @@ const SettingsScreen = () => {
             </View>
           </View>
         </View>
+        )}
 
         {/* The Palette — Theme Selection */}
         <TutorialTarget id="settings-theme">
@@ -748,6 +807,7 @@ const SettingsScreen = () => {
         </TutorialTarget>
 
         {/* Advanced System Ledger */}
+        {!cashierMode && (
         <View style={styles.ledgerSection}>
           <View style={styles.sectionHead}>
             <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: G.muted }]} numberOfLines={1}>{t('settings.advanced')}</AppText>
@@ -771,25 +831,7 @@ const SettingsScreen = () => {
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowImportModal(true); }}
              />
              </PremiumFeatureGate>
-              <View style={[styles.soundRow, { borderBottomColor: G.border }]}>
-                <View style={[styles.ledgerIconBox, { backgroundColor: G.accentGlass }]}>
-                  <Volume2 size={18} color={G.fg} strokeWidth={2.5} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <AppText variant="body" weight="bold" style={{ color: G.fg }} numberOfLines={1}>{t('settings.sound_effects')}</AppText>
-                  <AppText variant="caption" weight="medium" style={{ color: G.muted }} numberOfLines={1}>{t('settings.sound_desc')}</AppText>
-                </View>
-                <Switch
-                  value={soundEnabled}
-                  onValueChange={(val: boolean) => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setSoundEnabled(val);
-                  }}
-                  trackColor={{ false: G.border, true: G.fg + '60' }}
-                  thumbColor={soundEnabled ? G.fg : G.muted}
-                />
-              </View>
-             <SettingLedgerItem
+              <SettingLedgerItem
                 icon={CloudDownload}
                 title={t('settings.check_updates')}
                 subtitle={updateState.checking ? t('update.checking') : t('settings.check_updates_desc')}
@@ -812,6 +854,7 @@ const SettingsScreen = () => {
               />
           </View>
         </View>
+        )}
 
         <View style={styles.footer}>
            <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.versionText, { color: G.muted }]} numberOfLines={2}>{t('settings.version_info', { version: updateState.currentVersion })}</AppText>
@@ -836,12 +879,15 @@ const SettingsScreen = () => {
       <BottomSheet visible={showDateTime} onClose={() => setShowDateTime(false)}>
         <DateTimeSettings />
       </BottomSheet>
+      <BottomSheet visible={showTax} onClose={() => setShowTax(false)}>
+        <TaxCenterScreen />
+      </BottomSheet>
       <BottomSheet visible={showSupport} onClose={() => setShowSupport(false)}>
         <SupportScreen />
       </BottomSheet>
 
       {/* Warehouse Modal */}
-      <BottomSheet visible={showWarehouse} onClose={() => setShowWarehouse(false)}>
+      <BottomSheet visible={showWarehouse && featureFlags.warehousesEnabled} onClose={() => setShowWarehouse(false)}>
         <WarehouseSettingsScreen onClose={() => setShowWarehouse(false)} />
       </BottomSheet>
 
@@ -850,19 +896,9 @@ const SettingsScreen = () => {
         <PeripheralCenter onClose={() => setShowDevices(false)} />
       </BottomSheet>
 
-      {/* Business Management */}
-      <BottomSheet visible={showBusiness} onClose={() => setShowBusiness(false)}>
-        <BusinessManagement onClose={() => setShowBusiness(false)} />
-      </BottomSheet>
-
       {/* §24 Sync Center */}
       <BottomSheet visible={showSyncCenter} onClose={() => setShowSyncCenter(false)}>
         <SyncCenter />
-      </BottomSheet>
-
-      {/* §38 Business Overview */}
-      <BottomSheet visible={showBusinessOverview} onClose={() => setShowBusinessOverview(false)}>
-        <BusinessOverview />
       </BottomSheet>
 
       {/* Reset Modal */}

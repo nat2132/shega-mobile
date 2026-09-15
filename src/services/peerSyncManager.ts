@@ -4,13 +4,10 @@
  * Coordinates:
  * 1. Local sync server (Mobile↔Mobile via LAN)
  * 2. Sync client (Mobile↔Desktop via LAN)
- * 3. Cloud sync (Mobile↔Cloud↔Desktop via internet)
  *
  * Network behavior:
- * - LAN + Internet → LAN sync + Cloud sync in background
- * - LAN only → LAN sync continues working offline
- * - Internet only → Cloud sync through Django
- * - Neither → Offline mode, queue changes for later
+ * - LAN available → LAN sync
+ * - No LAN → Offline mode, queue changes for later
  *
  * This module replaces the ad-hoc sync calls scattered across SyncContext
  * with a single, coordinated sync engine.
@@ -21,8 +18,6 @@ import {
   getDeviceId,
   getHubUrl,
   syncNow as lanSyncNow,
-  cloudSyncNow,
-  getCloudStatus,
   getSyncStatus,
   getUnifiedSyncStatus,
 } from './syncService';
@@ -65,14 +60,12 @@ export interface PeerSyncState {
 // ─── Configuration ──────────────────────────────────────────────────────────
 
 const LAN_SYNC_INTERVAL_MS = 30_000;   // 30s
-const CLOUD_SYNC_INTERVAL_MS = 60_000;  // 60s
 const DISCOVERY_INTERVAL_MS = 15_000;    // 15s
 
 // ─── State ──────────────────────────────────────────────────────────────────
 
 let currentMode: SyncMode = 'offline';
 let lanTimer: NodeJS.Timeout | null = null;
-let cloudTimer: NodeJS.Timeout | null = null;
 let discoveryTimer: NodeJS.Timeout | null = null;
 let isRunning = false;
 let lastError: string | null = null;
@@ -117,25 +110,6 @@ async function performLanSync(): Promise<{ pushed: number; pulled: number; confl
   } catch (e: any) {
     lastError = e?.message;
     console.warn('[PeerSync] LAN sync failed:', e?.message);
-    return null;
-  }
-}
-
-/**
- * Perform one Cloud sync cycle.
- * Push local changes to Django and pull other-branch changes back.
- */
-async function performCloudSync(): Promise<{ pushed: number; pulled: number; conflicts: number } | null> {
-  const cloudStatus = await getCloudStatus();
-  if (!cloudStatus.configured || !cloudStatus.enabled) return null;
-
-  try {
-    const result = await cloudSyncNow();
-    console.log('[PeerSync] Cloud sync:', result);
-    return result;
-  } catch (e: any) {
-    lastError = e?.message;
-    console.warn('[PeerSync] Cloud sync failed:', e?.message);
     return null;
   }
 }
@@ -188,7 +162,11 @@ export async function startPeerSyncManager(): Promise<void> {
   }
 
   // Start mDNS discovery (find other hubs)
-  startMdnsDiscovery();
+  try {
+    startMdnsDiscovery();
+  } catch (e: any) {
+    console.warn('[PeerSync] mDNS discovery unavailable:', e?.message);
+  }
 
   // Detect initial mode
   currentMode = detectMode();
@@ -203,11 +181,6 @@ export async function startPeerSyncManager(): Promise<void> {
     }
   }, LAN_SYNC_INTERVAL_MS);
 
-  if (cloudTimer) clearInterval(cloudTimer);
-  cloudTimer = setInterval(async () => {
-    await performCloudSync();
-  }, CLOUD_SYNC_INTERVAL_MS);
-
   if (discoveryTimer) clearInterval(discoveryTimer);
   discoveryTimer = setInterval(async () => {
     await performDiscoveryCycle();
@@ -221,7 +194,6 @@ export async function startPeerSyncManager(): Promise<void> {
  */
 export function stopPeerSyncManager(): void {
   if (lanTimer) { clearInterval(lanTimer); lanTimer = null; }
-  if (cloudTimer) { clearInterval(cloudTimer); cloudTimer = null; }
   if (discoveryTimer) { clearInterval(discoveryTimer); discoveryTimer = null; }
 
   stopMobileSyncServer();
@@ -267,9 +239,7 @@ export async function getPeerSyncState(): Promise<PeerSyncState> {
  */
 export async function triggerSync(): Promise<{
   lan: { pushed: number; pulled: number; conflicts: number } | null;
-  cloud: { pushed: number; pulled: number; conflicts: number } | null;
 }> {
   const lan = await performLanSync();
-  const cloud = await performCloudSync();
-  return { lan, cloud };
+  return { lan };
 }

@@ -2,7 +2,7 @@ import { formatDate, parseLocalDate } from '@/utils/date-utils';
 
 export interface SearchResult {
   id: string;
-  type: 'item' | 'sale' | 'expense' | 'adjustment' | 'budget' | 'category' | 'warehouse' | 'contact' | 'draft';
+  type: 'item' | 'sale' | 'adjustment' | 'category' | 'warehouse' | 'contact' | 'draft';
   title: string;
   subtitle: string;
   route?: string;
@@ -26,9 +26,7 @@ export function searchAll(query: string, t?: TranslateFn, calendarType: string =
   const searchers: SearchFn[] = [
     searchItems,
     searchSales,
-    searchExpenses,
     searchAdjustments,
-    searchBudgets,
     searchContacts,
     searchWarehouses,
     searchCategories,
@@ -83,19 +81,6 @@ function searchSales(q: string, t: TranslateFn, calendarType: string, language: 
   }));
 }
 
-function searchExpenses(q: string, t: TranslateFn, calendarType: string, language: string): SearchResult[] {
-  const { getFilteredExpenses } = require('@/database/db');
-  const expenses = getFilteredExpenses({ search: q, sortBy: 'date DESC', limit: 10 });
-  return (expenses || []).slice(0, 10).map((e: any) => ({
-    id: `expense-${e.id}`,
-    type: 'expense' as const,
-    title: e.name || `${t('search.expense_id')} #${e.id}`,
-    subtitle: `${t('common.etb')} ${e.amount || 0} • ${e.category || ''} • ${fmtDate(e.date, calendarType, language)}`,
-    route: 'expense',
-    data: e,
-  }));
-}
-
 function searchAdjustments(q: string, t: TranslateFn, calendarType: string, language: string): SearchResult[] {
   const { getFilteredAdjustments } = require('@/database/db');
   const adjustments = getFilteredAdjustments({ search: q, limit: 10 });
@@ -112,25 +97,6 @@ function searchAdjustments(q: string, t: TranslateFn, calendarType: string, lang
   });
 }
 
-function searchBudgets(q: string, t: TranslateFn): SearchResult[] {
-  const { getBudgets } = require('@/database/db');
-  const budgets = getBudgets();
-  return (budgets || [])
-    .filter((b: any) =>
-      b.name?.toLowerCase().includes(q) ||
-      b.type?.toLowerCase().includes(q)
-    )
-    .slice(0, 5)
-    .map((b: any) => ({
-      id: `budget-${b.id}`,
-      type: 'budget' as const,
-      title: b.name,
-      subtitle: `${b.type || t('search.business')} • ${b.period || t('search.monthly')} • ${t('common.etb')} ${b.totalPlanned || 0}`,
-      route: 'budget',
-      data: b,
-    }));
-}
-
 function searchContacts(q: string, t: TranslateFn): SearchResult[] {
   const { searchContacts } = require('@/database/db');
   const contacts = searchContacts(q);
@@ -145,7 +111,8 @@ function searchContacts(q: string, t: TranslateFn): SearchResult[] {
 }
 
 function searchWarehouses(q: string, t: TranslateFn): SearchResult[] {
-  const { getWarehouses } = require('@/database/db');
+  const { getWarehouses, getFeatureFlag } = require('@/database/db');
+  if (!getFeatureFlag('warehouses_enabled', true)) return [];
   const warehouses = getWarehouses();
   return (warehouses || [])
     .filter((w: any) =>

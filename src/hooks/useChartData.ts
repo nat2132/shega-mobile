@@ -4,7 +4,7 @@
 // chart components.
 //
 // Why this exists:
-// - Some callers (sales.tsx, expense.tsx) start with `[]` for chart
+// - Some callers (sales.tsx, summary.tsx) start with `[]` for chart
 //   data. With react-native-gifted-charts, an empty array shows an
 //   empty frame that briefly flashes zeros; a non-empty array of
 //   stale/default values can show "fake" bars.

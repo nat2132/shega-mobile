@@ -1,4 +1,4 @@
-import { getCategories, getContacts, getItems, insertAdjustment, insertCategory, insertContact, insertExpense, insertItem, insertSale, getDB } from '@/database/db';
+import { getCategories, getContacts, getItems, insertAdjustment, insertCategory, insertContact, insertItem, insertSale, getDB } from '@/database/db';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 
@@ -81,27 +81,9 @@ export const CSV_SPECS: Record<string, CSVModuleSpec> = {
     ],
     requiredColumns: ['itemName', 'quantity', 'totalPrice'],
   },
-  expenses: {
-    name: 'Expenses',
-    description: 'Business expenses and transactions',
-    columns: [
-      { key: 'name', label: 'Description', required: true, type: 'string' },
-      { key: 'amount', label: 'Amount', required: true, type: 'number' },
-      { key: 'category', label: 'Category', required: false, type: 'string', defaultValue: 'General' },
-      { key: 'date', label: 'Date', required: false, type: 'date', defaultValue: null },
-      { key: 'isRecurring', label: 'Recurring', required: false, type: 'boolean', defaultValue: false },
-      { key: 'frequency', label: 'Frequency', required: false, type: 'string', defaultValue: 'monthly' },
-      { key: 'nextBillingDate', label: 'Next Billing Date', required: false, type: 'date', defaultValue: null },
-      { key: 'budgetCategoryId', label: 'Budget Category ID', required: false, type: 'number', defaultValue: null },
-      { key: 'paymentStatus', label: 'Payment Status', required: false, type: 'string', defaultValue: 'pending' },
-      { key: 'isOverdue', label: 'Is Overdue', required: false, type: 'boolean', defaultValue: false },
-      { key: 'overdueDays', label: 'Overdue Days', required: false, type: 'number', defaultValue: 0 },
-    ],
-    requiredColumns: ['name', 'amount'],
-  },
   categories: {
     name: 'Categories',
-    description: 'Product and expense categories',
+    description: 'Product categories',
     columns: [
       { key: 'name', label: 'Category Name', required: true, type: 'string' },
       { key: 'icon', label: 'Icon', required: false, type: 'string', defaultValue: '📦' },
@@ -500,15 +482,6 @@ export function findDuplicates(
           dupes.push({ index: i, field: 'name', existingId: existing.id });
         }
       }
-      // Expenses: match on name + date + amount
-      if (spec === CSV_SPECS.expenses) {
-        if (record.name && record.date && record.amount &&
-            record.name.toLowerCase() === existing.name?.toLowerCase() &&
-            record.date?.split('T')[0] === existing.date?.split('T')[0] &&
-            record.amount === existing.amount) {
-          dupes.push({ index: i, field: 'name+date+amount', existingId: existing.id });
-        }
-      }
       // Categories: match on name
       if (spec === CSV_SPECS.categories) {
         if (record.name && existing.name &&
@@ -690,55 +663,6 @@ export function importSales(data: any[]): ImportResult {
   return result;
 }
 
-export function importExpenses(data: any[]): ImportResult {
-  const result: ImportResult = { success: true, imported: 0, skipped: 0, errors: [] };
-
-  for (let i = 0; i < data.length; i++) {
-    const row = data[i];
-    const rowNum = i + 2;
-    try {
-      if (!row.name || row.name.trim() === '') {
-        result.errors.push(`Row ${rowNum}: Description is required`);
-        result.skipped++;
-        continue;
-      }
-
-      const amount = Number(row.amount);
-      if (isNaN(amount) || amount <= 0) {
-        result.errors.push(`Row ${rowNum}: Amount must be a positive number, got "${row.amount}"`);
-        result.skipped++;
-        continue;
-      }
-
-      const expenseId = insertExpense({
-        name: row.name.trim(),
-        amount,
-        category: row.category || 'General',
-        date: row.date ? new Date(row.date).toISOString() : new Date().toISOString(),
-        isRecurring: row.isRecurring === true || row.isRecurring === 'true' || row.isRecurring === '1',
-        frequency: row.frequency || 'monthly',
-        nextBillingDate: row.nextBillingDate ? new Date(row.nextBillingDate).toISOString() : undefined,
-        budgetCategoryId: row.budgetCategoryId ? Number(row.budgetCategoryId) : undefined,
-        paymentStatus: row.paymentStatus || 'pending',
-        isOverdue: row.isOverdue === true || row.isOverdue === 'true' || row.isOverdue === '1',
-        overdueDays: row.overdueDays !== undefined && row.overdueDays !== '' ? Number(row.overdueDays) : undefined,
-      });
-
-      if (expenseId) {
-        result.imported++;
-      } else {
-        result.errors.push(`Row ${rowNum}: Failed to insert expense "${row.name}"`);
-        result.skipped++;
-      }
-    } catch (e: any) {
-      result.errors.push(`Row ${rowNum}: ${e.message || 'Unknown error'}`);
-      result.skipped++;
-    }
-  }
-
-  return result;
-}
-
 export function importCategories(data: any[]): ImportResult {
   const result: ImportResult = { success: true, imported: 0, skipped: 0, errors: [] };
   const existingCats = getCategories() as any[];
@@ -785,7 +709,6 @@ export async function executeImport(
   switch (moduleKey) {
     case 'items': return importItems(data);
     case 'sales': return importSales(data);
-    case 'expenses': return importExpenses(data);
     case 'categories': return importCategories(data);
     case 'contacts': return importContacts(data);
     case 'adjustments': return importAdjustments(data);

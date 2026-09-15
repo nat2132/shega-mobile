@@ -38,18 +38,31 @@ export default function Index() {
           // Show login/register flow.
           target = fromFirstRun ? '/language-select' : '/welcome-choice';
         } else {
-          // 2. Local device lock (PIN) still applies for in-app security.
-          setPhase('security');
-          const pin = await SecureStore.getItemAsync('user_pin');
-          const setupComplete = await SecureStore.getItemAsync('user_setupComplete');
-          if (pin) {
-            target = '/verify-pin';
+          // 2. Resume a mid-join pairing request BEFORE the sign-in/subscription
+          // gates: the pairing request lives on the backend, so after a restart
+          // the joiner drops back into Waiting for Approval (or completes an
+          // approval that landed while the app was closed). Nothing here
+          // re-issues the one-time code.
+          const { resolveJoinResume } = await import('../src/services/postAuthRouter');
+          const resumeRoute = await resolveJoinResume();
+          if (resumeRoute) {
+            target = resumeRoute;
           } else {
-            // 3. Check subscription + license gate.
-            setPhase('subscription');
-            const { resolvePostAuthRoute } = await import('../src/services/postAuthRouter');
-            target = await resolvePostAuthRoute();
-            if (!target) target = setupComplete === 'true' ? '/(tabs)/dashboard' : '/subscription/plans';
+            // Business-user sign-in gate (username+PIN). Once a business exists,
+            // a team member signs in with their business credentials instead of
+            // the old device-wide PIN. First-time users set username+PIN inside
+            // the screen itself, so this is always the gate for an onboarding
+            // business. Owners fresh from the setup wizard also pass here.
+            const { getBusinesses } = await import('../src/services/businessService');
+            if (getBusinesses().length > 0) {
+              target = '/user-signin';
+            } else {
+              // 3. Check subscription + license gate.
+              setPhase('subscription');
+              const { resolvePostAuthRoute } = await import('../src/services/postAuthRouter');
+              target = await resolvePostAuthRoute();
+              if (!target) target = '/(tabs)/dashboard';
+            }
           }
         }
         if (cancelled) return;

@@ -9,7 +9,6 @@
 import { formatNumber } from '@/utils/formatNumber';
 import {
   createNotification,
-  hasActiveNotificationByGroupKey,
   AppNotification,
   CreateNotificationInput,
 } from '@/database/notifications';
@@ -17,26 +16,15 @@ import {
   getLowStockItems,
   getExpiringItems,
   getDebtCustomers,
-  getOverdueExpenses,
-  getRecurringExpensesDueToday,
-  getRecurringExpensesDueTomorrow,
   getOnCreditItems,
   getItemsWithRecentPriceChanges,
   getItemsDueForSupplierCheck,
   updateItem,
   getItemById,
   getItemSuppliers,
-  getBudgetDashboard,
-  getMonthlyBudgetSummary,
-  getBudgetWithCategoryProgress,
-  getCurrentMonthBudget,
-  getRecurringTemplates,
-  getBudgetLifecycle,
-  getBudgetFinalStats,
-  expireOverdueBudgets,
 } from '@/database/db';
 
-// â”€â”€ Inventory triggers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ Inventory triggers ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬
 
 export const checkLowStock = (): AppNotification[] => {
   try {
@@ -106,7 +94,7 @@ export const checkExpiringItems = (): AppNotification[] => {
   }
 };
 
-// â”€â”€ Customer / Debt triggers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ Customer / Debt triggers ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬
 
 export const checkOutstandingDebts = (): AppNotification[] => {
   try {
@@ -137,7 +125,7 @@ export const checkOutstandingDebts = (): AppNotification[] => {
   }
 };
 
-// â”€â”€ Supplier / Credit triggers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ Supplier / Credit triggers ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬
 
 export const checkUnpaidSuppliers = (): AppNotification[] => {
   try {
@@ -167,7 +155,7 @@ export const checkUnpaidSuppliers = (): AppNotification[] => {
   }
 };
 
-// â”€â”€ Weekly supplier call triggers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ Weekly supplier call triggers ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬
 
 // Surfaces a notification for every item flagged with supplierCallEnabled
 // whose purchase price was adjusted in the last 7 days. The user is asked
@@ -278,66 +266,7 @@ export const checkSupplierPeriodicReview = (): AppNotification[] => {
   }
 };
 
-// â”€â”€ Expense triggers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-export const checkOverdueExpenses = (): AppNotification[] => {
-  try {
-    const overdue = getOverdueExpenses();
-    return overdue.map((exp: any) =>
-      createNotification({
-        type: 'expense_overdue',
-        category: 'expense',
-        priority: 'high',
-        title: 'Overdue Expense',
-        message: `${exp.name} is ${exp.overdueDays || 0} days overdue.`,
-        icon: 'wallet',
-        deepLink: `/expense/expense-details/${exp.id}`,
-        data: {
-          expenseId: exp.id,
-          name: exp.name,
-          overdueDays: exp.overdueDays || 0,
-          titleKey: 'notif.title.overdue_expense',
-          messageKey: 'notif.message.overdue_expense',
-        },
-        groupKey: `overdue-${exp.id}`,
-        requiresAction: true,
-      }),
-    ).filter((n): n is AppNotification => n !== null);
-  } catch (e) {
-    console.error('checkOverdueExpenses error:', e);
-    return [];
-  }
-};
-
-export const checkRecurringExpenses = (): AppNotification[] => {
-  try {
-    const due = getRecurringExpensesDueToday();
-    return due.map((exp: any) =>
-      createNotification({
-        type: 'recurring_due',
-        category: 'expense',
-        priority: 'normal',
-        title: 'Recurring Expense Due',
-        message: `${exp.name} (${exp.frequency || 'Recurring'}) is due today.`,
-        icon: 'calendar',
-        deepLink: `/expense/expense-details/${exp.id}`,
-        data: {
-          expenseId: exp.id,
-          name: exp.name,
-          frequency: exp.frequency || 'Recurring',
-          titleKey: 'notif.title.recurring_expense_due',
-          messageKey: 'notif.message.recurring_expense_due',
-        },
-        groupKey: `recurring-${exp.id}`,
-      }),
-    ).filter((n): n is AppNotification => n !== null);
-  } catch (e) {
-    console.error('checkRecurringExpenses error:', e);
-    return [];
-  }
-};
-
-// â”€â”€ Sales / Activity triggers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ Sales / Activity triggers ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬
 
 export const notifySaleCompleted = (saleData: {
   id: number;
@@ -365,30 +294,6 @@ export const notifySaleCompleted = (saleData: {
         : 'notif.message.sale_completed',
     },
     groupKey: `sale-${saleData.id}`,
-  });
-};
-
-export const notifyExpenseRecorded = (expenseData: {
-  id: number;
-  name: string;
-  amount: number;
-  category: string;
-}): AppNotification | null => {
-  return createNotification({
-    type: 'expense_recorded',
-    category: 'expense',
-    priority: 'low',
-    title: 'Expense Recorded',
-    message: `${expenseData.name} (${formatNumber(expenseData.amount)} Birr) added.`,
-    icon: 'wallet',
-    deepLink: `/expense/expense-details/${expenseData.id}`,
-    data: {
-      ...expenseData,
-      amountStr: formatNumber(expenseData.amount),
-      titleKey: 'notif.title.expense_recorded',
-      messageKey: 'notif.message.expense_recorded',
-    },
-    groupKey: `expense-${expenseData.id}`,
   });
 };
 
@@ -425,7 +330,7 @@ export const notifyCustomerAdded = (customer: {
     title: 'Customer Added',
     message: `${customer.fullName} has been added to your contacts.`,
     icon: 'handshake',
-    deepLink: `/contacts/contact-details/${customer.id}`,
+    deepLink: '/(tabs)/dashboard',
     data: {
       ...customer,
       titleKey: 'notif.title.customer_added',
@@ -601,763 +506,7 @@ export const notifyPaymentStatus = (data: {
   });
 };
 
-// â”€â”€ Budget Notification Triggers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-export const notifyBudgetCreated = (budgetData: {
-  id: number;
-  name: string;
-  period: string;
-  year: number;
-  month?: number;
-}): AppNotification | null => {
-  return createNotification({
-    type: 'budget_created',
-    category: 'budget',
-    priority: 'low',
-    title: 'Budget Created',
-    message: `${budgetData.name} budget has been created successfully.`,
-    icon: 'trending-up',
-    deepLink: '/(tabs)/budget',
-    data: {
-      budgetId: budgetData.id,
-      name: budgetData.name,
-      titleKey: 'notif.title.budget_created',
-      messageKey: 'notif.message.budget_created',
-    },
-    groupKey: `budget-created-${budgetData.id}`,
-  });
-};
-
-export const notifyBudgetCategoryExceeded = (data: {
-  categoryName: string;
-  budgetName: string;
-  planned: number;
-  spent: number;
-  budgetId: number;
-  categoryId: number;
-  excess: number;
-}): AppNotification | null => {
-  return createNotification({
-    type: 'budget_category_exceeded',
-    category: 'budget',
-    priority: 'critical',
-    title: 'Budget Category Exceeded',
-    message: `Your ${data.categoryName} budget (${data.budgetName}) has exceeded its limit by ${formatNumber(data.excess)} ETB.`,
-    icon: 'alert-triangle',
-    deepLink: '/(tabs)/budget',
-    data: {
-      budgetId: data.budgetId,
-      categoryId: data.categoryId,
-      categoryName: data.categoryName,
-      name: data.categoryName,
-      planned: data.planned,
-      spent: data.spent,
-      excess: data.excess,
-      amountStr: formatNumber(data.excess),
-      titleKey: 'notif.title.budget_exceeded',
-      messageKey: 'notif.message.budget_exceeded',
-    },
-    groupKey: `budget-exceeded-${data.budgetId}-${data.categoryId}`,
-    requiresAction: true,
-  });
-};
-
-export const notifyBudgetApproachingLimit = (data: {
-  categoryName: string;
-  budgetName: string;
-  percentUsed: number;
-  budgetId: number;
-  categoryId: number;
-  spent: number;
-  planned: number;
-}): AppNotification | null => {
-  const threshold = data.percentUsed >= 100 ? 100 : data.percentUsed >= 90 ? 90 : 80;
-  const title = threshold >= 100
-    ? 'Budget Limit Reached'
-    : `Budget ${threshold}% Used`;
-  const message = threshold >= 100
-    ? `Your ${data.categoryName} budget (${data.budgetName}) has reached its limit.`
-    : `Your ${data.categoryName} budget (${data.budgetName}) is ${data.percentUsed}% used.`;
-  return createNotification({
-    type: threshold >= 100 ? 'budget_limit_reached' : 'budget_approaching_limit',
-    category: 'budget',
-    priority: threshold >= 100 ? 'critical' : threshold >= 90 ? 'high' : 'normal',
-    title,
-    message,
-    icon: threshold >= 100 ? 'alert-triangle' : 'percent',
-    deepLink: '/(tabs)/budget',
-    data: {
-      budgetId: data.budgetId,
-      categoryId: data.categoryId,
-      categoryName: data.categoryName,
-      name: data.categoryName,
-      percentUsed: data.percentUsed,
-      percent: data.percentUsed,
-      spent: data.spent,
-      planned: data.planned,
-      threshold,
-      titleKey: threshold >= 100 ? 'notif.title.budget_limit_reached' : 'notif.title.budget_percent_used',
-      messageKey: threshold >= 100 ? 'notif.message.budget_limit_reached' : 'notif.message.budget_percent_used',
-    },
-    groupKey: `budget-limit-${data.budgetId}-${data.categoryId}-${threshold}`,
-    requiresAction: threshold >= 90,
-  });
-};
-
-// Notifies the user each time a budget crosses one of the guard-rail
-// thresholds (50% / 75% / 90% / 100% / over budget). Uses a group key that
-// includes the crossed threshold so each level is only notified once until
-// the notification is resolved or dismissed.
-const BUDGET_USAGE_THRESHOLDS = [50, 75, 90, 100];
-
-export const notifyBudgetThresholdReached = (data: {
-  budgetId: number;
-  budgetName: string;
-  percentUsed: number;
-  totalPlanned: number;
-  totalSpent: number;
-  remaining: number;
-}): AppNotification | null => {
-  const pct = Number(data.percentUsed) || 0;
-  const isOver = (Number(data.remaining) || 0) < 0;
-  const crossed = [...BUDGET_USAGE_THRESHOLDS].reverse().find((th) => pct >= th);
-  if (crossed === undefined) return null;
-
-  const threshold = isOver ? 'over' : crossed;
-  const title = isOver
-    ? 'Budget Over Limit'
-    : `Budget ${crossed}% Used`;
-  const message = isOver
-    ? `Your ${data.budgetName} budget is over its limit by ${formatNumber(Math.abs(Number(data.remaining) || 0))} ETB.`
-    : `Your ${data.budgetName} budget has reached ${pct}% usage.`;
-  return createNotification({
-    type: isOver ? 'budget_over_budget' : 'budget_threshold_reached',
-    category: 'budget',
-    priority: isOver ? 'critical' : crossed >= 90 ? 'high' : 'normal',
-    title,
-    message,
-    icon: 'alert-triangle',
-    deepLink: '/(tabs)/budget',
-    data: {
-      budgetId: data.budgetId,
-      budgetName: data.budgetName,
-      name: data.budgetName,
-      percentUsed: pct,
-      percent: pct,
-      threshold: crossed,
-      remaining: data.remaining,
-      amount: Math.abs(Number(data.remaining) || 0),
-      totalPlanned: data.totalPlanned,
-      totalSpent: data.totalSpent,
-      titleKey: isOver ? 'notif.title.budget_over_budget' : 'notif.title.budget_threshold',
-      messageKey: isOver ? 'notif.message.budget_over_budget' : 'notif.message.budget_threshold',
-    },
-    groupKey: `budget-threshold-${data.budgetId}-${threshold}`,
-    requiresAction: isOver || crossed >= 90,
-  });
-};
-
-export const checkBudgetThresholds = (): AppNotification[] => {
-  try {
-    const dashboard = getBudgetDashboard();
-    if (!dashboard?.activeBudgets) return [];
-    const created: AppNotification[] = [];
-    for (const budget of dashboard.activeBudgets) {
-      const progress = getBudgetWithCategoryProgress(budget.id);
-      if (!progress?.categories) continue;
-      for (const cat of progress.categories) {
-        if (cat.plannedAmount <= 0) continue;
-        const pct = cat.percentUsed || 0;
-        if (pct >= 100) {
-          const n = notifyBudgetApproachingLimit({
-            categoryName: cat.category,
-            budgetName: progress.name,
-            percentUsed: pct,
-            budgetId: budget.id,
-            categoryId: cat.id,
-            spent: cat.spent || 0,
-            planned: cat.plannedAmount,
-          });
-          if (n) created.push(n);
-        } else if (pct >= 90) {
-          const n = notifyBudgetApproachingLimit({
-            categoryName: cat.category,
-            budgetName: progress.name,
-            percentUsed: pct,
-            budgetId: budget.id,
-            categoryId: cat.id,
-            spent: cat.spent || 0,
-            planned: cat.plannedAmount,
-          });
-          if (n) created.push(n);
-        } else if (pct >= 80) {
-          const n = notifyBudgetApproachingLimit({
-            categoryName: cat.category,
-            budgetName: progress.name,
-            percentUsed: pct,
-            budgetId: budget.id,
-            categoryId: cat.id,
-            spent: cat.spent || 0,
-            planned: cat.plannedAmount,
-          });
-          if (n) created.push(n);
-        }
-      }
-
-      // Budget-level guard-rail thresholds (50% / 75% / 90% / 100% / over).
-      if (progress.totalPlanned > 0) {
-        const n = notifyBudgetThresholdReached({
-          budgetId: budget.id,
-          budgetName: progress.name,
-          percentUsed: progress.percentUsed || 0,
-          totalPlanned: progress.totalPlanned,
-          totalSpent: progress.totalSpent || 0,
-          remaining: progress.remaining,
-        });
-        if (n) created.push(n);
-      }
-    }
-    return created;
-  } catch (e) {
-    console.error('checkBudgetThresholds error:', e);
-    return [];
-  }
-};
-
-export const notifyBudgetExpired = (data: {
-  budgetId: number;
-  budgetName: string;
-  endDate: string;
-  totalPlanned: number;
-  totalSpent: number;
-  remaining: number;
-  percentUsed: number;
-  expenseCount: number;
-}): AppNotification | null => {
-  return createNotification({
-    type: 'budget_expired',
-    category: 'budget',
-    priority: 'high',
-    title: 'Budget Expired',
-    message: `${data.budgetName} has ended. Renew it or create a new budget to keep tracking expenses.`,
-    icon: 'alert-triangle',
-    deepLink: '/(tabs)/budget',
-    data: {
-      budgetId: data.budgetId,
-      budgetName: data.budgetName,
-      name: data.budgetName,
-      endDate: data.endDate,
-      totalPlanned: data.totalPlanned,
-      totalSpent: data.totalSpent,
-      remaining: data.remaining,
-      percentUsed: data.percentUsed,
-      expenseCount: data.expenseCount,
-      titleKey: 'notif.title.budget_expired',
-      messageKey: 'notif.message.budget_expired',
-    },
-    groupKey: `budget-expired-${data.budgetId}`,
-    requiresAction: true,
-  });
-};
-
-export const checkExpiredBudgets = (): AppNotification[] => {
-  try {
-    const lifecycle = getBudgetLifecycle();
-    if (!lifecycle.expired.length) return [];
-    const created: AppNotification[] = [];
-    for (const budget of lifecycle.expired) {
-      const stats = getBudgetFinalStats(budget.id);
-      const n = notifyBudgetExpired({
-        budgetId: budget.id,
-        budgetName: budget.name,
-        endDate: budget.endDate,
-        totalPlanned: stats?.totalPlanned || 0,
-        totalSpent: stats?.totalSpent || 0,
-        remaining: stats?.remaining || 0,
-        percentUsed: stats?.percentUsed || 0,
-        expenseCount: stats?.expenseCount || 0,
-      });
-      if (n) created.push(n);
-    }
-    return created;
-  } catch (e) {
-    console.error('checkExpiredBudgets error:', e);
-    return [];
-  }
-};
-
-export const checkEndingBudgets = (): AppNotification[] => {
-  try {
-    const lifecycle = getBudgetLifecycle();
-    if (!lifecycle.expiringSoon.length) return [];
-    const created: AppNotification[] = [];
-    for (const budget of lifecycle.expiringSoon) {
-      const daysLeft = budget.daysLeft || 0;
-      const n = createNotification({
-        type: 'budget_ending',
-        category: 'budget',
-        priority: daysLeft <= 1 ? 'high' : 'normal',
-        title: 'Budget Period Ending',
-        message: `Your ${budget.name} budget ends in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}.`,
-        icon: 'clock',
-        deepLink: '/(tabs)/budget',
-        data: {
-          budgetId: budget.id,
-          daysLeft,
-          days: daysLeft,
-          budgetName: budget.name,
-          name: budget.name,
-          remaining: (Number(budget.totalPlanned) || 0) - (Number(budget.totalActual) || 0),
-          endDate: budget.endDate,
-          titleKey: 'notif.title.budget_ending',
-          messageKey: 'notif.message.budget_ending',
-        },
-        groupKey: `budget-ending-${budget.id}-${budget.endDate}`,
-      });
-      if (n) created.push(n);
-    }
-    return created;
-  } catch (e) {
-    console.error('checkEndingBudgets error:', e);
-    return [];
-  }
-};
-
-export const checkNoActiveBudget = (): AppNotification[] => {
-  try {
-    const current = getCurrentMonthBudget();
-    if (current) return [];
-    const now = new Date();
-    const groupKey = `no-budget-${now.getFullYear()}-${now.getMonth() + 1}`;
-    if (hasActiveNotificationByGroupKey(groupKey)) return [];
-    const monthName = now.toLocaleString('default', { month: 'long' });
-    const n = createNotification({
-      type: 'no_active_budget',
-      category: 'budget',
-      priority: 'high',
-      title: 'No Active Budget',
-      message: `No budget has been created for ${monthName} yet. Create one to track your spending.`,
-      icon: 'megaphone',
-      deepLink: '/(tabs)/budget',
-      data: {
-        year: now.getFullYear(),
-        month: now.getMonth() + 1,
-        monthName,
-        titleKey: 'notif.title.no_active_budget',
-        messageKey: 'notif.message.no_active_budget',
-      },
-      groupKey,
-      requiresAction: true,
-    });
-    return n ? [n] : [];
-  } catch (e) {
-    console.error('checkNoActiveBudget error:', e);
-    return [];
-  }
-};
-
-export const checkInactiveBudgetCategories = (): AppNotification[] => {
-  try {
-    const now = new Date();
-    const summary = getMonthlyBudgetSummary(now.getFullYear(), now.getMonth() + 1);
-    if (!summary?.byCategory) return [];
-    const created: AppNotification[] = [];
-    for (const cat of summary.byCategory as any[]) {
-      if (cat.planned > 0 && cat.spent === 0) {
-        const n = createNotification({
-          type: 'budget_no_spending',
-          category: 'budget',
-          priority: 'low',
-          title: 'No Spending Yet',
-          message: `Your ${cat.name} category has no spending this month.`,
-          icon: 'info',
-          deepLink: '/(tabs)/budget',
-          data: {
-            category: cat.name,
-            name: cat.name,
-            planned: cat.planned,
-            budgetId: summary.budgetId,
-            titleKey: 'notif.title.budget_no_spending',
-            messageKey: 'notif.message.budget_no_spending',
-          },
-          groupKey: `no-spend-${cat.name}-${now.getFullYear()}-${now.getMonth() + 1}`,
-        });
-        if (n) created.push(n);
-      }
-    }
-    return created;
-  } catch (e) {
-    console.error('checkInactiveBudgetCategories error:', e);
-    return [];
-  }
-};
-
-// â”€â”€ Expense Notification Triggers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-export const notifyExpenseEdited = (expenseData: {
-  id: number;
-  name: string;
-  amount: number;
-  category: string;
-  oldAmount?: number;
-}): AppNotification | null => {
-  const amountChanged = expenseData.oldAmount !== undefined && expenseData.oldAmount !== expenseData.amount;
-  return createNotification({
-    type: 'expense_edited',
-    category: 'expense',
-    priority: 'low',
-    title: 'Expense Updated',
-    message: amountChanged
-      ? `${expenseData.name} updated from ${formatNumber(expenseData.oldAmount || 0)} to ${formatNumber(expenseData.amount)} Birr.`
-      : `${expenseData.name} has been updated.`,
-    icon: 'receipt',
-    deepLink: `/expense/expense-details/${expenseData.id}`,
-    data: {
-      expenseId: expenseData.id,
-      name: expenseData.name,
-      amount: expenseData.amount,
-      category: expenseData.category,
-      oldAmount: expenseData.oldAmount,
-      titleKey: 'notif.title.expense_edited',
-      messageKey: amountChanged ? 'notif.message.expense_edited_with_amount' : 'notif.message.expense_edited',
-    },
-    groupKey: `expense-edit-${expenseData.id}-${Date.now()}`,
-  });
-};
-
-export const notifyExpenseDeleted = (expenseData: {
-  name: string;
-  amount: number;
-  category: string;
-}): AppNotification | null => {
-  return createNotification({
-    type: 'expense_deleted',
-    category: 'expense',
-    priority: 'low',
-    title: 'Expense Deleted',
-    message: `${expenseData.name} (${formatNumber(expenseData.amount)} Birr) has been removed.`,
-    icon: 'wallet',
-    data: {
-      name: expenseData.name,
-      amount: expenseData.amount,
-      category: expenseData.category,
-      amountStr: formatNumber(expenseData.amount),
-      titleKey: 'notif.title.expense_deleted',
-      messageKey: 'notif.message.expense_deleted',
-    },
-    groupKey: `expense-delete-${Date.now()}`,
-  });
-};
-
-export const notifyLargeExpense = (expenseData: {
-  id: number;
-  name: string;
-  amount: number;
-  category: string;
-  threshold: number;
-}): AppNotification | null => {
-  return createNotification({
-    type: 'large_expense',
-    category: 'expense',
-    priority: 'high',
-    title: 'Large Expense Recorded',
-    message: `${expenseData.name} (${formatNumber(expenseData.amount)} Birr) exceeds your ${formatNumber(expenseData.threshold)} Birr large-expense threshold.`,
-    icon: 'alert-triangle',
-    deepLink: `/expense/expense-details/${expenseData.id}`,
-    data: {
-      expenseId: expenseData.id,
-      name: expenseData.name,
-      amount: expenseData.amount,
-      category: expenseData.category,
-      threshold: expenseData.threshold,
-      titleKey: 'notif.title.large_expense',
-      messageKey: 'notif.message.large_expense',
-    },
-    groupKey: `large-expense-${expenseData.id}`,
-    requiresAction: false,
-  });
-};
-
-export const notifyExpensePushedBudgetOverLimit = (data: {
-  expenseId: number;
-  expenseName: string;
-  categoryName: string;
-  budgetName: string;
-  budgetId: number;
-  excess: number;
-}): AppNotification | null => {
-  return createNotification({
-    type: 'expense_budget_exceeded',
-    category: 'expense',
-    priority: 'critical',
-    title: 'Budget Exceeded by Expense',
-    message: `${data.expenseName} pushed the ${data.categoryName} budget (${data.budgetName}) over its limit by ${formatNumber(data.excess)} ETB.`,
-    icon: 'alert-triangle',
-    deepLink: '/(tabs)/budget',
-    data: {
-      expenseId: data.expenseId,
-      expenseName: data.expenseName,
-      categoryName: data.categoryName,
-      budgetName: data.budgetName,
-      budgetId: data.budgetId,
-      excess: data.excess,
-      titleKey: 'notif.title.expense_pushed_over_budget',
-      messageKey: 'notif.message.expense_pushed_over_budget',
-    },
-    groupKey: `expense-budget-${data.expenseId}`,
-    requiresAction: true,
-  });
-};
-
-export const notifyExpenseOrphaned = (expenseData: {
-  id: number;
-  name: string;
-  amount: number;
-  category: string;
-}): AppNotification | null => {
-  return createNotification({
-    type: 'expense_orphaned',
-    category: 'expense',
-    priority: 'normal',
-    title: 'Unlinked Expense',
-    message: `${expenseData.name} (${formatNumber(expenseData.amount)} Birr) could not be automatically linked to a budget. Please assign a budget category.`,
-    icon: 'receipt',
-    deepLink: `/expense/expense-details/${expenseData.id}`,
-    data: {
-      expenseId: expenseData.id,
-      name: expenseData.name,
-      amount: expenseData.amount,
-      category: expenseData.category,
-      titleKey: 'notif.title.expense_orphaned',
-      messageKey: 'notif.message.expense_orphaned',
-    },
-    groupKey: `expense-orphan-${expenseData.id}`,
-    requiresAction: true,
-  });
-};
-
-// â”€â”€ Recurring Expense Triggers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-export const checkRecurringDueTomorrow = (): AppNotification[] => {
-  try {
-    const due = getRecurringExpensesDueTomorrow();
-    return due.map((exp: any) =>
-      createNotification({
-        type: 'recurring_due_tomorrow',
-        category: 'recurring',
-        priority: 'normal',
-        title: 'Recurring Expense Due Tomorrow',
-        message: `${exp.name} (${exp.frequency || 'Recurring'}) is due tomorrow.`,
-        icon: 'calendar',
-        deepLink: `/expense/expense-details/${exp.id}`,
-        data: {
-          expenseId: exp.id,
-          name: exp.name,
-          frequency: exp.frequency || 'Recurring',
-          amount: exp.amount,
-          titleKey: 'notif.title.recurring_due_tomorrow',
-          messageKey: 'notif.message.recurring_due_tomorrow',
-        },
-        groupKey: `recurring-tomorrow-${exp.id}`,
-      }),
-    ).filter((n): n is AppNotification => n !== null);
-  } catch (e) {
-    console.error('checkRecurringDueTomorrow error:', e);
-    return [];
-  }
-};
-
-export const notifyRecurringMarkedPaid = (data: {
-  id: number;
-  name: string;
-  amount: number;
-  nextBillingDate?: string;
-}): AppNotification | null => {
-  return createNotification({
-    type: 'recurring_paid',
-    category: 'recurring',
-    priority: 'low',
-    title: 'Recurring Expense Paid',
-    message: `${data.name} (${formatNumber(data.amount)} Birr) has been marked as paid.`,
-    icon: 'check-circle',
-    deepLink: `/expense/expense-details/${data.id}`,
-    data: {
-      expenseId: data.id,
-      name: data.name,
-      amount: data.amount,
-      nextBillingDate: data.nextBillingDate,
-      titleKey: 'notif.title.recurring_paid',
-      messageKey: 'notif.message.recurring_paid',
-    },
-    groupKey: `recurring-paid-${data.id}`,
-  });
-};
-
-export const notifyRecurringSkipped = (data: {
-  id: number;
-  name: string;
-  amount: number;
-}): AppNotification | null => {
-  return createNotification({
-    type: 'recurring_skipped',
-    category: 'recurring',
-    priority: 'low',
-    title: 'Recurring Expense Skipped',
-    message: `${data.name} (${formatNumber(data.amount)} Birr) has been skipped.`,
-    icon: 'repeat',
-    deepLink: `/expense/expense-details/${data.id}`,
-    data: {
-      expenseId: data.id,
-      name: data.name,
-      amount: data.amount,
-      titleKey: 'notif.title.recurring_skipped',
-      messageKey: 'notif.message.recurring_skipped',
-    },
-    groupKey: `recurring-skip-${data.id}`,
-  });
-};
-
-export const notifyRecurringTemplateExpired = (data: {
-  id: number;
-  name: string;
-  endDate: string;
-}): AppNotification | null => {
-  return createNotification({
-    type: 'recurring_template_expired',
-    category: 'recurring',
-    priority: 'normal',
-    title: 'Recurring Template Expired',
-    message: `The recurring template "${data.name}" has expired (ended ${data.endDate}).`,
-    icon: 'clock',
-    data: {
-      templateId: data.id,
-      name: data.name,
-      endDate: data.endDate,
-      titleKey: 'notif.title.recurring_template_expired',
-      messageKey: 'notif.message.recurring_template_expired',
-    },
-    groupKey: `recurring-expired-${data.id}`,
-    requiresAction: false,
-  });
-};
-
-export const checkExpiredTemplates = (): AppNotification[] => {
-  try {
-    const templates = getRecurringTemplates(true);
-    const now = new Date().toISOString().split('T')[0];
-    const created: AppNotification[] = [];
-    for (const t of templates as any[]) {
-      if (t.endDate && t.endDate <= now) {
-        const n = notifyRecurringTemplateExpired({
-          id: t.id,
-          name: t.name,
-          endDate: t.endDate,
-        });
-        if (n) created.push(n);
-      }
-    }
-    return created;
-  } catch (e) {
-    console.error('checkExpiredTemplates error:', e);
-    return [];
-  }
-};
-
-// â”€â”€ Reminder Triggers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-export const notifyWeeklySpendingSummary = (data: {
-  totalSpent: number;
-  totalBudget: number;
-  budgetCount: number;
-  topCategory: string;
-  topCategoryAmount: number;
-}): AppNotification | null => {
-  return createNotification({
-    type: 'weekly_summary',
-    category: 'reminder',
-    priority: 'low',
-    title: 'Weekly Spending Summary',
-    message: `You spent ${formatNumber(data.totalSpent)} ETB this week across ${data.budgetCount} budget${data.budgetCount !== 1 ? 's' : ''}. Top category: ${data.topCategory} (${formatNumber(data.topCategoryAmount)} ETB).`,
-    icon: 'receipt',
-    deepLink: '/(tabs)/expense',
-    data: {
-      totalSpent: data.totalSpent,
-      totalBudget: data.totalBudget,
-      budgetCount: data.budgetCount,
-      topCategory: data.topCategory,
-      topCategoryAmount: data.topCategoryAmount,
-      titleKey: 'notif.title.weekly_summary',
-      messageKey: 'notif.message.weekly_summary',
-    },
-    groupKey: `weekly-summary-${Date.now()}`,
-  });
-};
-
-export const notifyMonthlySpendingSummary = (data: {
-  year: number;
-  month: number;
-  totalSpent: number;
-  totalBudget: number;
-  percentUsed: number;
-  budgetCount: number;
-  topCategory: string;
-  topCategoryAmount: number;
-}): AppNotification | null => {
-  return createNotification({
-    type: 'monthly_summary',
-    category: 'reminder',
-    priority: 'low',
-    title: 'Monthly Spending Summary',
-    message: `${data.month}/${data.year}: Spent ${formatNumber(data.totalSpent)} ETB of ${formatNumber(data.totalBudget)} ETB (${data.percentUsed}%) across ${data.budgetCount} budget${data.budgetCount !== 1 ? 's' : ''}.`,
-    icon: 'receipt',
-    deepLink: '/(tabs)/budget',
-    data: {
-      year: data.year,
-      month: data.month,
-      totalSpent: data.totalSpent,
-      totalBudget: data.totalBudget,
-      percentUsed: data.percentUsed,
-      budgetCount: data.budgetCount,
-      topCategory: data.topCategory,
-      topCategoryAmount: data.topCategoryAmount,
-      titleKey: 'notif.title.monthly_summary',
-      messageKey: 'notif.message.monthly_summary',
-    },
-    groupKey: `monthly-summary-${data.year}-${data.month}`,
-  });
-};
-
-export const notifyBudgetReviewReminder = (data: {
-  year: number;
-  month: number;
-  budgetName: string;
-  remaining: number;
-  percentUsed: number;
-}): AppNotification | null => {
-  return createNotification({
-    type: 'budget_review_reminder',
-    category: 'reminder',
-    priority: 'normal',
-    title: 'Budget Review Reminder',
-    message: `Review your "${data.budgetName}" budget for ${data.month}/${data.year}. You have ${formatNumber(data.remaining)} ETB remaining (${data.percentUsed}% used).`,
-    icon: 'bell',
-    deepLink: '/(tabs)/budget',
-    data: {
-      year: data.year,
-      month: data.month,
-      budgetName: data.budgetName,
-      name: data.budgetName,
-      remaining: data.remaining,
-      percentUsed: data.percentUsed,
-      titleKey: 'notif.title.budget_review_reminder',
-      messageKey: 'notif.message.budget_review_reminder',
-    },
-    groupKey: `budget-review-${data.year}-${data.month}`,
-    requiresAction: false,
-  });
-};
-
-// â”€â”€ Master "run all" trigger used at app start / on refresh â”€â”€â”€â”€â”€â”€â”€â”€
+// ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ Master "run all" trigger used at app start / on refresh ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬
 
 export interface NotificationGate {
   stock?: boolean;
@@ -1365,40 +514,17 @@ export interface NotificationGate {
   daily?: boolean;
   credit?: boolean;
   debt?: boolean;
-  budget?: boolean;
-  budgetStatus?: boolean;
-  expense?: boolean;
-  largeExpense?: boolean;
-  recurring?: boolean;
-  weeklySummary?: boolean;
-  monthlySummary?: boolean;
 }
 
-export const runAllNotificationChecks = (settings?: NotificationGate): AppNotification[] => {
+export const runAllNotificationChecks = (settings?: NotificationGate, customersEnabled?: boolean): AppNotification[] => {
   const all: AppNotification[] = [];
-  try { expireOverdueBudgets(); } catch (e) { console.error('expireOverdueBudgets in runAllNotificationChecks error:', e); }
   if (settings?.stock !== false) all.push(...checkLowStock());
   if (settings?.expiration !== false) all.push(...checkExpiringItems());
-  if (settings?.debt !== false) all.push(...checkOutstandingDebts());
+  if (settings?.debt !== false && customersEnabled !== false) all.push(...checkOutstandingDebts());
   if (settings?.credit !== false) {
     all.push(...checkUnpaidSuppliers());
     all.push(...checkSupplierPriceChanges());
     all.push(...checkSupplierPeriodicReview());
-  }
-  if (settings?.expense !== false) all.push(...checkOverdueExpenses());
-  if (settings?.recurring !== false) {
-    all.push(...checkRecurringExpenses());
-    all.push(...checkRecurringDueTomorrow());
-    all.push(...checkExpiredTemplates());
-  }
-  if (settings?.budget !== false) {
-    all.push(...checkBudgetThresholds());
-  }
-  if (settings?.budgetStatus !== false) {
-    all.push(...checkExpiredBudgets());
-    all.push(...checkEndingBudgets());
-    all.push(...checkNoActiveBudget());
-    all.push(...checkInactiveBudgetCategories());
   }
   return all;
 };
@@ -1409,16 +535,13 @@ export const getDashboardAlertSummary = () => {
   const lowStock = low.filter((i: any) => Number(i.totalBaseQuantity) > 0);
   const debts = getDebtCustomers();
   const supplierCredit = getOnCreditItems();
-  const overdue = getOverdueExpenses();
-  const recurring = getRecurringExpensesDueToday();
   const expiring = getExpiringItems(30);
   const supplierPriceChanges = getItemsWithRecentPriceChanges(7);
   const supplierReviewDue = getItemsDueForSupplierCheck(7);
 
   const totalAlerts =
     outOfStock.length + lowStock.length + debts.length + supplierCredit.length +
-    overdue.length + recurring.length + expiring.length +
-    supplierPriceChanges.length + supplierReviewDue.length;
+    expiring.length + supplierPriceChanges.length + supplierReviewDue.length;
 
   return {
     totalAlerts,
@@ -1426,8 +549,6 @@ export const getDashboardAlertSummary = () => {
     lowStock: lowStock.length,
     debts: debts.length,
     supplierCredit: supplierCredit.length,
-    overdue: overdue.length,
-    recurring: recurring.length,
     expiring: expiring.length,
     supplierPriceChanges: supplierPriceChanges.length,
     supplierReviewDue: supplierReviewDue.length,

@@ -11,8 +11,12 @@ export default function LoginRoute() {
 }
 
 // After a successful login, route based on subscription + license status.
+// A server-backed pairing request that needs resuming takes priority, so a
+// joiner who restarted mid-request drops straight back into the wait/approval
+// screen instead of the dashboard.
 async function handlePostAuth() {
-  const { resolvePostAuthRoute } = await import('../src/services/postAuthRouter');
-  const target = await resolvePostAuthRoute();
+  const { resolvePostAuthRoute, resolveJoinResume } = await import('../src/services/postAuthRouter');
+  const resumeRoute = await resolveJoinResume();
+  const target = resumeRoute ?? (await resolvePostAuthRoute());
   router.replace(target as never);
 }

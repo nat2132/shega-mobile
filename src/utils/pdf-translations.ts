@@ -63,20 +63,17 @@ export interface PDFTranslations {
   reports: {
     salesTitle: string;
     stockTitle: string;
-    expenseTitle: string;
     plTitle: string;
     productTitle: string;
     period: string;
     dateGenerated: string;
     summary: string;
     inflow: string;
-    outflow: string;
     netProfit: string;
     netLoss: string;
     revenue: string;
     cost: string;
     grossProfit: string;
-    expenses: string;
     valuation: string;
     assets: string;
     lowStock: string;
@@ -109,7 +106,6 @@ export interface PDFTranslations {
     activeTracking: string;
     grossSalesInflow: string;
     directCost: string;
-    operationalExpenses: string;
     brandCompany: string;
   };
   common: {
@@ -197,20 +193,17 @@ export const pdfTranslations: Record<'en' | 'am' | 'om' | 'ti', PDFTranslations>
     reports: {
       salesTitle: "Sales Performance Report",
       stockTitle: "Stock Valuation & Health Report",
-      expenseTitle: "Operational Expense Report",
       plTitle: "Profit & Loss (P&L) Statement",
       productTitle: "Full Product Catalog List",
       period: "Report Period",
       dateGenerated: "Date Generated",
       summary: "Performance Indicators",
       inflow: "Total Revenue",
-      outflow: "Total Expenses",
       netProfit: "Net profit",
       netLoss: "Net Loss",
       revenue: "Sales Revenue",
       cost: "Cost of Goods Sold (COGS)",
       grossProfit: "Gross Profit Margin",
-      expenses: "Operating Expenses",
       valuation: "Total Inventory Value",
       assets: "Total Unique Products",
       lowStock: "Low Stock Deficit Items",
@@ -243,7 +236,6 @@ export const pdfTranslations: Record<'en' | 'am' | 'om' | 'ti', PDFTranslations>
       activeTracking: "Active sales tracking",
       grossSalesInflow: "Gross Sales Inflow",
       directCost: "Direct Cost of Inventory Sold",
-      operationalExpenses: "Operational & Recurring Expenses",
       brandCompany: "Brand / Company"
     },
     common: {
@@ -329,20 +321,17 @@ export const pdfTranslations: Record<'en' | 'am' | 'om' | 'ti', PDFTranslations>
     reports: {
       salesTitle: "የሽያጭ አፈፃፀም ሪፖርት",
       stockTitle: "የክምችት ግምገማና ጤና ሪፖርት",
-      expenseTitle: "የአሠራር ወጪ ሪፖርት",
       plTitle: "የትርፍና ኪሳራ (P&L) መግለጫ",
       productTitle: "የምርቶች ዝርዝር ማውጫ",
       period: "የሪፖርት ጊዜ",
       dateGenerated: "ሪፖርቱ የወጣበት ቀን",
       summary: "አጠቃላይ የአፈጻጸም አመልካቾች",
       inflow: "ጠቅላላ ገቢ",
-      outflow: "ጠቅላላ ወጪ",
       netProfit: "የተጣራ ትርፍ",
       netLoss: "የተጣራ ኪሳራ",
       revenue: "የሽያጭ ገቢ",
       cost: "የተሸጡ ዕቃዎች ዋጋ (COGS)",
       grossProfit: "አጠቃላይ ትርፍ",
-      expenses: "የአሠራር ወጪዎች",
       valuation: "ጠቅላላ የክምችት ዋጋ",
       assets: "ልዩ የሆኑ ምርቶች ብዛት",
       lowStock: "ማስጠንቀቂያ ላይ ያሉ ምርቶች",
@@ -375,7 +364,6 @@ export const pdfTranslations: Record<'en' | 'am' | 'om' | 'ti', PDFTranslations>
       activeTracking: "ንቁ ሽያጭ ተከታታይ",
       grossSalesInflow: "ጠቅላላ የሽያጭ ገቢ",
       directCost: "የተሸጠ ክምችት ቀጥታ ዋጋ",
-      operationalExpenses: "የአሠራር እና ደጋሚ ወጪዎች",
       brandCompany: "ብራንድ / ኩባንያ"
     },
     common: {
@@ -461,20 +449,17 @@ export const pdfTranslations: Record<'en' | 'am' | 'om' | 'ti', PDFTranslations>
     reports: {
       salesTitle: "Gabaasa Raawwii Gurgurtaa",
       stockTitle: "Gabaasa Gatii fi Fayyummaa Kuusaa",
-      expenseTitle: "Gabaasa Baasii Hojii",
       plTitle: "Ibsa Bu'aa fi Kisaaraa (P&L)",
       productTitle: "Tarree Meeshaalee Guutuu",
       period: "Barbaadame",
       dateGenerated: "Guyyaa Qophaa'e",
       summary: "Agarsiiftuu Hojii Waliigalaa",
       inflow: "Gali Waliigalaa",
-      outflow: "Baasii Waliigalaa",
       netProfit: "Bu'aa Qulqulluu",
       netLoss: "Kisaaraa Qulqulluu",
       revenue: "Gali Gurgurtaa",
       cost: "Gatii Meeshaalee Gurguraman (COGS)",
       grossProfit: "Bu'aa Waliigalaa",
-      expenses: "Baasii Hojii Waliigalaa",
       valuation: "Gatii Kuusaa Waliigalaa",
       assets: "Meeshaalee Addaa",
       lowStock: "Meeshaalee Kuusaa Hir'atan",
@@ -485,7 +470,7 @@ export const pdfTranslations: Record<'en' | 'am' | 'om' | 'ti', PDFTranslations>
       category: "Ramaddii",
       status: "Haala",
       date: "Guyyaa Hojii",
-      description: "Ibsa Baasii",
+      description: "Ibsa",
       amount: "Maallaqa",
       total: "Dimshaash Waliigalaa",
       powered: "Shega Mobile kanaan kan qophaaye",
@@ -507,7 +492,6 @@ export const pdfTranslations: Record<'en' | 'am' | 'om' | 'ti', PDFTranslations>
       activeTracking: "Gurgurtaan nagaan guyyaa",
       grossSalesInflow: "Gali Gurgurtaa Guutuu",
       directCost: "Gatii Kuusaa Bitame Dachaa",
-      operationalExpenses: "Baasii Hojii fi Baasii Dhuunfaa",
       brandCompany: "Biraandii / Kampanii"
     },
     common: {
@@ -593,20 +577,17 @@ export const pdfTranslations: Record<'en' | 'am' | 'om' | 'ti', PDFTranslations>
     reports: {
       salesTitle: "ናይ መሻይጥ አፈፃፅማ ሪፖርት",
       stockTitle: "ናይ ክምችት ገምጋምን ጥዕናን ሪፖርት",
-      expenseTitle: "ናይ ስራሕ ወፃኢ ሪፖርት",
       plTitle: "ናይ መኽሰብን ክሳራን (P&L) መግለፂ",
       productTitle: "ናይ ፍርያት ዝርዝር መውፅኢ",
       period: "ናይ ሪፖርት እዋን",
       dateGenerated: "ሪፖርት ዝተዳለወሉ ዕለት",
       summary: "ሓፈሻዊ ናይ ስራሕ መርኣይታት",
       inflow: "ጠቕላላ እቶት",
-      outflow: "ጠቕላላ ወፃኢ",
       netProfit: "ዝተፃረየ መኽሰብ",
       netLoss: "ዝተፃረየ ክሳራ",
       revenue: "ናይ መሻይጥ እቶት",
       cost: "ዝተሸጡ ኣቑሑት ዋጋ (COGS)",
       grossProfit: "ሓፈሻዊ መኽሰብ",
-      expenses: "ናይ ስራሕ ወፃኢታት",
       valuation: "ጠቕላላ ናይ ክምችት ዋጋ",
       assets: "ፍሉይ ፍርያት ብዝሒ",
       lowStock: "ውሑድ ክምችት ዘለዎም ፍርያት",
@@ -639,7 +620,6 @@ export const pdfTranslations: Record<'en' | 'am' | 'om' | 'ti', PDFTranslations>
       activeTracking: "ንቁ መሻይጥ ተከታይ",
       grossSalesInflow: "ሓፈሻዊ እቶት መሻይጥ",
       directCost: "ናይ ዝተወሰኸ ክምችት ቀጥታ ዋጋ",
-      operationalExpenses: "ናይ ስራሕ ወፃኢን ዝቕልል ወፃኢታትን",
       brandCompany: "ብራንድ / ኩባንያ"
     },
     common: {

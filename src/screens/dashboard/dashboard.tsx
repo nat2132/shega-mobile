@@ -1,5 +1,7 @@
 import { DashboardAlerts } from '@/components/DashboardAlerts';
 import { NotificationBell } from '@/components/NotificationBell';
+import { BusinessSwitcher } from '@/components/BusinessSwitcher';
+import { UserAvatar } from '@/components/UserAvatar';
 import SaleSuccessModal from '@/components/SaleSuccessModal';
 import PremiumTrialBanner from '@/components/PremiumTrialBanner';
 import { useSubscription } from '@/context/SubscriptionContext';
@@ -21,6 +23,7 @@ import {
   TrendingDown,
   TrendingUp,
   X,
+  Trash2,
   Zap
 } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -37,8 +40,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import AdjustmentDetailsScreen from '../adjustement/adjustment-details';
-import ExpenseDetailsScreen from '../expense/expense-details';
 import AddAssetFlow from '../inventory/inventroy-form';
 import PendingSales from '../sales/pending';
 import NewSaleScreen from '../sales/new-sale';
@@ -66,9 +67,10 @@ import { useSidebar } from '@/context/SidebarContext';
 import { useTutorial, TutorialScrollView, TutorialTarget, TutorialButton } from '@/tutorials';
 import { dashboardTutorial } from '@/tutorials/definitions';
 import { useWarehouse } from '@/context/WarehouseContext';
-import { getActivityFeed, getAdjustmentById, getDashboardStats, getDebtCustomers, getExpenseById, getInventoryStats, getLowStockItems, getOnCreditItems, getQuickProducts, getRecentItems, getSaleWithItemsById, getBudgetsOverBudget, ItemData } from '@/database/db';
+import { getActivityFeed, getDashboardStats, getDebtCustomers, getInventoryStats, getLowStockItems, getOnCreditItems, getQuickProducts, getRecentItems, getSaleWithItemsById, ItemData } from '@/database/db';
 import { useBusinessAssistant } from '@/hooks/useBusinessAssistant';
 import { useBusinessHealthScore } from '@/hooks/useBusinessHealthScore';
+import { useDataChangedRefresh } from '@/hooks/useDataChangedRefresh';
 import { useEnsureOwnerBusiness } from '@/hooks/useEnsureOwnerBusiness';
 import { useAutoHideScroll } from '@/hooks/useAutoHideScroll';
 import { useNotifications } from '@/hooks/useNotifications';
@@ -203,8 +205,6 @@ SparklineChart.displayName = 'SparklineChart';
     const [activeModal, setActiveModal] = useState<string | null>(null);
     const [showSalesRecord, setShowSalesRecord] = useState(false);
     const [selectedSale, setSelectedSale] = useState<any>(null);
-    const [selectedExpense, setSelectedExpense] = useState<any>(null);
-    const [selectedAdjustment, setSelectedAdjustment] = useState<any>(null);
 
     const [showSearch, setShowSearch] = useState(false);
     const [lastSaleData, setLastSaleData] = useState<any>(null);
@@ -226,7 +226,6 @@ SparklineChart.displayName = 'SparklineChart';
     const [debtCustomersCount, setDebtCustomersCount] = useState(0);
     const [creditItemsCount, setCreditItemsCount] = useState(0);
     const [lowStockCount, setLowStockCount] = useState(0);
-    const [overBudgetBudgets, setOverBudgetBudgets] = useState<any[]>([]);
     const [refreshing, setRefreshing] = useState(false);
     const [showActivityLedger, setShowActivityLedger] = useState(false);
     const [showUniversalSearch, setShowUniversalSearch] = useState(false);
@@ -272,11 +271,12 @@ SparklineChart.displayName = 'SparklineChart';
     if (lowStock.length > 0) {
       playBad();
     }
-    setOverBudgetBudgets(getBudgetsOverBudget());
     refreshHealth();
     refreshAssistant();
     refreshTrialDays();
   }, [activeWarehouseId, refreshHealth, refreshAssistant, refreshTrialDays]);
+
+  useDataChangedRefresh(loadDashboardData);
 
   const addToPendingSales = React.useCallback((item: any) => {
     setPendingSales((prev) => {
@@ -428,7 +428,6 @@ SparklineChart.displayName = 'SparklineChart';
   // Helper to render activity items
   const renderActivityItem = (activity: any) => {
     const isSale = activity.category === 'sale';
-    const isExpense = activity.category === 'expense';
     const isAdjustment = activity.category === 'adjustment';
     const isInventory = activity.category === 'inventory';
 
@@ -439,7 +438,6 @@ SparklineChart.displayName = 'SparklineChart';
 
     if (isSale) {
       const paymentStatus = activity.paymentStatus || 'Paid';
-      const isOrder = paymentStatus === 'Order';
       const isDebt = paymentStatus === 'Debt';
       const isCancelled = paymentStatus === 'Cancelled';
       const isPayment = (typeof activity.value === 'number' && activity.value < 0) || (activity.batchId && String(activity.batchId).startsWith('PAY_'));
@@ -450,16 +448,11 @@ SparklineChart.displayName = 'SparklineChart';
         prefix = '+';
       } else {
         Icon = isCancelled ? AlertTriangle : ShoppingBag;
-        iconBg = isCancelled ? colors.error : (isOrder ? colors.primary : (isDebt ? colors.warning : colors.success));
-        const statusLabel = isCancelled ? t('sale.cancelled') : (isOrder ? t('dashboard.order') : (isDebt ? t('sale.credit') : t('dashboard.activity.sold')));
+        iconBg = isCancelled ? colors.error : (isDebt ? colors.warning : colors.success);
+        const statusLabel = isCancelled ? t('sale.cancelled') : (isDebt ? t('sale.credit') : t('dashboard.activity.sold'));
         label = `${activity.quantity || 0} ${statusLabel}`;
         prefix = isCancelled ? '' : '+';
       }
-    } else if (isExpense) {
-      Icon = TrendingDown;
-      iconBg = colors.error;
-      label = activity.expenseCategory || t('expense.not_recurring');
-      prefix = '-';
     } else if (isAdjustment) {
       const adjType = activity.adjType || activity.type;
       if (adjType === 'price_up') {
@@ -483,18 +476,21 @@ SparklineChart.displayName = 'SparklineChart';
       iconBg = colors.primary;
       label = `${activity.quantity || 0} ${t('dashboard.activity.added')}`;
       prefix = '+';
+    } else if (activity.category === 'deletion' || activity.type === 'deletion') {
+      Icon = Trash2;
+      iconBg = colors.error;
+      label = t('activity.deleted_item');
+      prefix = '';
     }
 
     // Name: use customerName for sales, fallback to item label
     const activityName = isSale
       ? (activity.customerName || t('sales.walk_in_customer'))
-      : (activity.name || activity.label || (isExpense ? t('expense.header') : (isAdjustment ? t('adjustment.header') : t('inventory.header'))));
+      : (activity.name || activity.label || (isAdjustment ? t('adjustment.header') : t('inventory.header')));
     
     // Amount color based on type
     let amtColor: string | undefined = undefined;
-    if (isExpense) {
-      amtColor = colors.error;
-    } else if (isAdjustment) {
+    if (isAdjustment) {
       const adjType = activity.adjType || activity.type;
       if (adjType === 'damaged' || adjType === 'price_down') amtColor = colors.error;
       else if (adjType === 'price_up') amtColor = colors.success;
@@ -530,12 +526,6 @@ SparklineChart.displayName = 'SparklineChart';
           if (isSale) {
             const sale = getSaleWithItemsById(activity.id);
             if (sale) setSelectedSale(sale);
-          } else if (isExpense) {
-            const expense = getExpenseById(activity.id);
-            if (expense) setSelectedExpense(expense);
-          } else if (isAdjustment) {
-            const adj = getAdjustmentById(activity.id);
-            if (adj) setSelectedAdjustment(adj);
           }
         }}
       >
@@ -544,14 +534,24 @@ SparklineChart.displayName = 'SparklineChart';
         </View>
 
         <View style={styles.activityInfo}>
-          <AppText
-            style={styles.activityName}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.6}
-          >
-            {activityName}
-          </AppText>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <AppText
+              style={styles.activityName}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.6}
+            >
+              {activityName}
+            </AppText>
+            {activity.userName ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 6 }}>
+                <UserAvatar name={activity.userName} avatarUri={activity.userAvatar} size={16} />
+                <AppText variant="body-sm" weight="semibold" style={{ color: colors.primary, marginLeft: 3 }} numberOfLines={1}>
+                  {activity.userName}
+                </AppText>
+              </View>
+            ) : null}
+          </View>
           <AppText variant="body-sm" weight="medium" style={styles.activityMeta} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{label}</AppText>
         </View>
 
@@ -596,17 +596,10 @@ SparklineChart.displayName = 'SparklineChart';
       yesterdayValue: metrics.yesterday.salesCount,
       isCount: true,
     },
-    { 
-      label: t('dashboard.stats.expense'), 
-      todayValue: metrics.today.expenses,
-      yesterdayValue: metrics.yesterday.expenses,
-      isCurrency: true,
-    },
   ] : [
     { label: t('dashboard.stats.gross_profit'), todayValue: 0, yesterdayValue: 0, isCurrency: true },
     { label: t('dashboard.stats.revenue'), todayValue: 0, yesterdayValue: 0, isCurrency: true },
     { label: t('dashboard.stats.sales_count'), todayValue: 0, yesterdayValue: 0, isCount: true },
-    { label: t('dashboard.stats.expense'), todayValue: 0, yesterdayValue: 0, isCurrency: true },
   ];
 
   const handleNextMetric = () => {
@@ -670,6 +663,9 @@ SparklineChart.displayName = 'SparklineChart';
                 <AppText variant="body-sm" weight="medium" style={styles.dateLabel} numberOfLines={1}>
                   {formatDate(new Date(), calendarType, language)}
                 </AppText>
+                <View style={{ marginTop: 8 }}>
+                  <BusinessSwitcher />
+                </View>
               </View>
               
               <View style={styles.headerActions}>
@@ -723,42 +719,6 @@ SparklineChart.displayName = 'SparklineChart';
             <View style={{ paddingHorizontal: DASH_SPACING.gutter }}>
               <DashboardAlerts />
             </View>
-          )}
-
-          {/* Over Budget Alert - budgets that have exceeded their limit */}
-          {overBudgetBudgets.length > 0 && (
-            <Animated.View entering={FadeInDown.delay(100).springify().damping(20).stiffness(150)} style={{ paddingHorizontal: DASH_SPACING.gutter, marginBottom: 16 }}>
-              <View style={styles.overBudgetTitleRow}>
-                <AlertTriangle size={15} color={colors.error} />
-                <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.overBudgetTitle, { color: colors.error }]} numberOfLines={1}>
-                  {t('budget.over_budget_alert_title')}
-                </AppText>
-              </View>
-              {overBudgetBudgets.map((b: any) => (
-                <TouchableOpacity
-                  key={b.budgetId}
-                  style={[styles.overBudgetCard, { backgroundColor: colors.error + '12', borderColor: colors.error + '45' }]}
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    router.push('/(tabs)/budget' as any);
-                  }}
-                >
-                  <View style={{ flex: 1, marginRight: 12 }}>
-                    <AppText variant="body-sm" weight="bold" style={{ color: colors.text }} numberOfLines={1}>{b.budgetName}</AppText>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2, flexWrap: 'wrap' }}>
-                      <AppText variant="caption" weight="bold" style={{ color: colors.error }} numberOfLines={1}>
-                        {t('budget.over_by')}
-                      </AppText>
-                      <AppNumber value={Math.abs(b.remaining)} size="body-sm" prefix={` ${t('common.etb')} `} />
-                    </View>
-                  </View>
-                  <View style={[styles.overBudgetRemaining, { backgroundColor: colors.error + '18' }]}>
-                    <AppNumber value={b.remaining} size="body" prefix={`${t('common.etb')} `} />
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </Animated.View>
           )}
 
           {/* Business Health Score */}
@@ -1060,30 +1020,6 @@ SparklineChart.displayName = 'SparklineChart';
         </TouchableOpacity>
       </Modal>
 
-      <Modal visible={!!selectedExpense} transparent animationType="slide">
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setSelectedExpense(null)}>
-          <View style={styles.modalBackdrop} />
-          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
-            <Animated.View entering={FadeInUp} style={[styles.bottomSheetContainer, { backgroundColor: colors.background, height: Dimensions.get('window').height * 0.85 }]}>
-               <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
-               {selectedExpense && <ExpenseDetailsScreen expense={selectedExpense} onClose={() => { setSelectedExpense(null); loadDashboardData(); }} />}
-            </Animated.View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
-      <Modal visible={!!selectedAdjustment} transparent animationType="slide">
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setSelectedAdjustment(null)}>
-          <View style={styles.modalBackdrop} />
-          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
-            <Animated.View entering={FadeInUp} style={[styles.bottomSheetContainer, { backgroundColor: colors.background, height: Dimensions.get('window').height * 0.85 }]}>
-               <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: colors.border }]} /></View>
-               {selectedAdjustment && <AdjustmentDetailsScreen adjustment={selectedAdjustment} onClose={() => setSelectedAdjustment(null)} onRefresh={() => { setSelectedAdjustment(null); loadDashboardData(); }} />}
-            </Animated.View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
       <Modal visible={showSearch} transparent animationType="slide" onRequestClose={() => setShowSearch(false)}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -1375,22 +1311,10 @@ SparklineChart.displayName = 'SparklineChart';
             case 'sale':
               setSelectedSale(data);
               break;
-            case 'expense':
-              setSelectedExpense(data);
-              break;
-            case 'adjustment':
-              setSelectedAdjustment(data);
-              break;
             case 'item':
             case 'category':
-              router.push('/inventory');
-              break;
-            case 'budget':
-              router.push('/budget');
-              break;
             case 'warehouse':
-            case 'contact':
-              router.push('/contacts');
+              router.push('/inventory');
               break;
             default:
               break;
@@ -1460,28 +1384,6 @@ const createStyles = (G: any) => StyleSheet.create({
   },
   searchPlaceholder: {
     flex: 1,
-  },
-  overBudgetTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 8,
-  },
-  overBudgetTitle: {
-    letterSpacing: 1,
-  },
-  overBudgetCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 14,
-    marginBottom: 8,
-  },
-  overBudgetRemaining: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
   },
   greetingLabel: {
     fontFamily: Fonts.medium,

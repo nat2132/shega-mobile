@@ -376,6 +376,40 @@ export const loginUser = (payload: {
   request('/api/auth/login/', { method: 'POST', body: payload });
 
 // ---------------------------------------------------------------------------
+// Multi-business membership (same person across businesses + devices)
+// ---------------------------------------------------------------------------
+
+/** A business the logged-in account owns or belongs to (backend membership). */
+export interface RemoteMembership {
+  id: number;
+  user_id: number;
+  user_name: string;
+  user_email: string;
+  business_id: number;
+  business_name: string;
+  role: string;
+  permissions?: Record<string, unknown>;
+  status: string;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface MyMembershipsResponse {
+  owned: AccountUser[];
+  memberships: RemoteMembership[];
+}
+
+/**
+ * The businesses the authenticated person may operate (owned + memberships).
+ * This is the identity anchor for "sign in on a second device → select your
+ * existing business" — the SAME person reuses their existing membership instead
+ * of a new per-device owner business being created.
+ */
+export const fetchMyMemberships = (): Promise<MyMembershipsResponse> =>
+  request<MyMembershipsResponse>('/api/auth/memberships/', { auth: true });
+
+// ---------------------------------------------------------------------------
 // Plans
 // ---------------------------------------------------------------------------
 
@@ -440,50 +474,6 @@ export const verifyLicense = (payload: { license_key: string }): Promise<License
 // backend derives the business tenant from the authenticated user and the
 // device from the identity — never from a client-supplied business id.
 // ---------------------------------------------------------------------------
-
-export interface CloudChange {
-  entity: string;
-  entity_uuid: string;
-  op: string;
-  payload: Record<string, unknown>;
-  checksum?: string;
-  seq: number;
-}
-
-export interface CloudPushResult {
-  ok?: boolean;
-  accepted: number;
-  last_remote_seq: number;
-  lastSeq?: number;
-}
-
-export const cloudSyncPush = (payload: {
-  device_id: string;
-  device_name?: string;
-  changes: CloudChange[];
-}): Promise<CloudPushResult> =>
-  request<CloudPushResult>('/api/sync/push/', { method: 'POST', body: payload, auth: true });
-
-export const cloudSyncPull = (params: {
-  device: string;
-  since: number;
-}): Promise<{ ok?: boolean; changes: CloudChange[]; lastSeq: number }> =>
-  request<{ ok?: boolean; changes: CloudChange[]; lastSeq: number }>(
-    `/api/sync/pull/?device=${encodeURIComponent(params.device)}&since=${params.since}`,
-    { auth: true }
-  );
-
-export const cloudDeviceStatus = (deviceId: string): Promise<{
-  ok?: boolean;
-  device_id: string;
-  status: string | null;
-  name?: string;
-  blocked?: boolean;
-}> =>
-  request<{ ok?: boolean; device_id: string; status: string | null; name?: string; blocked?: boolean }>(
-    `/api/sync/status/?device=${encodeURIComponent(deviceId)}`,
-    { auth: true }
-  );
 
 // ---------------------------------------------------------------------------
 // Error handling helpers

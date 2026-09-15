@@ -76,53 +76,6 @@ export function useBusinessAssistant(enabled = true): {
         });
       }
 
-      const budgetAlerts = db.getBudgetAlerts(80);
-      if (budgetAlerts?.length > 0) {
-        const exceeded = budgetAlerts.filter((b: any) => b.isExceeded);
-        const nearLimit = budgetAlerts.filter((b: any) => !b.isExceeded);
-        if (exceeded.length > 0) {
-          const names = exceeded.slice(0, 3).map((b: any) => b.category || b.name).join(', ');
-          result.push({
-            id: 'budget-overrun',
-            type: 'alert',
-            priority: 'high',
-            title: t('assistant.budget_alert_title', { count: String(exceeded.length) }),
-            description: exceeded.length <= 3
-              ? t('assistant.budget_alert_desc_few', { names })
-              : t('assistant.budget_alert_desc_many', { names, count: String(exceeded.length - 3) }),
-            icon: 'alert-triangle',
-            action: t('assistant.action_view_budgets'),
-          });
-        }
-        if (nearLimit.length > 0) {
-          const names = nearLimit.slice(0, 3).map((b: any) => b.category || b.name).join(', ');
-          result.push({
-            id: 'budget-near-limit',
-            type: 'info',
-            priority: 'low',
-            title: t('assistant.budget_near_title', { count: String(nearLimit.length) }),
-            description: nearLimit.length <= 3
-              ? t('assistant.budget_near_desc_few', { names })
-              : t('assistant.budget_near_desc_many', { names, count: String(nearLimit.length - 3) }),
-            icon: 'bar-chart',
-            action: t('assistant.action_view_budgets'),
-          });
-        }
-      }
-
-      const orderSummary = db.getOrderSummary();
-      if (orderSummary && orderSummary.active > 0) {
-        result.push({
-          id: 'order-pending',
-          type: 'alert',
-          priority: 'high',
-          title: t('assistant.order_pending_title', { count: String(orderSummary.active) }),
-          description: t('assistant.order_pending_desc', { count: String(orderSummary.active) }),
-          icon: 'shopping-bag',
-          action: t('assistant.action_view_orders'),
-        });
-      }
-
       const supplierList = db.getSupplierList();
       const supplierDebtList = (supplierList || []).filter((s: any) => s.hasDebt);
       if (supplierDebtList.length > 0) {
@@ -183,22 +136,6 @@ export function useBusinessAssistant(enabled = true): {
           icon: 'dollar-sign',
           action: t('assistant.action_view_inventory'),
         });
-      }
-
-      const expenseStats = db.getExpenseComparisonStats();
-      if (expenseStats) {
-        const diff = (expenseStats.thisMonthLoss || 0) - (expenseStats.lastMonthLoss || 0);
-        if (diff > 0) {
-          result.push({
-            id: 'expense-increase',
-            type: 'alert',
-            priority: 'medium',
-            title: t('assistant.expense_increase_title'),
-            description: t('assistant.expense_increase_desc', { diff: diff.toLocaleString() }),
-            icon: 'trending-down',
-            action: t('assistant.action_review_expenses'),
-          });
-        }
       }
 
       const debtSummary = db.getDebtSummary();

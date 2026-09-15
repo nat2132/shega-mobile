@@ -14,8 +14,12 @@ import {
   updateItem,
 } from '@/database/db';
 import { playBad, playNice } from '@/services/soundService';
+import { getPeripheralManager } from '@/services/peripherals/peripheralManager';
+import { barcodePng } from '@shega/shared';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import * as Haptics from 'expo-haptics';
-import { Barcode as BarcodeIcon, Plus, Star, Trash2, X, Check, Power } from 'lucide-react-native';
+import { Barcode as BarcodeIcon, Plus, Star, Trash2, X, Check, Power, Printer, Download } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Modal,
@@ -138,6 +142,59 @@ const ManageBarcodesModal: React.FC<ManageBarcodesModalProps> = ({ visible, item
     if (next) playNice();
     onChanged?.();
   }, [active, item.id, onChanged]);
+
+  const handlePrintLabel = useCallback(
+    async (code: string) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const res = await getPeripheralManager().printLabel({
+        name: item?.name || 'Product',
+        barcode: code,
+        sku: item?.sku || undefined,
+        price: Number(item?.baseSellingPrice ?? item?.sellingPrice ?? 0),
+        copies: 1,
+      });
+      if (res.ok) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        dialog.alert({
+          title: res.errorCode === 'needs_dev_build' ? 'Development build required' : 'Print failed',
+          message:
+            res.errorCode === 'needs_dev_build'
+              ? 'Printing requires the Shega development build. Preview:\n\n' + (res.preview || '')
+              : res.errorCode === 'printer_missing'
+                ? 'No printer configured. Add one in Settings → Devices.'
+                : `Could not print the label (${res.errorCode || 'error'}).`,
+        });
+      }
+    },
+    [item, dialog],
+  );
+
+  const handleDownloadBarcode = useCallback(
+    async (code: string) => {
+      try {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        const png = barcodePng(code);
+        if (!png) {
+          dialog.alert({ title: 'Cannot encode', message: 'This value cannot be rendered as a barcode image.' });
+          return;
+        }
+        const b64 = pngBytesToBase64(png);
+        const fileUri = `${FileSystem.cacheDirectory}barcode-${code.replace(/[^0-9A-Za-z-]/g, '_')}.png`;
+        await FileSystem.writeAsStringAsync(fileUri, b64, { encoding: FileSystem.EncodingType.Base64 });
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(fileUri, { mimeType: 'image/png', dialogTitle: 'Save Barcode' });
+        } else {
+          dialog.alert({ title: 'Saved', message: fileUri });
+        }
+      } catch {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        dialog.alert({ title: 'Download failed', message: 'Could not export the barcode image.' });
+      }
+    },
+    [dialog],
+  );
 
   const handleToggleQuick = useCallback(() => {
     const next = !quick;
@@ -264,6 +321,18 @@ const ManageBarcodesModal: React.FC<ManageBarcodesModalProps> = ({ visible, item
                   <EditPen />
                 </TouchableOpacity>
               )}
+              {!!primaryCode && !editingPrimary && (
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                  <TouchableOpacity style={[styles.smallBtn, { flex: 1, borderColor: G.border }]} onPress={() => handlePrintLabel(primaryCode)} activeOpacity={0.8}>
+                    <Printer size={14} color={colors.primary} style={{ marginRight: 6 }} />
+                    <AppText variant="caption" weight="bold" style={{ color: G.fg }} numberOfLines={1}>{t('inv.print_label') || 'Print Label'}</AppText>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.smallBtn, { flex: 1, borderColor: G.border }]} onPress={() => handleDownloadBarcode(primaryCode)} activeOpacity={0.8}>
+                    <Download size={14} color={G.fgSecondary} style={{ marginRight: 6 }} />
+                    <AppText variant="caption" weight="bold" style={{ color: G.fg }} numberOfLines={1}>{t('inv.download_barcode') || 'Download'}</AppText>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
 
             {/* Alternative barcodes */}
@@ -292,6 +361,12 @@ const ManageBarcodesModal: React.FC<ManageBarcodesModalProps> = ({ visible, item
                     )}
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <TouchableOpacity style={styles.iconBtn} onPress={() => handlePrintLabel(bc.barcode)} activeOpacity={0.7}>
+                      <Printer size={16} color={colors.primary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.iconBtn} onPress={() => handleDownloadBarcode(bc.barcode)} activeOpacity={0.7}>
+                      <Download size={16} color={G.fgSecondary} />
+                    </TouchableOpacity>
                     <TouchableOpacity style={styles.iconBtn} onPress={() => handleSetPrimary(bc)} activeOpacity={0.7}>
                       <Check size={16} color={colors.primary} />
                     </TouchableOpacity>
@@ -503,3 +578,18 @@ const styles = StyleSheet.create({
 });
 
 export default ManageBarcodesModal;
+// Convert raw PNG bytes to base64 without Node's Buffer (RN-safe).
+function pngBytesToBase64(bytes: Uint8Array): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  let out = '';
+  for (let i = 0; i < bytes.length; i += 3) {
+    const b0 = bytes[i];
+    const b1 = bytes[i + 1];
+    const b2 = bytes[i + 2];
+    out += chars[b0 >> 2];
+    out += chars[((b0 & 3) << 4) | ((b1 ?? 0) >> 4)];
+    out += b1 === undefined ? '=' : chars[((b1 & 15) << 2) | ((b2 ?? 0) >> 6)];
+    out += b2 === undefined ? '=' : chars[b2 & 63];
+  }
+  return out;
+}

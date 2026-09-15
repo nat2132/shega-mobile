@@ -11,7 +11,6 @@ import {
   StyleSheet,
   Switch,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import Constants from 'expo-constants';
@@ -25,16 +24,11 @@ import {
   Shield,
   Volume2,
   Wallet,
-  TrendingUp,
-  Repeat,
-  Receipt,
-  Megaphone,
 } from 'lucide-react-native';
 import { Fonts } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
 import { useNotificationCenter } from '@/context/NotificationContext';
-import { useRouter } from 'expo-router';
-import { AppText, AppNumber} from '@/components/ui';
+import { AppText } from '@/components/ui';
 import { getSettingsGlass } from './glass-settings';
 import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
 import { notificationSettingsTutorial } from '@/tutorials/definitions';
@@ -49,10 +43,9 @@ try {
   };
 }
 const NotificationSettings = () => {
-  const { notifications, setNotifications, colors, t } = useSettings();
+  const { notifications, setNotifications, colors, t, featureFlags, soundEnabled, setSoundEnabled } = useSettings();
   const G = getSettingsGlass(colors);
-  const { preferences, updatePreference, reminders } = useNotificationCenter();
-  const router = useRouter();
+  const { preferences, updatePreference } = useNotificationCenter();
   useTutorial({ tutorial: notificationSettingsTutorial });
 
   const getPref = (key: string) =>
@@ -140,6 +133,13 @@ const NotificationSettings = () => {
           value={pushPref.enabled}
           onValueChange={(v: boolean) => updatePreference('push', { enabled: v })}
           icon={Bell}
+        />
+        <AlertCard
+          title={t('settings.sound_effects')}
+          subtitle={t('settings.sound_desc')}
+          value={soundEnabled}
+          onValueChange={(v: boolean) => setSoundEnabled(v)}
+          icon={Volume2}
         />
         <AlertCard
           title={t('notif.sound')}
@@ -237,111 +237,20 @@ const NotificationSettings = () => {
           onValueChange={() => toggle('credit')}
           icon={Wallet}
         />
-        <AlertCard
-          title={t('settings.debt_status')}
-          subtitle={t('settings.debt_status_desc')}
-          value={notifications.debt}
-          onValueChange={() => toggle('debt')}
-          icon={CheckCircle2}
-        />
+        {featureFlags.customersEnabled && (
+          <AlertCard
+            title={t('settings.debt_status')}
+            subtitle={t('settings.debt_status_desc')}
+            value={notifications.debt}
+            onValueChange={() => toggle('debt')}
+            icon={CheckCircle2}
+          />
+        )}
         </TutorialTarget>
-
-        {/* Budget Alerts */}
-        <View style={styles.sectionHeader}>
-          <TrendingUp size={20} color={G.fg} />
-          <AppText variant="subtitle" weight="bold" style={[styles.sectionTitle, { color: G.fg }]} numberOfLines={2}>
-            {t('notif.budget_alerts')}
-          </AppText>
-        </View>
-        <AlertCard
-          title={t('notif.budget_limit_warnings')}
-          subtitle={t('notif.budget_limit_desc')}
-          value={notifications.budget ?? true}
-          onValueChange={() => toggle('budget')}
-          icon={TrendingUp}
-        />
-        <AlertCard
-          title={t('notif.budget_status')}
-          subtitle={t('notif.budget_status_desc')}
-          value={notifications.budgetStatus ?? true}
-          onValueChange={() => toggle('budgetStatus')}
-          icon={Megaphone}
-        />
-
-        {/* Expense Alerts */}
-        <TutorialTarget id="ns-expense">
-        <View style={styles.sectionHeader}>
-          <Receipt size={20} color={G.fg} />
-          <AppText variant="subtitle" weight="bold" style={[styles.sectionTitle, { color: G.fg }]} numberOfLines={2}>
-            {t('notif.expense_alerts')}
-          </AppText>
-        </View>
-        <AlertCard
-          title={t('notif.expense_confirmations')}
-          subtitle={t('notif.expense_confirm_desc')}
-          value={notifications.expense ?? true}
-          onValueChange={() => toggle('expense')}
-          icon={Receipt}
-        />
-        <AlertCard
-          title={t('notif.large_expense_alerts')}
-          subtitle={t('notif.large_expense_desc')}
-          value={notifications.largeExpense ?? true}
-          onValueChange={() => toggle('largeExpense')}
-          icon={Bell}
-        />
-        </TutorialTarget>
-
-        {/* Recurring Expense Reminders */}
-        <View style={styles.sectionHeader}>
-          <Repeat size={20} color={G.fg} />
-          <AppText variant="subtitle" weight="bold" style={[styles.sectionTitle, { color: G.fg }]} numberOfLines={2}>
-            {t('notif.recurring_reminders')}
-          </AppText>
-        </View>
-        <AlertCard
-          title={t('notif.due_today_tomorrow')}
-          subtitle={t('notif.due_desc')}
-          value={notifications.recurring ?? true}
-          onValueChange={() => toggle('recurring')}
-          icon={Repeat}
-        />
-        <AlertCard
-          title={t('notif.weekly_summary')}
-          subtitle={t('notif.weekly_summary_desc')}
-          value={notifications.weeklySummary ?? true}
-          onValueChange={() => toggle('weeklySummary')}
-          icon={LineChart}
-        />
-        <AlertCard
-          title={t('notif.monthly_summary')}
-          subtitle={t('notif.monthly_summary_desc')}
-          value={notifications.monthlySummary ?? true}
-          onValueChange={() => toggle('monthlySummary')}
-          icon={Calendar}
-        />
 
         <AppText variant="caption" weight="medium" style={[styles.persistNote, { color: G.fgSecondary }]} numberOfLines={2}>
           {t('settings.auto_save')}
         </AppText>
-
-        {/* Scheduled reminders shortcut */}
-        <TutorialTarget id="ns-save-btn">
-        <TouchableOpacity
-          style={[styles.remindersBtn, { backgroundColor: G.fg, borderColor: G.fg }]}
-          onPress={() => router.push('/reminders' as any)}
-        >
-          <Calendar size={18} color={G.bg} />
-          <AppText variant="body" weight="bold" style={[styles.remindersBtnText, { color: G.bg }]} numberOfLines={1}>
-            {t('notif.manage_reminders')}
-          </AppText>
-          {reminders.length > 0 && (
-            <View style={[styles.reminderBadge, { backgroundColor: G.bg }]}>
-              <AppNumber value={reminders.length} size="caption" style={[styles.reminderBadgeText, { color: G.fg }]} />
-            </View>
-          )}
-        </TouchableOpacity>
-        </TutorialTarget>
       </TutorialScrollView>
       <View style={{ position: 'absolute', top: 50, right: 20, zIndex: 100 }}>
         <TutorialButton tutorialId="notification-settings" screenName={t('settings.notification_settings')} />
@@ -422,33 +331,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
 
     fontFamily: Fonts.medium,
-  },
-  remindersBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    marginTop: 18,
-    gap: 8,
-  },
-  remindersBtnText: {
-
-    fontFamily: Fonts.bold,
-  },
-  reminderBadge: {
-    minWidth: 22,
-    height: 22,
-    borderRadius: 11,
-    paddingHorizontal: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 4,
-  },
-  reminderBadgeText: {
-    fontFamily: Fonts.bold,
-    lineHeight: 14,
   },
   glowWash: { position: 'absolute' },
 });

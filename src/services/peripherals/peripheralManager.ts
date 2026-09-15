@@ -17,6 +17,9 @@ import {
   buildSampleReceiptPreview,
   buildTestReceiptBytes,
   buildTestReceiptPreview,
+  buildLabelBytes,
+  buildLabelPreview,
+  type LabelBytesOptions,
   type CommandDiagnosticResult,
   type PrinterMeta,
   type ReceiptLayoutOptions,
@@ -263,6 +266,13 @@ class PeripheralManager {
     });
   };
 
+  /** Dev/testing: inject a synthetic scan as if a scanner had read it. */
+  simulateScan = (code?: string): { code: string; format: string } => {
+    const value = (code && code.trim()) || String(Math.floor(100000000000 + Math.random() * 899999999999));
+    this.handleScan(value, 'keyboard_hid');
+    return { code: value, format: detectBarcodeFormat(value).format };
+  };
+
   // --- Printing --------------------------------------------------------------
 
   // Single choke point for byte delivery; records virtual-printer telemetry
@@ -309,6 +319,41 @@ class PeripheralManager {
       this.log('info', 'devices.print_ok', printer.id);
     }
     return result;
+  }
+
+  /** Print a product barcode label on the primary printer. */
+  async printLabel(opts: LabelBytesOptions): Promise<PrintResult & { preview?: string }> {
+    const printer = this.getPrimaryDevice('printer');
+    if (!printer) {
+      this.log('warn', 'devices.print_no_printer');
+      return { ok: false, errorCode: 'printer_missing' };
+    }
+    const cap = transportCapability(printer.connectionType);
+    const preview = buildLabelPreview(opts);
+    if (cap.state !== 'available') {
+      this.setStatus(printer.id, 'error');
+      this.log('warn', 'devices.print_dev_build', printer.id);
+      return { ok: false, errorCode: cap.reasonCode === 'needs_dev_build' ? 'needs_dev_build' : 'unsupported', deviceName: printer.name, preview };
+    }
+    const result = await this.sendBytes(printer, buildLabelBytes(opts));
+    if (result.ok) this.log('info', 'devices.print_ok', printer.id);
+    else this.log('error', 'devices.print_failed', printer.id, result.errorCode);
+    return { ...result, preview };
+  }
+
+  /** Print a synthetic test label (barcode + price) to verify the label path. */
+  async testLabel(id?: string): Promise<TestResult> {
+    const dev = id ? this.getDevice(id) : this.getPrimaryDevice('printer');
+    if (!dev) return { ok: false, errorCode: 'missing' };
+    const result = await this.printLabel({
+      name: 'Test Product',
+      barcode: '6294001234567',
+      sku: 'TEST-SKU',
+      price: 50,
+      businessName: dev.name,
+      copies: 1,
+    });
+    return { ok: result.ok, errorCode: result.errorCode, preview: result.preview };
   }
 
   async printSaleReceipt(input: SaleReceiptInput): Promise<PrintResult & { payload?: ReturnType<typeof saleReceiptFromBatch> }> {

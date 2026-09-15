@@ -17,6 +17,7 @@ import {
   FlaskConical,
   Globe,
   History,
+  MonitorSmartphone,
   Info,
   LucideIcon,
   Play,
@@ -26,9 +27,14 @@ import {
   RotateCcw,
   Scale,
   ScanLine,
+  ShieldCheck,
   Smartphone,
   Trash2,
 } from 'lucide-react-native';
+import { useBusinessAuth } from '@/hooks/useBusinessAuth';
+import { CompanionScreen } from './CompanionScreen';
+import { ConnectedDevicesScreen } from './ConnectedDevicesScreen';
+import { companionService } from '@/services/companionService';
 import * as Device from 'expo-device';
 import { useSettings } from '@/context/SettingsContext';
 import { AppButton, AppText } from '@/components/ui';
@@ -57,6 +63,8 @@ type ViewState =
   | { name: 'test-printer'; id: string }
   | { name: 'diag' }
   | { name: 'logs' }
+  | { name: 'companion' }
+  | { name: 'connected-devices' }
   | { name: 'pos' };
 
 interface Glass {
@@ -311,6 +319,13 @@ const VirtualProbePanel = ({ host, port, onOpenSettings }: { host: string; port:
     setInternet(await manager.probeInternet());
   };
 
+  const [scanNote, setScanNote] = useState<string | null>(null);
+  const simulateScan = () => {
+    const r = manager.simulateScan();
+    setScanNote(`${r.code} (${r.format}) — sent to the active sales screen`);
+    setTimeout(() => setScanNote(null), 4000);
+  };
+
   const causes =
     outcome?.outcome === 'timeout' ? ['whitelist', 'not_running', 'firewall'] : ['internet', 'host', 'port', 'whitelist', 'not_running', 'firewall'];
   const showWhitelist = state === 'fail' && (outcome?.rejected || outcome?.outcome === 'timeout');
@@ -397,6 +412,21 @@ const VirtualProbePanel = ({ host, port, onOpenSettings }: { host: string; port:
             <View style={styles.actionRow}>
               <AppButton label={t('devices.retry')} variant="secondary" onPress={run} style={{ flex: 1 }} />
               <AppButton label={t('devices.diagnostics')} variant="secondary" onPress={runDiagnostics} style={{ flex: 1 }} />
+            </View>
+
+            <View style={[styles.card, { backgroundColor: G.bg, borderColor: G.border }]}>
+              <AppText variant="caption" weight="bold" style={{ color: G.fg }}>
+                {t('devices.simulate_scan') || 'Simulate Scan'}
+              </AppText>
+              <AppText variant="micro" style={{ color: G.muted, marginTop: 2 }}>
+                {t('devices.simulate_scan_desc') || 'Injects a random EAN-style code through the scanner pipeline (testing without hardware).'}
+              </AppText>
+              <AppButton label={t('devices.simulate_scan_btn') || 'Simulate Scan'} variant="secondary" onPress={simulateScan} style={{ marginTop: 8 }} />
+              {scanNote ? (
+                <AppText variant="caption" weight="bold" style={{ color: G.success, marginTop: 6 }} numberOfLines={2}>
+                  {scanNote}
+                </AppText>
+              ) : null}
             </View>
           </View>
 
@@ -531,6 +561,10 @@ export const PeripheralCenter = ({ onClose }: { onClose: () => void }) => {
   const { t } = useSettings();
   const G = useGlass();
   const { devices } = usePeripheralStore();
+  const { can } = useBusinessAuth();
+  // Only users with devices.manage may change POS hardware; others get a
+  // read-only view.
+  const canManage = can('devices.manage');
 
   const [view, setView] = useState<ViewState>({ name: 'list' });
 
@@ -549,6 +583,8 @@ export const PeripheralCenter = ({ onClose }: { onClose: () => void }) => {
       />
     );
   }
+  if (view.name === 'companion') return <CompanionScreen onBack={backToList} />;
+  if (view.name === 'connected-devices') return <ConnectedDevicesScreen onBack={backToList} />;
   if (view.name === 'diag') return <UnifiedDiagnosticsSheet onBack={backToList} />;
   if (view.name === 'logs') return <DeviceLogsSheet onBack={backToList} />;
   if (view.name === 'pos') return <PosDeviceSheet onBack={backToList} />;
@@ -633,16 +669,37 @@ export const PeripheralCenter = ({ onClose }: { onClose: () => void }) => {
         </View>
       )}
 
-      <AppButton
-        label={t('devices.add_device')}
-        variant="primary"
-        fullWidth
-        leftIcon={<Plus size={18} color={G.bg} />}
-        onPress={() => setView({ name: 'add' })}
-        style={{ marginTop: 6 }}
-      />
+      {canManage ? (
+        <AppButton
+          label={t('devices.add_device')}
+          variant="primary"
+          fullWidth
+          leftIcon={<Plus size={18} color={G.bg} />}
+          onPress={() => setView({ name: 'add' })}
+          style={{ marginTop: 6 }}
+        />
+      ) : (
+        <View style={[styles.summaryRow, { backgroundColor: G.bgCard, borderColor: G.border, marginTop: 6, flexDirection: 'row', gap: 8, alignItems: 'center' }]}>
+          <ShieldCheck size={14} color={G.muted} />
+          <AppText variant="caption" weight="medium" style={{ color: G.muted, flex: 1 }}>
+            View only — ask your owner or manager to change POS hardware.
+          </AppText>
+        </View>
+      )}
 
       <View style={[styles.settingsGroup, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+        <MenuItem
+          icon={MonitorSmartphone}
+          title="Connected Devices"
+          subtitle="All paired phones & desktops, sync status, add new device"
+          onPress={() => setView({ name: 'connected-devices' })}
+        />
+        <MenuItem
+          icon={MonitorSmartphone}
+          title="Connected to Desktop"
+          subtitle="Scanner & camera companion mode, connection status"
+          onPress={() => setView({ name: 'companion' })}
+        />
         <MenuItem
           icon={Activity}
           title={t('devices.diagnostics')}
@@ -655,12 +712,14 @@ export const PeripheralCenter = ({ onClose }: { onClose: () => void }) => {
           subtitle={t('devices.logs_desc')}
           onPress={() => setView({ name: 'logs' })}
         />
-        <MenuItem
-          icon={Smartphone}
-          title={t('devices.pos_device')}
-          subtitle={t('devices.pos_device_desc')}
-          onPress={() => setView({ name: 'pos' })}
-        />
+        {canManage && (
+          <MenuItem
+            icon={Smartphone}
+            title={t('devices.pos_device')}
+            subtitle={t('devices.pos_device_desc')}
+            onPress={() => setView({ name: 'pos' })}
+          />
+        )}
       </View>
 
       <AppText variant="caption" weight="medium" style={{ color: G.muted, textAlign: 'center', marginTop: 16, marginBottom: 8 }}>

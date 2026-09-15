@@ -2,7 +2,8 @@ import { EventEmitter } from 'events';
 import { Platform } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import { getDB } from '../database/db';
-import { DEVICE_JOIN_MSG } from '@shega/shared';
+import { applyChange } from './syncService';
+import { DEVICE_JOIN_MSG, PERIPHERAL_MSG } from '@shega/shared';
 
 // Simple logger (defined before first use)
 const logger = {
@@ -163,8 +164,38 @@ export class WsSyncClient extends EventEmitter {
         this.resolvePending(msg.requestId, msg.payload);
         break;
 
+      case 'DATA_CHANGED':
+        // Live push from the hub: some other device just pushed data. Pull it
+        // now rather than waiting for the timer. Consumers subscribe to
+        // 'dataChanged' to refresh UI.
+        this.lastServerSeq = typeof msg.payload?.serverSeq === 'number' ? Math.max(this.lastServerSeq, msg.payload.serverSeq) : this.lastServerSeq;
+        this.emit('dataChanged', msg.payload);
+        this.syncNow().catch(() => {});
+
       case DEVICE_JOIN_MSG.ACK:
       case DEVICE_JOIN_MSG.RESPONSE:
+        this.resolvePending(msg.requestId, msg.payload);
+        break;
+
+      case PERIPHERAL_MSG.HELLO:
+        // Hub accepts phone peripherals — announce our capabilities.
+        this.registerAsPeripheral().catch((e) => logger.warn('[WS] peripheral register failed', e));
+        break;
+
+      case PERIPHERAL_MSG.SCAN_REQUEST:
+        this.emit('peripheralScanRequest', msg.payload);
+        break;
+
+      case PERIPHERAL_MSG.CAPTURE_REQUEST:
+        this.emit('peripheralCaptureRequest', msg.payload);
+        break;
+
+      case PERIPHERAL_MSG.CANCEL:
+        this.emit('peripheralCancel', msg.payload);
+        break;
+
+      case PERIPHERAL_MSG.ACK:
+      case PERIPHERAL_MSG.RESPONSE:
         this.resolvePending(msg.requestId, msg.payload);
         break;
 
@@ -172,8 +203,18 @@ export class WsSyncClient extends EventEmitter {
         this.resolvePending(msg.requestId, msg.payload);
         break;
 
+      case 'INVITE_RESPONSE':
+        this.resolvePending(msg.requestId, msg.payload);
+        break;
+
       case 'RESYNC_RESPONSE':
         this.resolvePending(msg.requestId, msg.payload);
+        break;
+
+      case 'P2P_SIGNAL':
+        // WebRTC signaling (SDP/ICE) relayed by the hub — business data never
+        // travels this path.
+        try { this.emit('signal', msg.payload?.signal ?? msg.payload); } catch {}
         break;
 
       case 'ERROR':
@@ -190,7 +231,7 @@ export class WsSyncClient extends EventEmitter {
   private async handleIncomingChanges(changes: any[]): Promise<void> {
     if (!changes.length) return;
 
-    const APPLY_ORDER = ['categories', 'items', 'item_packs', 'customers', 'sales', 'debt_payments', 'expenses', 'adjustments', 'returns'];
+    const APPLY_ORDER = ['categories', 'items', 'item_packs', 'customers', 'sales', 'debt_payments', 'adjustments', 'returns'];
     const sorted = changes.slice().sort((a: any, b: any) => {
       const ia = APPLY_ORDER.indexOf(a.entity);
       const ib = APPLY_ORDER.indexOf(b.entity);
@@ -207,8 +248,7 @@ export class WsSyncClient extends EventEmitter {
   }
 
   private async applyChange(change: any): Promise<void> {
-    const db = getDB();
-    const { entity, entity_uuid, op, payload, device_id, checksum } = change;
+    const { entity, entity_uuid, op, payload, checksum } = change;
 
     if (checksum) {
       const expected = await this.computeChecksum({ entity, entity_uuid, op, payload });
@@ -217,53 +257,10 @@ export class WsSyncClient extends EventEmitter {
       }
     }
 
-    const table = entity;
-    const existing = db.getFirstSync(`SELECT * FROM ${table} WHERE uuid = ?`, [entity_uuid]) as any;
-
-    if (op === 'DELETE') {
-      if (existing) {
-        db.runSync(`UPDATE ${table} SET is_deleted = 1, deleted_at = COALESCE(?, deleted_at) WHERE uuid = ?`, [
-          payload?.deleted_at ?? new Date().toISOString(),
-          entity_uuid,
-        ]);
-      }
-      return;
-    }
-
-    if (!existing) {
-      const insertData = { ...payload };
-      delete insertData.id;
-      insertData.uuid = entity_uuid;
-      insertData.device_id = device_id ?? (await this.getDeviceId());
-      insertData.updated_at = insertData.updated_at ?? new Date().toISOString();
-
-      const cols = Object.keys(insertData).filter(c => c in insertData);
-      const placeholders = cols.map(() => '?').join(', ');
-      db.runSync(`INSERT INTO ${table} (${cols.join(', ')}) VALUES (${placeholders})`, cols.map(c => insertData[c]));
-      return;
-    }
-
-    const incoming = { ...payload, uuid: entity_uuid, updated_at: payload.updated_at ?? new Date().toISOString() };
-    if (this.lwwWins(incoming, existing)) {
-      const updateData = { ...payload };
-      delete updateData.id;
-      updateData.device_id = device_id ?? (await this.getDeviceId());
-      const cols = Object.keys(updateData).filter(c => c in updateData && c !== 'id' && c !== 'uuid');
-      if (cols.length) {
-        const sets = cols.map(c => `${c} = ?`).join(', ');
-        db.runSync(`UPDATE ${table} SET ${sets} WHERE uuid = ?`, [...cols.map(c => updateData[c]), entity_uuid]);
-      }
-    }
-  }
-
-  private lwwWins(incoming: Record<string, any>, existing: Record<string, any>): boolean {
-    const iTs = (incoming.updated_at ?? incoming.createdAt ?? '') as string;
-    const eTs = (existing.updated_at ?? existing.createdAt ?? '') as string;
-    if (iTs !== eTs) return iTs > eTs;
-    const iVer = Number(incoming.row_version ?? 0);
-    const eVer = Number(existing.row_version ?? 0);
-    if (iVer !== eVer) return iVer > eVer;
-    return String(incoming.uuid ?? '') >= String(existing.uuid ?? '');
+    // Delegate to the shared apply path (column filter, business scoping, FK
+    // remapping, echo-outbox pruning, LWW) so WS pulls behave exactly like
+    // HTTP pulls.
+    applyChange(change);
   }
 
   private async computeChecksum(change: { entity: string; entity_uuid: string; op: string; payload: Record<string, any> }): Promise<string> {
@@ -311,6 +308,86 @@ export class WsSyncClient extends EventEmitter {
     return this.sendRequest(DEVICE_JOIN_MSG.STATUS, { code, joinerDeviceId });
   }
 
+  // ---------- Desktop user invites (QR join) ----------
+
+  /** Claim a desktop-generated user invite code on the LAN hub. */
+  async claimHubInvite(code: string, name: string, joinerDeviceId: string): Promise<any> {
+    if (!this._isConnected) throw new Error('Not connected to hub');
+    return this.sendRequest('INVITE_CLAIM', { code, name, joinerDeviceId });
+  }
+
+  /** Poll the owner's decision on a claimed desktop user invite. */
+  async getHubInviteStatus(code: string): Promise<any> {
+    if (!this._isConnected) throw new Error('Not connected to hub');
+    return this.sendRequest('INVITE_STATUS', { code });
+  }
+
+  // ---------- P2P signaling (WebRTC setup only — no business data) ----------
+
+  /** Subscribe to relayed WebRTC signaling messages from the hub. */
+  onSignal(fn: (msg: any) => void): () => void {
+    this.on('signal', fn);
+    return () => this.off('signal', fn);
+  }
+
+  /** Send a signaling message to a peer via the hub (to='__broadcast__' floods). */
+  sendSignal(toDeviceId: string, signal: any): void {
+    if (!this._isConnected) return;
+    this.send({ type: 'P2P_SIGNAL', payload: { to: toDeviceId, signal } });
+  }
+
+  /** Raw message send for status beacons (queued if socket drops). */
+  sendRaw(msg: { type: string; payload: any }): void {
+    this.send(msg);
+  }
+
+  /** Tell the hub this phone is no longer available as a peripheral. */
+  unregisterPeripheral(): void {
+    if (!this._isConnected) return;
+    const { getThisDeviceId } = require('@/services/businessService');
+    this.send({
+      type: PERIPHERAL_MSG.REGISTER,
+      payload: { deviceId: getThisDeviceId() || this.config?.deviceId, kinds: [] },
+    });
+  }
+
+  // ---------- Phone-peripheral (scanner / camera for the desktop POS) ----------
+
+  /** Announce this phone as an available scanner/camera to the hub. */
+  async registerAsPeripheral(kinds: string[] = ['scanner', 'camera']): Promise<any> {
+    if (!this._isConnected) throw new Error('Not connected to hub');
+    const { getThisDeviceId } = await import('@/services/businessService');
+    return this.sendRequest(PERIPHERAL_MSG.REGISTER, {
+      deviceId: getThisDeviceId() || this.config?.deviceId,
+      name: 'Shega Mobile',
+      model: Platform.OS === 'ios' ? 'iPhone' : 'Android',
+      platform: 'mobile',
+      kinds,
+    });
+  }
+
+  /** Answer a desktop scan request with the scanned barcode. */
+  sendScanResult(requestId: string, barcode: string, symbology?: string): void {
+    const { getThisDeviceId } = require('@/services/businessService');
+    this.send({
+      type: PERIPHERAL_MSG.SCAN_RESULT,
+      payload: { requestId, barcode, symbology, deviceId: getThisDeviceId() || this.config?.deviceId },
+    });
+  }
+
+  /** Answer a desktop capture request (photo data URL or scanned text). */
+  sendCaptureResult(requestId: string, result: { dataUrl?: string; text?: string; mode: string; cancelled?: boolean }): void {
+    const { getThisDeviceId } = require('@/services/businessService');
+    this.send({
+      type: PERIPHERAL_MSG.CAPTURE_RESULT,
+      payload: { ...result, requestId, deviceId: getThisDeviceId() || this.config?.deviceId },
+    });
+  }
+
+  get isConnectedToHub(): boolean {
+    return this._isConnected;
+  }
+
   async syncNow(): Promise<SyncResult> {
     if (!this._isConnected || this.isSyncing) {
       return { pushed: 0, pulled: 0, conflicts: 0 };
@@ -329,7 +406,21 @@ export class WsSyncClient extends EventEmitter {
         totalConflicts = pushResult.conflicts || 0;
 
         const db = getDB();
-        db.runSync('DELETE FROM sync_outbox WHERE seq IN (' + seqs.map(() => '?').join(',') + ')', seqs);
+        // Prune only rows the hub merged. Per-change outcomes arrive keyed to
+        // client_seq; without them fall back to deleting on success. Pending/
+        // skipped rows (e.g. unresolved item FK) stay queued for retry.
+        const outcome = Array.isArray(pushResult.results)
+          ? new Map((pushResult.results as { client_seq: number | null; status: string }[]).map((r) => [r.client_seq, r.status]))
+          : null;
+        const prune = outcome
+          ? seqs.filter((seq) => {
+              const status = outcome.get(seq);
+              return status === 'applied' || status === 'conflict' || status === undefined;
+            })
+          : seqs;
+        if (prune.length) {
+          db.runSync('DELETE FROM sync_outbox WHERE seq IN (' + prune.map(() => '?').join(',') + ')', prune);
+        }
       }
 
       const pullResult = await this.sendRequest('SYNC_PULL', { since: this.lastServerSeq });
@@ -353,7 +444,7 @@ export class WsSyncClient extends EventEmitter {
       if (row.op === 'DELETE') {
         const payload: any = { id: row.row_id ?? null, uuid: row.entity_uuid, deleted_at: new Date().toISOString() };
         const checksum = await this.computeChecksum({ entity: row.entity, entity_uuid: row.entity_uuid, op: row.op, payload });
-        changes.push({ entity: row.entity, entity_uuid: row.entity_uuid, op: row.op, payload, checksum });
+        changes.push({ entity: row.entity, entity_uuid: row.entity_uuid, op: row.op, payload, checksum, client_seq: row.seq });
         seqs.push(row.seq);
       } else if (row.row_id != null) {
         const r = getDB().getFirstSync(`SELECT * FROM ${row.entity} WHERE id = ?`, [row.row_id]) as any;
@@ -362,7 +453,7 @@ export class WsSyncClient extends EventEmitter {
           const cols = Object.keys(r);
           for (const c of cols) payload[c] = r[c];
           const checksum = await this.computeChecksum({ entity: row.entity, entity_uuid: row.entity_uuid, op: row.op, payload });
-          changes.push({ entity: row.entity, entity_uuid: row.entity_uuid, op: row.op, payload, checksum });
+          changes.push({ entity: row.entity, entity_uuid: row.entity_uuid, op: row.op, payload, checksum, client_seq: row.seq });
           seqs.push(row.seq);
         }
       }
@@ -504,6 +595,14 @@ export const wsSyncClient = new (class extends EventEmitter {
     return this.instance?.checkDeviceJoinStatus(code, joinerDeviceId);
   }
 
+  async claimHubInvite(code: string, name: string, joinerDeviceId: string) {
+    return this.instance?.claimHubInvite(code, name, joinerDeviceId);
+  }
+
+  async getHubInviteStatus(code: string) {
+    return this.instance?.getHubInviteStatus(code);
+  }
+
   async disconnect() {
     await this.instance?.disconnect();
     this.instance = null;
@@ -511,5 +610,46 @@ export const wsSyncClient = new (class extends EventEmitter {
 
   get isConnected() {
     return this.instance?.isConnectedNow ?? false;
+  }
+
+  // Peripheral pass-through — forward instance events + methods
+  onPeripheralEvent(event: string, handler: (...args: any[]) => void) {
+    this.instance?.on(event, handler);
+    return () => this.instance?.off(event, handler);
+  }
+
+  // P2P signaling pass-through
+  onSignal(fn: (msg: any) => void): () => void {
+    const h = (payload: any) => fn(payload?.signal ?? payload);
+    this.instance?.on('signal', h);
+    this.on('signal', fn);
+    return () => {
+      this.instance?.off('signal', h);
+      this.off('signal', fn);
+    };
+  }
+
+  sendSignal(toDeviceId: string, signal: any) {
+    this.instance?.sendSignal(toDeviceId, signal);
+  }
+
+  registerAsPeripheral(kinds?: string[]) {
+    return this.instance?.registerAsPeripheral(kinds);
+  }
+
+  unregisterPeripheral() {
+    this.instance?.unregisterPeripheral();
+  }
+
+  sendRaw(msg: { type: string; payload: any }) {
+    this.instance?.sendRaw(msg);
+  }
+
+  sendScanResult(requestId: string, barcode: string, symbology?: string) {
+    this.instance?.sendScanResult(requestId, barcode, symbology);
+  }
+
+  sendCaptureResult(requestId: string, result: { dataUrl?: string; text?: string; mode: string; cancelled?: boolean }) {
+    this.instance?.sendCaptureResult(requestId, result);
   }
 })();

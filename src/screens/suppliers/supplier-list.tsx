@@ -32,6 +32,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import SupplierForm from './supplier-form';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useAutoHideScroll } from '@/hooks/useAutoHideScroll';
+import { useDataChangedRefresh } from '@/hooks/useDataChangedRefresh';
 import { useRouter } from 'expo-router';
 import { useDebounce } from '@/hooks/useDebounce';
 import { SkeletonList } from '@/components/Skeleton';
@@ -171,6 +172,8 @@ export default function SupplierList() {
     setIsLoading(false);
     setRefreshing(false);
   }, [activeFilter, debouncedSearch]);
+
+  useDataChangedRefresh(loadSuppliers);
 
   useEffect(() => { loadSuppliers(); }, [loadSuppliers]);
 

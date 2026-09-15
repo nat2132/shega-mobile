@@ -135,28 +135,6 @@ export const NotificationDetailSheet: React.FC<NotificationDetailSheetProps> = (
     }
   }
 
-  // For budget notifications, expose a "View Budget" action
-  if (onView && (notification.category === 'budget' || notification.type?.startsWith('budget_'))) {
-    actions.unshift({
-      label: t('notif.view_budget'),
-      variant: 'primary',
-      icon: <Eye size={16} color={colors.background} />,
-      onPress: () => { onView(notification); onClose(); },
-    });
-  }
-
-  // For recurring expense due notifications, expose "Mark as Paid" action
-  if (notification.type === 'recurring_due' || notification.type === 'recurring_due_tomorrow') {
-    if (onResolve) {
-      actions.unshift({
-        label: t('notif.mark_paid'),
-        variant: 'primary',
-        icon: <CheckCircle2 size={16} color={colors.background} />,
-        onPress: () => { onResolve(notification); onClose(); },
-      });
-    }
-  }
-
   if (onResolve) {
     actions.push({
       label: t('notif.resolve'),

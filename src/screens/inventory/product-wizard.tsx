@@ -11,12 +11,12 @@ import {
   getItemById,
   getItems,
   getPriceHistory,
+  findItemsByNameInCategory,
   getSuppliers,
   getUserCategories,
   insertCategory,
   insertContact,
   insertItem,
-  insertPacksBatch,
   updateItem
 } from '@/database/db';
 import { useFormDrafts } from '@/hooks/useFormDrafts';
@@ -32,6 +32,7 @@ import {
   stockForecast,
   suggestedSellingPrice,
 } from '@/utils/pricing';
+import { getActiveTaxType } from '@/services/taxService';
 import { TutorialButton, TutorialScrollView, TutorialTarget } from '@/tutorials';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
@@ -83,12 +84,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import InventoryScannerSheet from '@/components/InventoryScannerSheet';
 import { getInventoryGlass } from './glass-inventory';
 
-const TAX_TYPES: { id: 'VAT' | 'TOT' | 'None'; label: string }[] = [
-  { id: 'VAT', label: 'VAT' },
-  { id: 'TOT', label: 'TOT' },
-  { id: 'None', label: 'None' },
-];
-
 const QUALITY_GRADES = ['grade1', 'grade2', 'grade3'];
 
 const STEP_LABELS = ['identify', 'info', 'photo', 'pricing', 'stock'] as const;
@@ -100,7 +95,7 @@ interface ProductWizardProps {
 }
 
 export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWizardProps) => {
-  const { colors, t, calendarType, language } = useSettings();
+  const { colors, t, calendarType, language, featureFlags } = useSettings();
   const G = getInventoryGlass(colors);
   const styles = useMemo(() => createStyles(G), [G]);
   const router = useRouter();
@@ -138,9 +133,6 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [newCategory, setNewCategory] = useState('');
   const [baseUnit, setBaseUnit] = useState('pcs');
-  const [purchaseUnit, setPurchaseUnit] = useState('box');
-  const [hasPacks, setHasPacks] = useState(false);
-  const [unitsPerPack, setUnitsPerPack] = useState('12');
   const [sku, setSku] = useState('');
 
   // -- create: photo & barcode ------------------------------------------------
@@ -152,10 +144,7 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
   // -- create: pricing & tax ---------------------------------------------------
   const [taxType, setTaxType] = useState<'VAT' | 'TOT' | 'None'>('VAT');
   const [basePurchasePrice, setBasePurchasePrice] = useState('');
-  const [packPurchasePrice, setPackPurchasePrice] = useState('');
   const [baseSellingPrice, setBaseSellingPrice] = useState('');
-  const [packSellingPrice, setPackSellingPrice] = useState('');
-  const [allowSellByPack, setAllowSellByPack] = useState(false);
   const [taxTreatment, setTaxTreatment] = useState<'inclusive' | 'exclusive'>('exclusive');
   const [costTransport, setCostTransport] = useState('');
   const [costImport, setCostImport] = useState('');
@@ -223,9 +212,6 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
       companyName,
       selectedCategory,
       baseUnit,
-      purchaseUnit,
-      hasPacks,
-      unitsPerPack,
       stockQty,
       sku,
       image,
@@ -234,10 +220,7 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
       generatedCode,
       taxType,
       basePurchasePrice,
-      packPurchasePrice,
       baseSellingPrice,
-      packSellingPrice,
-      allowSellByPack,
       selectedSupplier,
       supplierPhone,
       supplierAccount,
@@ -258,10 +241,10 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
       minWholesaleQty,
     };
   }, [
-    dormant, step, itemName, companyName, selectedCategory, baseUnit, purchaseUnit,
-    hasPacks, unitsPerPack, stockQty, sku, image, barcodeMode, barcodeInput,
-    generatedCode, taxType, basePurchasePrice, packPurchasePrice, baseSellingPrice,
-    packSellingPrice, allowSellByPack, selectedSupplier, supplierPhone, supplierAccount,
+    dormant, step, itemName, companyName, selectedCategory, baseUnit,
+    stockQty, sku, image, barcodeMode, barcodeInput,
+    generatedCode, taxType, basePurchasePrice, baseSellingPrice,
+    selectedSupplier, supplierPhone, supplierAccount,
     supplierCallEnabled, creditToggle, warehouseId, expiryDate, batchNumber, qualityGrade,
     taxTreatment, costTransport, costImport, costPackaging, costHandling, costOther,
     targetMargin, wholesalePrice, minWholesaleQty,
@@ -311,8 +294,8 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
   });
 
   // -- derived -----------------------------------------------------------------
-  const stockBaseQty = hasPacks ? (Number(stockQty) || 0) * (Number(unitsPerPack) || 0) : Number(stockQty) || 0;
-  const baseCost = hasPacks ? (Number(packPurchasePrice) || 0) / (Number(unitsPerPack) || 1) : Number(basePurchasePrice) || 0;
+  const stockBaseQty = Number(stockQty) || 0;
+  const baseCost = Number(basePurchasePrice) || 0;
   const extraCostPerBase =
     (Number(costTransport) || 0) +
     (Number(costImport) || 0) +
@@ -322,9 +305,6 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
   const effectiveCost = baseCost + extraCostPerBase;
   const retailPrice = Number(baseSellingPrice) || 0;
   const baseMetrics = profitMetrics(effectiveCost, retailPrice, taxType, taxTreatment);
-  const packCost = hasPacks ? baseCost * (Number(unitsPerPack) || 0) : 0;
-  const packSellDerived = hasPacks ? (Number(packSellingPrice) || 0) || retailPrice * (Number(unitsPerPack) || 1) : 0;
-  const packMetrics = profitMetrics(packCost, packSellDerived, taxType, taxTreatment);
   const wholesaleRaw = Number(wholesalePrice) || 0;
   const wholesaleMetrics = wholesaleRaw > 0 ? profitMetrics(effectiveCost, wholesaleRaw, taxType, taxTreatment) : null;
   const suggested = Number(targetMargin) > 0 ? suggestedSellingPrice(effectiveCost, Number(targetMargin), taxType, taxTreatment) : null;
@@ -373,11 +353,11 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
     setRestockItem(item);
     setBuyingPrice(String(item.basePurchasePrice || ''));
     setUnitSellingPrice(String(item.baseSellingPrice || ''));
-    setBulkSellingPrice(String(item.packSellingPrice || ''));
+    setBulkSellingPrice(String(item.baseSellingPrice || ''));
     setRestockQty('1');
     const linked = suppliers.find((s: any) => s.id === item.supplierId);
     setSelectedSupplier(linked || null);
-    setTaxType(TAX_TYPES.some((x) => x.id === item.taxType) ? item.taxType : 'VAT');
+    setTaxType(item.taxType || 'VAT');
     setTaxTreatment(item.taxTreatment === 'inclusive' ? 'inclusive' : 'exclusive');
     setPriceHistory(getPriceHistory(item.id));
     setMode('restock');
@@ -424,9 +404,6 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
     setCompanyName(d.companyName || '');
     setSelectedCategory(d.selectedCategory || null);
     setBaseUnit(d.baseUnit || 'pcs');
-    setPurchaseUnit(d.purchaseUnit || 'box');
-    setHasPacks(d.hasPacks || false);
-    setUnitsPerPack(d.unitsPerPack || '12');
     setStockQty(d.stockQty || '0');
     setSku(d.sku || '');
     setImage(d.image || null);
@@ -435,10 +412,7 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
     setGeneratedCode(d.generatedCode || '');
     setTaxType(d.taxType || 'VAT');
     setBasePurchasePrice(d.basePurchasePrice || '');
-    setPackPurchasePrice(d.packPurchasePrice || '');
     setBaseSellingPrice(d.baseSellingPrice || '');
-    setPackSellingPrice(d.packSellingPrice || '');
-    setAllowSellByPack(d.allowSellByPack || false);
     setSelectedSupplier(d.selectedSupplier || null);
     setSupplierPhone(d.supplierPhone || '');
     setSupplierAccount(d.supplierAccount || '');
@@ -500,9 +474,6 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
       } else if (step === 4) {
         if (!priceLocked) {
           if (!baseSellingPrice || Number(baseSellingPrice) <= 0) currentErrors.sellingPrice = t('form.error_price_positive');
-          if (hasPacks && allowSellByPack && (!packSellingPrice || Number(packSellingPrice) <= 0)) {
-            currentErrors.packSellingPrice = t('form.error_price_positive');
-          }
         }
       } else if (step === 5) {
         if (creditToggle === 'Yes' && !selectedSupplier) currentErrors.supplier = t('form.tap_select_supplier');
@@ -521,7 +492,7 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setStep(step + 1);
-  }, [mode, step, itemName, priceLocked, baseSellingPrice, hasPacks, allowSellByPack, packSellingPrice, restockQty, creditToggle, selectedSupplier, t]);
+  }, [mode, step, itemName, priceLocked, baseSellingPrice, restockQty, creditToggle, selectedSupplier, t]);
 
   const handleBack = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -638,12 +609,6 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
       setErrors({ sellingPrice: t('form.error_price_positive') });
       return;
     }
-    if (hasPacks && (Number(stockQty) || 0) > 0 && (Number(unitsPerPack) || 0) <= 0) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      playBad();
-      setErrors({ unitsPerPack: t('form.error_units_positive') });
-      return;
-    }
 
     setSaving(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -655,30 +620,45 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
         if (newId) finalCategoryId = Number(newId);
       }
 
-      const totalBaseQty = hasPacks ? (Number(stockQty) || 0) * (Number(unitsPerPack) || 0) : Number(stockQty) || 0;
-      const costPerBase = hasPacks ? (Number(packPurchasePrice) || 0) / (Number(unitsPerPack) || 1) : Number(basePurchasePrice) || 0;
+      const dupes = findItemsByNameInCategory(itemName.trim(), finalCategoryId);
+      if (dupes.length > 0) {
+        const proceed = await dialog.confirm({
+          title: t('inventory.duplicate_item_title') || 'Duplicate item',
+          message: t('inventory.duplicate_item_message', { name: itemName.trim() }) || `An item named '${itemName.trim()}' already exists in this category. Do you want to continue?`,
+          confirmText: t('common.proceed') || 'Proceed',
+          cancelText: t('common.cancel') || 'Cancel',
+          iconType: 'warning',
+        });
+        if (!proceed) {
+          setSaving(false);
+          return;
+        }
+      }
+
+      const totalBaseQty = Number(stockQty) || 0;
+      const costPerBase = Number(basePurchasePrice) || 0;
       const sellPrice = priceLocked ? 0 : Number(baseSellingPrice) || 0;
 
       const itemData: any = {
         name: itemName.trim(),
         categoryId: finalCategoryId,
         companyName: companyName.trim(),
-        purchaseUnit: hasPacks ? purchaseUnit : baseUnit,
+        purchaseUnit: baseUnit,
         baseUnit,
-        unitsPerPack: hasPacks ? Number(unitsPerPack) || 0 : 1,
-        totalPackQuantity: hasPacks ? Number(stockQty) || 0 : 0,
+        unitsPerPack: 1,
+        totalPackQuantity: totalBaseQty,
         totalBaseQuantity: totalBaseQty,
-        packPurchasePrice: hasPacks ? Number(packPurchasePrice) || 0 : 0,
+        packPurchasePrice: costPerBase,
         basePurchasePrice: costPerBase,
         baseSellingPrice: sellPrice,
-        packSellingPrice: hasPacks ? Number(packSellingPrice) || sellPrice : sellPrice,
+        packSellingPrice: sellPrice,
         allowSellByBaseUnit: true,
-        allowSellByPackUnit: hasPacks && allowSellByPack,
+        allowSellByPackUnit: false,
         barcode: finalBarcode,
         sku: finalSku,
         image: image || null,
-        taxType,
-        taxTreatment,
+        taxType: getActiveTaxType()?.name || 'VAT',
+        taxTreatment: 'exclusive',
         wholesaleSellingPrice: wholesaleRaw || null,
         minWholesaleQty: Number(minWholesaleQty) || null,
         transportCost: Number(costTransport) || 0,
@@ -705,17 +685,6 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
       const insertedId = await insertItem(itemData);
       if (!insertedId) throw new Error('insertItem failed');
 
-      if (insertedId && hasPacks && (Number(stockQty) || 0) > 0) {
-        const packCount = Number(stockQty);
-        const packs = Array.from({ length: packCount }, (_, i) => ({
-          itemId: Number(insertedId),
-          packNumber: i + 1,
-          quantity: Number(unitsPerPack),
-          unit: baseUnit,
-        }));
-        insertPacksBatch(packs);
-      }
-
       await createDrafts.clearCurrent();
       const persisted: any = getItemById(Number(insertedId));
       setSavedItem(persisted ? { ...persisted, categoryName: persisted.categoryName || selectedCategory?.name || null } : { id: insertedId, categoryName: selectedCategory?.name || null, ...itemData });
@@ -726,7 +695,7 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
     } finally {
       setSaving(false);
     }
-  }, [isReadOnly, canManageCatalog, canAdjustStock, itemName, priceLocked, baseSellingPrice, hasPacks, stockQty, unitsPerPack, selectedCategory, companyName, purchaseUnit, baseUnit, packPurchasePrice, basePurchasePrice, packSellingPrice, allowSellByPack, finalBarcode, finalSku, image, taxType, taxTreatment, creditToggle, expiryDate, qualityGrade, batchNumber, warehouseId, selectedSupplier, supplierPhone, supplierAccount, supplierCallEnabled, wholesaleRaw, minWholesaleQty, targetMargin, costTransport, costImport, costPackaging, costHandling, costOther, dialog, t, createDrafts]);
+  }, [isReadOnly, canManageCatalog, canAdjustStock, itemName, priceLocked, baseSellingPrice, stockQty, selectedCategory, companyName, baseUnit, basePurchasePrice, finalBarcode, finalSku, image, taxType, taxTreatment, creditToggle, expiryDate, qualityGrade, batchNumber, warehouseId, selectedSupplier, supplierPhone, supplierAccount, supplierCallEnabled, wholesaleRaw, minWholesaleQty, targetMargin, costTransport, costImport, costPackaging, costHandling, costOther, dialog, t, createDrafts]);
 
   const handleSaveRestock = useCallback(async () => {
     if (isReadOnly) {
@@ -750,8 +719,8 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     playNice();
     try {
-      const newBaseQty = (restockItem.totalBaseQuantity || 0) + qty * (restockItem.unitsPerPack || 1);
-      const newPackQty = (restockItem.totalPackQuantity || 0) + qty;
+      const newBaseQty = (restockItem.totalBaseQuantity || 0) + qty;
+      const newPackQty = newBaseQty;
       const updates: any = {
         totalBaseQuantity: newBaseQty,
         totalPackQuantity: newPackQty,
@@ -760,7 +729,6 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
       };
       if (!priceLocked) {
         updates.baseSellingPrice = Number(unitSellingPrice) || restockItem.baseSellingPrice;
-        updates.packSellingPrice = Number(bulkSellingPrice) || restockItem.packSellingPrice;
       }
       updates.basePurchasePrice = Number(buyingPrice) || restockItem.basePurchasePrice || 0;
       updates.taxTreatment = taxTreatment;
@@ -780,10 +748,9 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
         updates.supplierAccount = selectedSupplier.accountNumber || restockItem.supplierAccount;
         updates.supplierId = selectedSupplier.id;
         const unitPrice = Number(buyingPrice) || restockItem.basePurchasePrice || 0;
-        const addedQty = qty * (restockItem.unitsPerPack || 1);
         updates.purchaseUnitPrice = unitPrice;
         updates.purchasePaymentStatus = creditToggle === 'Yes' ? 'Unpaid' : 'Paid';
-        updates.purchasePaidAmount = creditToggle === 'Yes' ? 0 : unitPrice * addedQty;
+        updates.purchasePaidAmount = creditToggle === 'Yes' ? 0 : unitPrice * qty;
       }
 
       const success = updateItem(restockItem.id, updates);
@@ -809,9 +776,6 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
     setShowCategoryPicker(false);
     setNewCategory('');
     setBaseUnit('pcs');
-    setPurchaseUnit('box');
-    setHasPacks(false);
-    setUnitsPerPack('12');
     setStockQty('0');
     setSku('');
     setImage(null);
@@ -819,10 +783,7 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
     setBarcodeInput('');
     setTaxType('VAT');
     setBasePurchasePrice('');
-    setPackPurchasePrice('');
     setBaseSellingPrice('');
-    setPackSellingPrice('');
-    setAllowSellByPack(false);
     setSelectedSupplier(null);
     setSupplierPhone('');
     setSupplierAccount('');
@@ -1003,8 +964,12 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
                 onPress={() => handleScannedFound(item)}
                 activeOpacity={0.7}
               >
-                <View style={[styles.modeIcon, { backgroundColor: colors.primary + '15', width: 44, height: 44, borderRadius: 12 }]}>
-                  <Package size={20} color={colors.primary} />
+                <View style={[styles.modeIcon, { backgroundColor: colors.primary + '15', width: 44, height: 44, borderRadius: 12, overflow: 'hidden' }]}>
+                  {item.image ? (
+                    <Image source={{ uri: item.image }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
+                  ) : (
+                    <Package size={20} color={colors.primary} />
+                  )}
                 </View>
                 <View style={{ flex: 1 }}>
                   <AppText variant="body" weight="bold" style={{ color: G.fg }} numberOfLines={1}>{item.name}</AppText>
@@ -1199,63 +1164,6 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
         </View>
       </TutorialTarget>
 
-      {/* Packs (optional disclosure) */}
-      <View style={[styles.intelligenceBlock, { backgroundColor: G.bgCard, borderColor: G.border }]}>
-        <View style={styles.blockHeader}>
-          <Package size={20} color={colors.primary} />
-          <View style={{ flex: 1 }}>
-            <AppText variant="body" weight="bold" style={[styles.blockTitle, { color: G.fg }]} numberOfLines={2}>{t('form.box_roll_config')}</AppText>
-            <AppText variant="body-sm" weight="medium" style={[styles.blockSub, { color: G.fgSecondary }]} numberOfLines={2}>{t('form.box_roll_desc')}</AppText>
-          </View>
-          <TouchableOpacity
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setHasPacks(!hasPacks); }}
-            style={[styles.switch, { backgroundColor: hasPacks ? G.fg : G.border }]}
-          >
-            <View style={[styles.switchThumb, { backgroundColor: G.bg, left: hasPacks ? 24 : 2 }]} />
-          </TouchableOpacity>
-        </View>
-        {hasPacks && (
-          <Animated.View entering={FadeInDown} style={{ gap: 12, marginTop: 12 }}>
-            <View style={styles.row}>
-              <View style={{ flex: 1, marginRight: 15 }}>
-                <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('form.bulk_unit')}</AppText>
-                <TextInput
-                  style={[styles.input, { color: G.fg, borderColor: G.border }]}
-                  value={purchaseUnit}
-                  onChangeText={setPurchaseUnit}
-                  placeholder={t('form.bulk_unit')}
-                  placeholderTextColor={G.fgSecondary}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('form.conversion_ratio')}</AppText>
-                <TextInput
-                  style={[styles.input, { color: G.fg, borderColor: errors.unitsPerPack ? colors.error : G.border, fontFamily: Fonts.bold }]}
-                  value={unitsPerPack}
-                  onChangeText={(val) => { setUnitsPerPack(val); if (errors.unitsPerPack) setErrors((p) => ({ ...p, unitsPerPack: '' })); }}
-                  keyboardType="numeric"
-                />
-                {errors.unitsPerPack && <AppText variant="caption" weight="medium" style={[styles.errorText, { color: colors.error }]} numberOfLines={2}>{errors.unitsPerPack}</AppText>}
-              </View>
-            </View>
-            <View style={[styles.intelligenceBlock, { backgroundColor: G.bgCard, borderColor: G.border }]}>
-              <View style={styles.blockHeader}>
-                <RefreshCw size={18} color={colors.primary} />
-                <View style={{ flex: 1 }}>
-                  <AppText variant="body-sm" weight="bold" style={[styles.blockTitle, { color: G.fg }]} numberOfLines={2}>{t('form.adv_bulk_selling')}</AppText>
-                  <AppText variant="micro" weight="medium" style={{ color: G.fgSecondary, marginTop: 2 }} numberOfLines={2}>{t('form.box_roll_desc')}</AppText>
-                </View>
-                <TouchableOpacity
-                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setAllowSellByPack(!allowSellByPack); }}
-                  style={[styles.switch, { backgroundColor: allowSellByPack ? G.fg : G.border }]}
-                >
-                  <View style={[styles.switchThumb, { backgroundColor: G.bg, left: allowSellByPack ? 24 : 2 }]} />
-                </TouchableOpacity>
-              </View>
-            </View>
-          </Animated.View>
-        )}
-      </View>
     </Animated.View>
   );
 
@@ -1470,7 +1378,6 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
     if (p === null) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setBaseSellingPrice(p.toFixed(2));
-    if (hasPacks) setPackSellingPrice((p * (Number(unitsPerPack) || 1)).toFixed(2));
     if (mode === 'restock') setUnitSellingPrice(p.toFixed(2));
     if (errors.sellingPrice) setErrors((p) => ({ ...p, sellingPrice: '' }));
   };
@@ -1517,15 +1424,15 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
       <View style={styles.row}>
         <View style={{ flex: 1, marginRight: 15 }}>
           <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={2}>
-            {hasPacks ? t('form.bulk_cost') : (t('form.unit_cost'))}
+            {t('form.unit_cost')}
           </AppText>
           <TextInput
-            style={input(!priceLocked || hasPacks, [styles.priceInput])}
+            style={input(!priceLocked, [styles.priceInput])}
             placeholder="0.00"
             placeholderTextColor={G.fgSecondary}
-            editable={!priceLocked || hasPacks}
-            value={hasPacks ? packPurchasePrice : basePurchasePrice}
-            onChangeText={hasPacks ? setPackPurchasePrice : setBasePurchasePrice}
+            editable={!priceLocked}
+            value={basePurchasePrice}
+            onChangeText={setBasePurchasePrice}
             keyboardType="numeric"
           />
         </View>
@@ -1547,55 +1454,7 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
         <AppText variant="caption" weight="medium" style={[styles.errorText, { color: colors.error, marginTop: 8 }]} numberOfLines={2}>{errors.sellingPrice}</AppText>
       )}
 
-      {hasPacks && allowSellByPack && (
-        <View style={styles.inputNode}>
-          <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('form.bulk_selling_price')}</AppText>
-          <TextInput
-            style={input(!priceLocked, [styles.priceInput, { borderColor: errors.packSellingPrice ? colors.error : G.border }])}
-            placeholder="0.00"
-            placeholderTextColor={G.fgSecondary}
-            editable={!priceLocked}
-            value={packSellingPrice}
-            onChangeText={(val) => { setPackSellingPrice(val); if (errors.packSellingPrice) setErrors((p) => ({ ...p, packSellingPrice: '' })); }}
-            keyboardType="numeric"
-          />
-          {errors.packSellingPrice && <AppText variant="caption" weight="medium" style={[styles.errorText, { color: colors.error }]} numberOfLines={2}>{errors.packSellingPrice}</AppText>}
-        </View>
-      )}
-
       {!priceLocked && renderProfitPanel({ cost: effectiveCost, price: retailPrice, unitLabel: baseUnit })}
-
-      <View style={styles.inputNode}>
-        <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('sale.tax_type')}</AppText>
-        <View style={styles.chipRow}>
-          {TAX_TYPES.map((tx) => (
-            <TouchableOpacity
-              key={tx.id}
-              onPress={() => { if (!priceLocked) { Haptics.selectionAsync(); setTaxType(tx.id); } }}
-              style={[styles.chip, { backgroundColor: taxType === tx.id ? colors.primary : G.bgCard, borderColor: taxType === tx.id ? colors.primary : G.border }]}
-              activeOpacity={0.8}
-              disabled={priceLocked}
-            >
-              <AppText variant="body-sm" weight="bold" shrink={false} style={{ color: taxType === tx.id ? '#fff' : G.fgSecondary }} numberOfLines={1}>{tx.label}</AppText>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
-      {taxType !== 'None' && !priceLocked && (
-        <View style={styles.chipRow}>
-          {(['inclusive', 'exclusive'] as const).map((tr) => (
-            <TouchableOpacity
-              key={tr}
-              onPress={() => { Haptics.selectionAsync(); setTaxTreatment(tr); }}
-              style={[styles.chip, { backgroundColor: taxTreatment === tr ? colors.primary : G.bgCard, borderColor: taxTreatment === tr ? colors.primary : G.border }]}
-              activeOpacity={0.8}
-            >
-              <AppText variant="body-sm" weight="bold" shrink={false} style={{ color: taxTreatment === tr ? '#fff' : G.fgSecondary }} numberOfLines={1}>{t(tr === 'inclusive' ? 'pricing.tax_inclusive' : 'pricing.tax_exclusive')}</AppText>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
 
       {taxType !== 'None' && retailPrice > 0 && (
         <View style={[styles.financeSummary, { backgroundColor: G.bgCard, borderColor: G.border }]}>
@@ -1718,17 +1577,6 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
                   </View>
                 )}
               </View>
-
-              {/* Unit & pack profitability (no double-counted costs) */}
-              {hasPacks && packMetrics.cost > 0 && packMetrics.price > 0 && (
-                <View style={{ marginTop: 10, borderTopWidth: 1, borderTopColor: G.border, paddingTop: 10 }}>
-                  <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 4 }]} numberOfLines={1}>{t('pricing.pack_profitability')}</AppText>
-                  {renderCalcRow(t('pricing.cost_per_unit'), etb(baseCost))}
-                  {renderCalcRow(t('pricing.unit_profit'), etb(baseMetrics.grossProfit), { strong: true, color: baseMetrics.grossProfit > 0 ? colors.success : colors.error })}
-                  {renderCalcRow(t('pricing.pack_cost'), etb(packMetrics.cost))}
-                  {renderCalcRow(t('pricing.pack_profit'), etb(packMetrics.grossProfit), { strong: true, color: packMetrics.grossProfit > 0 ? colors.success : colors.error })}
-                </View>
-              )}
             </View>
           )}
         </View>
@@ -1769,7 +1617,7 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
 
       <View style={styles.formCard}>
         <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.cardTitle, { color: G.fgSecondary }]} numberOfLines={1}>
-          {mode === 'restock' ? (hasPacks ? t('form.initial_stock', { unit: restockItem?.purchaseUnit || 'pcs' }) : t('form.initial_stock', { unit: restockItem?.baseUnit || 'pcs' })) : t('wizard.initial_stock')}
+          {mode === 'restock' ? t('form.initial_stock', { unit: restockItem?.baseUnit || 'pcs' }) : t('wizard.initial_stock')}
         </AppText>
 
         {(mode === 'restock' || !priceLocked) && (
@@ -1781,8 +1629,8 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
               style={input(true, [styles.priceInput, { borderColor: G.border }])}
               placeholder="0.00"
               placeholderTextColor={G.fgSecondary}
-              value={(mode === 'restock' ? buyingPrice : hasPacks ? packPurchasePrice : basePurchasePrice)}
-              onChangeText={mode === 'restock' ? setBuyingPrice : (hasPacks ? setPackPurchasePrice : setBasePurchasePrice)}
+              value={(mode === 'restock' ? buyingPrice : basePurchasePrice)}
+              onChangeText={mode === 'restock' ? setBuyingPrice : setBasePurchasePrice}
               keyboardType="numeric"
             />
           </View>
@@ -1791,10 +1639,8 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
         <View style={styles.inputNode}>
           <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={2}>
             {mode === 'restock'
-              ? t('form.initial_stock', { unit: (restockItem?.unitsPerPack || 0) > 1 ? (restockItem?.purchaseUnit || 'pcs') : (restockItem?.baseUnit || 'pcs') })
-              : hasPacks
-                ? t('form.initial_stock', { unit: purchaseUnit })
-                : t('form.initial_stock', { unit: baseUnit })}
+              ? t('form.initial_stock', { unit: restockItem?.baseUnit || 'pcs' })
+              : t('form.initial_stock', { unit: baseUnit })}
           </AppText>
           <TextInput
             style={[styles.input, { color: G.fg, borderColor: errors.quantity ? colors.error : G.border, fontFamily: Fonts.bold, fontSize: 18 }]}
@@ -1803,18 +1649,13 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
             keyboardType="numeric"
           />
           {errors.quantity && <AppText variant="caption" weight="medium" style={[styles.errorText, { color: colors.error }]} numberOfLines={2}>{errors.quantity}</AppText>}
-          {hasPacks && mode !== 'restock' && (
-            <AppText variant="micro" weight="medium" style={{ color: G.fgSecondary, marginTop: 6 }} numberOfLines={2}>
-              = {stockBaseQty} {baseUnit}
-            </AppText>
-          )}
         </View>
 
         {renderPotentialProfit(
-          mode === 'restock' ? (Number(restockQty) || 0) : hasPacks ? stockBaseQty : (Number(stockQty) || 0),
+          mode === 'restock' ? (Number(restockQty) || 0) : (Number(stockQty) || 0),
           mode === 'restock' ? (Number(buyingPrice) || restockItem?.basePurchasePrice || 0) : effectiveCost,
           mode === 'restock' ? (Number(unitSellingPrice) || restockItem?.baseSellingPrice || 0) : retailPrice,
-          mode === 'restock' ? (restockItem?.baseUnit || 'pcs') : (hasPacks ? purchaseUnit : baseUnit)
+          mode === 'restock' ? (restockItem?.baseUnit || 'pcs') : baseUnit
         )}
 
         {/* Advanced pricing for restock: edit selling price + price-change impact + history */}
@@ -1930,6 +1771,7 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
         )}
 
         {/* Warehouse */}
+        {featureFlags.warehousesEnabled && (
         <TouchableOpacity
           style={[styles.intelligenceBlock, { backgroundColor: G.bgCard, borderColor: G.border, flexDirection: 'row', alignItems: 'center' }]}
           onPress={() => setShowWarehouseModal(true)}
@@ -1944,6 +1786,7 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
           </View>
           <ChevronDown size={18} color={G.fgSecondary} />
         </TouchableOpacity>
+        )}
 
         {/* Supplier */}
         <TutorialTarget id="if-supplier">
@@ -2132,7 +1975,7 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
           <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.cardTitle, { color: G.fgSecondary }]} numberOfLines={1}>{t('wizard.review')}</AppText>
           <View style={styles.financeSummary}>
             {renderReviewItem('Product', restockItem?.name || '', true)}
-            {renderReviewItem(t('form.initial_stock', { unit: 'qty' }), `${restockQty} × ${(restockItem?.unitsPerPack || 1) > 1 ? (restockItem?.purchaseUnit || 'pcs') : (restockItem?.baseUnit || 'pcs')}`)}
+            {renderReviewItem(t('form.initial_stock', { unit: 'qty' }), `${restockQty} ${restockItem?.baseUnit || 'pcs'}`)}
             {renderReviewItem(t('form.unit_cost'), `${t('common.etb')} ${Number(buyingPrice) || restockItem?.basePurchasePrice || 0}`)}
             {!priceLocked && renderReviewItem(t('form.unit_selling_price'), `${t('common.etb')} ${Number(unitSellingPrice) || restockItem?.baseSellingPrice || 0}`)}
             {renderReviewItem(t('form.supplier_label'), selectedSupplier?.fullName || '—')}
@@ -2173,8 +2016,7 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
             {renderReviewItem(t('form.unit_cost'), `${t('common.etb')} ${costDisplay.toFixed(2)}`)}
             {renderReviewItem(t('form.unit_selling_price'), `${t('common.etb')} ${Number(baseSellingPrice) || 0}`)}
             {renderReviewItem(t('sale.tax_type'), taxType)}
-            {hasPacks && renderReviewItem(t('form.bulk_selling_price'), `${t('common.etb')} ${Number(packSellingPrice) || 0}`)}
-            {renderReviewItem(t('wizard.initial_stock'), `${stockBaseQty} ${baseUnit}` + (hasPacks ? ` (${stockQty} ${purchaseUnit})` : ''))}
+            {renderReviewItem(t('wizard.initial_stock'), `${stockBaseQty} ${baseUnit}`)}
             {renderReviewItem(t('form.supplier_label'), selectedSupplier?.fullName || '—')}
             {renderReviewItem(t('wizard.batch_number'), batchNumber || '—')}
             {renderReviewItem(t('form.expiration_archive'), expiryDate ? formatDate(new Date(expiryDate), calendarType, language) : '—')}

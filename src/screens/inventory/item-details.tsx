@@ -9,6 +9,7 @@ import { deleteItem, ItemData, updateItem } from '@/database/db';
 import { playBad, playNice } from '@/services/soundService';
 import { formatDate } from '@/utils/date-utils';
 import * as Haptics from 'expo-haptics';
+import { Image } from 'expo-image';
 import {
   Activity,
   AlertCircle,
@@ -183,7 +184,11 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => 
 
          <Animated.View style={styles.heroContent}>
             <View style={[styles.assetIconBox, { backgroundColor: G.fg }]}>
-               <Package size={32} color={G.bg} />
+               {item.image ? (
+                  <Image source={{ uri: item.image }} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} />
+               ) : (
+                  <Package size={32} color={G.bg} />
+               )}
             </View>
             <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.heroSub, { color: G.fgSecondary }]} numberOfLines={1}>{t('detail.asset_blueprint')}</AppText>
             {isEditing ? (
@@ -480,44 +485,7 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => 
                      <AppNumber value={editForm.baseSellingPrice} prefix={t('common.etb') + ' '} size="body-sm" style={styles.nodeValue} />
                   )}
                </View>
-               {Boolean(editForm.hasPacks) && (
-                 <>
-                   <View style={styles.nodeDivider} />
-                   <View style={styles.node}>
-                     <View style={styles.nodeInfo}>
-                       <Boxes size={16} color={G.fgSecondary} />
-                       <AppText variant="caption" weight="bold" style={[styles.nodeLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('inventory.pack_purchase_price')}</AppText>
-                     </View>
-                     {isEditing ? (
-                       <TextInput
-                         style={[styles.nodeInput, { color: G.fg, borderColor: G.border }]}
-                         value={String(editForm.packPurchasePrice || '')}
-                         onChangeText={(t) => setEditForm((prev: any) => ({ ...prev, packPurchasePrice: Number(t) }))}
-                         keyboardType="numeric"
-                       />
-                     ) : (
-                       <AppNumber value={editForm.packPurchasePrice} prefix={t('common.etb') + ' '} size="body-sm" style={styles.nodeValue} />
-                     )}
-                   </View>
-                   <View style={styles.nodeDivider} />
-                   <View style={styles.node}>
-                     <View style={styles.nodeInfo}>
-                       <Boxes size={16} color={G.fgSecondary} />
-                       <AppText variant="caption" weight="bold" style={[styles.nodeLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('inventory.pack_selling_price')}</AppText>
-                     </View>
-                     {isEditing ? (
-                       <TextInput
-                         style={[styles.nodeInput, { color: G.fg, borderColor: G.border }]}
-                         value={String(editForm.packSellingPrice || '')}
-                         onChangeText={(t) => setEditForm((prev: any) => ({ ...prev, packSellingPrice: Number(t) }))}
-                         keyboardType="numeric"
-                       />
-                     ) : (
-                       <AppNumber value={editForm.packSellingPrice} prefix={t('common.etb') + ' '} size="body-sm" style={styles.nodeValue} />
-                     )}
-                   </View>
-                 </>
-               )}
+               
            </View>
          </Animated.View>
 
@@ -596,44 +564,7 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => 
                       </View>
                    )}
                 </View>
-                {Boolean(editForm.hasPacks) && (
-                  <>
-                    <View style={styles.nodeDivider} />
-                    <View style={styles.node}>
-                      <View style={styles.nodeInfo}>
-                        <Boxes size={16} color={G.fgSecondary} />
-                        <AppText variant="caption" weight="bold" style={[styles.nodeLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('inventory.units_per_pack')}</AppText>
-                      </View>
-                      {isEditing ? (
-                        <TextInput
-                          style={[styles.nodeInput, { color: G.fg, borderColor: G.border }]}
-                          value={String(editForm.unitsPerPack || 1)}
-                          onChangeText={(t) => setEditForm((prev: any) => ({ ...prev, unitsPerPack: Number(t) }))}
-                          keyboardType="numeric"
-                        />
-                      ) : (
-                        <AppText variant="body-sm" weight="bold" style={[styles.nodeValue, { color: G.fg }]} numberOfLines={1}>{editForm.unitsPerPack} {editForm.baseUnit}/{t('form.pack')}</AppText>
-                      )}
-                    </View>
-                    <View style={styles.nodeDivider} />
-                    <View style={styles.node}>
-                      <View style={styles.nodeInfo}>
-                        <Boxes size={16} color={G.fgSecondary} />
-                        <AppText variant="caption" weight="bold" style={[styles.nodeLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('inventory.total_packs')}</AppText>
-                      </View>
-                     {isEditing ? (
-                       <TextInput
-                         style={[styles.nodeInput, { color: G.fg, borderColor: G.border }]}
-                         value={String(editForm.totalPackQuantity || 0)}
-                         onChangeText={(t) => setEditForm((prev: any) => ({ ...prev, totalPackQuantity: Number(t) }))}
-                         keyboardType="numeric"
-                       />
-                     ) : (
-                       <AppNumber value={editForm.totalPackQuantity} size="body-sm" style={styles.nodeValue} />
-                     )}
-                   </View>
-                 </>
-               )}
+                
             </View>
           </Animated.View>
           </TutorialTarget>
@@ -758,7 +689,7 @@ const createStyles = (G: any) => StyleSheet.create({
   topActions: { position: 'absolute', top: 50, left: 25, right: 25, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 10 },
   circleBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
   heroContent: { alignItems: 'center' },
-  assetIconBox: { width: 70, height: 70, borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginBottom: 15, shadowColor: G.fg, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 15, elevation: 5, backgroundColor: G.bgCard },
+  assetIconBox: { width: 70, height: 70, borderRadius: 24, overflow: 'hidden', justifyContent: 'center', alignItems: 'center', marginBottom: 15, shadowColor: G.fg, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 15, elevation: 5, backgroundColor: G.bgCard },
   heroSub: { fontSize: 13, fontFamily: Fonts.bold, letterSpacing: 1.5, marginBottom: 5 },
   heroTitle: { fontSize: 32, fontFamily: Fonts.bold, letterSpacing: -1, textAlign: 'center' },
   heroInput: { fontSize: 24, fontFamily: Fonts.bold, textAlign: 'center', borderWidth: 1, borderColor: G.border, borderRadius: 12, paddingHorizontal: 20, minWidth: 200, backgroundColor: G.bgCard },

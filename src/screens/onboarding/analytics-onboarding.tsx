@@ -210,7 +210,6 @@ function AnalyticsCard({ G, t }: { G: ReturnType<typeof getGlass>; t: (key: stri
           {[
             { label: t('onboarding.revenue'), value: 'Br 125.4k', change: '+12.5%', positive: true },
             { label: t('onboarding.profit'), value: 'Br 38.2k', change: '+8.3%', positive: true },
-            { label: t('onboarding.expenses'), value: 'Br 24.1k', change: '-3.1%', positive: false },
           ].map((s, i) => (
             <StatCard key={i} stat={s} index={i} G={G} />
           ))}

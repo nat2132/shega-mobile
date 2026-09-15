@@ -8,14 +8,11 @@ import { Fonts } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
 import { useToast } from '@/context/ToastContext';
 import {
-    getFilteredExpenses,
     getItems,
     getSales,
     getCategories,
-    getContacts,
     getWarehouses,
     getDB,
-    getFilteredAdjustments,
 } from '@/database/db';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -33,13 +30,10 @@ import {
     ArrowRight,
     Package,
     ShoppingCart,
-    Receipt,
     Tag,
-    Users,
     Warehouse,
     CreditCard,
     RotateCcw,
-    Wrench,
     FileText,
 } from 'lucide-react-native';
 import React, { useState, useEffect, useCallback } from 'react';
@@ -70,7 +64,7 @@ import {
 
 type Mode = 'export' | 'import';
 type Format = 'db' | 'csv';
-type DataType = 'items' | 'sales' | 'expenses' | 'categories' | 'contacts' | 'adjustments' | 'warehouses' | 'debt_payments' | 'returns';
+type DataType = 'items' | 'sales' | 'categories' | 'warehouses' | 'debt_payments' | 'returns';
 
 interface Props {
   visible: boolean;
@@ -126,7 +120,7 @@ const si = StyleSheet.create({
 // ——— Main Modal ———————————————————————————————————————————————————————
 
 export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onSuccess }) => {
-  const { colors, t } = useSettings();
+  const { colors, t, featureFlags } = useSettings();
   const { showToast } = useToast();
 
   const [step, setStep] = useState(1);
@@ -154,10 +148,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
       const tables: [string, string][] = [
         ['items', 'items'],
         ['sales', 'sales'],
-        ['expenses', 'expenses'],
         ['categories', 'categories'],
-        ['contacts', 'contacts'],
-        ['adjustments', 'adjustments'],
         ['warehouses', 'warehouses'],
         ['debt_payments', 'debt_payments'],
         ['returns', 'returns'],
@@ -228,10 +219,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
       switch (moduleKey) {
         case 'items': return getItems() as any[];
         case 'sales': return getSales() as any[];
-        case 'expenses': return getFilteredExpenses({ limit: 999999 }) as any[];
         case 'categories': return getCategories() as any[];
-        case 'contacts': return getContacts() as any[];
-        case 'adjustments': return getFilteredAdjustments() as any[];
         case 'warehouses': return getWarehouses() as any[];
         case 'debt_payments': return database.getAllSync('SELECT * FROM debt_payments ORDER BY id DESC') as any[];
         case 'returns': return database.getAllSync('SELECT r.*, i.name as itemName FROM returns r LEFT JOIN items i ON r.itemId = i.id ORDER BY r.id DESC') as any[];
@@ -434,10 +422,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
     switch (key) {
       case 'items': return Package;
       case 'sales': return ShoppingCart;
-      case 'expenses': return Receipt;
       case 'categories': return Tag;
-      case 'contacts': return Users;
-      case 'adjustments': return Wrench;
       case 'warehouses': return Warehouse;
       case 'debt_payments': return CreditCard;
       case 'returns': return RotateCcw;
@@ -449,10 +434,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
     switch (key) {
       case 'items': return colors.primary;
       case 'sales': return colors.success;
-      case 'expenses': return colors.warning;
       case 'categories': return '#8B5CF6';
-      case 'contacts': return '#06B6D4';
-      case 'adjustments': return '#F59E0B';
       case 'warehouses': return '#10B981';
       case 'debt_payments': return colors.error;
       case 'returns': return '#EC4899';
@@ -463,10 +445,7 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
   const DATA_TYPE_LABELS: Record<DataType, string> = {
     items: 'dt.inventory_items',
     sales: 'dt.sales_records',
-    expenses: 'dt.expenses',
     categories: 'dt.categories',
-    contacts: 'dt.contacts',
-    adjustments: 'dt.adjustments',
     warehouses: 'dt.warehouses',
     debt_payments: 'dt.debt_payments',
     returns: 'dt.returns',
@@ -557,7 +536,9 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
             {/* ══════ STEP 2: Select Data Type ══════ */}
             {step === 2 && (
               <Animated.View entering={FadeInDown.duration(300)} style={s.section}>
-                {(Object.keys(DATA_TYPE_LABELS) as DataType[]).map((key) => {
+                {(Object.keys(DATA_TYPE_LABELS) as DataType[]).filter((key) =>
+                  key === 'warehouses' ? featureFlags.warehousesEnabled : true
+                ).map((key) => {
                   const Icon = getModuleIcon(key);
                   const iconColor = getModuleColor(key);
                   const count = moduleCounts[key] || 0;

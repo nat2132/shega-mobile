@@ -17,8 +17,8 @@ export interface HealthScoreResult {
 }
 
 const FACTOR_KEYS = [
-  'sales', 'margin', 'growth', 'expense',
-  'inventory', 'budget', 'customers', 'adjustments',
+  'sales', 'margin', 'growth',
+  'inventory', 'customers', 'adjustments',
 ] as const;
 
 export function useBusinessHealthScore(enabled = true): {
@@ -40,7 +40,6 @@ export function useBusinessHealthScore(enabled = true): {
       const db = require('@/database/db');
       const stats = db.getDashboardStats();
       const inventoryStats = db.getInventoryStats();
-      const budgetDashboard = db.getBudgetDashboard();
       const debtSummary = db.getDebtSummary();
       const adjMetrics = db.getAdjustmentDashboardMetrics();
       const lowStock = db.getLowStockItems();
@@ -58,14 +57,9 @@ export function useBusinessHealthScore(enabled = true): {
       const revenueYesterday = yesterday.revenue || 0;
       const gpToday = today.grossProfit || 0;
       const gpMargin = revenueToday > 0 ? (gpToday / revenueToday) * 100 : 0;
-      const expensesToday = today.expenses || 0;
-      const expenseRatio = revenueToday > 0 ? (expensesToday / revenueToday) : 0;
       const revGrowth = revenueYesterday > 0 ? ((revenueToday - revenueYesterday) / revenueYesterday) * 100 : 0;
-      const bd = budgetDashboard || {};
-      const budgetRatio = (bd.totalPlanned || 0) > 0 ? ((bd.totalSpent || 0) / bd.totalPlanned) : 0;
       const debtorCount = debtSummary?.debtorCount || 0;
-      const adjData = adjMetrics || {};
-      const damageCount = adjData.damagedItems || 0;
+      const damageCount = adjMetrics?.damagedItems || 0;
       const invHealthScore = Math.max(100 - ((lowStockRatio + outOfStockRatio) * 100), 0);
 
       const rawScores: Record<string, { score: number; status: 'good' | 'warning' | 'critical' }> = {
@@ -81,17 +75,9 @@ export function useBusinessHealthScore(enabled = true): {
           score: Math.round(Math.min(Math.max(((revGrowth + 50) / 100) * 100, 0), 100)),
           status: revGrowth < -20 ? 'critical' : revGrowth < 0 ? 'warning' : 'good',
         },
-        expense: {
-          score: Math.round(Math.max(100 - (expenseRatio * 100), 0)),
-          status: expenseRatio > 0.7 ? 'critical' : expenseRatio > 0.4 ? 'warning' : 'good',
-        },
         inventory: {
           score: Math.round(invHealthScore),
           status: lowStockRatio > 0.3 ? 'critical' : lowStockRatio > 0.1 ? 'warning' : 'good',
-        },
-        budget: {
-          score: Math.round(Math.max(100 - (budgetRatio * 50), 0)),
-          status: budgetRatio > 1.0 ? 'critical' : budgetRatio > 0.8 ? 'warning' : 'good',
         },
         customers: {
           score: Math.round(Math.max(100 - (debtorCount * 5), debtorCount > 0 ? 30 : 100)),
@@ -104,8 +90,8 @@ export function useBusinessHealthScore(enabled = true): {
       };
 
       const WEIGHTS: Record<string, number> = {
-        sales: 20, margin: 15, growth: 15, expense: 10,
-        inventory: 15, budget: 10, customers: 10, adjustments: 5,
+        sales: 20, margin: 15, growth: 15,
+        inventory: 15, customers: 10, adjustments: 5,
       };
 
       const factors: HealthFactor[] = FACTOR_KEYS.map((key) => ({

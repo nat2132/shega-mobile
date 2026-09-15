@@ -4,6 +4,7 @@ import { AuthProvider } from '@/context/AuthContext';
 import { AccountProvider } from '@/context/AccountContext';
 import { SettingsProvider , useSettings } from '@/context/SettingsContext';
 import { SidebarProvider } from '@/context/SidebarContext';
+import { BusinessScopeProvider } from '@/context/BusinessScopeContext';
 import { NavigationIntentProvider } from '@/context/NavigationIntentContext';
 import { WarehouseProvider } from '@/context/WarehouseContext';
 import { UpdateProvider } from '@/context/UpdateContext';
@@ -119,6 +120,7 @@ function AppShell({ dbWarning }: { dbWarning?: string | null }) {
             <Stack.Screen name="sales-onboarding" options={{ animation: 'fade' }} />
             <Stack.Screen name="analytics-onboarding" options={{ animation: 'fade' }} />
             <Stack.Screen name="user-setup" options={{ animation: 'fade' }} />
+            <Stack.Screen name="feature-setup" options={{ animation: 'fade' }} />
             <Stack.Screen name="subscription/welcome" options={{ animation: 'fade' }} />
             <Stack.Screen name="subscription/plans" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="subscription/upgrade" options={{ animation: 'slide_from_right' }} />
@@ -255,6 +257,7 @@ export default function RootLayout() {
             <SettingsProvider>
               <SubscriptionProvider>
                 <WarehouseProvider>
+                  <BusinessScopeProvider>
                   <ToastProvider>
                     <DialogProvider>
                       <InAppBannerProvider>
@@ -272,6 +275,7 @@ export default function RootLayout() {
                       </InAppBannerProvider>
                     </DialogProvider>
                   </ToastProvider>
+                  </BusinessScopeProvider>
                 </WarehouseProvider>
               </SubscriptionProvider>
             </SettingsProvider>

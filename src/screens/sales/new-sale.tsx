@@ -7,6 +7,7 @@ import { Check, Package, ScanLine, Search, ShoppingCart, Star, X } from 'lucide-
 import React, { useCallback, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { Image } from 'expo-image';
 import { getSalesGlass } from './glass-sales';
 
 interface NewSaleScreenProps {
@@ -147,7 +148,11 @@ const NewSaleScreen: React.FC<NewSaleScreenProps> = ({
                 activeOpacity={0.7}
               >
                 <View style={[styles.resultIcon, { backgroundColor: colors.primary + '15' }]}>
-                  <Package size={18} color={colors.primary} />
+                  {item.image ? (
+                    <Image source={{ uri: item.image }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
+                  ) : (
+                    <Package size={18} color={colors.primary} />
+                  )}
                 </View>
                 <View style={{ flex: 1 }}>
                   <AppText variant="body" weight="bold" style={{ color: SALES_GLASS.fg }} numberOfLines={1}>{item.name}</AppText>
@@ -189,7 +194,11 @@ const NewSaleScreen: React.FC<NewSaleScreenProps> = ({
                     activeOpacity={0.7}
                   >
                     <View style={[styles.quickIcon, { backgroundColor: colors.primary + '15' }]}>
-                      <Package size={18} color={colors.primary} />
+                      {item.image ? (
+                        <Image source={{ uri: item.image }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
+                      ) : (
+                        <Package size={18} color={colors.primary} />
+                      )}
                     </View>
                     <AppText variant="body" weight="bold" style={[styles.quickName, { color: SALES_GLASS.fg }]} numberOfLines={1}>
                       {item.name}
@@ -315,6 +324,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 12,
+    overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -333,6 +343,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
+    overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
   },

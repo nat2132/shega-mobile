@@ -58,6 +58,10 @@ export function publishMobileHub(): void {
   if (isPublishing) return;
 
   try {
+    if (!Zeroconf) {
+      console.warn('[mDNS] Cannot publish mobile hub: react-native-zeroconf unavailable');
+      return;
+    }
     zeroconf = new Zeroconf();
     const deviceId = getDeviceId();
     const port = getMobileSyncPort();

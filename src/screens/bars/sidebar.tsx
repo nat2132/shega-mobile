@@ -146,35 +146,18 @@ const MyStoreMenu: React.FC<SidebarProps> = ({ onClose }) => {
               </AppText>
               
               <MenuItem 
-                icon={Users} 
-                label={t('sidebar.contacts')} 
-                onPress={() => handleRoute('/contacts')} 
-                delay={150}
+                icon={Truck} 
+                label={t('sidebar.suppliers')} 
+                onPress={() => handlePremiumRoute('/(tabs)/suppliers', 'supplier_management')} 
+                locked={!isFeatureUnlocked('supplier_management')}
+                delay={200}
               />
-              {canAny(['inventory.suppliers']) && (
+              {canAny(['team.view']) && (
                 <MenuItem 
-                  icon={Truck} 
-                  label={t('sidebar.suppliers')} 
-                  onPress={() => handlePremiumRoute('/(tabs)/suppliers', 'supplier_management')} 
-                  locked={!isFeatureUnlocked('supplier_management')}
-                  delay={200}
-                />
-              )}
-              {canAny(['payments.manageExpenses']) && (
-                <MenuItem 
-                  icon={Banknote} 
-                  label={t('sidebar.expense_tracker')} 
-                  onPress={() => handlePremiumRoute('/expense', 'expense')} 
-                  locked={!isFeatureUnlocked('expense')}
+                  icon={Users} 
+                  label={t('teams.title')} 
+                  onPress={() => handleRoute('/teams')} 
                   delay={250}
-                />
-              )}
-              {canAny(['inventory.adjust']) && (
-                <MenuItem 
-                  icon={SlidersHorizontal} 
-                  label={t('sidebar.stock_adjustments')} 
-                  onPress={() => handleRoute('/adjustment')} 
-                  delay={300}
                 />
               )}
               {canAny(['reports.viewOwn', 'reports.viewAll']) && (

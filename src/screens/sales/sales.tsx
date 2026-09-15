@@ -30,6 +30,7 @@ import {
 } from "@/database/db";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useAutoHideScroll } from "@/hooks/useAutoHideScroll";
+import { useDataChangedRefresh } from "@/hooks/useDataChangedRefresh";
 import { usePeripheralScan } from "@/hooks/usePeripherals";
 import { getPeripheralManager } from "@/services/peripherals/peripheralManager";
 import { playBad, playNice } from "@/services/soundService";
@@ -44,6 +45,7 @@ import {
 } from "@/utils/date-utils";
 import { generateInvoicePDF, generateReceiptPDF } from "@/utils/pdf-utils";
 import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
 import {
   Banknote,
@@ -67,7 +69,6 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Dimensions,
   FlatList,
-  Image,
   KeyboardAvoidingView,
   Linking,
   Modal,
@@ -127,7 +128,7 @@ const { width, height } = Dimensions.get("window");
 
 const SalesDashboard = () => {
   const { openSidebar } = useSidebar();
-  const { userProfile, colors, calendarType, language, timeSystem, t } =
+  const { userProfile, colors, calendarType, language, timeSystem, t, featureFlags } =
     useSettings();
   const { isReadOnly } = useSubscription();
   const insets = useSafeAreaInsets();
@@ -248,6 +249,8 @@ const SalesDashboard = () => {
     const products = getTopSellingItems(5);
     setTopItems(products);
   }, [activeTab, periodOffset, calendarType]);
+
+  useDataChangedRefresh(loadData);
 
   const onRefresh = React.useCallback(() => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -662,15 +665,8 @@ const SalesDashboard = () => {
         color: colors.error,
         onPress: () => handleShowPaymentMethods(),
       },
-      {
-        title: t("orders.orders"),
-        value: t("sales.tap_to_view"),
-        icon: ShoppingBag,
-        color: colors.primary,
-        onPress: () => router.push("/(tabs)/orders"),
-      },
     ],
-    [t],
+    [t, featureFlags.customersEnabled],
   );
 
   const handleShowPeakHours = () => {
@@ -728,11 +724,11 @@ const SalesDashboard = () => {
   // mount AND on subsequent publishes, without racing the focus event.
   React.useEffect(() => {
     if (!pendingIntent) return;
-    if (pendingIntent.kind === "collect_payments") {
+    if (pendingIntent.kind === "collect_payments" && featureFlags.customersEnabled) {
       handleOpenCollectPayments(pendingIntent.customerName);
     }
     consumeIntent();
-  }, [pendingIntent, consumeIntent]);
+  }, [pendingIntent, consumeIntent, featureFlags.customersEnabled]);
 
   const handleSelectCustomer = (customer: any) => {
     setSelectedCustomer(customer);
@@ -1416,7 +1412,7 @@ const SalesDashboard = () => {
               </TouchableOpacity>
               </TutorialTarget>
 
-              {isBarExpanded && (
+              {isBarExpanded && featureFlags.customersEnabled && (
                 <Animated.View
                   entering={FadeIn.delay(100)}
                   exiting={FadeOut.duration(100)}
@@ -3580,10 +3576,7 @@ const SalesDashboard = () => {
                 quickProducts={quickProducts}
                 cartCount={pendingSales.reduce((sum, s) => sum + Math.max(0, s.quantity || 0), 0)}
                 cartTotal={pendingSales.reduce((sum, s) => {
-                  const p =
-                    s.unitType === "pack"
-                      ? s.packSellingPrice || 0
-                      : s.baseSellingPrice || 0;
+                  const p = s.baseSellingPrice || 0;
                   return sum + Number(p) * Math.max(0, s.quantity || 0);
                 }, 0)}
                 onAddProduct={(item: any) => {
@@ -3599,10 +3592,7 @@ const SalesDashboard = () => {
                 quickProducts={quickProducts}
                 cartCount={pendingSales.reduce((sum, s) => sum + Math.max(0, s.quantity || 0), 0)}
                 cartTotal={pendingSales.reduce((sum, s) => {
-                  const p =
-                    s.unitType === "pack"
-                      ? s.packSellingPrice || 0
-                      : s.baseSellingPrice || 0;
+                  const p = s.baseSellingPrice || 0;
                   return sum + Number(p) * Math.max(0, s.quantity || 0);
                 }, 0)}
                 onAddProduct={(item: any) => {
@@ -3669,10 +3659,7 @@ const SalesDashboard = () => {
                       totalPrice:
                         saleMetadata.totalPrice ||
                         pendingSales.reduce((sum, i) => {
-                          const p =
-                            i.unitType === "pack"
-                              ? i.packSellingPrice || 0
-                              : i.baseSellingPrice || 0;
+                          const p = i.baseSellingPrice || 0;
                           return sum + Number(p) * (i.quantity || 0);
                         }, 0),
                       paymentMethod: saleMetadata.paymentMethod || "Cash",
@@ -3784,7 +3771,6 @@ const SalesActivityCard = React.memo(
     const { colors, t } = useSettings();
     const SALES_GLASS = useMemo(() => getSalesGlass(colors), [colors]);
     const isPaid = sale.paymentStatus === "Paid";
-    const isOrder = sale.paymentStatus === "Order";
     const isDebt = sale.paymentStatus === "Debt";
     const isCancelled = sale.paymentStatus === "Cancelled";
     const isBatch = sale.isBatch;
@@ -3817,22 +3803,18 @@ const SalesActivityCard = React.memo(
       ? colors.success
       : isCancelled
         ? colors.error
-        : isOrder
-          ? colors.primary
-          : isDebt
-            ? colors.warning
-            : isPaid
-              ? colors.success
-              : colors.warning;
+        : isDebt
+          ? colors.warning
+          : isPaid
+            ? colors.success
+            : colors.warning;
     const badgeLabel = isPayment
       ? t("dashboard.activity.debt_collected")
       : isCancelled
         ? t("sale.cancelled")
-        : isOrder
-          ? t("sale.order")
-          : isPaid
-            ? t("sales.payment_paid")
-            : t("sales.payment_debt");
+        : isPaid
+          ? t("sales.payment_paid")
+          : t("sales.payment_debt");
     const displayPrice = isPayment
       ? Math.abs(sale.totalPrice)
       : sale.totalPrice;
@@ -3849,7 +3831,11 @@ const SalesActivityCard = React.memo(
               { backgroundColor: badgeColor + "18", borderColor: SALES_GLASS.borderSubtle },
             ]}
           >
-            <User size={18} color={badgeColor} />
+            {sale.image && !isPayment ? (
+              <Image source={{ uri: sale.image }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
+            ) : (
+              <User size={18} color={badgeColor} />
+            )}
           </View>
           <View style={styles.activityMain}>
             <AppText

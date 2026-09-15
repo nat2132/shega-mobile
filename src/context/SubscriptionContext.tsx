@@ -24,10 +24,7 @@ export const PREMIUM_FEATURES = [
   'pdf_download',
   'csv_import',
   'csv_export',
-  'expense',
-  'budget',
   'debt',
-  'orders',
   'purchase_orders',
   'multi_warehouse',
   'ai_assistant',
@@ -66,25 +63,10 @@ export const FEATURE_LABELS: Record<PremiumFeature, { name: string; description:
     description: 'Export your business data to CSV format.',
     benefits: ['Data portability', 'Backup your records', 'Analyze in spreadsheets'],
   },
-  expense: {
-    name: 'Expense Management',
-    description: 'Track all business expenses and understand where your money goes.',
-    benefits: ['Better financial control', 'Understand profits', 'Smarter spending'],
-  },
-  budget: {
-    name: 'Budget Management',
-    description: 'Create and manage budgets for your business.',
-    benefits: ['Plan your spending', 'Stay on track', 'Reduce waste'],
-  },
   debt: {
     name: 'Debt Management',
     description: 'Manage customer debts and payment tracking.',
     benefits: ['Track owed amounts', 'Automate reminders', 'Improve cash flow'],
-  },
-  orders: {
-    name: 'Customer Orders',
-    description: 'Manage customer orders from placement to fulfillment.',
-    benefits: ['Streamline ordering', 'Track fulfillment', 'Better customer service'],
   },
   purchase_orders: {
     name: 'Purchase Orders',

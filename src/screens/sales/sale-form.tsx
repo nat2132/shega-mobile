@@ -16,57 +16,45 @@ import Animated, {
 } from "react-native-reanimated";
 import {
   Banknote,
-  Barcode,
   Calendar,
+  Check,
   ChevronLeft,
-  CreditCard,
   Eye,
   History,
-  Minus,
-  Package as PackageItem,
-  Percent,
   Phone,
   Plus,
-  Repeat,
-  ScanLine,
-  Search,
   ShieldCheck,
   ShoppingBag,
   Smartphone,
-  Split,
-  Ticket,
-  Trash2,
   User,
-  Wallet,
   X,
   Zap,
 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
-import { Image } from "expo-image";
-import { getDebtCustomers, getComplianceSettings, getItemByBarcode, searchInventory } from "@/database/db";
+import { getDebtCustomers, getComplianceSettings, getScopedBusinessId } from "@/database/db";
 import { useSettings } from "@/context/SettingsContext";
 import { useDialog } from "@/context/DialogContext";
 import { playNice, playBad } from "@/services/soundService";
 import { Fonts, LightTheme } from "@/constants/theme";
-import { CustomDatePicker } from "@/components/CustomDatePicker";
-import { formatDate } from '@/utils/date-utils';
 import { AppText, AppNumber } from "@/components/ui";
 import { DraftSection } from '@/components/DraftSection';
 import { Draft } from '@/services/draftService';
 import { useFormDrafts } from '@/hooks/useFormDrafts';
-import { usePermissions } from '@/hooks/usePermissions';
-import BarcodeScannerView, { BarcodeScanResult } from '@/components/BarcodeScanner';
 import { getLinePrice, getLineUnitLabel, getLineStock, calcLineTotal, cartSubtotal, cartUnitCount } from '@/utils/cartUtils';
 import { getSalesGlass } from './glass-sales';
+import { getSaleTaxConfig } from "@/services/taxService";
+import { usePermissions } from "@/hooks/usePermissions";
+import {
+  getMobileBankingProviders,
+  addMobileBankingProvider,
+  removeMobileBankingProvider,
+  MobileBankingProvider,
+} from "@/services/mobileBankingService";
 import { useTutorial, useTutorialExample, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
 import { saleFormTutorial } from '@/tutorials/definitions';
 const SALES_GLASS = getSalesGlass(LightTheme);
 
-type PaymentMethod = "Cash" | "Transfer" | "Card" | "Mobile" | "";
-interface TenderRow {
-  method: Exclude<PaymentMethod, "">;
-  amount: string;
-}
+type PaymentMethod = "Cash" | "Mobile" | "";
 interface SaleFormProps {
   cart: any[];
   onFinish?: (saleData: any) => void;
@@ -80,15 +68,14 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
   cart,
   onFinish,
   onBack,
-  onAddItem,
-  onUpdateItem,
-  onRemoveItem,
 }) => {
-  const { colors, t, theme, calendarType, language } = useSettings();
+  const { colors, t, theme, featureFlags } = useSettings();
   const SALES_GLASS = useMemo(() => getSalesGlass(colors), [colors]);
   const tutorial = useTutorial({ tutorial: saleFormTutorial });
   const dialog = useDialog();
-  const { canManageCatalog } = usePermissions();
+  // Domain gate: no sales.create permission, no settlement — this is the
+  // single checkout surface every sale flow funnels through.
+  const { canSell } = usePermissions();
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
     "Cash",
@@ -99,35 +86,28 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [globalDiscount, setGlobalDiscount] = useState("0");
-  const [taxType, setTaxType] = useState<"VAT" | "TOT" | "Other" | "None">("None");
-  const [taxRate, setTaxRate] = useState("0");
-  const [recordDate, setRecordDate] = useState("");
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [dueDays, setDueDays] = useState("5");
+
+  // Tax comes from the business configuration (Settings → Tax Center, or the
+  // initial setup step) — the cashier never picks tax type/rate per sale.
+  // Keyed to the active business so switching businesses reloads the config.
+  const saleTax = useMemo(() => getSaleTaxConfig(), [getScopedBusinessId()]);
+  const taxType = saleTax.taxType;
+  const taxRate = saleTax.taxRate;
+
+  // Saved mobile-banking providers (Telebirr, CBE Birr, …) picked at checkout.
+  const [mbProviders, setMbProviders] = useState<MobileBankingProvider[]>(() => getMobileBankingProviders());
+  const [selectedMbProvider, setSelectedMbProvider] = useState<string>("");
+  const [showAddMbProvider, setShowAddMbProvider] = useState(false);
+  const [newMbName, setNewMbName] = useState("");
+  const [newMbAccount, setNewMbAccount] = useState("");
   const [showCustomerSearch, setShowCustomerSearch] = useState(false);
   const [customerSearchQuery, setCustomerSearchQuery] = useState("");
   const [existingCustomers, setExistingCustomers] = useState<any[]>([]);
 
-  // Cart editing + adding
-  const [showAddSheet, setShowAddSheet] = useState(false);
-  const [addTab, setAddTab] = useState<"scan" | "search">("scan");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [editingPrice, setEditingPrice] = useState<{ id: any; value: string } | null>(null);
-
-  // Tenders / split payments / cash change
-  const [tenders, setTenders] = useState<TenderRow[]>([
-    { method: "Cash", amount: "" },
-    { method: "Transfer", amount: "" },
-    { method: "Card", amount: "" },
-    { method: "Mobile", amount: "" },
-  ]);
-
   // Receipt preview + duplicate-submit guard
   const [showReceipt, setShowReceipt] = useState(false);
   const submittingRef = useRef(false);
-  const scanBusyRef = useRef(false);
 
   useEffect(() => {
     if (!tutorial.isActive) return;
@@ -136,10 +116,6 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
       setCustomerName('Tigist Desta');
       setCustomerPhone('0911-234-567');
       setDueDays('30');
-    } else if (tid === 'sf-pricing') {
-      setGlobalDiscount('5');
-      setTaxType('VAT');
-      setTaxRate('15');
     }
   }, [tutorial.isActive, tutorial.currentStep?.targetId]);
 
@@ -153,16 +129,12 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
       customerName,
       customerPhone,
       globalDiscount,
-      taxType,
-      taxRate,
-      recordDate,
       dueDays,
-    }), [paymentMethod, paymentStatus, customerName, customerPhone, globalDiscount, taxType, taxRate, recordDate, dueDays]),
+    }), [paymentMethod, paymentStatus, customerName, customerPhone, globalDiscount, dueDays]),
     getTitle: useCallback(() => t('sale.draft_title', { count: String(cart.length) }), [cart.length, t]),
     getSubtitle: useCallback(() => {
       if (paymentStatus === 'Paid') return `${paymentMethod} • ${t('sale.settled_full')}`;
-      if (paymentStatus === 'Debt') return `${customerName || t('sale.no_name')} • ${t('sale.debt_credit')}`;
-      return t('sale.order');
+      return `${customerName || t('sale.no_name')} • ${t('sale.debt_credit')}`;
     }, [paymentStatus, paymentMethod, customerName, t]),
     enabled: cart.length > 0,
   });
@@ -176,18 +148,15 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
     const subtotal = cartSubtotal(safeCart);
     const disc = Math.max(0, parseFloat(globalDiscount) || 0);
     const rate = Math.min(100, Math.max(0, parseFloat(taxRate) || 0));
-    // Tax per item: only lines whose stored taxType is not "None" are taxed.
-    // Falls back to taxing every line when items were created without tax metadata.
+    // The business-level tax (Settings → Tax Centre) applies to every line.
     let vatAmount = 0;
     if (taxType !== "None" && safeCart.length > 0) {
-      const hasTaxMetadata = safeCart.some((i: any) => i.taxType);
       for (const item of safeCart) {
         const lineSubtotal = calcLineTotal(item);
         const itemDisc =
           subtotal > 0 ? (lineSubtotal / subtotal) * Math.max(0, disc) : 0;
         const taxable = Math.max(0, lineSubtotal - itemDisc);
-        const isExempt = hasTaxMetadata && (!item.taxType || item.taxType === "None");
-        if (!isExempt) vatAmount += taxable * (rate / 100);
+        vatAmount += taxable * (rate / 100);
       }
     }
     const total = Math.max(0, subtotal - disc + vatAmount);
@@ -195,50 +164,6 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
   };
 
   const { subtotal, vatAmount: taxAmount, total } = calculateTotals();
-
-  // Tenders: amounts per method; non-split Quick mode auto-fills the active method.
-  const applyQuickTender = useCallback(
-    (method: Exclude<PaymentMethod, "">) => {
-      setTenders((prev) =>
-        prev.map((row) =>
-          row.method === method
-            ? { ...row, amount: total.toFixed(2) }
-            : { ...row, amount: "" },
-        ),
-      );
-    },
-    [total],
-  );
-
-  const allocatedTotal = useMemo(
-    () =>
-      tenders.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0),
-    [tenders],
-  );
-  const cashTendered = useMemo(
-    () => parseFloat(tenders.find((r) => r.method === "Cash")?.amount || "0") || 0,
-    [tenders],
-  );
-  const nonCashTendered = Math.max(0, allocatedTotal - cashTendered);
-  const changeDue = Math.max(0, cashTendered - Math.max(0, total - nonCashTendered));
-  const outstanding = Math.max(0, total - allocatedTotal);
-  const allTenderFilled =
-    paymentStatus !== "Paid" ||
-    (allocatedTotal >= total - 0.01 && allocatedTotal <= total + 0.01);
-
-  const primaryMethod = useMemo((): PaymentMethod => {
-    if (paymentStatus === "Paid") {
-      const paid: TenderRow[] = tenders.filter(
-        (r) => (parseFloat(r.amount) || 0) > 0,
-      );
-      if (paid.length === 1) return paid[0].method;
-      const dominant = tenders.reduce((best, r) =>
-        (parseFloat(r.amount) || 0) > (parseFloat(best.amount) || 0) ? r : best,
-      );
-      return dominant.method;
-    }
-    return paymentMethod as PaymentMethod;
-  }, [tenders, paymentStatus, paymentMethod]);
 
   const handleCheckout = async () => {
     // Duplicate-sale protection: ignore re-taps while the settlement is in flight.
@@ -267,18 +192,6 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
       await dialog.alert({
         title: t("common.error"),
         message: t('sale.discount_negative_error'),
-        iconType: "danger",
-      });
-      return;
-    }
-
-    // Validate tax rate is non-negative
-    const parsedRate = parseFloat(taxRate) || 0;
-    if (parsedRate < 0) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      await dialog.alert({
-        title: t("common.error"),
-        message: t('sale.tax_rate_negative_error'),
         iconType: "danger",
       });
       return;
@@ -315,35 +228,6 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
       }
     }
 
-    // Orders require customer name (for order tracking) but not phone
-    if (paymentStatus === "Order") {
-      if (!customerName || !customerName.trim()) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        playBad();
-        await dialog.alert({
-          title: t("common.error"),
-          message: t("sale.order_requires_name"),
-          iconType: "danger",
-        });
-        return;
-      }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      playNice();
-      await draftFormData.clearCurrent();
-      onFinish?.({
-        paymentMethod,
-        paymentStatus,
-        customerName,
-        customerPhone,
-        discount: globalDiscount,
-        taxType,
-        vat: taxRate,
-        totalPrice: total,
-        createdAt: recordDate || undefined,
-      });
-      return;
-    }
-
     // Validate total is a valid number
     if (isNaN(total) || total < 0) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -363,8 +247,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
       if (requiredQty > availableStock) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         playBad();
-        const unitLabel =
-          item.unitType === "pack" ? item.purchaseUnit : item.baseUnit;
+        const unitLabel = item.baseUnit;
         await dialog.alert({
           title: t('dialog.insufficient_stock'),
           message: t('dialog.insufficient_stock_desc', { name: item.name, required: String(requiredQty), unit: unitLabel, available: String(availableStock) }),
@@ -375,16 +258,12 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
       }
     }
 
-    // Tender validation: tendered amounts must cover the total.
-    if (paymentStatus === "Paid" && !allTenderFilled) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      playBad();
-      const shortfall = (total - allocatedTotal).toFixed(2);
+    // Mobile sales require choosing a saved mobile-banking method.
+    if (paymentStatus === "Paid" && paymentMethod === "Mobile" && !selectedMbProvider) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       await dialog.alert({
-        title: t("sale.split_incomplete_title") || "Payment not covered",
-        message:
-          t("sale.split_incomplete_msg") ||
-          `Tendered ETB ${allocatedTotal.toFixed(2)} of ${total.toFixed(2)}. Enter the remaining ETB ${shortfall} to complete the sale.`,
+        title: t("common.error"),
+        message: t("sale.select_mb_provider") || "Select a mobile banking method to continue.",
         iconType: "warning",
       });
       resetGuard();
@@ -392,23 +271,26 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
     }
 
     // ETB cash-transaction guardrail (National Bank of Ethiopia DAB limit).
-    // Any cash portion of a Paid sale above the configured threshold requires a digital method.
-    if (paymentStatus === "Paid" && cashTendered > 0) {
+    // Cash-only sales above the configured threshold require a digital method.
+    if (paymentStatus === "Paid" && paymentMethod === "Cash") {
       const compliance = getComplianceSettings();
-      if (cashTendered > compliance.cashTransactionLimit) {
+      if (total > compliance.cashTransactionLimit) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         playBad();
         const switchToTransfer = await dialog.confirm({
           title: t("sale.cash_limit_title") || "Cash Limit Exceeded",
           message:
             t("sale.cash_limit_msg") ||
-            `This cash tender (ETB ${cashTendered.toLocaleString()}) exceeds the ETB ${compliance.cashTransactionLimit.toLocaleString()} cash transaction limit. Switch to Transfer to continue.`,
-          confirmText: t("sale.cash_limit_switch") || "Switch to Transfer",
+            `This cash sale (ETB ${total.toLocaleString()}) exceeds the ETB ${compliance.cashTransactionLimit.toLocaleString()} cash transaction limit. Switch to Mobile Banking to continue.`,
+          confirmText: t("sale.cash_limit_switch") || "Switch to Mobile Banking",
           cancelText: t("common.cancel") || "Cancel",
           iconType: "warning",
         });
         if (switchToTransfer) {
-          applyQuickTender("Transfer");
+          setPaymentMethod("Mobile");
+          setSelectedMbProvider(
+            (prev) => prev || mbProviders[0]?.id || "",
+          );
         }
         resetGuard();
         return;
@@ -418,16 +300,32 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
     const dueDate =
       paymentStatus === "Debt"
         ? new Date(
-            new Date(recordDate || Date.now()).getTime() +
+            Date.now() +
               (parseInt(dueDays) || 5) * 24 * 60 * 60 * 1000,
           ).toISOString()
         : undefined;
 
+    if (!canSell) {
+      playBad();
+      dialog.alert({
+        title: t("common.error"),
+        message: t("sale.no_permission") || "You do not have permission to make sales.",
+        iconType: "warning",
+      });
+      return;
+    }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     playNice();
     await draftFormData.clearCurrent();
+    // Record the chosen mobile-banking provider as the payment method so
+    // reports show e.g. "Telebirr" instead of a generic "Mobile". The whole
+    // sale settles in one method — no split tender entry.
+    const resolvedPaymentMethod =
+      paymentMethod === "Mobile"
+        ? (mbProviders.find((p) => p.id === selectedMbProvider)?.name || "Mobile")
+        : paymentMethod;
     onFinish?.({
-      paymentMethod: primaryMethod,
+      paymentMethod: resolvedPaymentMethod,
       paymentStatus,
       customerName,
       customerPhone,
@@ -436,148 +334,13 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
       vat: taxRate,
       totalPrice: total,
       dueDate,
-      createdAt: recordDate || undefined,
-      tenders: tenders.filter((r) => (parseFloat(r.amount) || 0) > 0),
-      changeDue,
+      tenders: [{ method: resolvedPaymentMethod, amount: total.toFixed(2) }],
+      changeDue: 0,
       taxAmount,
     });
     // Keep the guard set until the parent unmounts/reopens the form.
     setTimeout(resetGuard, 800);
   };
-
-  const addAt = useCallback(
-    (item: any) => {
-      onAddItem?.(item);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    },
-    [onAddItem],
-  );
-
-  const setLineQty = useCallback(
-    (id: any, patchQty: number) => {
-      const item = safeCart.find((i) => i.id === id);
-      if (!item) return;
-      const qty = Math.max(0, patchQty);
-      const maxStock = getLineStock(item);
-      if (qty > maxStock) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        onUpdateItem?.(id, { quantity: maxStock });
-        return;
-      }
-      onUpdateItem?.(id, { quantity: qty });
-    },
-    [safeCart, onUpdateItem],
-  );
-
-  const toggleUnit = useCallback(
-    (id: any) => {
-      const item = safeCart.find((i) => i.id === id);
-      if (!item) return;
-      const wantPack = item.unitType !== "pack";
-      const allowed =
-        wantPack && item.allowSellByPackUnit
-          ? true
-          : !wantPack && item.allowSellByBaseUnit
-            ? true
-            : false;
-      if (!allowed) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        return;
-      }
-      Haptics.selectionAsync();
-      onUpdateItem?.(id, { unitType: wantPack ? "pack" : "base" });
-    },
-    [safeCart, onUpdateItem],
-  );
-
-  const removeLine = useCallback(
-    (id: any) => {
-      onRemoveItem?.(id);
-      setEditingPrice((prev) => (prev?.id === id ? null : prev));
-    },
-    [onRemoveItem],
-  );
-
-  const commitPrice = useCallback(() => {
-    if (!editingPrice) return;
-    const id = editingPrice.id;
-    const value = Math.max(0, parseFloat(editingPrice.value) || 0).toString();
-    const item = safeCart.find((i) => i.id === id);
-    if (item) {
-      const field =
-        item.unitType === "pack" ? "packSellingPrice" : "baseSellingPrice";
-      onUpdateItem?.(id, { [field]: value });
-    }
-    setEditingPrice(null);
-  }, [editingPrice, safeCart, onUpdateItem]);
-
-  const runSearch = useCallback((q: string) => {
-    const query = (q || "").trim();
-    if (!query) {
-      setSearchResults([]);
-      return;
-    }
-    setSearching(true);
-    const result = searchInventory(query);
-    setSearchResults(result);
-    setSearching(false);
-  }, []);
-
-  const searchTimer = useRef<any>(null);
-  useEffect(() => {
-    if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => runSearch(searchQuery), 250);
-    return () => {
-      if (searchTimer.current) clearTimeout(searchTimer.current);
-    };
-  }, [searchQuery, runSearch]);
-
-  const handleBarcodeScan = useCallback(
-    async (result: BarcodeScanResult) => {
-      if (scanBusyRef.current) return;
-      scanBusyRef.current = true;
-      const code = result.barcode;
-      const item = getItemByBarcode(code);
-      if (item) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        addAt(item);
-      } else {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        await dialog.alert({
-          title: t("sale.not_found_title") || "Item not found",
-          message:
-            t("sale.not_found_msg") ||
-            `No item matches barcode "${code}". Search the catalog below or register it as a new product.`,
-          iconType: "warning",
-        });
-        setAddTab("search");
-        setSearchQuery("");
-      }
-      setTimeout(() => {
-        scanBusyRef.current = false;
-      }, 1200);
-    },
-    [addAt, dialog, t],
-  );
-
-  const clearTenders = useCallback(() => {
-    setTenders((prev) => prev.map((r) => ({ ...r, amount: "" })));
-  }, []);
-
-  const quickFillRemainder = useCallback(() => {
-    setTenders((prev) => {
-      const filled = prev.filter((r) => (parseFloat(r.amount) || 0) > 0);
-      if (filled.length === 0) return prev;
-      const rest = total - filled.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
-      if (rest <= 0.001) return prev;
-      return prev.map((r) => {
-        if (r.method !== filled[0].method && (parseFloat(r.amount) || 0) === 0) {
-          return { ...r, amount: rest.toFixed(2) };
-        }
-        return r;
-      });
-    });
-  }, [total]);
 
   return (
     <View style={[styles.container, { backgroundColor: SALES_GLASS.bg }]}>
@@ -600,13 +363,10 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
               onRestore={async (draft) => {
                 const d = draft.data;
                 setPaymentMethod(d.paymentMethod || 'Cash');
-                setPaymentStatus(d.paymentStatus || 'Paid');
+                setPaymentStatus(featureFlags.customersEnabled ? (d.paymentStatus || 'Paid') : 'Paid');
                 setCustomerName(d.customerName || '');
                 setCustomerPhone(d.customerPhone || '');
                 setGlobalDiscount(d.globalDiscount || '0');
-                setTaxType(d.taxType || 'None');
-                setTaxRate(d.taxRate || '0');
-                setRecordDate(d.recordDate || '');
                 setDueDays(d.dueDays || '5');
                 await draftFormData.remove(draft.id);
               }}
@@ -661,301 +421,11 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
           </Animated.View>
           </TutorialTarget>
 
-          {/* Cart Lines — scan-to-add, editable rows */}
-          <Animated.View
-            entering={FadeInDown.delay(100)}
-            style={styles.formSection}
-          >
-            <TutorialTarget id="sf-cart">
-            <View style={styles.blockHeader}>
-              <ShoppingBag size={18} color={colors.primary} />
-              <AppText
-                variant="body"
-                weight="bold"
-                style={[styles.blockTitle, { color: SALES_GLASS.fg }]}
-                numberOfLines={2}
-              >
-                {t("sale.cart_title") || "Cart"}
-              </AppText>
-              <View style={styles.blockHeaderRight}>
-                <TouchableOpacity
-                  style={[
-                    styles.addItemBtn,
-                    { backgroundColor: colors.primary + "18" },
-                  ]}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setSearchQuery("");
-                    setAddTab("scan");
-                    setShowAddSheet(true);
-                  }}
-                >
-                  <ScanLine size={16} color={colors.primary} />
-                  <AppText
-                    variant="body-sm"
-                    weight="bold"
-                    shrink={false}
-                    style={{ color: colors.primary }}
-                    numberOfLines={1}
-                  >
-                    {t("sale.add_items") || "Add items"}
-                  </AppText>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {safeCart.length === 0 ? (
-              <TouchableOpacity
-                style={[
-                  styles.emptyCart,
-                  { backgroundColor: SALES_GLASS.bgCard, borderColor: SALES_GLASS.border },
-                ]}
-                onPress={() => setShowAddSheet(true)}
-              >
-                <Barcode size={28} color={SALES_GLASS.fgSecondary} />
-                <AppText
-                  variant="body"
-                  weight="medium"
-                  style={{ color: SALES_GLASS.fgSecondary, marginTop: 8, textAlign: "center" }}
-                >
-                  {t("sale.empty_cart_hint") || "No items yet — scan a barcode or search the catalog to start."}
-                </AppText>
-              </TouchableOpacity>
-            ) : (
-              safeCart.map((item: any) => {
-                const linePrice = getLinePrice(item);
-                const unitLabel = getLineUnitLabel(item) || "pcs";
-                const stock = getLineStock(item);
-                const isPack = item.unitType === "pack";
-                return (
-                  <Animated.View
-                    key={item.id}
-                    entering={FadeInDown.duration(250)}
-                    layout={Layout.springify()}
-                    style={[
-                      styles.cartRow,
-                      { backgroundColor: SALES_GLASS.bgCard, borderColor: SALES_GLASS.border },
-                    ]}
-                  >
-                    <View style={styles.cartThumb}>
-                      {item.image ? (
-                        <Image
-                          source={{ uri: item.image }}
-                          style={styles.cartThumbImg}
-                          contentFit="cover"
-                          transition={200}
-                        />
-                      ) : (
-                        <PackageItem size={18} color={SALES_GLASS.fgSecondary} />
-                      )}
-                    </View>
-                    <View style={styles.cartLineBody}>
-                      <View style={styles.cartLineTop}>
-                        <AppText
-                          variant="body"
-                          weight="bold"
-                          style={[styles.cartLineName, { color: SALES_GLASS.fg }]}
-                          numberOfLines={1}
-                        >
-                          {item.name}
-                        </AppText>
-                        {item.taxType && item.taxType !== "None" ? (
-                          <View
-                            style={[
-                              styles.taxChip,
-                              { backgroundColor: colors.primary + "15" },
-                            ]}
-                          >
-                            <AppText
-                              variant="micro"
-                              weight="bold"
-                              transform="uppercase"
-                              shrink={false}
-                              style={{ color: colors.primary }}
-                              numberOfLines={1}
-                            >
-                              {item.taxType}
-                            </AppText>
-                          </View>
-                        ) : null}
-                      </View>
-                      <AppNumber
-                        value={linePrice}
-                        size="caption"
-                        weight="medium"
-                        color={SALES_GLASS.fgSecondary}
-                      />
-                      <AppText
-                        variant="micro"
-                        weight="medium"
-                        style={{ color: stock <= 0 ? colors.error : SALES_GLASS.fgSecondary, marginTop: 2 }}
-                        numberOfLines={1}
-                      >
-                        {t("sale.stock_hint") || "In stock"}: {Math.max(0, stock)} {stock === 1 ? unitLabel : ""}
-                      </AppText>
-                    </View>
-                    <View style={styles.cartControls}>
-                      <View style={styles.qtyStepper}>
-                        <TouchableOpacity
-                          style={styles.qtyBtn}
-                          onPress={() => setLineQty(item.id, (item.quantity || 0) - 1)}
-                        >
-                          <Minus size={14} color={SALES_GLASS.fg} />
-                        </TouchableOpacity>
-                        <AppNumber
-                          value={item.quantity || 0}
-                          size="body-sm"
-                          weight="bold"
-                          style={styles.qtyVal}
-                          color={SALES_GLASS.fg}
-                        />
-                        <TouchableOpacity
-                          style={styles.qtyBtn}
-                          onPress={() => setLineQty(item.id, (item.quantity || 0) + 1)}
-                        >
-                          <Plus size={14} color={SALES_GLASS.fg} />
-                        </TouchableOpacity>
-                      </View>
-                      {(item.allowSellByPackUnit && item.allowSellByBaseUnit) ? (
-                        <TouchableOpacity
-                          style={[styles.unitToggleBtn, { borderColor: SALES_GLASS.border }]}
-                          onPress={() => toggleUnit(item.id)}
-                        >
-                          <Repeat size={11} color={SALES_GLASS.fgSecondary} />
-                          <AppText
-                            variant="micro"
-                            weight="bold"
-                            shrink={false}
-                            style={{ color: SALES_GLASS.fgSecondary }}
-                            numberOfLines={1}
-                          >
-                            {isPack ? (item.purchaseUnit || "Pack") : (item.baseUnit || "Unit")}
-                          </AppText>
-                        </TouchableOpacity>
-                      ) : (
-                        <View>
-                          <AppText
-                            variant="micro"
-                            weight="medium"
-                            shrink={false}
-                            style={{ color: SALES_GLASS.fgSecondary }}
-                            numberOfLines={1}
-                          >
-                            {unitLabel}
-                          </AppText>
-                        </View>
-                      )}
-                      <View style={styles.cartRowActions}>
-                        {canManageCatalog ? (
-                          !!editingPrice && editingPrice.id === item.id ? (
-                            <TextInput
-                              style={[
-                                styles.priceEditInput,
-                                {
-                                  color: SALES_GLASS.fg,
-                                  borderColor: colors.primary,
-                                  backgroundColor: SALES_GLASS.bgCard,
-                                },
-                              ]}
-                              value={editingPrice.value}
-                              onChangeText={(val) =>
-                                setEditingPrice({ id: item.id, value: val })
-                              }
-                              keyboardType="decimal-pad"
-                              autoFocus
-                              onBlur={commitPrice}
-                              onSubmitEditing={commitPrice}
-                              returnKeyType="done"
-                            />
-                          ) : (
-                            <TouchableOpacity
-                              style={styles.iconBtn}
-                              onPress={() => {
-                                Haptics.selectionAsync();
-                                setEditingPrice({
-                                  id: item.id,
-                                  value: String(linePrice),
-                                });
-                              }}
-                            >
-                              <Wallet size={13} color={SALES_GLASS.fgSecondary} />
-                            </TouchableOpacity>
-                          )
-                        ) : null}
-                        <TouchableOpacity
-                          style={styles.iconBtn}
-                          onPress={() => {
-                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                            removeLine(item.id);
-                          }}
-                        >
-                          <Trash2 size={14} color={colors.error} />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                    <AppNumber
-                      value={calcLineTotal(item)}
-                      size="body"
-                      weight="bold"
-                      style={styles.cartLineTotal}
-                      color={SALES_GLASS.fg}
-                    />
-                  </Animated.View>
-                );
-              })
-            )}
-            </TutorialTarget>
-          </Animated.View>
-
           {/* Settlement Blocks */}
           <Animated.View
             entering={FadeInDown.delay(200)}
             style={styles.formSection}
           >
-            {/* Record Date */}
-            <TouchableOpacity
-              style={[
-                {
-                  backgroundColor: SALES_GLASS.bgCard,
-                  borderColor: SALES_GLASS.border,
-                  borderWidth: 1,
-                  borderRadius: 20,
-                  padding: 16,
-                  marginBottom: 15,
-                  flexDirection: "row",
-                  alignItems: "center",
-                },
-              ]}
-              onPress={() => setShowDatePicker(true)}
-            >
-              <Calendar
-                size={18}
-                color={colors.primary}
-                style={{ marginRight: 12 }}
-              />
-              <View style={{ flex: 1 }}>
-                <AppText
-                  variant="micro"
-                  weight="bold"
-                  transform="uppercase"
-                  style={{ color: SALES_GLASS.fgSecondary }}
-                  numberOfLines={1}
-                >
-                  {t("common.record_date") || "Record Date"}
-                </AppText>
-                <AppText
-                  variant="body"
-                  weight="bold"
-                  style={{
-                    color: recordDate ? SALES_GLASS.fg : SALES_GLASS.fgSecondary,
-                    marginTop: 2,
-                  }}
-                  numberOfLines={1}
-                >
-                  {recordDate ? formatDate(new Date(recordDate), calendarType, language) : t("common.today") || "Today (Default)"}
-                </AppText>
-              </View>
-            </TouchableOpacity>
             <View
               style={[
                 styles.intelligenceBlock,
@@ -1006,6 +476,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                     {t("sale.settled_full")}
                   </AppText>
                 </TouchableOpacity>
+                {featureFlags.customersEnabled && (
                 <TouchableOpacity
                   style={[
                     styles.modalBtn,
@@ -1038,38 +509,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                     {t("sale.debt_credit")}
                   </AppText>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.modalBtn,
-                    paymentStatus === "Order" && [
-                      styles.modalActive,
-                      { backgroundColor: colors.primary },
-                    ],
-                  ]}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setPaymentStatus("Order");
-                    setPaymentMethod("");
-                  }}
-                >
-                  <AppText
-                    variant="body-sm"
-                    weight="bold"
-                    shrink={false}
-                    style={[
-                      styles.modalBtnText,
-                      {
-                        color:
-                          paymentStatus === "Order"
-                            ? SALES_GLASS.bg
-                            : SALES_GLASS.fgSecondary,
-                      },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {t('sale.order')}
-                  </AppText>
-                </TouchableOpacity>
+                )}
               </View>
             </View>
 
@@ -1098,9 +538,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                 </View>
                 <View style={styles.toggleRow}>
                   {([["Cash", Banknote, t("sale.physical_cash")],
-                    ["Transfer", CreditCard, t("sale.digital_bank")],
-                    ["Card", CreditCard, t("sale.card") || "Card"],
-                    ["Mobile", Smartphone, t("sale.mobile") || "Mobile"]] as const).map(
+                    ["Mobile", Smartphone, t("sale.mobile") || "Mobile Banking"]] as const).map(
                     ([m, Icon, label]) => (
                       <TouchableOpacity
                         key={m}
@@ -1114,7 +552,11 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                         onPress={() => {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                           setPaymentMethod(m);
-                          applyQuickTender(m);
+                          if (m === "Mobile") {
+                            setSelectedMbProvider(
+                              (prev) => prev || mbProviders[0]?.id || "",
+                            );
+                          }
                         }}
                       >
                         <Icon
@@ -1146,103 +588,122 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                     ),
                   )}
                 </View>
-                <View
-                  style={[
-                    styles.tenderRows,
-                    { borderTopColor: SALES_GLASS.border },
-                  ]}
-                >
-                  {tenders.map((row) => (
-                    <TenderInputRow
-                      key={row.method}
-                      row={row}
-                      label={row.method === "Cash" ? t("sale.physical_cash") : row.method === "Transfer" ? t("sale.digital_bank") : row.method}
-                      action={() => {
-                        Haptics.selectionAsync();
-                        applyQuickTender(row.method);
-                      }}
-                      onChange={(amount) =>
-                        setTenders((prev) =>
-                          prev.map((r) =>
-                            r.method === row.method ? { ...r, amount } : r,
-                          ),
-                        )
-                      }
-                      activeColor={colors.primary}
-                      glas={SALES_GLASS}
-                    />
-                  ))}
-                </View>
-                <View style={styles.tenderBalanceRow}>
-                  {allocatedTotal >= total - 0.01 ? (
-                    <>
-                      <Wallet size={14} color={colors.success} />
-                      <AppText
-                        variant="caption"
-                        weight="bold"
-                        style={{ color: colors.success, flexShrink: 1 }}
-                        numberOfLines={1}
-                      >
-                        {t("sale.change_due") || "Change due"}: ETB{" "}
-                        <AppNumber value={changeDue} size="caption" weight="bold" color={colors.success} />
-                      </AppText>
-                    </>
-                  ) : (
-                    <>
-                      <Wallet size={14} color={colors.warning} />
-                      <AppText
-                        variant="caption"
-                        weight="bold"
-                        style={{ color: colors.warning, flexShrink: 1 }}
-                        numberOfLines={1}
-                      >
-                        {t("sale.outstanding") || "Outstanding"}: ETB{" "}
-                        <AppNumber value={outstanding} size="caption" weight="bold" color={colors.warning} />
-                      </AppText>
-                    </>
-                  )}
-                  <View style={styles.tenderBalanceActions}>
-                    <TouchableOpacity
-                      style={[styles.smallActionBtn, { borderColor: SALES_GLASS.border }]}
-                      onPress={quickFillRemainder}
+                {paymentMethod === "Mobile" && (
+                  <View style={[styles.mbProviderBlock, { borderTopColor: SALES_GLASS.border }]}>
+                    <AppText
+                      variant="micro"
+                      weight="bold"
+                      transform="uppercase"
+                      style={{ color: SALES_GLASS.fgSecondary, marginBottom: 8 }}
+                      numberOfLines={1}
                     >
-                      <Split size={12} color={SALES_GLASS.fgSecondary} />
-                      <AppText
-                        variant="micro"
-                        weight="bold"
-                        shrink={false}
-                        style={{ color: SALES_GLASS.fgSecondary }}
-                        numberOfLines={1}
-                      >
-                        {t("sale.split_pay") || "Split"}
-                      </AppText>
-                    </TouchableOpacity>
+                      {t("sale.mobile_provider") || "Mobile Banking Provider"}
+                    </AppText>
+                    <View style={styles.mbProviderList}>
+                      {mbProviders.map((p) => {
+                        const selected = selectedMbProvider === p.id;
+                        return (
+                          <TouchableOpacity
+                            key={p.id}
+                            activeOpacity={0.7}
+                            style={[
+                              styles.mbProviderCard,
+                              {
+                                backgroundColor: selected
+                                  ? SALES_GLASS.fg
+                                  : SALES_GLASS.bgCard,
+                                borderColor: selected
+                                  ? SALES_GLASS.fg
+                                  : SALES_GLASS.border,
+                              },
+                            ]}
+                            onPress={() => {
+                              Haptics.selectionAsync();
+                              setSelectedMbProvider(p.id);
+                            }}
+                          >
+                            <AppText
+                              variant="body-sm"
+                              weight="bold"
+                              style={[
+                                styles.mbProviderCardText,
+                                {
+                                  color: selected
+                                    ? SALES_GLASS.bg
+                                    : SALES_GLASS.fg,
+                                },
+                              ]}
+                            >
+                              {p.name}
+                            </AppText>
+                            {selected && (
+                              <Check size={16} color={SALES_GLASS.bg} />
+                            )}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
                     <TouchableOpacity
-                      style={[styles.smallActionBtn, { borderColor: SALES_GLASS.border }]}
+                      style={[styles.mbAddBtn, { borderColor: SALES_GLASS.border }]}
                       onPress={() => {
-                        Haptics.selectionAsync();
-                        clearTenders();
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setShowAddMbProvider(!showAddMbProvider);
                       }}
                     >
-                      <X size={12} color={SALES_GLASS.fgSecondary} />
+                      <Plus size={15} color={colors.primary} />
                       <AppText
-                        variant="micro"
+                        variant="body-sm"
                         weight="bold"
                         shrink={false}
-                        style={{ color: SALES_GLASS.fgSecondary }}
+                        style={{ color: colors.primary }}
                         numberOfLines={1}
                       >
-                        {t("common.reset") || "Reset"}
+                        {t("sale.add_provider") || "Add New"}
                       </AppText>
                     </TouchableOpacity>
+                    {showAddMbProvider && (
+                      <View style={[styles.mbAddRow, { backgroundColor: SALES_GLASS.bgCard, borderColor: SALES_GLASS.border }]}>
+                        <TextInput
+                          style={[styles.mbInput, { color: SALES_GLASS.fg, borderColor: SALES_GLASS.border, backgroundColor: SALES_GLASS.bg }]}
+                          placeholder={t("sale.provider_name") || "Provider (e.g. Telebirr)"}
+                          placeholderTextColor={SALES_GLASS.fgSecondary}
+                          value={newMbName}
+                          onChangeText={setNewMbName}
+                        />
+                        <TextInput
+                          style={[styles.mbInput, { color: SALES_GLASS.fg, borderColor: SALES_GLASS.border, backgroundColor: SALES_GLASS.bg }]}
+                          placeholder={t("sale.provider_account") || "Account / phone (optional)"}
+                          placeholderTextColor={SALES_GLASS.fgSecondary}
+                          value={newMbAccount}
+                          onChangeText={setNewMbAccount}
+                        />
+                        <TouchableOpacity
+                          style={[styles.mbSaveBtn, { backgroundColor: SALES_GLASS.fg }]}
+                          onPress={() => {
+                            if (!newMbName.trim()) return;
+                            const added = addMobileBankingProvider(newMbName, newMbAccount);
+                            setMbProviders(getMobileBankingProviders());
+                            setSelectedMbProvider(added.id);
+                            setNewMbName("");
+                            setNewMbAccount("");
+                            setShowAddMbProvider(false);
+                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                          }}
+                        >
+                          <AppText variant="body-sm" weight="bold" shrink={false} style={{ color: SALES_GLASS.bg }} numberOfLines={1}>
+                            {t("common.save") || "Save"}
+                          </AppText>
+                        </TouchableOpacity>
+                      </View>
+                    )}
                   </View>
-                </View>
+                )}
               </View>
             )}
             </TutorialTarget>
 
             <TutorialTarget id="sf-customer-info">
-            {(paymentStatus === "Debt" || paymentStatus === "Order") && (
+            {featureFlags.customersEnabled && paymentStatus === "Debt" && (
               <Animated.View
                 entering={FadeInDown}
                 layout={Layout}
@@ -1547,145 +1008,6 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
               </Pressable>
             </Modal>
 
-            {/* Pricing Adjustments */}
-            <TutorialTarget id="sf-pricing">
-            <View style={styles.pricingSection}>
-              <View style={styles.adjRow}>
-                <View style={styles.adjLabelCol}>
-                  <Ticket size={16} color={SALES_GLASS.fgSecondary} />
-                  <AppText
-                    variant="caption"
-                    weight="bold"
-                    transform="uppercase"
-                    style={[styles.adjLabel, { color: SALES_GLASS.fgSecondary }]}
-                    numberOfLines={2}
-                  >
-                    {t("sale.loyalty_discount")}
-                  </AppText>
-                </View>
-                <View
-                  style={[
-                    styles.adjInputBox,
-                    {
-                      backgroundColor: SALES_GLASS.bgCard,
-                      borderColor: SALES_GLASS.border,
-                    },
-                  ]}
-                >
-                  <TextInput
-                    style={[styles.adjInput, { color: SALES_GLASS.fg }]}
-                    value={globalDiscount}
-                    onChangeText={setGlobalDiscount}
-                    keyboardType="numeric"
-                  />
-                  <AppText
-                    variant="body"
-                    weight="bold"
-                    shrink={false}
-                    style={[styles.adjCurr, { color: SALES_GLASS.fgSecondary }]}
-                    numberOfLines={1}
-                  >
-                    {t("common.etb")}
-                  </AppText>
-                </View>
-              </View>
-
-              {/* Tax Type */}
-              <View style={[styles.adjRow, { marginTop: 15 }]}>
-                <View style={styles.adjLabelCol}>
-                  <Percent size={16} color={SALES_GLASS.fgSecondary} />
-                  <AppText
-                    variant="caption"
-                    weight="bold"
-                    transform="uppercase"
-                    style={[styles.adjLabel, { color: SALES_GLASS.fgSecondary }]}
-                    numberOfLines={2}
-                  >
-                    {t("sale.tax_type")}
-                  </AppText>
-                </View>
-                <View style={[styles.adjInputBox, { backgroundColor: SALES_GLASS.bgCard, borderColor: SALES_GLASS.border, width: 180, paddingHorizontal: 8 }]}>
-                  {(["VAT", "TOT", "Other", "None"] as const).map((type) => (
-                    <TouchableOpacity
-                      key={type}
-                      style={[
-                        { flex: 1, paddingVertical: 8, alignItems: "center", borderRadius: 10 },
-                        taxType === type && { backgroundColor: SALES_GLASS.fg },
-                      ]}
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        setTaxType(type);
-                        if (type === "None") {
-                          setTaxRate("0");
-                        } else if (type === "VAT") {
-                          setTaxRate("15");
-                        }
-                      }}
-                    >
-                      <AppText
-                        variant="caption"
-                        weight="bold"
-                        shrink={false}
-                        style={[
-                          { fontSize: 11, fontFamily: Fonts.bold },
-                          { color: taxType === type ? SALES_GLASS.bg : SALES_GLASS.fgSecondary },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {t(`sale.tax.${type.toLowerCase()}`)}
-                      </AppText>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Tax Rate */}
-              <View style={[styles.adjRow, { marginTop: 12 }]}>
-                <View style={styles.adjLabelCol}>
-                  <Percent size={16} color={SALES_GLASS.fgSecondary} />
-                  <AppText
-                    variant="caption"
-                    weight="bold"
-                    transform="uppercase"
-                    style={[styles.adjLabel, { color: SALES_GLASS.fgSecondary }]}
-                    numberOfLines={2}
-                  >
-                    {t("sale.tax_rate")}
-                  </AppText>
-                </View>
-                <View
-                  style={[
-                    styles.adjInputBox,
-                    {
-                      backgroundColor: SALES_GLASS.bgCard,
-                      borderColor: SALES_GLASS.border,
-                    },
-                  ]}
-                >
-                  <TextInput
-                    style={[styles.adjInput, { color: SALES_GLASS.fg }]}
-                    value={taxRate}
-                    onChangeText={(val) => {
-                      const cleaned = val.replace(/[^0-9.]/g, "");
-                      if (cleaned.split(".").length <= 2) setTaxRate(cleaned);
-                    }}
-                    keyboardType="decimal-pad"
-                    editable={taxType !== "None"}
-                  />
-                  <AppText
-                    variant="body"
-                    weight="bold"
-                    shrink={false}
-                    style={[styles.adjCurr, { color: SALES_GLASS.fgSecondary }]}
-                    numberOfLines={1}
-                  >
-                    %
-                  </AppText>
-                </View>
-              </View>
-            </View>
-            </TutorialTarget>
-
             {/* Vault Summary */}
             <View
               style={[
@@ -1803,14 +1125,12 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
             onPress={handleCheckout}
             activeOpacity={0.9}
             style={{ marginTop: 35 }}
-            disabled={paymentStatus === "Paid" && !allTenderFilled}
           >
             <View
               style={[
                 styles.finishBtn,
                 {
                   backgroundColor: SALES_GLASS.fg,
-                  opacity: paymentStatus === "Paid" && !allTenderFilled ? 0.45 : 1,
                 },
               ]}
             >
@@ -1825,18 +1145,6 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                 {t("sale.authorize_settlement").toUpperCase()}
               </AppText>
             </View>
-            {paymentStatus === "Paid" && !allTenderFilled ? (
-              <AppText
-                variant="micro"
-                weight="medium"
-                style={{ color: SALES_GLASS.fgSecondary, textAlign: "center", marginTop: 6 }}
-                numberOfLines={1}
-              >
-                {outstanding > 0
-                  ? `${t("sale.outstanding") || "Outstanding"} ETB ${outstanding.toFixed(2)}`
-                  : `${t("sale.change_due") || "Change"} ETB ${(-outstanding).toFixed(2)}`}
-              </AppText>
-            ) : null}
           </TouchableOpacity>
           </TutorialTarget>
 
@@ -1855,210 +1163,6 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
           <View style={{ height: 100 }} />
         </TutorialScrollView>
       </KeyboardAvoidingView>
-
-      <CustomDatePicker
-        visible={showDatePicker}
-        onClose={() => setShowDatePicker(false)}
-        onSelectDate={(date) => {
-          setRecordDate(date);
-          setShowDatePicker(false);
-        }}
-        initialDate={recordDate}
-      />
-
-      {/* Add-items sheet: Scan + Search */}
-      <Modal
-        visible={showAddSheet}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowAddSheet(false)}
-      >
-        <Pressable
-          style={styles.modalBackdrop}
-          onPress={() => setShowAddSheet(false)}
-        />
-        <View
-          style={[
-            styles.addSheet,
-            { backgroundColor: SALES_GLASS.bgCard, borderColor: SALES_GLASS.border },
-          ]}
-        >
-          <View style={styles.sheetHandle} />
-          <View style={styles.sheetHeader}>
-            <AppText
-              variant="body"
-              weight="bold"
-              style={{ color: SALES_GLASS.fg }}
-              numberOfLines={1}
-            >
-              {t("sale.add_items") || "Add items"}
-            </AppText>
-            <TouchableOpacity onPress={() => setShowAddSheet(false)}>
-              <X size={20} color={SALES_GLASS.fgSecondary} />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.toggleRow}>
-            <TouchableOpacity
-              style={[
-                styles.sheetTab,
-                addTab === "scan" && [styles.modalActive, { backgroundColor: SALES_GLASS.fg }],
-              ]}
-              onPress={() => {
-                Haptics.selectionAsync();
-                setAddTab("scan");
-              }}
-            >
-              <Barcode
-                size={15}
-                color={addTab === "scan" ? SALES_GLASS.bg : SALES_GLASS.fgSecondary}
-              />
-              <AppText
-                variant="body-sm"
-                weight="bold"
-                shrink={false}
-                style={{ color: addTab === "scan" ? SALES_GLASS.bg : SALES_GLASS.fgSecondary }}
-                numberOfLines={1}
-              >
-                {t("sale.scan_barcode") || "Scan"}
-              </AppText>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.sheetTab,
-                addTab === "search" && [styles.modalActive, { backgroundColor: SALES_GLASS.fg }],
-              ]}
-              onPress={() => {
-                Haptics.selectionAsync();
-                setAddTab("search");
-              }}
-            >
-              <Search
-                size={15}
-                color={addTab === "search" ? SALES_GLASS.bg : SALES_GLASS.fgSecondary}
-              />
-              <AppText
-                variant="body-sm"
-                weight="bold"
-                shrink={false}
-                style={{ color: addTab === "search" ? SALES_GLASS.bg : SALES_GLASS.fgSecondary }}
-                numberOfLines={1}
-              >
-                {t("sale.search_catalog") || "Search"}
-              </AppText>
-            </TouchableOpacity>
-          </View>
-
-          {addTab === "scan" ? (
-            <View style={[styles.scanArea, { borderColor: SALES_GLASS.border }]}>
-              <BarcodeScannerView
-                onScan={handleBarcodeScan}
-                onClose={() => setShowAddSheet(false)}
-                onManualEntry={() => {}}
-                showTopBar={false}
-              />
-            </View>
-          ) : (
-            <View style={styles.searchArea}>
-              <View
-                style={[
-                  styles.searchBox,
-                  { backgroundColor: SALES_GLASS.bg, borderColor: SALES_GLASS.border },
-                ]}
-              >
-                <Search size={16} color={SALES_GLASS.fgSecondary} />
-                <TextInput
-                  style={[styles.searchInput, { color: SALES_GLASS.fg }]}
-                  placeholder={t("sale.search_placeholder") || "Search product, SKU, barcode..."}
-                  placeholderTextColor={SALES_GLASS.fgSecondary}
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                {searchQuery ? (
-                  <TouchableOpacity onPress={() => setSearchQuery("")}>
-                    <X size={16} color={SALES_GLASS.fgSecondary} />
-                  </TouchableOpacity>
-                ) : null}
-              </View>
-              {searching ? (
-                <AppText
-                  variant="caption"
-                  weight="medium"
-                  style={{ color: SALES_GLASS.fgSecondary, textAlign: "center", marginTop: 18 }}
-                >
-                  {t("common.searching") || "Searching..."}
-                </AppText>
-              ) : searchResults.length === 0 ? (
-                <AppText
-                  variant="caption"
-                  weight="medium"
-                  style={{ color: SALES_GLASS.fgSecondary, textAlign: "center", marginTop: 18 }}
-                >
-                  {searchQuery.trim()
-                    ? t("sale.no_results") || "No products found."
-                    : t("sale.search_hint") || "Type to search your catalog."}
-                </AppText>
-              ) : (
-                <ScrollView
-                  style={{ flex: 1 }}
-                  contentContainerStyle={styles.searchResults}
-                  keyboardShouldPersistTaps="handled"
-                >
-                  {searchResults.map((r: any) => (
-                    <TouchableOpacity
-                      key={r.id}
-                      style={[
-                        styles.resultRow,
-                        { backgroundColor: SALES_GLASS.bg, borderColor: SALES_GLASS.border },
-                      ]}
-                      onPress={() => addAt(r)}
-                    >
-                      <View style={styles.cartThumb}>
-                        {r.image ? (
-                          <Image source={{ uri: r.image }} style={styles.cartThumbImg} contentFit="cover" />
-                        ) : (
-                          <PackageItem size={16} color={SALES_GLASS.fgSecondary} />
-                        )}
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <AppText
-                          variant="body-sm"
-                          weight="bold"
-                          style={{ color: SALES_GLASS.fg }}
-                          numberOfLines={1}
-                        >
-                          {r.name}
-                        </AppText>
-                        <AppText
-                          variant="micro"
-                          weight="medium"
-                          style={{ color: SALES_GLASS.fgSecondary }}
-                          numberOfLines={1}
-                        >
-                          {r.baseUnit || "pcs"}
-                          {r.taxType && r.taxType !== "None" ? ` · ${r.taxType}` : ""}
-                        </AppText>
-                      </View>
-                      <AppNumber
-                        value={parseFloat(r.baseSellingPrice) || 0}
-                        size="body-sm"
-                        weight="bold"
-                        showCurrency
-                        color={SALES_GLASS.fg}
-                      />
-                      <View style={styles.addRowBtn}>
-                        <Plus size={15} color={SALES_GLASS.bg} />
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              )}
-            </View>
-          )}
-        </View>
-      </Modal>
 
       {/* Receipt preview */}
       <Modal
@@ -2104,7 +1208,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                 style={{ color: SALES_GLASS.fgSecondary }}
                 numberOfLines={1}
               >
-                {recordDate ? formatDate(new Date(recordDate), calendarType, language) : new Date().toLocaleString()}
+                {new Date().toLocaleString()}
               </AppText>
             </View>
             {safeCart.map((item: any) => (
@@ -2159,24 +1263,14 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
               </AppText>
               <AppNumber value={taxAmount} size="body-sm" weight="bold" showCurrency color={SALES_GLASS.fg} />
             </View>
-            {allocatedTotal > 0 && paymentStatus === "Paid"
-              ? tenders
-                  .filter((r) => (parseFloat(r.amount) || 0) > 0)
-                  .map((r) => (
-                    <View key={r.method} style={styles.summaryLine}>
-                      <AppText variant="caption" weight="medium" style={{ color: SALES_GLASS.fgSecondary }}>
-                        {r.method}
-                      </AppText>
-                      <AppNumber value={parseFloat(r.amount) || 0} size="body-sm" weight="bold" showCurrency color={SALES_GLASS.fg} />
-                    </View>
-                  ))
-              : null}
-            {changeDue > 0 && paymentStatus === "Paid" ? (
+            {paymentStatus === "Paid" ? (
               <View style={styles.summaryLine}>
-                <AppText variant="caption" weight="bold" style={{ color: colors.success }}>
-                  {t("sale.change_due") || "Change due"}
+                <AppText variant="caption" weight="medium" style={{ color: SALES_GLASS.fgSecondary }}>
+                  {paymentMethod === "Mobile"
+                    ? (mbProviders.find((p) => p.id === selectedMbProvider)?.name || t("sale.mobile") || "Mobile")
+                    : t("sale.physical_cash")}
                 </AppText>
-                <AppNumber value={changeDue} size="body-sm" weight="bold" showCurrency color={colors.success} />
+                <AppNumber value={total} size="body-sm" weight="bold" showCurrency color={SALES_GLASS.fg} />
               </View>
             ) : null}
             <View style={[styles.vDivider, { backgroundColor: SALES_GLASS.border }]} />
@@ -2192,54 +1286,6 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
     </View>
   );
 };
-
-const TenderInputRow: React.FC<{
-  row: TenderRow;
-  label: string;
-  action: () => void;
-  onChange: (amount: string) => void;
-  activeColor: string;
-  glas: any;
-}> = ({ row, label, action, onChange, activeColor, glas }) => (
-  <View style={styles.tenderRow}>
-    <TouchableOpacity style={styles.tenderFillBtn} onPress={action} activeOpacity={0.6}>
-      <AppText
-        variant="micro"
-        weight="bold"
-        shrink={false}
-        style={{ color: glas.fgSecondary }}
-        numberOfLines={1}
-      >
-        {label}
-      </AppText>
-    </TouchableOpacity>
-    <TextInput
-      style={[
-        styles.tenderInput,
-        {
-          color: glas.fg,
-          borderColor: glas.border,
-          backgroundColor: glas.bg,
-        },
-      ]}
-      value={row.amount}
-      onChangeText={onChange}
-      keyboardType="decimal-pad"
-      placeholder="0.00"
-      placeholderTextColor={glas.fgSecondary}
-      onFocus={() => {
-        if (!row.amount) onChange("0");
-      }}
-    />
-    <TouchableOpacity
-      style={[styles.tenderCheck, { backgroundColor: activeColor }]}
-      onPress={action}
-      activeOpacity={0.6}
-    >
-      <Plus size={12} color={glas.bg} />
-    </TouchableOpacity>
-  </View>
-);
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
@@ -2387,101 +1433,73 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   backText: { fontSize: 14, fontFamily: Fonts.bold },
-  blockHeaderRight: { marginLeft: "auto" },
-  addItemBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 14,
-  },
-  emptyCart: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderStyle: "dashed",
-    padding: 24,
-    alignItems: "center",
-  },
-  cartRow: {
-    borderRadius: 18,
-    borderWidth: 1,
-    padding: 12,
-    marginBottom: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  cartThumb: {
-    width: 46,
-    height: 46,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-    backgroundColor: "rgba(120,120,120,0.10)",
-  },
-  cartThumbImg: { width: 46, height: 46 },
-  cartLineBody: { flex: 1, minWidth: 0 },
-  cartLineTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  cartLineName: { flex: 1, fontSize: 14, fontFamily: Fonts.bold },
-  taxChip: {
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 7,
-  },
-  cartControls: { alignItems: "flex-end", gap: 6 },
-  qtyStepper: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  qtyBtn: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(120,120,120,0.10)",
-  },
-  qtyVal: { minWidth: 22, textAlign: "center", fontSize: 14, fontFamily: Fonts.bold },
-  unitToggleBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 9,
-  },
-  cartRowActions: { flexDirection: "row", alignItems: "center", gap: 6 },
-  iconBtn: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(120,120,120,0.10)",
-  },
-  cartLineTotal: { minWidth: 70, textAlign: "right", fontSize: 14, fontFamily: Fonts.bold },
-  priceEditInput: {
-    width: 74,
-    height: 30,
-    borderRadius: 9,
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    fontSize: 13,
-    fontFamily: Fonts.bold,
-  },
   tenderRows: {
     borderTopWidth: 1,
     marginTop: 14,
     paddingTop: 12,
     gap: 8,
+  },
+  mbProviderBlock: {
+    borderTopWidth: 1,
+    marginTop: 12,
+    paddingTop: 12,
+    marginBottom: 12,
+  },
+  mbProviderList: { gap: 8, marginTop: 2 },
+  mbProviderCard: {
+    width: "100%",
+    minHeight: 52,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  mbProviderCardText: {
+    flexShrink: 1,
+    fontSize: 14,
+    fontFamily: Fonts.bold,
+    lineHeight: 20,
+  },
+  mbAddBtn: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    marginTop: 4,
+  },
+  mbAddRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 10,
+    marginTop: 10,
+  },
+  mbInput: {
+    flex: 1,
+    height: 40,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    fontSize: 13,
+    fontFamily: Fonts.medium,
+  },
+  mbSaveBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
   },
   tenderRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   tenderFillBtn: {
@@ -2547,79 +1565,11 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: "rgba(0,0,0,0.45)",
   },
-  addSheet: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
-    borderTopWidth: 1,
-    padding: 18,
-    paddingBottom: 34,
-    maxHeight: "70%",
-  },
-  sheetHandle: {
-    alignSelf: "center",
-    width: 42,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: "rgba(120,120,120,0.35)",
-    marginBottom: 12,
-  },
   sheetHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 14,
-  },
-  sheetTab: {
-    flex: 1,
-    height: 46,
-    borderRadius: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
-  },
-  scanArea: {
-    height: 300,
-    borderRadius: 18,
-    borderWidth: 1,
-    overflow: "hidden",
-    marginTop: 12,
-  },
-  searchArea: { marginTop: 12, height: 320 },
-  searchBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    height: 48,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    fontFamily: Fonts.medium,
-  },
-  searchResults: { paddingTop: 12, gap: 8, paddingBottom: 20 },
-  resultRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 10,
-  },
-  addRowBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: SALES_GLASS.fg,
   },
   receiptModal: {
     position: "absolute",

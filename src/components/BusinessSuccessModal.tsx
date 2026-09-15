@@ -35,7 +35,7 @@ export interface BusinessSuccessDetails {
   mainValue: string;
   secondaryLabel?: string;
   secondaryValue?: string;
-  iconType: 'price_up' | 'price_down' | 'damaged' | 'expense';
+  iconType: 'price_up' | 'price_down' | 'damaged';
   itemName?: string;
 }
 
@@ -76,7 +76,6 @@ const BusinessSuccessModal: React.FC<BusinessSuccessModalProps> = ({ details, on
       case 'price_up': return colors.success;
       case 'price_down': return colors.error;
       case 'damaged': return colors.warning;
-      case 'expense': return '#AF52DE';
       default: return colors.primary;
     }
   };

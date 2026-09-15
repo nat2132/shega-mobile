@@ -33,7 +33,20 @@ class MobileMdnsDiscovery extends EventEmitter {
   start(): void {
     if (this.isScanning) return;
 
-    this.zeroconf = new Zeroconf();
+    if (!Zeroconf) {
+      console.warn('[mDNS] react-native-zeroconf unavailable (native module missing)');
+      this.isScanning = true;
+      return;
+    }
+
+    try {
+      this.zeroconf = new Zeroconf();
+    } catch (e: any) {
+      console.warn('[mDNS] Zeroconf unavailable:', e?.message);
+      this.zeroconf = null;
+      this.isScanning = true;
+      return;
+    }
     this.zeroconf.on('resolved', (service) => {
       const deviceId = service.txtRecord?.device_id;
       if (!deviceId) return;

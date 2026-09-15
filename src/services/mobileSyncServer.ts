@@ -17,7 +17,8 @@
  */
 
 import { getDB } from '../database/db';
-import { getDeviceId } from './syncService';
+import { getDeviceId, currentOutboxSeq, pruneOutboxEchoes } from './syncService';
+import { bumpDataVersion } from './dataVersion';
 import * as Crypto from 'expo-crypto';
 
 export const MOBILE_SYNC_PORT = 5759;
@@ -69,9 +70,9 @@ function getCurrentBusinessId(): string | null {
 
 const SYNC_TABLES = [
   'categories', 'items', 'item_packs', 'sales', 'debt_payments',
-  'expenses', 'adjustments', 'returns', 'customers', 'contacts',
+  'adjustments', 'returns', 'customers', 'contacts',
   'stock_movements', 'businesses', 'locations', 'registers',
-  'business_roles', 'users', 'devices', 'budgets',
+  'business_roles', 'users', 'devices',
   'subscriptions', 'scheduled_reminders', 'suppliers', 'orders',
   'order_items', 'shipments', 'shipment_items', 'employees',
   'employee_roles', 'employee_accounts', 'attendance', 'employee_performance',
@@ -99,8 +100,8 @@ function cleanPayload(entity: string, payload: Record<string, any>): Record<stri
 }
 
 function lastWriteWins(incoming: Record<string, any>, existing: Record<string, any>): boolean {
-  const iTs = (incoming.updated_at ?? incoming.createdAt ?? '') as string;
-  const eTs = (existing.updated_at ?? existing.createdAt ?? '') as string;
+  const iTs = tsValue(incoming.updated_at ?? incoming.createdAt ?? '');
+  const eTs = tsValue(existing.updated_at ?? existing.createdAt ?? '');
   if (iTs !== eTs) return iTs > eTs;
   const iVer = Number(incoming.row_version ?? 0);
   const eVer = Number(existing.row_version ?? 0);
@@ -108,10 +109,18 @@ function lastWriteWins(incoming: Record<string, any>, existing: Record<string, a
   return String(incoming.uuid ?? '') >= String(existing.uuid ?? '');
 }
 
+function tsValue(v: any): number {
+  if (v == null || v === '') return -Infinity;
+  if (typeof v === 'number') return v;
+  const s = String(v).trim();
+  if (/^[0-9]+$/.test(s)) return Number(s);
+  const norm = s.replace(' ', 'T');
+  const ms = Date.parse(norm.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(norm) ? norm : `${norm}Z`);
+  return Number.isNaN(ms) ? -Infinity : ms;
+}
+
 function maxSeq(): number {
-  const db = getDB();
-  const r = db.getFirstSync('SELECT COALESCE(MAX(seq),0) AS m FROM sync_outbox') as any;
-  return r?.m ?? 0;
+  return currentOutboxSeq();
 }
 
 function snapshotSince(since: number): { changes: any[]; lastSeq: number; snapshot: boolean } {
@@ -123,20 +132,31 @@ function snapshotSince(since: number): { changes: any[]; lastSeq: number; snapsh
       try {
         const rows = db.getAllSync(`SELECT * FROM ${entity} WHERE is_deleted = 0`) as any[];
         for (const r of rows) {
-          changes.push({ entity, entity_uuid: r.uuid, op: 'INSERT', payload: r, device_id: r.device_id });
+          changes.push({ entity, entity_uuid: r.uuid, op: 'INSERT', payload: r, device_id: r.device_id ?? getDeviceId() });
         }
       } catch { /* table may not exist */ }
     }
     return { changes, lastSeq: seq, snapshot: true };
   }
-  const rows = db.getAllSync(
-    'SELECT * FROM sync_outbox WHERE seq > ? ORDER BY seq ASC LIMIT 1000'
-  , [since]) as any[];
-  const changes = rows.map((r: any) => {
+  // BREAK-01: the outbox has NO `payload` column — the delta must re-read the
+  // current row by row_id (live row state) like buildChangesFromOutbox does,
+  // with a minimal tombstone for deletes.
+  const outboxRows = db.getAllSync('SELECT * FROM sync_outbox WHERE seq > ? ORDER BY seq ASC LIMIT 1000', [since]) as any[];
+  const devId = getDeviceId();
+  const changes: any[] = [];
+  for (const r of outboxRows) {
     let payload: any = {};
-    try { payload = JSON.parse(r.payload); } catch {}
-    return { entity: r.entity, entity_uuid: r.entity_uuid, op: r.op, payload, device_id: r.device_id, seq: r.seq };
-  });
+    if (r.op === 'DELETE') {
+      payload = { id: r.row_id ?? null, uuid: r.entity_uuid, deleted_at: new Date().toISOString() };
+    } else if (r.row_id != null) {
+      try {
+        const row = db.getFirstSync(`SELECT * FROM ${r.entity} WHERE id = ?`, [r.row_id]) as any;
+        if (row) payload = row;
+      } catch { /* table may not exist */ }
+    }
+    if (r.op !== 'DELETE' && Object.keys(payload).length === 0) continue;
+    changes.push({ entity: r.entity, entity_uuid: r.entity_uuid, op: r.op, payload, device_id: payload.device_id ?? devId, seq: r.seq });
+  }
   return { changes, lastSeq: seq, snapshot: false };
 }
 
@@ -155,6 +175,7 @@ function applyChange(deviceId: string, change: Change): 'applied' | 'conflict' |
 
   const db = getDB();
   const data = cleanPayload(entity, payload);
+  const outboxPreSeq = currentOutboxSeq();
 
   if (op === 'DELETE') {
     try {
@@ -162,6 +183,8 @@ function applyChange(deviceId: string, change: Change): 'applied' | 'conflict' |
         payload.deleted_at ?? new Date().toISOString(), entity_uuid,
       ]);
     } catch { /* table may not exist */ }
+    pruneOutboxEchoes(entity, entity_uuid, outboxPreSeq);
+    bumpDataVersion();
     return 'applied';
   }
 
@@ -175,6 +198,8 @@ function applyChange(deviceId: string, change: Change): 'applied' | 'conflict' |
     const cols = columnsOf(entity).filter((c) => c in insertData);
     const placeholders = cols.map(() => '?').join(', ');
     db.runSync(`INSERT INTO ${entity} (${cols.join(', ')}) VALUES (${placeholders})`, cols.map((c) => insertData[c]));
+    pruneOutboxEchoes(entity, entity_uuid, outboxPreSeq);
+    bumpDataVersion();
     return 'applied';
   }
 
@@ -189,6 +214,8 @@ function applyChange(deviceId: string, change: Change): 'applied' | 'conflict' |
       const sets = cols.map((c) => `${c} = ?`).join(', ');
       db.runSync(`UPDATE ${entity} SET ${sets} WHERE uuid = ?`, [...cols.map((c) => updateData[c]), entity_uuid]);
     }
+    pruneOutboxEchoes(entity, entity_uuid, outboxPreSeq);
+    bumpDataVersion();
     return 'applied';
   }
   return 'conflict';
@@ -258,21 +285,30 @@ function handlePairRequest(client: TcpClient, msg: any): void {
 
   // Verify business membership
   const hubBizId = getCurrentBusinessId();
-  if (business_id && hubBizId && business_id !== hubBizId) {
+  if (!hubBizId) {
+    sendError(client.socket, 'PAIR_FAILED', 'No active business on this hub');
+    return;
+  }
+  if (business_id && business_id !== hubBizId) {
     sendError(client.socket, 'PAIR_FAILED', 'Business membership mismatch');
     return;
   }
+  const bizId = business_id ?? hubBizId;
 
-  // Register device
+  // Register device — bound to the hub's business, awaiting owner approval.
+  // A person never gets created here: the device is just a pending install of
+  // the SAME business/membership, approved and bound to a user by the owner.
   const db = getDB();
   db.runSync(
-    'INSERT OR REPLACE INTO devices (id, name, last_seen_at, uuid, is_active) VALUES (?, ?, ?, ?, 1)',
-    [device_id, name || device_id.slice(0, 8), new Date().toISOString(), device_id]
+    `INSERT OR REPLACE INTO devices
+       (id, business_id, user_id, name, platform, status, is_active, uuid, created_at, updated_at)
+     VALUES (?, ?, NULL, ?, 'mobile', 'pending', 1, ?, ?, ?)`,
+    [device_id, bizId, name || device_id.slice(0, 8), device_id, new Date().toISOString(), new Date().toISOString()]
   );
 
   client.deviceId = device_id;
   client.paired = true;
-  client.businessId = business_id ?? hubBizId;
+  client.businessId = bizId;
 
   sendTo(client.socket, {
     type: 'PAIR_RESPONSE',

@@ -10,7 +10,6 @@ import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import {
   Calendar,
-  CreditCard,
   DollarSign,
   Package,
   TrendingUp,
@@ -329,17 +328,12 @@ const SummaryScreen = () => {
             />
           </View>
 
-          {/* Row 2: Profit & Expenses */}
+          {/* Row 2: Profit */}
           <View style={styles.metricsRow}>
             <MetricCard 
               label={t('summary.profit_cash')}
               value={<AppNumber value={metrics?.profit ?? 0} showCurrency size="title" weight="bold" compact />}
               icon={TrendingUp}
-            />
-            <MetricCard 
-              label={t('summary.expenses')}
-              value={<AppNumber value={metrics?.expenses ?? 0} showCurrency size="title" weight="bold" compact />}
-              icon={CreditCard}
             />
           </View>
 
@@ -440,8 +434,6 @@ const SummaryScreen = () => {
                 <AppNumber value={metrics?.profit ?? 0} size="micro" showCurrency compact />
                 <AppText variant="micro" weight="medium" style={{ color: G.fgSecondary }}>+</AppText>
                 <AppNumber value={metrics?.priceChangeGains ?? 0} size="micro" showCurrency compact />
-                <AppText variant="micro" weight="medium" style={{ color: G.fgSecondary }}>−</AppText>
-                <AppNumber value={metrics?.expenses ?? 0} size="micro" showCurrency compact />
                 <AppText variant="micro" weight="medium" style={{ color: G.fgSecondary }}>−</AppText>
                 <AppNumber value={metrics?.damageLoss ?? 0} size="micro" showCurrency compact />
                 <AppText variant="micro" weight="medium" style={{ color: G.fgSecondary }}>−</AppText>

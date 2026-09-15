@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { getWarehouses, getWarehouseById } from '@/database/db';
+import { useSettings } from './SettingsContext';
 
 interface Warehouse {
   id: number;
@@ -22,6 +23,8 @@ interface WarehouseContextType {
 const WarehouseContext = createContext<WarehouseContextType | undefined>(undefined);
 
 export function WarehouseProvider({ children }: { children: React.ReactNode }) {
+  const { featureFlags } = useSettings();
+  const warehousesEnabled = featureFlags.warehousesEnabled;
   const [activeWarehouseId, setActiveWarehouseIdState] = useState<number | null>(null);
   const [activeWarehouse, setActiveWarehouse] = useState<Warehouse | null>(null);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
@@ -32,10 +35,17 @@ export function WarehouseProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (!warehousesEnabled) {
+      setWarehouses([]);
+      setActiveWarehouseIdState(null);
+      setActiveWarehouse(null);
+      return;
+    }
     loadWarehouses();
-  }, [loadWarehouses]);
+  }, [warehousesEnabled, loadWarehouses]);
 
   useEffect(() => {
+    if (!warehousesEnabled) return;
     const loadActiveWarehouse = async () => {
       const saved = await SecureStore.getItemAsync('active_warehouse_id');
       if (saved) {
@@ -48,16 +58,17 @@ export function WarehouseProvider({ children }: { children: React.ReactNode }) {
       }
     };
     loadActiveWarehouse();
-  }, []);
+  }, [warehousesEnabled]);
 
   useEffect(() => {
+    if (!warehousesEnabled) return;
     if (activeWarehouseId) {
       const wh = warehouses.find(w => w.id === activeWarehouseId);
       setActiveWarehouse(wh || null);
     } else {
       setActiveWarehouse(null);
     }
-  }, [activeWarehouseId, warehouses]);
+  }, [warehousesEnabled, activeWarehouseId, warehouses]);
 
   const setActiveWarehouseId = useCallback(async (id: number | null) => {
     setActiveWarehouseIdState(id);

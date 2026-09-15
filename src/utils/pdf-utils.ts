@@ -905,87 +905,11 @@ export const generateProductListPDF = async (items: any[], business: any, langua
   return triggerShare(html, trans.reports.productTitle, action);
 };
 
-// 7. Expense Report PDF Generator
-export const generateExpenseReportPDF = async (expenses: any[], period: string, dateRange: string, business: any, language: Lang = 'en', action: 'share' | 'save' = 'share', timeSystem: 'device' | 'ethiopian' = 'device') => {
-  const trans = pdfTranslations[language];
-  const totalExpenses = expenses.reduce((acc, curr) => acc + curr.amount, 0);
-
-  const itemsHtml = expenses.map(expense => `
-    <tr>
-      <td>${new Date(expense.date).toLocaleDateString()}</td>
-      <td><strong>${expense.name}</strong></td>
-      <td>${expense.category || 'General'}</td>
-      <td style="text-align: center;">${expense.isRecurring ? 'Recurring' : 'One-time'}</td>
-      <td style="text-align: right; color: #EF4444; font-weight: 600;">${formatNumber(expense.amount)} ETB</td>
-    </tr>
-  `).join('');
-
-  const html = `
-    <html>
-      <head>
-        ${getCommonStyles()}
-      </head>
-      <body>
-        <div class="shega-stamp">
-          <img src="${SHEGA_LOGO}" alt="Shega" />
-        </div>
-        <div class="header">
-          <div class="business-info">
-            <div class="business-name">${business?.businessName || 'Shega Store'}</div>
-            <div class="business-sub">${business?.storeName || 'Main Branch'}</div>
-          </div>
-          <div class="doc-meta">
-            <div class="doc-title" style="color: #EF4444;">${trans.reports.expenseTitle}</div>
-            <div class="doc-date">${trans.reports.dateGenerated}: ${new Date().toLocaleDateString()}</div>
-          </div>
-        </div>
-
-        <div class="info-grid">
-          <div class="info-column">
-            <div class="info-row"><span class="label">${trans.reports.period}:</span><span class="value">${period} (${dateRange})</span></div>
-          </div>
-          <div class="info-column">
-            <div class="info-row"><span class="label">${trans.reports.outflow}:</span>            <span class="value" style="color: #EF4444; font-weight: 700;">${formatNumber(totalExpenses)} ETB</span></div>
-          </div>
-        </div>
-
-        <table class="items-table">
-          <thead>
-            <tr>
-              <th>${trans.reports.date}</th>
-              <th>${trans.reports.description}</th>
-              <th>${trans.reports.category}</th>
-              <th style="text-align: center;">${trans.reports.frequency}</th>
-              <th style="text-align: right;">${trans.reports.amount}</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemsHtml}
-          </tbody>
-        </table>
-
-        <div class="total-section">
-          <div class="total-row grand-total" style="color: #EF4444;">
-            <span>${trans.reports.total}</span>
-            <span>${formatNumber(totalExpenses)} ETB</span>
-          </div>
-        </div>
-
-        <div class="footer">
-          ${trans.reports.powered}
-        </div>
-      </body>
-    </html>
-  `;
-
-  return triggerShare(html, trans.reports.expenseTitle, action);
-};
-
 // 8. Profit & Loss Report PDF Generator
 export const generateProfitAndLossReportPDF = async (plData: any, period: string, dateRange: string, business: any, language: Lang = 'en', action: 'share' | 'save' = 'share', timeSystem: 'device' | 'ethiopian' = 'device') => {
   const trans = pdfTranslations[language];
   const grossProfit = plData.revenue - plData.cogs;
-  const netProfit = grossProfit - plData.expenses;
+  const netProfit = grossProfit;
   const isProfit = netProfit >= 0;
 
   const html = `
@@ -1079,16 +1003,6 @@ export const generateProfitAndLossReportPDF = async (plData: any, period: string
               <td style="text-align: right; color: #10B981;">${formatNumber(grossProfit)} ETB</td>
             </tr>
 
-            <!-- EXPENSES -->
-            <tr class="pl-section-head">
-              <td>3. ${trans.reports.expenses}</td>
-              <td style="text-align: right;"></td>
-            </tr>
-            <tr>
-              <td class="pl-subtotal">${trans.reports.operationalExpenses}</td>
-              <td style="text-align: right; color: #EF4444;">- ${formatNumber(plData.expenses)} ETB</td>
-            </tr>
-
             <!-- NET INCOME -->
             <tr class="pl-total" style="color: ${isProfit ? '#10B981' : '#EF4444'}; background-color: #F3F4F6;">
               <td>${isProfit ? trans.reports.netProfit : trans.reports.netLoss}</td>
@@ -1169,22 +1083,10 @@ export const exportStockReportCSV = async (items: any[], action: 'share' | 'save
   return shareCSV(buildCSVString(headers, rows), 'Stock_Report', action);
 };
 
-// 11. Expense Report CSV
-export const exportExpenseReportCSV = async (expenses: any[], action: 'share' | 'save' = 'share') => {
-  const headers = ['Date', 'Expense Name', 'Category', 'Amount (ETB)', 'Recurring', 'Frequency'];
-  const rows = expenses.map(e => [
-    e.date ? new Date(e.date).toLocaleDateString() : '',
-    e.name || '', e.category || 'General',
-    e.amount || 0,
-    e.isRecurring ? 'Yes' : 'No', e.frequency || '',
-  ]);
-  return shareCSV(buildCSVString(headers, rows), 'Expense_Report', action);
-};
-
 // 12. P&L Report CSV
-export const exportPLReportCSV = async (plData: { revenue: number; cogs: number; expenses: number }, action: 'share' | 'save' = 'share') => {
+export const exportPLReportCSV = async (plData: { revenue: number; cogs: number }, action: 'share' | 'save' = 'share') => {
   const grossProfit = plData.revenue - plData.cogs;
-  const netProfit = grossProfit - plData.expenses;
+  const netProfit = grossProfit;
   const headers = ['Line Item', 'Amount (ETB)'];
   const rows = [
     ['1. Revenue', plData.revenue],
@@ -1192,8 +1094,6 @@ export const exportPLReportCSV = async (plData: { revenue: number; cogs: number;
     ['2. Cost of Goods Sold (COGS)', plData.cogs],
     ['  Direct Cost of Inventory Sold', plData.cogs],
     ['Gross Profit', grossProfit],
-    ['3. Operational Expenses', plData.expenses],
-    ['  Operational & Recurring Expenses', plData.expenses],
     [netProfit >= 0 ? 'Net Profit' : 'Net Loss', netProfit],
   ];
   return shareCSV(buildCSVString(headers, rows), 'Profit_Loss_Report', action);

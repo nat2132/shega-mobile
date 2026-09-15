@@ -19,6 +19,8 @@ import { getSuppliersGlass } from './glass-suppliers';
 import { Fonts } from '@/constants/theme';
 import { insertSupplier, updateSupplier } from '@/database/db';
 import { AppText } from '@/components/ui';
+import MorVerificationInline from '@/components/tax/mor-verification';
+import { isMorVerified } from '@shega/shared';
 
 const SUPPLIER_CATEGORIES = ['Product Supplier', 'Raw Material Supplier', 'Packaging Supplier'];
 const PAYMENT_TYPES = ['cash', 'credit', 'partial'] as const;
@@ -243,6 +245,18 @@ export default function SupplierForm({ supplier, onClose, onSaved }: SupplierFor
                 onChangeText={setTin}
                 placeholder={t('suppliers.tin_ph')}
                 placeholderTextColor={G.fgSecondary}
+                maxLength={12}
+              />
+            </View>
+            <View style={{ marginTop: 8 }}>
+              <MorVerificationInline
+                tin={tin}
+                onVerified={(v) => {
+                  if (isMorVerified(v) && v.taxpayerName && !fullName.trim()) {
+                    setFullName(v.taxpayerName);
+                    if (!companyName.trim()) setCompanyName(v.taxpayerName);
+                  }
+                }}
               />
             </View>
           </View>

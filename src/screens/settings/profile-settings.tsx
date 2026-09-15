@@ -38,6 +38,7 @@ import { getSettingsGlass } from './glass-settings';
 import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
 import { profileSettingsTutorial } from '@/tutorials/definitions';
 import { useAccount } from '@/context/AccountContext';
+import { setUserAvatar } from '@/services/businessService';
 import { SubscriptionStatusInfo } from '@/services/api';
 const EditProfileScreen = () => {
   const { userProfile, setUserProfile, t, colors } = useSettings();
@@ -57,6 +58,8 @@ const EditProfileScreen = () => {
       avatarIndex: selectedAvatar,
       avatarUri: customAvatarUri,
     });
+    // Persist to the users table so activity feeds across the app show it
+    setUserAvatar(customAvatarUri ?? null);
     const ok = await dialog.confirm({
       title: t('common.success'),
       message: t('profile.updated_success'),

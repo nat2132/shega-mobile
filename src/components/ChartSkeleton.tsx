@@ -138,7 +138,7 @@ interface LineChartSkeletonProps {
 }
 
 /**
- * Skeleton that matches the LineChart layout in expense.tsx (130px
+ * Skeleton that matches the LineChart layout used across charts (130px
  * tall with a horizontal-curve placeholder).
  */
 export const LineChartSkeleton: React.FC<LineChartSkeletonProps> = React.memo(({
@@ -184,8 +184,8 @@ interface SparklineSkeletonProps {
 }
 
 /**
- * Skeleton matching the small sparkline used in dashboard / inventory /
- * expense hero cards.
+ * Skeleton matching the small sparkline used across dashboard and
+ * inventory hero cards.
  */
 export const SparklineSkeleton: React.FC<SparklineSkeletonProps> = React.memo(({
   width = 100,
@@ -218,7 +218,7 @@ interface RingSkeletonProps {
 }
 
 /**
- * Skeleton matching the BudgetRing in expense.tsx.
+ * Skeleton matching a circular ring chart.
  */
 export const RingSkeleton: React.FC<RingSkeletonProps> = React.memo(({
   size = 100,

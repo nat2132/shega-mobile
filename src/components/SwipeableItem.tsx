@@ -12,13 +12,14 @@ import { useSettings } from '@/context/SettingsContext';
 import { useDialog } from '@/context/DialogContext';
 import { AppText } from '@/components/ui';
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const SWIPE_THRESHOLD = -80;
+const SWIPE_THRESHOLD = 80;
 
 interface SwipeableItemProps {
   children: React.ReactNode;
   onDelete: () => void | Promise<void>;
   itemTitle?: string;
   enabled?: boolean;
+  direction?: 'left' | 'right' | 'both';
 }
 
 export const SwipeableItem: React.FC<SwipeableItemProps> = ({
@@ -26,11 +27,15 @@ export const SwipeableItem: React.FC<SwipeableItemProps> = ({
   onDelete,
   itemTitle = 'this item',
   enabled = true,
+  direction = 'left',
 }) => {
   const { t } = useSettings();
   const dialog = useDialog();
   const pan = useRef(new Animated.Value(0)).current;
   const isSwipingRef = useRef(false);
+  const openSideRef = useRef(-1);
+  const directionRef = useRef(direction);
+  directionRef.current = direction;
   const onDeleteRef = useRef(onDelete);
   const dialogRef = useRef(dialog);
   const tRef = useRef(t);
@@ -60,7 +65,7 @@ export const SwipeableItem: React.FC<SwipeableItemProps> = ({
     });
     if (ok) {
       Animated.timing(pan, {
-        toValue: -SCREEN_WIDTH,
+        toValue: openSideRef.current * SCREEN_WIDTH,
         duration: 200,
         useNativeDriver: true,
       }).start(() => {
@@ -74,32 +79,51 @@ export const SwipeableItem: React.FC<SwipeableItemProps> = ({
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_evt, gestureState) => {
-        // Only capture horizontal swipes to the left
-        // Must be moving left (dx < -10) and mostly horizontal
-        return gestureState.dx < -10 && Math.abs(gestureState.dy) < Math.abs(gestureState.dx);
+        const { dx, dy } = gestureState;
+        const horizontal = Math.abs(dy) < Math.abs(dx);
+        if (directionRef.current === 'left') return dx < -10 && horizontal;
+        if (directionRef.current === 'right') return dx > 10 && horizontal;
+        return Math.abs(dx) > 10 && horizontal;
       },
       onMoveShouldSetPanResponderCapture: (_evt, gestureState) => {
-        return gestureState.dx < -15 && Math.abs(gestureState.dy) < Math.abs(gestureState.dx) * 0.5;
+        const { dx, dy } = gestureState;
+        const mostlyHorizontal = Math.abs(dy) < Math.abs(dx) * 0.5;
+        if (directionRef.current === 'left') return dx < -15 && mostlyHorizontal;
+        if (directionRef.current === 'right') return dx > 15 && mostlyHorizontal;
+        return Math.abs(dx) > 15 && mostlyHorizontal;
       },
       onPanResponderGrant: () => {
         isSwipingRef.current = true;
       },
       onPanResponderMove: (_evt, gestureState) => {
-        if (gestureState.dx < 0) {
-          // Add resistance after threshold
-          let value = gestureState.dx;
-          if (value < SWIPE_THRESHOLD) {
-            value = SWIPE_THRESHOLD + (gestureState.dx - SWIPE_THRESHOLD) * 0.3;
-          }
-          pan.setValue(value);
+        const { dx } = gestureState;
+        const side = dx > 0 ? 1 : -1;
+        const allowed =
+          directionRef.current === 'left' ? dx < 0
+          : directionRef.current === 'right' ? dx > 0
+          : dx !== 0;
+        if (!allowed) return;
+        openSideRef.current = side;
+        const dist = Math.abs(dx);
+        let value = dx;
+        if (dist > SWIPE_THRESHOLD) {
+          value = side * (SWIPE_THRESHOLD + (dist - SWIPE_THRESHOLD) * 0.3);
         }
+        pan.setValue(value);
       },
       onPanResponderRelease: (_evt, gestureState) => {
         isSwipingRef.current = false;
-        if (gestureState.dx < SWIPE_THRESHOLD) {
+        const { dx } = gestureState;
+        const side = dx > 0 ? 1 : -1;
+        const triggered =
+          directionRef.current === 'left' ? dx < -SWIPE_THRESHOLD
+          : directionRef.current === 'right' ? dx > SWIPE_THRESHOLD
+          : Math.abs(dx) > SWIPE_THRESHOLD;
+        if (triggered) {
+          openSideRef.current = side;
           // Snap to reveal delete button, then confirm
           Animated.spring(pan, {
-            toValue: SWIPE_THRESHOLD,
+            toValue: side * SWIPE_THRESHOLD,
             useNativeDriver: true,
             bounciness: 5,
           }).start(() => {
@@ -119,21 +143,27 @@ export const SwipeableItem: React.FC<SwipeableItemProps> = ({
   if (!enabled) return <>{children}</>;
 
   const deleteOpacity = pan.interpolate({
-    inputRange: [SWIPE_THRESHOLD, -20, 0],
-    outputRange: [1, 0.3, 0],
+    inputRange: [-SWIPE_THRESHOLD, -20, 0, 20, SWIPE_THRESHOLD],
+    outputRange: [1, 0.3, 0, 0.3, 1],
     extrapolate: 'clamp',
   });
 
   const deleteScale = pan.interpolate({
-    inputRange: [SWIPE_THRESHOLD, -20, 0],
-    outputRange: [1, 0.5, 0.3],
+    inputRange: [-SWIPE_THRESHOLD, -20, 0, 20, SWIPE_THRESHOLD],
+    outputRange: [1, 0.5, 0.3, 0.5, 1],
     extrapolate: 'clamp',
   });
 
   return (
     <View style={styles.outerContainer}>
       {/* Delete background */}
-      <View style={styles.deleteBackground}>
+      <View
+        style={[
+          styles.deleteBackground,
+          direction === 'right' && styles.deleteBackgroundLeftAlign,
+          direction === 'both' && styles.deleteBackgroundCenter,
+        ]}
+      >
         <Animated.View
           style={[
             styles.deleteContent,
@@ -170,6 +200,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'flex-end',
     paddingRight: 25,
+  },
+  deleteBackgroundLeftAlign: {
+    alignItems: 'flex-start',
+    paddingRight: 0,
+    paddingLeft: 25,
+  },
+  deleteBackgroundCenter: {
+    alignItems: 'center',
+    paddingRight: 0,
+    paddingLeft: 0,
   },
   deleteContent: {
     alignItems: 'center',

@@ -1,7 +1,8 @@
 import { CustomDatePicker } from '@/components/CustomDatePicker';
 import { Fonts , BorderRadius, Spacing } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
-import { getActivityFeed, getAdjustmentById, getExpenseById, getSaleWithItemsById } from '@/database/db';
+import { useDataChangedRefresh } from '@/hooks/useDataChangedRefresh';
+import { getActivityFeed, getSaleWithItemsById } from '@/database/db';
 import { formatDate, formatEthiopianTime, formatTime } from '@/utils/date-utils';
 import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -14,7 +15,7 @@ import {
     RefreshCw,
     Search,
     ShoppingBag,
-    TrendingDown,
+    Trash2,
     TrendingUp
 } from 'lucide-react-native';
 import React, { useCallback, useMemo, useState } from 'react';
@@ -29,12 +30,11 @@ import {
     View,
 } from 'react-native';
 import { AppNumber, AppText, AppListItem} from '@/components/ui';
+import { UserAvatar } from '@/components/UserAvatar';
 
 import Animated, {
     FadeInDown
 } from 'react-native-reanimated';
-import AdjustmentDetailsScreen from '../adjustement/adjustment-details';
-import ExpenseDetailsScreen from '../expense/expense-details';
 import SaleDetailsScreen from '../sales/sales-details';
 import { getDashGlass } from './glass-dashboard';
 import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
@@ -56,8 +56,6 @@ const ActivityLedgerScreen: React.FC<ActivityLedgerProps> = ({ onClose }) => {
   const [selectedDate, setSelectedDate] = useState('');
 
   const [selectedSale, setSelectedSale] = useState<any>(null);
-  const [selectedExpense, setSelectedExpense] = useState<any>(null);
-  const [selectedAdjustment, setSelectedAdjustment] = useState<any>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
 
   const sanitizeSearchQuery = (query: string) => {
@@ -108,6 +106,8 @@ data.forEach((item: any) => {
     setActivities(grouped);
   }, [searchQuery, selectedDate, t]);
 
+  useDataChangedRefresh(loadData);
+
   useFocusEffect(
     useCallback(() => {
       loadData();
@@ -131,8 +131,8 @@ data.forEach((item: any) => {
     }
 
     const isSale = item.category === 'sale' || item.type === 'sale';
-    const isExpense = item.category === 'expense' || item.type === 'expense';
     const isAdjustment = item.category === 'adjustment' || item.type === 'adjustment';
+    const isDeletion = item.category === 'deletion' || item.type === 'deletion';
     
     let Icon = TrendingUp;
     let iconBg = colors.primary;
@@ -142,7 +142,6 @@ data.forEach((item: any) => {
 
     if (isSale) {
       const paymentStatus = item.paymentStatus || 'Paid';
-      const isOrder = paymentStatus === 'Order';
       const isDebt = paymentStatus === 'Debt';
       const isCancelled = paymentStatus === 'Cancelled';
       const isPayment = (typeof item.value === 'number' && item.value < 0) || (item.batchId && String(item.batchId).startsWith('PAY_'));
@@ -154,33 +153,27 @@ data.forEach((item: any) => {
         prefix = '+';
       } else {
         Icon = isCancelled ? AlertTriangle : ShoppingBag;
-        iconBg = isCancelled ? colors.error : (isOrder ? colors.primary : (isDebt ? colors.warning : colors.success));
-        const statusLabel = isCancelled ? t('sale.cancelled') : (isOrder ? 'Order' : (isDebt ? t('sale.credit') : t('dashboard.activity.sold')));
+        iconBg = isCancelled ? colors.error : (isDebt ? colors.warning : colors.success);
+        const statusLabel = isCancelled ? t('sale.cancelled') : (isDebt ? t('sale.credit') : t('dashboard.activity.sold'));
         label = `${item.quantity || 0} ${item.unitType || ''} ${statusLabel}`;
-        amountColor = isCancelled ? colors.error : (isOrder ? colors.primary : (isDebt ? colors.warning : colors.success));
+        amountColor = isCancelled ? colors.error : (isDebt ? colors.warning : colors.success);
         prefix = isCancelled ? '' : '+';
       }
-    } else if (isExpense) {
-      Icon = TrendingDown;
-      iconBg = colors.error;
-      if (item.isRecurring && item.nextBillingDate) {
-        label = `${t('expense.recurring_next')}: ${formatDate(new Date(item.nextBillingDate), calendarType, language)}`;
-      } else {
-        label = t('expense.not_recurring');
-      }
-      amountColor = colors.error;
-      prefix = '-';
     } else if (isAdjustment) {
       Icon = RefreshCw;
       iconBg = colors.warning;
       label = item.type === 'price_up' ? t('adjustment.price_increased') : 
               item.type === 'price_down' ? t('adjustment.price_decreased') : t('dashboard.activity.damaged');
+    } else if (isDeletion) {
+      Icon = Trash2;
+      iconBg = colors.error;
+      label = t('activity.deleted_item');
     }
     
     // Item name: use customerName for sales, fallback to item label
     const itemName = isSale
       ? (item.customerName || t('sales.walk_in_customer'))
-      : (item.name || item.label || (isExpense ? t('expense.header') : t('adjustment.header')));
+      : (item.name || item.label || t('adjustment.header'));
     // Amount: try amount, value
     let displayAmount = typeof item.amount === 'number' ? item.amount : (typeof item.value === 'number' ? item.value : null);
     // Payment records have negative value — show as positive
@@ -202,21 +195,27 @@ data.forEach((item: any) => {
     return (
       <AppListItem
         left={
-          <View
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 18,
-              backgroundColor: iconBg + '15',
-              justifyContent: 'center',
-              alignItems: 'center',
-            }}
-          >
-            <Icon size={20} color={iconBg} />
+          <View style={{ width: 36, height: 36, justifyContent: 'center', alignItems: 'center' }}>
+            {item.userAvatar ? (
+              <UserAvatar name={item.userName} avatarUri={item.userAvatar} size={36} />
+            ) : (
+              <View
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: iconBg + '15',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <Icon size={20} color={iconBg} />
+              </View>
+            )}
           </View>
         }
         title={itemName}
-        subtitle={label}
+        subtitle={item.userName ? `${item.userName} · ${label}` : label}
         titleMaxLines={1}
         subtitleMaxLines={1}
         right={
@@ -243,12 +242,6 @@ data.forEach((item: any) => {
           if (isSale) {
             const sale = getSaleWithItemsById(item.id);
             if (sale) setSelectedSale(sale);
-          } else if (isExpense) {
-            const expense = getExpenseById(item.id);
-            if (expense) setSelectedExpense(expense);
-          } else if (isAdjustment) {
-            const adj = getAdjustmentById(item.id);
-            if (adj) setSelectedAdjustment(adj);
           }
         }}
         padding={Spacing.md}
@@ -262,7 +255,7 @@ data.forEach((item: any) => {
         }}
       />
     );
-  }, [colors, calendarType, language, timeSystem, t, G, styles, setSelectedSale, setSelectedExpense, setSelectedAdjustment]);
+  }, [colors, calendarType, language, timeSystem, t, G, styles, setSelectedSale]);
 
   return (
     <View style={[styles.container, { backgroundColor: G.bg }]}>
@@ -352,26 +345,6 @@ data.forEach((item: any) => {
           <Animated.View entering={FadeInDown} style={[styles.bottomSheetContainer, { backgroundColor: G.bg, height: Dimensions.get('window').height * 0.90 }]}>
              <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: G.border }]} /></View>
              {selectedSale && <SaleDetailsScreen sale={selectedSale} onClose={() => { setSelectedSale(null); loadData(); }} />}
-          </Animated.View>
-        </View>
-      </Modal>
-
-      <Modal visible={!!selectedExpense} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setSelectedExpense(null)} />
-          <Animated.View entering={FadeInDown} style={[styles.bottomSheetContainer, { backgroundColor: G.bg, height: Dimensions.get('window').height * 0.90 }]}>
-             <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: G.border }]} /></View>
-             {selectedExpense && <ExpenseDetailsScreen expense={selectedExpense} onClose={() => { setSelectedExpense(null); loadData(); }} />}
-          </Animated.View>
-        </View>
-      </Modal>
-
-      <Modal visible={!!selectedAdjustment} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setSelectedAdjustment(null)} />
-          <Animated.View entering={FadeInDown} style={[styles.bottomSheetContainer, { backgroundColor: G.bg, height: Dimensions.get('window').height * 0.90 }]}>
-             <View style={styles.modalHeader}><View style={[styles.modalHandle, { backgroundColor: G.border }]} /></View>
-             {selectedAdjustment && <AdjustmentDetailsScreen adjustment={selectedAdjustment} onClose={() => setSelectedAdjustment(null)} onRefresh={() => { setSelectedAdjustment(null); loadData(); }} />}
           </Animated.View>
         </View>
       </Modal>

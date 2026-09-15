@@ -167,16 +167,21 @@ async function stageLocalJoin(payload: any): Promise<void> {
 export function deviceLimitStatus(business: Business, activeCount: number): {
   allowed: boolean; availableMobile: number; availableDesktop: number; usedMobile: number; usedDesktop: number;
 } {
-  const usedMobile = Math.min(activeCount, business.maxMobile);
-  const usedDesktop = Math.max(0, activeCount - business.maxMobile);
-  const availableMobile = Math.max(0, business.maxMobile - usedMobile);
-  const availableDesktop = Math.max(0, business.maxDesktop - usedDesktop);
+  // Platform-neutral: Desktop and Mobile are equal first-class platforms, so
+  // the binding cap is the TOTAL device allowance, applied across any mix.
+  const totalAllowed = Math.max(
+    (business as unknown as { maxDevices?: number }).maxDevices ?? 0,
+    business.maxMobile,
+    business.maxDesktop,
+  );
+  const usedTotal = activeCount;
+  const availableTotal = Math.max(0, totalAllowed - usedTotal);
   return {
-    allowed: availableMobile + availableDesktop > 0,
-    availableMobile,
-    availableDesktop,
-    usedMobile,
-    usedDesktop,
+    allowed: availableTotal > 0,
+    usedMobile: usedTotal,
+    usedDesktop: 0,
+    availableMobile: availableTotal,
+    availableDesktop: availableTotal,
   };
 }
 

@@ -139,7 +139,7 @@ const SaleSuccessModal: React.FC<SaleSuccessModalProps> = ({ saleData, onClose, 
             <Animated.View entering={FadeInDown.delay(700)} style={styles.content}>
               <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.title, { color: colors.text, opacity: 0.6 }]} numberOfLines={1}>{t('common.success').toUpperCase()}</AppText>
               <AppText variant="heading" weight="bold" style={[styles.subtitle, { color: colors.text }]} numberOfLines={2}>
-                {saleData.paymentStatus === 'Order' ? (t('sale.order_placed') || 'Order Placed') : saleData.paymentStatus === 'Debt' ? (t('sale.debt_credit') || 'Credit Sale') : (t('sales.sale_success') || 'Sale Completed')}
+                {saleData.paymentStatus === 'Debt' ? (t('sale.debt_credit') || 'Credit Sale') : (t('sales.sale_success') || 'Sale Completed')}
               </AppText>
 
               {/* Premium Receipt Card */}
@@ -173,7 +173,7 @@ const SaleSuccessModal: React.FC<SaleSuccessModalProps> = ({ saleData, onClose, 
                        <View style={[styles.detailIconBox, { backgroundColor: (saleData.paymentStatus === 'Paid' ? colors.success : colors.warning) + '10' }]}>
                            <TrendingUp size={14} color={saleData.paymentStatus === 'Paid' ? colors.success : colors.warning} />
                        </View>
-                    <AppText variant="caption" weight="medium" style={[styles.detailText, { color: colors.textSecondary }]} numberOfLines={2}>{t('expense.status')}</AppText>
+                    <AppText variant="caption" weight="medium" style={[styles.detailText, { color: colors.textSecondary }]} numberOfLines={2}>{t('sale.status')}</AppText>
                     <AppText variant="body" weight="bold" shrink={false} style={[styles.detailValue, { color: saleData.paymentStatus === 'Paid' ? colors.success : colors.warning }]} numberOfLines={2}>
                          {(saleData.paymentStatus === 'Paid' ? t('sale.settled_full') : t('sale.debt_credit')).toUpperCase()}
                        </AppText>

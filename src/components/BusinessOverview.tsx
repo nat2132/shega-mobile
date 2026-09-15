@@ -48,7 +48,7 @@ import {
 // locations, and pending device approvals with actions.
 
 export default function BusinessOverview() {
-  const { colors } = useSettings();
+  const { colors, featureFlags } = useSettings();
   const G = getDashGlass(colors);
   const { showToast } = useToast();
   const { unifiedStatus } = useSync();
@@ -74,7 +74,7 @@ export default function BusinessOverview() {
         revenue: stats?.today?.revenue ?? 0,
         count: stats?.today?.salesCount ?? 0,
       });
-      const debt = getDebtCustomers();
+      const debt = featureFlags.customersEnabled ? getDebtCustomers() : [];
       setOutstandingDebt({
         count: debt.length,
         total: debt.reduce((s: number, d: any) => s + (Number(d.oweAmount) || 0), 0),
@@ -124,7 +124,7 @@ export default function BusinessOverview() {
   type StatDef = { key: string; icon: any; label: string; value: number; isCurrency?: boolean; color: string; onPress?: () => void };
   const stats: StatDef[] = [
     { key: 'sales', icon: ShoppingCart, label: 'Sales today', value: salesToday.revenue, isCurrency: true, color: colors.success || '#2ECC71' },
-    { key: 'debt', icon: Handshake, label: 'Outstanding debt', value: outstandingDebt.total, isCurrency: true, color: colors.error || '#E74C3C' },
+    ...(featureFlags.customersEnabled ? [{ key: 'debt', icon: Handshake, label: 'Outstanding debt', value: outstandingDebt.total, isCurrency: true, color: colors.error || '#E74C3C' }] : []),
     { key: 'low', icon: Package, label: 'Low stock items', value: lowStock, color: colors.warning || '#FFB020' },
     { key: 'devices', icon: Smartphone, label: 'Devices', value: devices.length, color: G?.fg || '#2F6FED' },
   ];

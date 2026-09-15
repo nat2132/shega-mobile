@@ -10,7 +10,7 @@ export const notificationsTutorial: TutorialDefinition = {
       id: 'nt-intro',
       targetId: 'nt-header',
       title: 'Notifications',
-      description: 'View all your business notifications — low stock alerts, payment reminders, expense warnings, and more.',
+      description: 'View all your business notifications — low stock alerts, payment reminders, and more.',
       tooltipPosition: 'bottom',
       fullContainer: true,
 },

@@ -12,6 +12,7 @@ import {
 import { getEthiopianMonthNames, toEthiopianDate } from '@/utils/date-utils';
 import { translateWarehouseName } from '@/utils/warehouse-labels';
 import * as Haptics from 'expo-haptics';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import {
     AlertCircle,
@@ -28,6 +29,7 @@ import {
     X
 } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useDataChangedRefresh } from '@/hooks/useDataChangedRefresh';
 import { useDebounce } from '@/hooks/useDebounce';
 import { SkeletonList } from '@/components/Skeleton';
 import {
@@ -84,6 +86,8 @@ const InventoryRecordScreen = () => {
     const stats = getInventorySummary();
     if (stats) setSummary(stats);
   }, [debouncedSearch, selectedCategory, selectedSort, activeWarehouseId]);
+
+  useDataChangedRefresh(loadData);
 
   useEffect(() => {
       loadData();
@@ -370,7 +374,11 @@ const InventoryCard = React.memo(({ item, onPress, warehouses }: { item: ItemDat
     >
       <View style={styles.itemCardTop}>
         <View style={[styles.itemIcon, { backgroundColor: G.bgCard }]}>
-          <Package size={18} color={G.fg} />
+          {item.image ? (
+            <Image source={{ uri: item.image }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
+          ) : (
+            <Package size={18} color={G.fg} />
+          )}
         </View>
         <View style={styles.itemInfo}>
           <AppText variant="body-sm" weight="bold" style={[styles.itemName, { color: G.fg }]} numberOfLines={1}>{item.name}</AppText>
@@ -445,7 +453,7 @@ const createStyles = (G: any) => StyleSheet.create({
   listContent: { paddingHorizontal: 20, paddingBottom: 150, paddingTop: 5 },
   itemCard: { borderRadius: 16, borderWidth: 1, padding: 12, marginBottom: 10, overflow: 'hidden' },
   itemCardTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  itemIcon: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+  itemIcon: { width: 36, height: 36, borderRadius: 10, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
   itemInfo: { flex: 1 },
   itemName: { fontSize: 14, fontFamily: Fonts.bold },
   itemCategory: { fontSize: 11, fontFamily: Fonts.medium, marginTop: 2 },

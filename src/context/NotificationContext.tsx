@@ -58,7 +58,7 @@ const NotificationContext = createContext<NotificationContextProps | undefined>(
 
 export const NotificationProvider = ({ children }: { children: React.ReactNode }) => {
   const { showToast } = useToast();
-  const { t, notifications: notificationSettings } = useSettings();
+  const { t, notifications: notificationSettings, featureFlags } = useSettings();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [unresolvedCount, setUnresolvedCount] = useState(0);
@@ -77,7 +77,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
       setLoading(true);
       // 1. Run business checks that may create new notifications
       //    (per-category toggles gate which checks run)
-      runAllNotificationChecks(notificationSettings);
+      runAllNotificationChecks(notificationSettings, featureFlags.customersEnabled);
 
       // 2. Read fresh data
       const list = getNotifications({ limit: 200 });
@@ -96,7 +96,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
     } finally {
       setLoading(false);
     }
-  }, [notificationSettings]);
+  }, [notificationSettings, featureFlags.customersEnabled]);
 
   const refreshByCategory = useCallback(async (category: string) => {
     const list = getNotifications({ category: category as any, limit: 200 });

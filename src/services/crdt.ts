@@ -23,7 +23,6 @@ export const SYNC_ENTITIES = [
   'sales',
   'debt_payments',
   'returns',
-  'expenses',
   'adjustments',
   'customers',
 ] as const;
@@ -107,7 +106,7 @@ export async function applyDelta(delta: any): Promise<{ applied: boolean; confli
     return { applied: false, conflict: false, reason: 'checksum_mismatch' };
   }
 
-  if (!['categories', 'items', 'item_packs', 'sales', 'debt_payments', 'returns', 'expenses', 'adjustments', 'customers'].includes(delta.entity)) {
+  if (!['categories', 'items', 'item_packs', 'sales', 'debt_payments', 'returns', 'adjustments', 'customers'].includes(delta.entity)) {
     return { applied: false, conflict: false, reason: 'entity_not_shared' };
   }
 

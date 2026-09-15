@@ -2,9 +2,10 @@ import { AppText } from '@/components/ui';
 import { Fonts } from '@/constants/theme';
 import { useDialog } from '@/context/DialogContext';
 import { useSettings } from '@/context/SettingsContext';
-import { generateShegaCode, getUserCategories, insertCategory, insertItem, logStockMovement } from '@/database/db';
+import { findItemsByNameInCategory, generateShegaCode, getUserCategories, insertCategory, insertItem, logStockMovement } from '@/database/db';
 import { usePermissions } from '@/hooks/usePermissions';
 import { playBad, playNice } from '@/services/soundService';
+import { getActiveTaxType } from '@/services/taxService';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -29,12 +30,6 @@ const UNITS: { id: string; label: string }[] = [
   { id: 'box', label: 'BOX' },
   { id: 'pack', label: 'PACK' },
   { id: 'dozen', label: 'DOZEN' },
-];
-
-const TAX_TYPES: { id: 'VAT' | 'TOT' | 'None'; label: string }[] = [
-  { id: 'VAT', label: 'VAT' },
-  { id: 'TOT', label: 'TOT' },
-  { id: 'None', label: 'None' },
 ];
 
 interface RegisterProductModalProps {
@@ -66,7 +61,6 @@ const RegisterProductModal: React.FC<RegisterProductModalProps> = ({
   const [purchasePrice, setPurchasePrice] = useState('');
   const [price, setPrice] = useState('');
   const [stockQty, setStockQty] = useState('0');
-  const [taxType, setTaxType] = useState<'VAT' | 'TOT' | 'None'>('VAT');
   const [image, setImage] = useState<string | null>(null);
   const [hasBarcode, setHasBarcode] = useState<boolean>(true);
   const [generatedCode, setGeneratedCode] = useState<string>('');
@@ -84,7 +78,6 @@ const RegisterProductModal: React.FC<RegisterProductModalProps> = ({
       setPurchasePrice('');
       setPrice('');
       setStockQty('0');
-      setTaxType('VAT');
       setImage(null);
       setCategoryId(null);
       setShowCategoryPicker(false);
@@ -199,6 +192,18 @@ const RegisterProductModal: React.FC<RegisterProductModalProps> = ({
         if (newId) finalCategoryId = Number(newId);
       }
 
+      const dupes = findItemsByNameInCategory(cleanName, finalCategoryId);
+      if (dupes.length > 0) {
+        const proceed = await dialog.confirm({
+          title: t('inventory.duplicate_item_title') || 'Duplicate item',
+          message: t('inventory.duplicate_item_message', { name: cleanName }) || `An item named '${cleanName}' already exists in this category. Do you want to continue?`,
+          confirmText: t('common.proceed') || 'Proceed',
+          cancelText: t('common.cancel') || 'Cancel',
+          iconType: 'warning',
+        });
+        if (!proceed) return;
+      }
+
       const finalBarcode = hasBarcode ? (barcode || null) : useGeneratedAsBarcode ? generatedCode : null;
       const finalSku = barcode || generatedCode || null;
 
@@ -220,7 +225,7 @@ const RegisterProductModal: React.FC<RegisterProductModalProps> = ({
         barcode: finalBarcode,
         sku: finalSku,
         image: image || null,
-        taxType,
+        taxType: getActiveTaxType()?.name || 'VAT',
         isCredit: false,
         warehouseId: null,
         supplierId: null,
@@ -242,7 +247,7 @@ const RegisterProductModal: React.FC<RegisterProductModalProps> = ({
         barcode: finalBarcode,
         sku: finalSku,
         image: image || null,
-        taxType,
+        taxType: getActiveTaxType()?.name || 'VAT',
         baseSellingPrice: cleanPrice,
         packSellingPrice: cleanPrice,
         basePurchasePrice: isNaN(cleanPurchasePrice) || cleanPurchasePrice < 0 ? 0 : cleanPurchasePrice,
@@ -262,7 +267,7 @@ const RegisterProductModal: React.FC<RegisterProductModalProps> = ({
     } finally {
       setSaving(false);
     }
-  }, [name, unit, purchasePrice, price, stockQty, taxType, image, hasBarcode, generatedCode, useGeneratedAsBarcode, categoryId, showCategoryPicker, newCategory, barcode, dialog, t, onSaved, onClose]);
+  }, [name, unit, purchasePrice, price, stockQty, image, hasBarcode, generatedCode, useGeneratedAsBarcode, categoryId, showCategoryPicker, newCategory, barcode, dialog, t, onSaved, onClose]);
 
   const selectedCat = categories.find((c) => c.id === categoryId);
 
@@ -451,20 +456,6 @@ const RegisterProductModal: React.FC<RegisterProductModalProps> = ({
                   onChangeText={setStockQty}
                   keyboardType="number-pad"
                 />
-              </Field>
-              <Field label={t('sale.tax_type') || 'Tax'}>
-                <View style={styles.chipRow}>
-                  {TAX_TYPES.map((tx) => (
-                    <TouchableOpacity
-                      key={tx.id}
-                      onPress={() => { Haptics.selectionAsync(); setTaxType(tx.id); }}
-                      style={[styles.chip, { backgroundColor: taxType === tx.id ? colors.primary : SALES_GLASS.bg, borderColor: taxType === tx.id ? colors.primary : SALES_GLASS.border }]}
-                      activeOpacity={0.8}
-                    >
-                      <AppText variant="body-sm" weight="bold" shrink={false} style={{ color: taxType === tx.id ? '#fff' : SALES_GLASS.fgSecondary }} numberOfLines={1}>{tx.label}</AppText>
-                    </TouchableOpacity>
-                  ))}
-                </View>
               </Field>
             </View>
           </ScrollView>

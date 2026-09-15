@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { DeviceStatus } from '@shega/shared';
 import { getSelfStatus, isBlocking, BLOCKING_STATUSES } from '@/services/deviceEnforcement';
 import { wsSyncClient } from '@/services/wsSyncClient';
-import { cloudSelfStatus, getCloudEnabled, getCloudUrl } from '@/services/syncService';
 
 export interface DeviceEnforcementState {
   status: DeviceStatus | null;
@@ -42,37 +41,13 @@ export function useDeviceEnforcement(): DeviceEnforcementState {
     setStatus(next);
   }, []);
 
-  // §17/§18 via the cloud path: when cloud sync is enabled we also poll the
-  // server's authoritative roster status so a remote lock/disable is applied
-  // even when the LAN hub is unreachable (different network, hub off, etc.).
-  const refreshCloud = useCallback(async () => {
-    if (!getCloudEnabled()) return null;
-    if (!getCloudUrl()) return null;
-    try {
-      const cloud = await cloudSelfStatus();
-      if (cloud && cloud.status) {
-        statusRef.current = cloud.status as DeviceStatus;
-        setStatus(cloud.status as DeviceStatus);
-        return cloud.status as DeviceStatus;
-      }
-    } catch {
-      // Ignore transient offline; fall back to the LAN-derived status.
-    }
-    return null;
-  }, []);
-
   useEffect(() => {
     refresh();
-    refreshCloud();
     wsSyncClient.on('syncCompleted', refresh);
-    wsSyncClient.on('syncCompleted', refreshCloud as Parameters<typeof wsSyncClient.on>[1]);
-    const t = setInterval(refreshCloud, 60 * 1000);
     return () => {
       wsSyncClient.off('syncCompleted', refresh);
-      wsSyncClient.off('syncCompleted', refreshCloud as Parameters<typeof wsSyncClient.on>[1]);
-      clearInterval(t);
     };
-  }, [refresh, refreshCloud]);
+  }, [refresh]);
 
   const blocked = isBlocking(status);
   return {

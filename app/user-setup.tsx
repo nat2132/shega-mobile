@@ -4,7 +4,7 @@ import ProfileSetupScreen from '../src/screens/account creation/user-setup';
 export default function UserSetup() {
   return (
     <ProfileSetupScreen onComplete={() => {
-      router.replace('/pin-setup');
+      router.replace('/feature-setup');
     }} />
   );
 }
