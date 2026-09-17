@@ -24,8 +24,6 @@ import {
 import { useAutoHideScroll } from '@/hooks/useAutoHideScroll';
 import { useDataChangedRefresh } from '@/hooks/useDataChangedRefresh';
 import { useNotifications } from '@/hooks/useNotifications';
-import { TutorialButton, TutorialScrollView, TutorialTarget, useTutorial } from '@/tutorials';
-import { inventoryTutorial } from '@/tutorials/definitions';
 import { formatNumber } from '@/utils/formatNumber';
 import { translateWarehouseName } from '@/utils/warehouse-labels';
 import * as Haptics from 'expo-haptics';
@@ -206,7 +204,6 @@ const InventoryDashboard = () => {
   const { notifCount } = useNotifications();
   const hideFABStyle = useAutoHideScroll();
   const { activeWarehouseId, warehouses } = useWarehouse();
-  const tutorial = useTutorial({ tutorial: inventoryTutorial });
   const dialog = useDialog();
   const [showInventoryRecord, setShowInventoryRecord] = useState(false);
   const [recordModalKey, setRecordModalKey] = useState(0);
@@ -323,7 +320,7 @@ const InventoryDashboard = () => {
       </View>
 
       <Animated.View entering={FadeIn.duration(400)} style={{ flex: 1 }}>
-        <TutorialScrollView 
+        <ScrollView 
           showsVerticalScrollIndicator={false} 
           contentContainerStyle={styles.scrollContent}
           refreshControl={
@@ -336,7 +333,6 @@ const InventoryDashboard = () => {
           }
         >
           {/* Top Navigation Bar */}
-          <TutorialTarget id="inv-header">
           <View style={styles.topBar}>
             <View style={{ flex: 1 }}>
               <View style={[styles.headerAvatarBox, { borderColor: G.borderLight }]}>
@@ -348,11 +344,9 @@ const InventoryDashboard = () => {
             </View>
             
             <View style={styles.headerActions}>
-              <TutorialButton tutorialId="inventory" screenName={t('screen.inventory')} />
               <NotificationBell size={22} count={notifCount} />
             </View>
           </View>
-          </TutorialTarget>
 
           {/* Hero Page Header */}
           <Animated.View entering={FadeInDown.duration(600)} style={styles.screenHeader}>
@@ -397,7 +391,6 @@ const InventoryDashboard = () => {
           )}
 
           {/* Vault Hero Section */}
-          <TutorialTarget id="inv-valuation">
           <View style={styles.heroSection}>
             <View style={[styles.vaultCard, { backgroundColor: G.bgCard, borderColor: G.border, overflow: 'hidden' }]}>
               <View style={[styles.vaultGlow, { backgroundColor: G.reflection }]} />
@@ -449,10 +442,8 @@ const InventoryDashboard = () => {
               </View>
             </View>
           </View>
-          </TutorialTarget>
 
            {/* Business Insights Bento */}
-            <TutorialTarget id="inv-stats">
             <View style={styles.bentoSection}>
                {/* High Value Item Card - Clickable to Top 10 */}
                <View style={styles.bentoRow}>
@@ -510,7 +501,6 @@ const InventoryDashboard = () => {
 
                {/* Product Order Card */}
                 <View style={styles.bentoRow}>
-                  <TutorialTarget id="inv-restock-btn">
                   <TouchableOpacity 
                       style={[styles.smallBento, { backgroundColor: G.bgCard, borderColor: G.border, overflow: 'hidden' }]}
                       onPress={() => {
@@ -523,8 +513,7 @@ const InventoryDashboard = () => {
                      <ShoppingBag size={20} color={G.fg} style={{ marginBottom: 8 }} />
                      <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.bentoLabel, { color: G.muted }]} numberOfLines={1}>{t('inventory.product_order')}</AppText>
                      <AppNumber value={summary?.lowStockCount} fallback="0" size="body" style={[styles.bentoMainVal, { fontSize: (summary?.lowStockCount || 0) >= 1000 ? 16 : 18 }]} />
-                   </TouchableOpacity>
-                   </TutorialTarget>
+</TouchableOpacity>
                 </View>
 
                {/* Category Distribution - Fixed percentages */}
@@ -559,11 +548,9 @@ const InventoryDashboard = () => {
                     </View>
                   </TouchableOpacity>
                </View>
-             </View>
-            </TutorialTarget>
+              </View>
 
-          {/* Action Ledger Section */}
-          <TutorialTarget id="inv-list">
+{/* Action Ledger Section */}
           <View style={styles.ledgerSection}>
             <View style={styles.sectionHeader}>
               <View>
@@ -578,7 +565,6 @@ const InventoryDashboard = () => {
             <View style={styles.ledgerList}>
               {recentItems.map((item, idx) => (
                 <Animated.View key={item.id} entering={FadeInDown.delay(300 + (idx * 50)).duration(500)}>
-                  <TutorialTarget id="inv-item-card">
                   <InventoryLedgerItem 
                     item={item} 
                     onPress={() => {
@@ -586,7 +572,6 @@ const InventoryDashboard = () => {
                       setShowItemDetails(true);
                     }} 
                   />
-                  </TutorialTarget>
                 </Animated.View>
               ))}
               {recentItems.length === 0 && (
@@ -599,9 +584,8 @@ const InventoryDashboard = () => {
               )}
             </View>
           </View>
-          </TutorialTarget>
 
-        </TutorialScrollView>
+        </ScrollView>
       </Animated.View>
 
       {/* Expanding Smart FAB */}
@@ -633,7 +617,6 @@ const InventoryDashboard = () => {
 
             {isBarExpanded && (
               <Animated.View entering={FadeIn.delay(120)} exiting={FadeOut.duration(100)}>
-                <TutorialTarget id="inv-add-btn">
                 <TouchableOpacity style={styles.dockBtn} onPress={() => { 
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setShowAddForm(true);
@@ -641,7 +624,6 @@ const InventoryDashboard = () => {
                 }}>
                   <Plus size={22} color={G.muted} />
                 </TouchableOpacity>
-                </TutorialTarget>
               </Animated.View>
             )}
           </View>

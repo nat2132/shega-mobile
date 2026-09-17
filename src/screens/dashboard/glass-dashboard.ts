@@ -10,7 +10,7 @@ export function getDashGlass(colors: typeof LightTheme) {
 
 export const DASH_SPACING = {
   gutter: 20,
-  cardRadius: 20,
+  cardRadius: 16,
   cardRadiusLg: 24,
   pillRadius: 999,
   headerHeight: 120,

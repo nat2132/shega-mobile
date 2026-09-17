@@ -96,11 +96,14 @@ export function ConnectedDevicesScreen({ onBack }: { onBack: () => void }) {
     setTimeout(load, 1500);
   };
 
+  const [confirmUnpair, setConfirmUnpair] = useState<DeviceRow | null>(null);
+
   const revoke = (deviceId: string) => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     mobileP2pSync.revokeDevice(deviceId);
-    showToast('Device revoked — it can no longer sync.', 'success');
+    showToast('Device unpaired — it must be paired again before it can sync.', 'success');
     setDetail(null);
+    setConfirmUnpair(null);
     load();
   };
 
@@ -273,15 +276,35 @@ export function ConnectedDevicesScreen({ onBack }: { onBack: () => void }) {
                   ))}
                 </View>
                 <AppButton
-                  label="Revoke Device"
+                  label="Unpair Device"
                   variant="danger"
                   fullWidth
                   leftIcon={<ShieldOff size={15} color="#fff" />}
-                  onPress={() => revoke(detail.deviceId)}
+                  onPress={() => setConfirmUnpair(detail)}
                   style={{ marginTop: 16 }}
                 />
               </>
             )}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Unpair confirmation */}
+      <Modal visible={!!confirmUnpair} transparent animationType="fade" onRequestClose={() => setConfirmUnpair(null)}>
+        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setConfirmUnpair(null)}>
+          <TouchableOpacity activeOpacity={1} style={[styles.sheet, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+            <AppText variant="heading" weight="bold" style={{ color: G.fg }}>Unpair "{confirmUnpair?.name || confirmUnpair?.model || 'this device'}"?</AppText>
+            <AppText variant="caption" style={{ color: G.muted, marginTop: 8 }}>
+              It will immediately stop syncing and lose access to {businessName}. Business data is kept on your remaining devices. The device must be paired and approved again before it can sync.
+            </AppText>
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
+              <View style={{ flex: 1 }}>
+                <AppButton label="Cancel" variant="ghost" fullWidth onPress={() => setConfirmUnpair(null)} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <AppButton label="Unpair" variant="danger" fullWidth leftIcon={<ShieldOff size={15} color="#fff" />} onPress={() => confirmUnpair && revoke(confirmUnpair.deviceId)} />
+              </View>
+            </View>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -416,4 +439,6 @@ const styles = StyleSheet.create({
   countTile: { width: '31%', borderRadius: 10, borderWidth: 1, padding: 8, alignItems: 'center' },
   qrFrame: { borderRadius: 16, padding: 12, alignItems: 'center', justifyContent: 'center', width: 194, height: 194 },
   codeChip: { borderRadius: 10, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 8 },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  sheet: { width: '100%', maxWidth: 360, borderRadius: 20, borderWidth: 1, padding: 20 },
 });

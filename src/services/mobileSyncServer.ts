@@ -189,9 +189,27 @@ function applyChange(deviceId: string, change: Change): 'applied' | 'conflict' |
   }
 
   const existing = db.getFirstSync(`SELECT * FROM ${entity} WHERE uuid = ?`, [entity_uuid]) as any;
+  // Resolve peer FKs to local ids on the update path (mirrors syncService.applyChange):
+  // a movement/sale/return UPDATE carrying the sender's raw itemId would violate
+  // the stock_movements → items FOREIGN KEY when local ids differ.
+  if ((entity === 'stock_movements' || entity === 'sales' || entity === 'returns') && data.itemId != null) {
+    try {
+      const localItem = db.getFirstSync('SELECT id FROM items WHERE uuid = ? OR id = ?', [String(data.itemId), data.itemId]) as any;
+      if (localItem?.id != null) data.itemId = localItem.id;
+      else delete data.itemId;
+    } catch { delete data.itemId; }
+  }
   if (!existing) {
     const insertData = { ...data };
     delete insertData.id;
+    // FK guard: never insert an unresolvable peer itemId (would violate the
+    // stock_movements → items FOREIGN KEY).
+    if ((entity === 'stock_movements' || entity === 'sales' || entity === 'returns') && insertData.itemId != null) {
+      try {
+        const localItem = db.getFirstSync('SELECT id FROM items WHERE uuid = ? OR id = ?', [String(insertData.itemId), insertData.itemId]) as any;
+        insertData.itemId = localItem?.id ?? null;
+      } catch { insertData.itemId = null; }
+    }
     insertData.uuid = entity_uuid;
     insertData.device_id = deviceId;
     insertData.updated_at = insertData.updated_at ?? new Date().toISOString();
@@ -224,10 +242,15 @@ function applyChange(deviceId: string, change: Change): 'applied' | 'conflict' |
 function applyPush(deviceId: string, changes: Change[]): { applied: number; conflicts: number; skipped: number } {
   const result = { applied: 0, conflicts: 0, skipped: 0 };
   for (const change of changes) {
-    const status = applyChange(deviceId, change);
-    if (status === 'applied') result.applied++;
-    else if (status === 'conflict') result.conflicts++;
-    else result.skipped++;
+    try {
+      const status = applyChange(deviceId, change);
+      if (status === 'applied') result.applied++;
+      else if (status === 'conflict') result.conflicts++;
+      else result.skipped++;
+    } catch {
+      // One constraint-violating row must not abort the whole batch.
+      result.skipped++;
+    }
   }
   return result;
 }
@@ -282,6 +305,18 @@ function handlePairRequest(client: TcpClient, msg: any): void {
     sendError(client.socket, 'PAIR_FAILED', 'Invalid pairing token');
     return;
   }
+
+  // A revoked/unpaired device is refused even with a valid token — an owner
+  // must approve a new pairing before it can sync again.
+  try {
+    const revoked = getDB().getFirstSync(
+      "SELECT status FROM devices WHERE id = ? OR uuid = ?", [device_id, device_id]
+    ) as any;
+    if (revoked && (revoked.status || '') === 'revoked') {
+      sendError(client.socket, 'PAIR_FAILED', 'Device was unpaired by the owner. A new pairing is required.');
+      return;
+    }
+  } catch { /* devices table may not exist yet */ }
 
   // Verify business membership
   const hubBizId = getCurrentBusinessId();

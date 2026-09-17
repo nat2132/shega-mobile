@@ -177,7 +177,7 @@ export const CustomTabBar = (props: BottomTabBarProps) => {
   return (
     <Animated.View style={[styles.tabBarContainer, hideStyle]}>
       <View style={[styles.shadowWrapper, { shadowColor: colors.border }]}>
-        <View style={[styles.tabBar, { backgroundColor: colors.tabBar }]}>
+        <View style={[styles.tabBar, { backgroundColor: colors.tabBar, borderColor: colors.border }]}>
           <Animated.View style={[styles.activePill, { backgroundColor: colors.tint + '15' }, pillStyle]} />
           {routes.map((route) => {
             const idx = props.state.routes.indexOf(route);
@@ -224,7 +224,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.06)',
   },
   activePill: {
     position: 'absolute',
@@ -236,5 +235,5 @@ const styles = StyleSheet.create({
   tabItemWrapper: { flex: 1, zIndex: 1 },
   tabItem: { alignItems: 'center', justifyContent: 'center', height: '100%' },
   iconContainer: { marginBottom: 2, width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
-  tabText: { fontSize: 10, letterSpacing: 0.3 },
+  tabText: { fontSize: 10, letterSpacing: 0.4 },
 });

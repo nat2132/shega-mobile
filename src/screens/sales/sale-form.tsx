@@ -50,8 +50,6 @@ import {
   removeMobileBankingProvider,
   MobileBankingProvider,
 } from "@/services/mobileBankingService";
-import { useTutorial, useTutorialExample, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
-import { saleFormTutorial } from '@/tutorials/definitions';
 const SALES_GLASS = getSalesGlass(LightTheme);
 
 type PaymentMethod = "Cash" | "Mobile" | "";
@@ -71,7 +69,6 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
 }) => {
   const { colors, t, theme, featureFlags } = useSettings();
   const SALES_GLASS = useMemo(() => getSalesGlass(colors), [colors]);
-  const tutorial = useTutorial({ tutorial: saleFormTutorial });
   const dialog = useDialog();
   // Domain gate: no sales.create permission, no settlement — this is the
   // single checkout surface every sale flow funnels through.
@@ -108,16 +105,6 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
   // Receipt preview + duplicate-submit guard
   const [showReceipt, setShowReceipt] = useState(false);
   const submittingRef = useRef(false);
-
-  useEffect(() => {
-    if (!tutorial.isActive) return;
-    const tid = tutorial.currentStep?.targetId;
-    if (tid === 'sf-customer-info') {
-      setCustomerName('Tigist Desta');
-      setCustomerPhone('0911-234-567');
-      setDueDays('30');
-    }
-  }, [tutorial.isActive, tutorial.currentStep?.targetId]);
 
   const draftFormKey = 'sale';
   const draftFormData = useFormDrafts({
@@ -352,7 +339,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <TutorialScrollView
+        <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -376,7 +363,6 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
             />
           )}
           {/* Checkout Header */}
-          <TutorialTarget id="sf-header">
           <Animated.View
             entering={FadeInDown.duration(600)}
             style={styles.header}
@@ -416,10 +402,8 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                   style={styles.bagCount}
                 />
               </View>
-              <TutorialButton tutorialId="sale-form" screenName={t('screen.record_sale')} />
             </View>
           </Animated.View>
-          </TutorialTarget>
 
           {/* Settlement Blocks */}
           <Animated.View
@@ -513,7 +497,6 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
               </View>
             </View>
 
-            <TutorialTarget id="sf-payment">
             {paymentStatus === "Paid" && (
               <View
                 style={[
@@ -700,9 +683,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                 )}
               </View>
             )}
-            </TutorialTarget>
 
-            <TutorialTarget id="sf-customer-info">
             {featureFlags.customersEnabled && paymentStatus === "Debt" && (
               <Animated.View
                 entering={FadeInDown}
@@ -871,7 +852,6 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
                 </View>
               </Animated.View>
             )}
-            </TutorialTarget>
 
             {/* Customer Search Modal */}
             <Modal
@@ -1120,7 +1100,6 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
             </TouchableOpacity>
           </Animated.View>
 
-          <TutorialTarget id="sf-commit-btn">
           <TouchableOpacity
             onPress={handleCheckout}
             activeOpacity={0.9}
@@ -1146,7 +1125,6 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
               </AppText>
             </View>
           </TouchableOpacity>
-          </TutorialTarget>
 
           <TouchableOpacity style={styles.backBtn} onPress={onBack}>
             <ChevronLeft size={16} color={SALES_GLASS.fgSecondary} />
@@ -1161,7 +1139,7 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
           </TouchableOpacity>
 
           <View style={{ height: 100 }} />
-        </TutorialScrollView>
+        </ScrollView>
       </KeyboardAvoidingView>
 
       {/* Receipt preview */}

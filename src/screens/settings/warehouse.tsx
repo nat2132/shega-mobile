@@ -15,13 +15,12 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   View
 } from 'react-native';
 
 import { AppText } from '@/components/ui';
 import { getSettingsGlass } from './glass-settings';
-import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
-import { warehouseSettingsTutorial } from '@/tutorials/definitions';
 
 interface WarehouseSettingsScreenProps {
   onClose?: () => void;
@@ -33,7 +32,6 @@ const WarehouseSettingsScreen: React.FC<WarehouseSettingsScreenProps> = ({ onClo
   const { activeWarehouseId, setActiveWarehouseId, warehouses, refreshWarehouses } = useWarehouse();
   const G = getSettingsGlass(colors);
   const dialog = useDialog();
-  const tutorial = useTutorial({ tutorial: warehouseSettingsTutorial });
   const [showForm, setShowForm] = useState(false);
   const [formName, setFormName] = useState('');
   const [formLocation, setFormLocation] = useState('');
@@ -120,20 +118,17 @@ const WarehouseSettingsScreen: React.FC<WarehouseSettingsScreenProps> = ({ onClo
 
   return (
     <><KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <TutorialScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingTop: 20, paddingBottom: 40 }}>
-        <TutorialTarget id="ws-header">
-          <View style={styles.headerRow}>
-            <Warehouse size={20} color={G.fg} />
-            <AppText variant="title" weight="bold" style={[styles.title, { color: G.fg, marginLeft: 10 }]} numberOfLines={2}>{t('inv.warehouses_title')}</AppText>
-            <TouchableOpacity onPress={() => { resetForm(); setShowForm(true); } } style={[styles.addBtn, { backgroundColor: colors.primary + '15' }]}>
-              <Plus size={18} color={colors.primary} />
-            </TouchableOpacity>
-          </View>
-        </TutorialTarget>
+      <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingTop: 20, paddingBottom: 40 }}>
+        <View style={styles.headerRow}>
+          <Warehouse size={20} color={G.fg} />
+          <AppText variant="title" weight="bold" style={[styles.title, { color: G.fg, marginLeft: 10 }]} numberOfLines={2}>{t('inv.warehouses_title')}</AppText>
+          <TouchableOpacity onPress={() => { resetForm(); setShowForm(true); } } style={[styles.addBtn, { backgroundColor: colors.primary + '15' }]}>
+            <Plus size={18} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
 
         {!showForm ? (
           <View style={styles.whList}>
-            <TutorialTarget id="ws-default">
               {/* All Warehouses option */}
               <TouchableOpacity
                 style={[styles.whItem, { backgroundColor: G.bgCard, borderColor: !activeWarehouseId ? colors.primary : G.border, borderWidth: !activeWarehouseId ? 2 : 1 }]}
@@ -148,10 +143,8 @@ const WarehouseSettingsScreen: React.FC<WarehouseSettingsScreenProps> = ({ onClo
                 </View>
                 {!activeWarehouseId && <Check size={18} color={colors.primary} />}
               </TouchableOpacity>
-            </TutorialTarget>
 
-            <TutorialTarget id="ws-list">
-              {warehouses.map((wh) => (
+            {warehouses.map((wh) => (
                 <TouchableOpacity
                   key={wh.id}
                   style={[styles.whItem, { backgroundColor: G.bgCard, borderColor: activeWarehouseId === wh.id ? colors.success : G.border, borderWidth: activeWarehouseId === wh.id ? 2 : 1 }]}
@@ -173,7 +166,6 @@ const WarehouseSettingsScreen: React.FC<WarehouseSettingsScreenProps> = ({ onClo
                   {activeWarehouseId === wh.id && <Check size={18} color={colors.success} style={{ marginLeft: 4 }} />}
                 </TouchableOpacity>
               ))}
-            </TutorialTarget>
 
             {warehouses.length === 0 && (
               <View style={styles.emptyContainer}>
@@ -183,8 +175,7 @@ const WarehouseSettingsScreen: React.FC<WarehouseSettingsScreenProps> = ({ onClo
             )}
           </View>
         ) : (
-          <TutorialTarget id="ws-prefs">
-            <View style={styles.formSection}>
+          <View style={styles.formSection}>
               <AppText variant="title" weight="bold" style={[styles.formTitle, { color: G.fg }]} numberOfLines={2}>
                 {t(editingId ? 'inv.edit_warehouse' : 'inv.new_warehouse')}
               </AppText>
@@ -255,11 +246,9 @@ const WarehouseSettingsScreen: React.FC<WarehouseSettingsScreenProps> = ({ onClo
                 </TouchableOpacity>
               </View>
             </View>
-          </TutorialTarget>
         )}
-      </TutorialScrollView>
+      </ScrollView>
     </KeyboardAvoidingView><View style={{ position: 'absolute', top: 50, right: 20, zIndex: 100 }}>
-        <TutorialButton tutorialId="warehouse-settings" screenName={t('inv.warehouses_title')} />
       </View></>
   );
 };

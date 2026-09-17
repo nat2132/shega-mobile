@@ -277,8 +277,8 @@ export default function JoinExistingScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: G.bg }]}>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets={true}>
           <TouchableOpacity onPress={() => router.back()} style={styles.back}>
             <ArrowLeft size={20} color={G.fg} />
             <AppText variant="body" weight="bold" style={{ color: G.fg }}>Back</AppText>
@@ -388,7 +388,7 @@ export default function JoinExistingScreen() {
                   <TouchableOpacity onPress={checkStatus} disabled={checking} style={[styles.primaryBtn, { backgroundColor: G.fg, marginTop: 16, opacity: checking ? 0.6 : 1 }]}>
                     <AppText variant="body" weight="bold" style={{ color: G.bg }}>{checking ? 'Checking…' : 'Check Approval Status'}</AppText>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => router.replace('/welcome-choice')} style={[styles.primaryBtn, { backgroundColor: G.accentGlass, marginTop: 10 }]}>
+                  <TouchableOpacity onPress={() => router.replace('/setup-wizard')} style={[styles.primaryBtn, { backgroundColor: G.accentGlass, marginTop: 10 }]}>
                     <AppText variant="body" weight="bold" style={{ color: G.fg }}>Continue Later</AppText>
                   </TouchableOpacity>
                 </>

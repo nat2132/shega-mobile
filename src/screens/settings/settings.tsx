@@ -1,7 +1,7 @@
 import { Fonts } from '@/constants/theme';
 import { useDialog } from '@/context/DialogContext';
 import { PROFILE_IMAGES, useDashboardVisibility, useSettings } from '@/context/SettingsContext';
-import { clearDatabase } from '@/database/db';
+import { factoryResetDatabase } from '@/database/db';
 import { useSubscription } from '@/context/SubscriptionContext';
 import * as Haptics from 'expo-haptics';
 import * as SecureStore from 'expo-secure-store';
@@ -51,6 +51,7 @@ import {
   Trash2,
   Truck,
   Users,
+  Wifi,
   Warehouse,
   Zap,
 } from 'lucide-react-native';
@@ -59,6 +60,7 @@ import { DataTransferModal } from '@/components/DataTransferModal';
 import { BottomSheet } from '@/components/BottomSheet';
 import { AppListItem, AppText } from '@/components/ui';
 import { PeripheralCenter } from './devices/peripherals';
+import { PosHubScreen } from './devices/PosHubScreen';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useBusinessAuth } from '@/hooks/useBusinessAuth';
 import { BusinessSwitcher } from '@/components/BusinessSwitcher';
@@ -72,8 +74,7 @@ import SecuritySettingsScreen from './security';
 import SupportScreen from './support';
 import TranslationSettingsScreen from './translation';
 import WarehouseSettingsScreen from './warehouse';
-import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
-import { settingsTutorial } from '@/tutorials/definitions';
+
 import { useUpdate } from '@/context/UpdateContext';
 import SyncSettings from '@/components/SyncSettings';
 import SyncCenter from '@/components/SyncCenter';
@@ -144,70 +145,20 @@ const THEME_OPTIONS = [
     label: 'theme.light',
     subtitle: 'theme.light_sub',
     bg: '#FFFFFF',
-    card: '#F9F9F9',
-    accent: '#000000',
-    highlight: '#FFC107',
-    text: '#000000',
+    card: '#EEF0F3',
+    accent: '#0052FF',
+    highlight: '#578BFA',
+    text: '#0A0B0D',
   },
   {
     id: 'dark' as const,
     label: 'theme.dark',
     subtitle: 'theme.dark_sub',
-    bg: '#000000',
-    card: '#1C1C1E',
-    accent: '#FFFFFF',
-    highlight: '#FF9500',
-    text: '#FFFFFF',
-  },
-  {
-    id: 'midnight' as const,
-    label: 'theme.midnight',
-    subtitle: 'theme.midnight_sub',
-    bg: '#0B1220',
-    card: '#172033',
-    accent: '#2F6FED',
-    highlight: '#E6B85C',
-    text: '#EAF1FF',
-  },
-  {
-    id: 'emerald' as const,
-    label: 'theme.emerald',
-    subtitle: 'theme.emerald_sub',
-    bg: '#0E1A16',
-    card: '#16241F',
-    accent: '#1F8A70',
-    highlight: '#EAD2A6',
-    text: '#F3F7F6',
-  },
-  {
-    id: 'charcoal' as const,
-    label: 'theme.charcoal',
-    subtitle: 'theme.charcoal_sub',
-    bg: '#121212',
-    card: '#1E1E1E',
-    accent: '#B23A48',
-    highlight: '#F4A261',
-    text: '#F1F1F1',
-  },
-  {
-    id: 'slate' as const,
-    label: 'theme.slate',
-    subtitle: 'theme.slate_sub',
-    bg: '#0F0F14',
-    card: '#1A1A22',
-    accent: '#7C5CFF',
-    highlight: '#F2C14E',
-    text: '#EAEAF0',
-  },
-  {
-    id: 'cocoa' as const,
-    label: 'theme.cocoa',
-    subtitle: 'theme.cocoa_sub',
-    bg: '#14110F',
-    card: '#201A17',
-    accent: '#C97C5D',
-    highlight: '#F1E3D3',
-    text: '#F8F5F2',
+    bg: '#0A0B0D',
+    card: '#1B1E24',
+    accent: '#4C8CFF',
+    highlight: '#3473F0',
+    text: '#F4F5F7',
   },
 ];
 
@@ -327,7 +278,11 @@ const ResetModal = ({
 
   const doReset = async () => {
     setLoading(true);
-    const success = clearDatabase();
+    // Full factory reset: every table (businesses, users, products, sales,
+    // debts, sync_outbox/history/conflicts, devices, app_settings incl. the
+    // device id, hub URL/token, pairing code, and POS Hub registrations).
+    // Next launch re-initializes the schema exactly like a first install.
+    const success = factoryResetDatabase();
 
     // Clear all persisted SecureStore data
     const storeKeys = [
@@ -339,6 +294,7 @@ const ResetModal = ({
       'biometrics_enabled',
       'user_setupComplete', 'user_avatarIndex',
       'last_weekly_check', 'last_notified',
+      'auth_token', 'refresh_token', 'shega_auth', 'shega_session',
     ];
     for (const key of storeKeys) {
       try { await SecureStore.deleteItemAsync(key); } catch {}
@@ -409,8 +365,6 @@ const SettingsScreen = () => {
   const { theme, setTheme, userProfile, pin, colors, t, featureFlags, setFeatureFlag } = useSettings();
   const { dashboardVisibility, toggleDashboardSection } = useDashboardVisibility();
   const G = getSettingsGlass(colors);
-  const tutorial = useTutorial({ tutorial: settingsTutorial });
-
   const themeTransition = useSharedValue(0);
   const [transitionAccent, setTransitionAccent] = useState('#FFFFFF');
 
@@ -446,6 +400,7 @@ const SettingsScreen = () => {
   const [showImportModal, setShowImportModal] = useState(false);
   const [showWarehouse, setShowWarehouse] = useState(false);
   const [showDevices, setShowDevices] = useState(false);
+  const [showPosHub, setShowPosHub] = useState(false);
   const [showSyncCenter, setShowSyncCenter] = useState(false);
   const [showTax, setShowTax] = useState(false);
 
@@ -487,23 +442,20 @@ const SettingsScreen = () => {
         <View style={[styles.bgWash, { top: '40%', left: '30%', backgroundColor: '#FFFFFF', opacity: 0.015, width: 200, height: 200, borderRadius: 100 }]} />
       </View>
 
-      <TutorialScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         
         {/* Integrated Header */}
-        <TutorialTarget id="settings-header">
         <View style={styles.integratedHeader}>
           <View>
             <AppText variant="body" weight="medium" style={[styles.headerLabel, { color: G.muted }]} numberOfLines={2}>{t('settings.system_pref')}</AppText>
             <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{t('settings.configuration')}</AppText>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <TutorialButton tutorialId="settings" screenName={t('screen.settings')} />
             <View style={[styles.headerIconBox, { backgroundColor: G.bgCard, borderColor: G.border }]}>
-              <Shield size={24} color={G.fg} />
+<Shield size={24} color={G.fg} />
             </View>
           </View>
         </View>
-        </TutorialTarget>
 
         {/* Active business scope selector */}
         <View style={{ paddingHorizontal: 25, marginBottom: 18 }}>
@@ -511,7 +463,6 @@ const SettingsScreen = () => {
         </View>
 
         {/* Elite Profile Banner */}
-        <TutorialTarget id="settings-profile">
         <Animated.View entering={FadeInDown.duration(600)} style={styles.bannerSection}>
           <TouchableOpacity 
             activeOpacity={0.9} 
@@ -537,41 +488,34 @@ const SettingsScreen = () => {
             </View>
           </TouchableOpacity>
         </Animated.View>
-        </TutorialTarget>
 
         {/* Service Intelligence Grid */}
         <View style={styles.gridSection}>
           <View style={styles.gridRow}>
             {!cashierMode && (
-            <TutorialTarget id="settings-security">
             <ConfigurationGridItem 
               icon={Shield} 
               title={t('settings.security')} 
               onPress={() => handleOpenSub(setShowSecurity)} 
               color={G.fg}
             />
-            </TutorialTarget>
             )}
             {!cashierMode && (
-            <TutorialTarget id="settings-notifications">
             <ConfigurationGridItem 
               icon={Bell} 
               title={t('settings.notifications')} 
               onPress={() => handleOpenSub(setShowNotification)} 
               color={G.fg}
             />
-            </TutorialTarget>
             )}
           </View>
           <View style={styles.gridRow}>
-            <TutorialTarget id="settings-language">
             <ConfigurationGridItem 
               icon={Languages} 
               title={t('settings.language')} 
               onPress={() => handleOpenSub(setShowTranslation)} 
               color={G.fg}
             />
-            </TutorialTarget>
             <ConfigurationGridItem 
               icon={Calendar} 
               title={t('settings.date_time_format')} 
@@ -710,6 +654,12 @@ const SettingsScreen = () => {
                 subtitle={t('devices.settings_subtitle')}
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowDevices(true); }}
               />
+              <SettingLedgerItem
+                icon={Wifi}
+                title="POS Hub"
+                subtitle="Let other devices connect to this phone"
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowPosHub(true); }}
+              />
             </View>
           </View>
         ) : null}
@@ -784,7 +734,6 @@ const SettingsScreen = () => {
         )}
 
         {/* The Palette — Theme Selection */}
-        <TutorialTarget id="settings-theme">
         <View style={styles.paletteSection}>
           <View style={styles.sectionHead}>
             <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: G.muted }]} numberOfLines={1}>{t('settings.palette')}</AppText>
@@ -804,7 +753,6 @@ const SettingsScreen = () => {
           </ScrollView>
           </PremiumFeatureGate>
         </View>
-        </TutorialTarget>
 
         {/* Advanced System Ledger */}
         {!cashierMode && (
@@ -815,14 +763,12 @@ const SettingsScreen = () => {
             <Sliders size={20} color={G.muted} />
           </View>
           <View style={[styles.ledgerGroup, { backgroundColor: G.bgCard, borderColor: G.border }]}>
-             <TutorialTarget id="settings-export">
              <SettingLedgerItem 
                 icon={Database} 
                 title={t('settings.export_data')} 
                 subtitle={t('settings.export_desc')}
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowExportModal(true); }}
              />
-             </TutorialTarget>
              <PremiumFeatureGate feature="csv_import" featureName={t('settings.import_data')}>
              <SettingLedgerItem 
                 icon={CloudDownload} 
@@ -861,7 +807,7 @@ const SettingsScreen = () => {
         </View>
 
         <View style={{ height: 40 }} />
-      </TutorialScrollView>
+      </ScrollView>
 
       {/* Bottom Sheet Modals */}
       <BottomSheet visible={showProfile} onClose={() => setShowProfile(false)}>
@@ -894,6 +840,11 @@ const SettingsScreen = () => {
       {/* Devices & Peripherals */}
       <BottomSheet visible={showDevices} onClose={() => setShowDevices(false)}>
         <PeripheralCenter onClose={() => setShowDevices(false)} />
+      </BottomSheet>
+
+      {/* POS Hub — this phone as the main connector */}
+      <BottomSheet visible={showPosHub} onClose={() => setShowPosHub(false)}>
+        <PosHubScreen onClose={() => setShowPosHub(false)} />
       </BottomSheet>
 
       {/* §24 Sync Center */}

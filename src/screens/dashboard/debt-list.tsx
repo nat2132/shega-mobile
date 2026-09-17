@@ -17,11 +17,10 @@ import { useSettings } from '@/context/SettingsContext';
 import { getDebtCustomers, getDebtSales} from '@/database/db';
 import { formatDate, parseLocalDate } from '@/utils/date-utils';
 import { AppNumber, AppText, AppListItem, AppCard} from '@/components/ui';
+import { ProductImageStack } from '@/components/ProductImageStack';
 
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { getDashGlass } from './glass-dashboard';
-import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
-import { debtListTutorial } from '@/tutorials/definitions';
 
 const DebtDetailView = ({ customer, onBack }: { customer: any, onBack: () => void }) => {
   const { colors, t, calendarType, language } = useSettings();
@@ -91,16 +90,30 @@ const DebtDetailView = ({ customer, onBack }: { customer: any, onBack: () => voi
                   marginBottom: Spacing.sm,
                 }}
               >
-                <View style={{ flex: 1 }}>
-                  <AppText variant="body" weight="bold" style={{ color: G.fg }} numberOfLines={2}>
-                    {`${sale.itemName} × ${sale.quantity}`}
-                  </AppText>
-                  <AppText variant="caption" weight="medium" style={{ color: G.fgSecondary }} numberOfLines={1}>
-                    {(() => {
-                      const d = parseLocalDate(sale.createdAt);
-                      return d ? formatDate(d, calendarType, language) : '';
-                    })()}
-                  </AppText>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                  {sale.image ? (
+                    <View style={{ marginRight: 10 }}>
+                      <ProductImageStack
+                        images={[sale.image]}
+                        size={32}
+                        radius={8}
+                        ringColor={G.bgCard}
+                        backgroundColor={G.fg + '05'}
+                        iconColor={G.fg}
+                      />
+                    </View>
+                  ) : null}
+                  <View style={{ flex: 1 }}>
+                    <AppText variant="body" weight="bold" style={{ color: G.fg }} numberOfLines={2}>
+                      {`${sale.itemName} × ${sale.quantity}`}
+                    </AppText>
+                    <AppText variant="caption" weight="medium" style={{ color: G.fgSecondary }} numberOfLines={1}>
+                      {(() => {
+                        const d = parseLocalDate(sale.createdAt);
+                        return d ? formatDate(d, calendarType, language) : '';
+                      })()}
+                    </AppText>
+                  </View>
                 </View>
                 <AppNumber value={sale.totalPrice} size="body" showCurrency numberOfLines={1} />
               </View>
@@ -139,7 +152,6 @@ const OnCreditCustomersScreen = () => {
   const { colors, t } = useSettings();
   const G = getDashGlass(colors);
   const styles = useMemo(() => createStyles(G), [G]);
-  const tutorial = useTutorial({ tutorial: debtListTutorial });
   const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
   const [customers, setCustomers] = useState<any[]>([]);
 
@@ -169,7 +181,6 @@ const OnCreditCustomersScreen = () => {
     <View style={[styles.container, { backgroundColor: G.bg }]}>
       <View style={{ position: 'absolute', top: -80, left: -30, width: 180, height: 180, borderRadius: 90, backgroundColor: G.mutedLight, opacity: 0.3 }} />
       <View style={{ position: 'absolute', bottom: -50, right: -20, width: 160, height: 160, borderRadius: 80, backgroundColor: G.mutedLight, opacity: 0.2 }} />
-      <TutorialTarget id="dl-list">
       <FlatList
         data={customers}
         keyExtractor={keyExtractor}
@@ -181,7 +192,6 @@ const OnCreditCustomersScreen = () => {
         windowSize={7}
         removeClippedSubviews={true}
         ListHeaderComponent={
-          <TutorialTarget id="dl-header">
           <View style={styles.headerNode}>
             <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.headerSub, { color: G.fgSecondary }]} numberOfLines={1}>
               {t('dash.financial_health')}
@@ -189,9 +199,7 @@ const OnCreditCustomersScreen = () => {
             <AppText variant="heading-lg" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>
               {t('dash.liability_ledger')}
             </AppText>
-            <TutorialButton tutorialId="debt-list" screenName={t('screen.debt_records')} />
           </View>
-          </TutorialTarget>
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
@@ -207,7 +215,6 @@ const OnCreditCustomersScreen = () => {
           </View>
         }
       />
-      </TutorialTarget>
     </View>
   );
 };

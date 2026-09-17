@@ -27,6 +27,7 @@ import {
   Zap
 } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import GuidedTour, { shouldShowTour } from '@/components/GuidedTour';
 import {
   Dimensions,
   Image,
@@ -64,8 +65,6 @@ import { useDialog } from '@/context/DialogContext';
 import { useToast } from '@/context/ToastContext';
 import { PROFILE_IMAGES, useDashboardVisibility, useSettings } from '@/context/SettingsContext';
 import { useSidebar } from '@/context/SidebarContext';
-import { useTutorial, TutorialScrollView, TutorialTarget, TutorialButton } from '@/tutorials';
-import { dashboardTutorial } from '@/tutorials/definitions';
 import { useWarehouse } from '@/context/WarehouseContext';
 import { getActivityFeed, getDashboardStats, getDebtCustomers, getInventoryStats, getLowStockItems, getOnCreditItems, getQuickProducts, getRecentItems, getSaleWithItemsById, ItemData } from '@/database/db';
 import { useBusinessAssistant } from '@/hooks/useBusinessAssistant';
@@ -194,7 +193,6 @@ SparklineChart.displayName = 'SparklineChart';
     useEnsureOwnerBusiness(userProfile.businessName, userProfile.name);
     const { dashboardVisibility, toggleDashboardSection } = useDashboardVisibility();
     const { refreshTrialDays, isFeatureUnlocked } = useSubscription();
-    const tutorial = useTutorial({ tutorial: dashboardTutorial });
     const G = getDashGlass(colors);
     const styles = useMemo(() => createStyles(G), [G]);
     const hideFABStyle = useAutoHideScroll();
@@ -204,6 +202,12 @@ SparklineChart.displayName = 'SparklineChart';
     const [isPrivate, setIsPrivate] = useState(false);
     const [activeModal, setActiveModal] = useState<string | null>(null);
     const [showSalesRecord, setShowSalesRecord] = useState(false);
+    const [showTour, setShowTour] = useState(false);
+
+    // First-time guided tour — once, skippable, only after onboarding is done.
+    useEffect(() => {
+      shouldShowTour().then(setShowTour).catch(() => {});
+    }, []);
     const [selectedSale, setSelectedSale] = useState<any>(null);
 
     const [showSearch, setShowSearch] = useState(false);
@@ -222,7 +226,7 @@ SparklineChart.displayName = 'SparklineChart';
     const [showRegisterProduct, setShowRegisterProduct] = useState(false);
     const [registerBarcode, setRegisterBarcode] = useState('');
     const [metrics, setMetrics] = useState<any>(null);
-    const [, setInvStats] = useState<any>(null);
+    const [invStats, setInvStats] = useState<any>(null);
     const [debtCustomersCount, setDebtCustomersCount] = useState(0);
     const [creditItemsCount, setCreditItemsCount] = useState(0);
     const [lowStockCount, setLowStockCount] = useState(0);
@@ -627,11 +631,18 @@ SparklineChart.displayName = 'SparklineChart';
     { id: 5, title: t('dashboard.credit_items'), value: creditItemsCount, icon: Clock, color: colors.error },
   ];
 
+  // Fresh business — no sales and no products yet: show first-launch CTAs.
+  const isFresh =
+    !!metrics &&
+    (metrics.today.salesCount || 0) === 0 &&
+    (metrics.yesterday.salesCount || 0) === 0 &&
+    !(invStats?.categories?.length > 0);
+
   return (
     <>
       <View style={{ flex: 1, backgroundColor: G.bg }}>
         
-        <TutorialScrollView 
+        <ScrollView 
           showsVerticalScrollIndicator={false} 
           contentContainerStyle={[styles.container, { backgroundColor: 'transparent' }]}
           refreshControl={
@@ -644,7 +655,6 @@ SparklineChart.displayName = 'SparklineChart';
           }
         >
           {/* Header */}
-          <TutorialTarget id="dash-header">
           <View style={styles.glassHeader}>
             <View style={styles.glassHeaderContent}>
               <View style={{ flex: 1 }}>
@@ -669,19 +679,14 @@ SparklineChart.displayName = 'SparklineChart';
               </View>
               
               <View style={styles.headerActions}>
-                <TutorialTarget id="dash-alerts">
                 <TouchableOpacity 
                   onPress={() => router.push('/notifications')} 
                   style={styles.headerIconBtn}
                 >
                   <NotificationBell size={20} count={notifCount} />
                 </TouchableOpacity>
-                </TutorialTarget>
 
-                <TutorialButton tutorialId="dashboard" screenName={t('screen.dashboard')} />
-
-                <TutorialTarget id="dash-avatar">
-                  <TouchableOpacity 
+                <TouchableOpacity 
                     onPress={openSidebar} 
                     activeOpacity={0.7}
                     style={styles.headerAvatarWrap}
@@ -691,14 +696,11 @@ SparklineChart.displayName = 'SparklineChart';
                     </View>
                     <View style={[styles.onlineIndicator, { backgroundColor: colors.text, borderColor: colors.background }]} />
                   </TouchableOpacity>
-                </TutorialTarget>
               </View>
             </View>
           </View>
-          </TutorialTarget>
 
           {/* Search Bar */}
-          <TutorialTarget id="dash-search">
             <TouchableOpacity
               onPress={() => setShowUniversalSearch(true)}
               activeOpacity={0.7}
@@ -709,7 +711,6 @@ SparklineChart.displayName = 'SparklineChart';
                 {t('common.search') || 'Search...'}
               </AppText>
             </TouchableOpacity>
-          </TutorialTarget>
 
           {/* Premium Trial Banner */}
           <PremiumTrialBanner />
@@ -723,17 +724,14 @@ SparklineChart.displayName = 'SparklineChart';
 
           {/* Business Health Score */}
           {dashboardVisibility.businessHealth && (
-            <TutorialTarget id="dash-health">
             <View style={{ paddingHorizontal: DASH_SPACING.gutter }}>
               <PremiumFeatureGate feature="health_score" featureName={t('health.title')}>
                 <BusinessHealthCard health={businessHealth} loading={healthLoading} />
               </PremiumFeatureGate>
             </View>
-            </TutorialTarget>
           )}
 
           {/* Metric Hub */}
-          <TutorialTarget id="dash-sparkline">
           <Animated.View entering={FadeInDown.springify().damping(18).stiffness(120)} style={styles.metricHub}>
             <GestureDetector gesture={panGesture}>
                 <View style={styles.metricCard}>
@@ -803,10 +801,48 @@ SparklineChart.displayName = 'SparklineChart';
                     </View>
             </GestureDetector>
           </Animated.View>
-          </TutorialTarget>
+
+          {/* First-launch steps — fresh business with no products or sales yet */}
+          {isFresh && (
+            <Animated.View entering={FadeInDown.springify().damping(18).stiffness(120)} style={styles.ctaCard}>
+              <AppText variant="title" weight="bold" style={styles.ctaTitle}>
+                Let's get selling
+              </AppText>
+              <AppText variant="body" weight="medium" style={{ color: G.muted, marginBottom: 6 }}>
+                Two quick steps to start using Shega.
+              </AppText>
+              <View style={styles.ctaStep}>
+                <View style={[styles.ctaIconBox, { backgroundColor: G.accentGlassStrong }]}>
+                  <Package size={18} color={G.accent} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <AppText variant="body" weight="bold" style={{ color: G.fg }}>Add your first product</AppText>
+                </View>
+                <TouchableOpacity
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowRegisterProduct(true); }}
+                  style={[styles.ctaButton, { backgroundColor: G.fg }]}
+                >
+                  <AppText variant="caption" weight="bold" style={{ color: G.bg }}>Add</AppText>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.ctaStep}>
+                <View style={[styles.ctaIconBox, { backgroundColor: G.accentGlassStrong }]}>
+                  <ShoppingBag size={18} color={G.accent} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <AppText variant="body" weight="bold" style={{ color: G.fg }}>Make your first sale</AppText>
+                </View>
+                <TouchableOpacity
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setSaleFlowStep('home'); setShowSaleFlow(true); }}
+                  style={[styles.ctaButton, { backgroundColor: G.fg }]}
+                >
+                  <AppText variant="caption" weight="bold" style={{ color: G.bg }}>Start</AppText>
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
+          )}
 
           {/* Quick Stats */}
-          <TutorialTarget id="dash-stats">
           <View style={styles.bentoSection}>
             <View style={styles.bentoSectionHeader}>
               <AppText variant="title" weight="bold" style={styles.bentoSectionTitle} numberOfLines={2}>{t('dashboard.quick_status')}</AppText>
@@ -857,7 +893,6 @@ SparklineChart.displayName = 'SparklineChart';
               })}
             </ScrollView>
           </View>
-          </TutorialTarget>
 
           {/* Business Assistant */}
           {dashboardVisibility.businessAssistant && (
@@ -869,7 +904,6 @@ SparklineChart.displayName = 'SparklineChart';
           )}
 
           {/* Activity Feed */}
-          <TutorialTarget id="dash-activity">
           <View style={styles.feedSection}>
             <View style={styles.feedHeader}>
               <View>
@@ -901,8 +935,7 @@ SparklineChart.displayName = 'SparklineChart';
               </View>
             )}
           </View>
-          </TutorialTarget>
-        </TutorialScrollView>
+        </ScrollView>
 
         {/* Smart FAB */}
         <Animated.View style={[styles.dockedBarWrapper, hideFABStyle]}>
@@ -1081,6 +1114,8 @@ SparklineChart.displayName = 'SparklineChart';
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {showTour && <GuidedTour onDone={() => setShowTour(false)} />}
 
       <Modal visible={showSaleFormFlow} transparent animationType="slide" onRequestClose={() => setShowSaleFormFlow(false)}>
         <KeyboardAvoidingView
@@ -1330,6 +1365,24 @@ const createStyles = (G: any) => StyleSheet.create({
     paddingBottom: 220,
     paddingTop: 10,
   },
+  ctaCard: {
+    marginHorizontal: DASH_SPACING.gutter,
+    marginTop: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: G.borderGlass,
+    backgroundColor: G.surfaceFillStrong,
+    padding: 18,
+  },
+  ctaTitle: { color: G.fg, marginBottom: 4 },
+  ctaStep: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: G.bgCard,
+    borderRadius: 14, borderWidth: 1, borderColor: G.borderGlass,
+    paddingVertical: 12, paddingHorizontal: 12, marginTop: 10,
+  },
+  ctaIconBox: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  ctaButton: { borderRadius: 999, paddingVertical: 8, paddingHorizontal: 18 },
   integratedHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1354,11 +1407,6 @@ const createStyles = (G: any) => StyleSheet.create({
     alignItems: 'center',
     position: 'relative',
     overflow: 'visible',
-    shadowColor: G.shadowColor,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: G.shadowOuter * 0.5,
-    shadowRadius: 4,
-    elevation: 1,
   },
   glassHeader: {
     paddingHorizontal: DASH_SPACING.gutter,
@@ -1444,11 +1492,6 @@ const createStyles = (G: any) => StyleSheet.create({
     backgroundColor: G.surfaceFill,
     borderWidth: 1,
     borderColor: G.borderGlass,
-    shadowColor: G.shadowColor,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: G.shadowOuter,
-    shadowRadius: 24,
-    elevation: 6,
   },
   metricCardHeader: {
     flexDirection: 'row',
@@ -1459,7 +1502,7 @@ const createStyles = (G: any) => StyleSheet.create({
   metricLabel: {
     fontFamily: Fonts.bold,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
     marginBottom: 4,
     color: G.muted,
   },
@@ -1489,11 +1532,6 @@ const createStyles = (G: any) => StyleSheet.create({
     backgroundColor: G.surfaceFillStrong,
     borderWidth: 1,
     borderColor: G.borderGlass,
-    shadowColor: G.shadowColor,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: G.shadowOuter * 0.5,
-    shadowRadius: 4,
-    elevation: 2,
   },
   statusPill: {
     flexDirection: 'row',
@@ -1505,11 +1543,6 @@ const createStyles = (G: any) => StyleSheet.create({
     backgroundColor: G.surfaceFillStrong,
     borderWidth: 1,
     borderColor: G.borderGlass,
-    shadowColor: G.shadowColor,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: G.shadowOuter * 0.4,
-    shadowRadius: 4,
-    elevation: 2,
   },
   statusPillText: {
     fontFamily: Fonts.bold,
@@ -1562,11 +1595,6 @@ const createStyles = (G: any) => StyleSheet.create({
     backgroundColor: G.surfaceFill,
     borderWidth: 1,
     borderColor: G.borderGlass,
-    shadowColor: G.shadowColor,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: G.shadowOuter * 0.8,
-    shadowRadius: 18,
-    elevation: 4,
   },
   bentoCardTop: {
     flexDirection: 'row',
@@ -1635,11 +1663,6 @@ const createStyles = (G: any) => StyleSheet.create({
     borderColor: G.borderGlass,
     overflow: 'hidden',
     position: 'relative',
-    shadowColor: G.shadowColor,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: G.shadowOuter * 0.6,
-    shadowRadius: 6,
-    elevation: 2,
   },
   emptyFeedText: {
     fontFamily: Fonts.medium,
@@ -1658,11 +1681,6 @@ const createStyles = (G: any) => StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
-    shadowColor: G.shadowColor,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: G.shadowOuter * 0.5,
-    shadowRadius: 4,
-    elevation: 2,
   },
   closeBtnText: {
     fontFamily: Fonts.medium,
@@ -1704,11 +1722,6 @@ const createStyles = (G: any) => StyleSheet.create({
     backgroundColor: G.surfaceFill,
     borderWidth: 1,
     borderColor: G.borderGlass,
-    shadowColor: G.shadowColor,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
   },
   premiumActivityCard: {
     flexDirection: 'row',

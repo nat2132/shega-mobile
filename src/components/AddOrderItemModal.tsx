@@ -16,8 +16,6 @@ import Animated, { SlideInDown } from 'react-native-reanimated';
 import { Fonts } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
 import { AppText, AppNumber } from '@/components/ui';
-import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
-import { addOrderItemTutorial } from '@/tutorials/definitions';
 
 interface AddOrderItemModalProps {
   visible: boolean;
@@ -31,7 +29,6 @@ export const AddOrderItemModal: React.FC<AddOrderItemModalProps> = ({ visible, o
   const [companyName, setCompanyName] = useState('');
   const [orderQty, setOrderQty] = useState(10);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const tutorial = useTutorial({ tutorial: addOrderItemTutorial });
 
   const validateForm = () => {
     let currentErrors: Record<string, string> = {};
@@ -86,9 +83,7 @@ export const AddOrderItemModal: React.FC<AddOrderItemModalProps> = ({ visible, o
           >
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" bounces={false}>
             <View style={{ position: 'absolute', top: 16, right: 70, zIndex: 100 }}>
-              <TutorialButton tutorialId="add-order-item" screenName={t('common.add')} />
             </View>
-            <TutorialTarget id="aoi-header">
             <View style={styles.header}>
               <View style={styles.headerIndicator}>
                 <View style={[styles.handleBar, { backgroundColor: colors.border }]} />
@@ -111,10 +106,8 @@ export const AddOrderItemModal: React.FC<AddOrderItemModalProps> = ({ visible, o
                 </TouchableOpacity>
               </View>
             </View>
-            </TutorialTarget>
 
             <View style={styles.formBody}>
-              <TutorialTarget id="aoi-name">
               <View style={styles.inputGroup}>
                 <AppText variant="caption" weight="bold" numberOfLines={1} transform="uppercase" style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('common.product_name')} *</AppText>
                 <TextInput
@@ -130,9 +123,7 @@ export const AddOrderItemModal: React.FC<AddOrderItemModalProps> = ({ visible, o
                 />
                 {errors.name && <AppText variant="body" weight="medium" numberOfLines={3} style={styles.errorText}>{errors.name}</AppText>}
               </View>
-              </TutorialTarget>
 
-              <TutorialTarget id="aoi-company">
               <View style={styles.inputGroup}>
                 <AppText variant="caption" weight="bold" numberOfLines={1} transform="uppercase" style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('common.company_brand')}</AppText>
                 <TextInput
@@ -147,9 +138,7 @@ export const AddOrderItemModal: React.FC<AddOrderItemModalProps> = ({ visible, o
                 />
                 {errors.companyName && <AppText variant="body" weight="medium" numberOfLines={3} style={styles.errorText}>{errors.companyName}</AppText>}
               </View>
-              </TutorialTarget>
 
-              <TutorialTarget id="aoi-quantity">
               <View style={styles.inputGroup}>
                 <AppText variant="caption" weight="bold" numberOfLines={1} transform="uppercase" style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('common.order_quantity')}</AppText>
                 <View style={styles.qtyStepperRow}>
@@ -181,7 +170,6 @@ export const AddOrderItemModal: React.FC<AddOrderItemModalProps> = ({ visible, o
                 </View>
                 {errors.orderQty && <AppText variant="body" weight="medium" numberOfLines={3} style={styles.errorText}>{errors.orderQty}</AppText>}
               </View>
-              </TutorialTarget>
             </View>
 
             <View style={styles.actionRow}>
@@ -192,7 +180,6 @@ export const AddOrderItemModal: React.FC<AddOrderItemModalProps> = ({ visible, o
               >
                 <AppText variant="body" weight="bold" numberOfLines={1} style={[styles.actionBtnText, { color: colors.text }]}>{t('common.cancel')}</AppText>
               </TouchableOpacity>
-              <TutorialTarget id="aoi-commit-btn">
               <TouchableOpacity
                 style={[
                   styles.actionBtn,
@@ -204,7 +191,6 @@ export const AddOrderItemModal: React.FC<AddOrderItemModalProps> = ({ visible, o
               >
                 <AppText variant="body" weight="bold" numberOfLines={1} style={[styles.actionBtnText, { color: colors.background }]}>{t('common.add_to_order')}</AppText>
               </TouchableOpacity>
-              </TutorialTarget>
             </View>
             </ScrollView>
           </Animated.View>

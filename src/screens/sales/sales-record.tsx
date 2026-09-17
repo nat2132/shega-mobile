@@ -15,7 +15,7 @@ import {
   formatTime,
 } from "@/utils/date-utils";
 import { useFocusEffect } from "expo-router";
-import { Image } from "expo-image";
+import { ProductImageStack } from "@/components/ProductImageStack";
 import { useToast } from "@/context/ToastContext";
 import {
   AlertCircle,
@@ -51,8 +51,6 @@ import { useAutoHideScroll } from "@/hooks/useAutoHideScroll";
 import { SkeletonList } from "@/components/Skeleton";
 import { AppText, AppNumber } from "@/components/ui";
 import { getSalesGlass } from './glass-sales';
-import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
-import { salesRecordsTutorial } from '@/tutorials/definitions';
 const SALES_GLASS = getSalesGlass(LightTheme);
 interface SalesRecordProps {
   onClose?: () => void;
@@ -102,7 +100,6 @@ const SalesRecordScreen: React.FC<SalesRecordProps> = ({ onClose }) => {
   const [pendingReceiptSale, setPendingReceiptSale] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const debouncedSearch = useDebounce(searchQuery, 250);
-  const tutorial = useTutorial({ tutorial: salesRecordsTutorial });
 
   const loadData = useCallback(() => {
     const businesses = getBusinesses();
@@ -387,7 +384,6 @@ const SalesRecordScreen: React.FC<SalesRecordProps> = ({ onClose }) => {
         <View style={{ position: 'absolute', bottom: -70, right: -30, width: 220, height: 220, borderRadius: 110, backgroundColor: SALES_GLASS.glow }} />
       </View>
       {/* Header */}
-      <TutorialTarget id="sr-header">
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <TouchableOpacity
@@ -415,11 +411,9 @@ const SalesRecordScreen: React.FC<SalesRecordProps> = ({ onClose }) => {
               {getHeaderLabel()}
             </AppText>
           </View>
-          <TutorialButton tutorialId="sales-records" screenName={t('screen.sales_records')} />
         </View>
 
         {/* Summary Cards */}
-        <TutorialTarget id="sr-summary">
         <View style={styles.summaryRow}>
           <View
             style={[
@@ -512,12 +506,9 @@ const SalesRecordScreen: React.FC<SalesRecordProps> = ({ onClose }) => {
             </View>
           </View>
         </View>
-        </TutorialTarget>
       </View>
-      </TutorialTarget>
 
       {/* Search & Filter Bar */}
-      <TutorialTarget id="sr-filter">
       <View style={styles.filterSection}>
         <View
           style={[
@@ -606,10 +597,8 @@ const SalesRecordScreen: React.FC<SalesRecordProps> = ({ onClose }) => {
           </View>
         )}
       </View>
-      </TutorialTarget>
 
       {/* Sales List */}
-      <TutorialTarget id="sr-list">
       {isLoading ? (
         <SkeletonList count={6} showAvatar style={styles.listContent} />
       ) : (
@@ -618,6 +607,7 @@ const SalesRecordScreen: React.FC<SalesRecordProps> = ({ onClose }) => {
           keyExtractor={keyExtractor}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
+          style={{ flex: 1 }}
           renderItem={renderGroup}
           initialNumToRender={12}
           maxToRenderPerBatch={8}
@@ -648,10 +638,8 @@ const SalesRecordScreen: React.FC<SalesRecordProps> = ({ onClose }) => {
           }
         />
       )}
-      </TutorialTarget>
 
       {/* Sort FAB */}
-      <TutorialTarget id="sr-export">
       <Animated.View style={hideFABStyle}>
       <TouchableOpacity
         style={[styles.sortFab, { backgroundColor: SALES_GLASS.fg }]}
@@ -660,7 +648,6 @@ const SalesRecordScreen: React.FC<SalesRecordProps> = ({ onClose }) => {
         <ArrowDownUp size={20} color={SALES_GLASS.bg} />
       </TouchableOpacity>
       </Animated.View>
-      </TutorialTarget>
 
       {/* Date Picker */}
       <CustomDatePicker
@@ -872,10 +859,18 @@ const SaleItemCard = React.memo(
         activeOpacity={0.7}
       >
         <View style={[styles.saleIcon, { backgroundColor: badgeColor + "15" }]}>
-          {sale.image ? (
-            <Image source={{ uri: sale.image }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
-          ) : (
+          {isPayment ? (
             <Icon size={16} color={badgeColor} />
+          ) : (
+            <ProductImageStack
+              images={sale.images?.length ? sale.images : sale.image ? [sale.image] : []}
+              totalCount={sale.isBatch ? (sale.quantity || sale.itemCount) : 1}
+              size={32}
+              radius={8}
+              ringColor={SALES_GLASS.bgCard}
+              backgroundColor={badgeColor + "15"}
+              iconColor={badgeColor}
+            />
           )}
         </View>
         <View style={styles.saleInfo}>

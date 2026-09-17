@@ -86,6 +86,7 @@ class MobileP2pSyncManager {
     mobileYjs.setDeviceId(deviceId);
     mobileWebRtc.init(deviceId, businessUuid);
     mobileYjs.bootstrapBusiness(businessUuid);
+    this.repairOrphanedRows();
 
     // Local changes → send to peers.
     this.unsubs.push(
@@ -127,6 +128,33 @@ class MobileP2pSyncManager {
     } catch { this.lastOutboxSeq = 0; }
     if (this.outboxTimer) clearInterval(this.outboxTimer);
     this.outboxTimer = setInterval(() => this.pumpOutbox(), 2000);
+  }
+
+  /**
+   * One-time repair: rows synced from peers before the business fallback
+   * existed may have business_id/businessId NULL and be invisible to every
+   * business-scoped query. Re-attach them to the operating business.
+   */
+  private repairOrphanedRows(): void {
+    if (!this.businessUuid) return;
+    const db = getDB();
+    const tables = ['items', 'categories', 'sales', 'sale_items', 'debt_payments', 'adjustments', 'customers', 'suppliers', 'returns', 'stock_movements'];
+    let fixed = 0;
+    for (const table of tables) {
+      try {
+        const cols = (db.getAllSync(`PRAGMA table_info(${table})`) as any[]).map((c) => c.name);
+        const bizCol = cols.includes('businessId') ? 'businessId' : cols.includes('business_id') ? 'business_id' : null;
+        if (!bizCol || !cols.includes('uuid')) continue;
+        const r = db.runSync(`UPDATE ${table} SET ${bizCol} = ? WHERE ${bizCol} IS NULL AND uuid IS NOT NULL`, [this.businessUuid]);
+        fixed += r.changes;
+      } catch { /* table may not exist */ }
+    }
+    if (fixed > 0) {
+      console.log(`[p2p] re-attached ${fixed} orphaned row(s) to the active business`);
+      bumpDataVersion();
+      // Re-broadcast the repaired rows so peers get the corrected scope too.
+      try { mobileYjs.bootstrapBusiness(this.businessUuid); } catch { /* non-fatal */ }
+    }
   }
 
   private pumpOutbox(): void {
@@ -194,7 +222,14 @@ class MobileP2pSyncManager {
       if (hasUuid) existing = db.getFirstSync(`SELECT id FROM ${table} WHERE uuid = ?`, [record.uuid]);
       if (existing && APPEND_ONLY.has(collection)) return; // immutable event already applied
 
-      if (hasBiz) data[bizCol] = record.businessId;
+      if (hasBiz) {
+        // Prefer the record's business, but never store NULL: a legacy peer
+        // (or one that predates the multi-business model) may omit it — the
+        // record came from a membership-verified peer of THIS business, so
+        // attach it to the operating business instead of orphaning the row
+        // where business-scoped queries can never see it.
+        data[bizCol] = record.businessId ?? this.businessUuid;
+      }
       const keys = Object.keys(data).filter((k) => cols.includes(k));
       if (keys.length === 0) return;
 

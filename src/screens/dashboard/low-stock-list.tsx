@@ -15,8 +15,6 @@ import { getLowStockItems, ItemData } from '@/database/db';
 import { AppNumber, AppText, AppListItem } from '@/components/ui';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { getDashGlass } from './glass-dashboard';
-import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
-import { lowStockListTutorial } from '@/tutorials/definitions';
 import { Image } from 'expo-image';
 const LowStockRow = React.memo(({
   item,
@@ -76,7 +74,6 @@ const LowStockItemsScreen = () => {
   const { colors, t } = useSettings();
   const G = getDashGlass(colors);
   const styles = useMemo(() => createStyles(G), [G]);
-  const tutorial = useTutorial({ tutorial: lowStockListTutorial });
   const [data, setData] = React.useState<ItemData[]>([]);
 
   const loadData = async () => {
@@ -98,7 +95,6 @@ const LowStockItemsScreen = () => {
     <View style={[styles.container, { backgroundColor: G.bg }]}>
       <View style={{ position: 'absolute', top: -80, left: -30, width: 180, height: 180, borderRadius: 90, backgroundColor: G.mutedLight, opacity: 0.3 }} />
       <View style={{ position: 'absolute', bottom: -50, right: -20, width: 160, height: 160, borderRadius: 80, backgroundColor: G.mutedLight, opacity: 0.2 }} />
-      <TutorialTarget id="lsl-list">
       <FlatList
         data={data}
         keyExtractor={keyExtractor}
@@ -110,15 +106,12 @@ const LowStockItemsScreen = () => {
         windowSize={7}
         removeClippedSubviews={true}
         ListHeaderComponent={
-          <TutorialTarget id="lsl-header">
           <View style={styles.headerRowContainer}>
             <View style={styles.headerNode}>
                <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.headerSub, { color: G.fgSecondary }]} numberOfLines={1}>{t('dash.inventory_health')}</AppText>
                <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{t('dash.deficit_intel')}</AppText>
             </View>
-            <TutorialButton tutorialId="low-stock-list" screenName={t('screen.low_stock_items')} />
           </View>
-          </TutorialTarget>
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
@@ -130,7 +123,6 @@ const LowStockItemsScreen = () => {
           </View>
         }
       />
-      </TutorialTarget>
     </View>
   );
 };

@@ -17,6 +17,8 @@ import { getDB } from '../database/db';
 import {
   getDeviceId,
   getHubUrl,
+  setHubUrl,
+  setHubToken,
   syncNow as lanSyncNow,
   getSyncStatus,
   getUnifiedSyncStatus,
@@ -69,6 +71,7 @@ let lanTimer: NodeJS.Timeout | null = null;
 let discoveryTimer: NodeJS.Timeout | null = null;
 let isRunning = false;
 let lastError: string | null = null;
+let autoConnectSince: number | null = null;
 
 // ─── Mode detection ─────────────────────────────────────────────────────────
 
@@ -105,11 +108,29 @@ async function performLanSync(): Promise<{ pushed: number; pulled: number; confl
 
   try {
     const result = await lanSyncNow();
-    console.log('[PeerSync] LAN sync:', result);
+    lastError = null;
     return result;
   } catch (e: any) {
     lastError = e?.message;
     console.warn('[PeerSync] LAN sync failed:', e?.message);
+    // Self-heal: an auth failure usually means the stored pairing token is
+    // stale (desktop regenerates it). Re-adopt the token from a discovered
+    // hub's mDNS TXT record and retry once.
+    if (/403|invalid pairing token|unauthorized/i.test(String(e?.message))) {
+      const peer = mdnsDiscovery.getDiscoveredHubs()[0];
+      if (peer?.pairingToken) {
+        console.log('[PeerSync] Retrying with refreshed pairing token');
+        try {
+          setHubToken(peer.pairingToken);
+          const result = await lanSyncNow();
+          lastError = null;
+          return result;
+        } catch (e2: any) {
+          lastError = e2?.message;
+          console.warn('[PeerSync] LAN sync retry failed:', e2?.message);
+        }
+      }
+    }
     return null;
   }
 }
@@ -124,14 +145,20 @@ async function performDiscoveryCycle(): Promise<void> {
   const peers = mdnsDiscovery.getDiscoveredHubs();
   const hubUrl = getHubUrl();
 
-  // If we found a new peer hub and we're not connected to any hub yet,
-  // automatically configure the connection
+  // Auto-connect: if we discovered a hub on the LAN and have no hub configured
+  // yet, adopt it (Shega Hub on desktop publishes itself over mDNS with a
+  // pairing token). This is what makes sync work without manual setup.
   if (peers.length > 0 && !hubUrl) {
-    const peer = peers[0]; // Connect to the first discovered hub
-    const peerUrl = `http://${peer.host}:${peer.port}`;
+    const peer = peers[0];
+    const peerUrl = `http://${peer.addresses?.[0] || peer.host}:${peer.port}`;
     console.log(`[PeerSync] Auto-connecting to discovered hub: ${peerUrl}`);
-    // The caller should set the hub URL and token via the settings UI
-    // For now, we just log the discovery
+    try {
+      setHubUrl(peerUrl);
+      if (peer.pairingToken) setHubToken(peer.pairingToken);
+      autoConnectSince = Date.now();
+    } catch (e: any) {
+      console.warn('[PeerSync] Auto-connect failed:', e?.message);
+    }
   }
 
   // If we're a hub and there are no peer hubs, stay as hub
@@ -171,6 +198,16 @@ export async function startPeerSyncManager(): Promise<void> {
   // Detect initial mode
   currentMode = detectMode();
   console.log(`[PeerSync] Initial mode: ${currentMode}`);
+
+  // Run one discovery + sync cycle immediately so a freshly opened app
+  // connects to a visible hub right away instead of waiting 15–30s.
+  (async () => {
+    try {
+      await performDiscoveryCycle();
+      const mode = detectMode();
+      if (mode === 'client' || mode === 'both') await performLanSync();
+    } catch (e: any) { console.warn('[PeerSync] initial cycle failed:', e?.message); }
+  })();
 
   // Start periodic sync cycles
   if (lanTimer) clearInterval(lanTimer);

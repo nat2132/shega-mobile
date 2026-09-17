@@ -241,8 +241,8 @@ export default function ScanJoinScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: G.bg }]}>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets={true}>
           <TouchableOpacity onPress={() => router.back()} style={styles.back}>
             <ArrowLeft size={20} color={G.fg} />
             <AppText variant="body" weight="bold" style={{ color: G.fg }}>{t('join.back')}</AppText>
@@ -376,7 +376,7 @@ export default function ScanJoinScreen() {
               <TouchableOpacity onPress={pollStatus} disabled={checking} style={[styles.secondaryBtn, { backgroundColor: G.accentGlass, borderColor: G.border, marginTop: 16 }]}>
                 <AppText variant="body" weight="bold" style={{ color: G.fg }}>{checking ? t('join.checking') : t('join.check_status')}</AppText>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => router.replace('/welcome-choice')} style={[styles.secondaryBtn, { backgroundColor: G.bgCard, borderColor: G.border, marginTop: 10 }]}>
+              <TouchableOpacity onPress={() => router.replace('/setup-wizard')} style={[styles.secondaryBtn, { backgroundColor: G.bgCard, borderColor: G.border, marginTop: 10 }]}>
                 <AppText variant="body" weight="bold" style={{ color: G.fg }}>{t('join.continue_later')}</AppText>
               </TouchableOpacity>
             </View>

@@ -49,7 +49,8 @@ type SyncEntity = (typeof SYNC_ENTITIES)[number];
 const UUID_KEYED_ENTITIES: readonly string[] = ['businesses', 'locations', 'registers', 'business_roles', 'users', 'devices'];
 
 // Apply order so FK references resolve before they are needed.
-const APPLY_ORDER: SyncEntity[] = ['businesses', 'categories', 'items', 'item_packs', 'customers', 'suppliers', 'orders', 'order_items', 'order_history', 'shipments', 'shipment_items', 'shipment_history', 'employee_roles', 'employees', 'employee_accounts', 'attendance', 'employee_performance', 'sales', 'debt_payments', 'adjustments', 'returns', 'locations', 'registers', 'business_roles', 'users', 'devices', 'stock_movements', 'audit_logs', 'subscriptions', 'subscription_payments', 'subscription_renewals', 'scheduled_reminders', 'notifications', 'contacts'];
+// Shared with wsSyncClient so WS pulls sort every entity, not just a subset.
+export const APPLY_ORDER: SyncEntity[] = ['businesses', 'categories', 'items', 'item_packs', 'customers', 'suppliers', 'orders', 'order_items', 'order_history', 'shipments', 'shipment_items', 'shipment_history', 'employee_roles', 'employees', 'employee_accounts', 'attendance', 'employee_performance', 'sales', 'debt_payments', 'adjustments', 'returns', 'locations', 'registers', 'business_roles', 'users', 'devices', 'stock_movements', 'audit_logs', 'subscriptions', 'subscription_payments', 'subscription_renewals', 'scheduled_reminders', 'notifications', 'contacts'];
 
 interface OutboxRow {
   seq: number;
@@ -261,17 +262,18 @@ function bridgeHistoryColumns(entity: string, payload: Record<string, any>): Rec
 // business_id, as camelCase `businessId`, or explicitly null. Those rows
 // belong to the business this device operates as, so they are backfilled at
 // apply time instead of violating the constraint.
-const BUSINESS_SCOPED_ENTITIES: readonly string[] = ['users', 'devices', 'locations', 'registers', 'business_roles', 'audit_logs', 'suppliers', 'orders', 'order_items', 'shipments', 'shipment_items', 'employee_roles', 'employees', 'employee_accounts', 'subscriptions', 'scheduled_reminders', 'contacts'];
+const BUSINESS_SCOPED_ENTITIES: readonly string[] = ['users', 'devices', 'locations', 'registers', 'business_roles', 'audit_logs', 'suppliers', 'orders', 'order_items', 'shipments', 'shipment_items', 'employee_roles', 'employees', 'employee_accounts', 'scheduled_reminders', 'contacts'];
 
 // Core POS tables carrying the camelCase `businessId` column (the mobile
 // business UUID). Desktop peers relay these with the business UUID after the
 // multi-business hub change; legacy peers send the desktop INTEGER id or
 // nothing. Those are normalized to the operating business at apply time so a
 // row can never surface under another business' filter.
-const CORE_BUSINESS_SCOPED_ENTITIES: readonly string[] = [
+export const CORE_BUSINESS_SCOPED_ENTITIES: readonly string[] = [
   'categories', 'items', 'item_packs', 'sales', 'debt_payments',
   'adjustments', 'returns', 'customers',
-  'employee_roles', 'employees', 'employee_accounts', 'attendance', 'employee_performance'
+  'employee_roles', 'employees', 'employee_accounts', 'attendance', 'employee_performance',
+  'subscriptions'
 ];
 
 /**
@@ -279,7 +281,7 @@ const CORE_BUSINESS_SCOPED_ENTITIES: readonly string[] = [
  * businessService.getActiveBusiness() (active â†’ default â†’ first) but reads the
  * DB directly so the sync layer does not depend on the service layer.
  */
-function resolveLocalBusinessId(): string | null {
+export function resolveLocalBusinessId(): string | null {
   const db = getDB();
   const activeId = (db.getFirstSync("SELECT value FROM app_settings WHERE key = 'active_business_id'") as any)?.value;
   if (activeId) {
@@ -335,6 +337,22 @@ export function getConflicts(): { id: number; entity: string; entity_uuid: strin
 export function dismissConflict(id: number): void {
   const db = getDB();
   db.runSync('DELETE FROM sync_conflicts WHERE id = ?', [id]);
+}
+
+/**
+ * Bulk-resolve every conflict at once. keepTheirs=true applies each stored
+ * incoming payload (desktop wins); keepTheirs=false discards them and keeps
+ * the local rows as-is (mine wins — the local change stays in sync_outbox and
+ * will be pushed on the next sync). Returns how many were resolved.
+ */
+export function resolveAllConflicts(keepTheirs: boolean): number {
+  const db = getDB();
+  const rows = db.getAllSync('SELECT id FROM sync_conflicts ORDER BY id ASC') as any[];
+  for (const r of rows) {
+    try { resolveConflict(r.id, keepTheirs); } catch { /* keep resolving the rest */ }
+  }
+  if (rows.length > 0) bumpDataVersion();
+  return rows.length;
 }
 
 export async function resolveConflict(id: number, keepTheirs: boolean): Promise<void> {
@@ -438,6 +456,7 @@ export function applyChange(change: HubChange, force = false): void {
     if ((entity === 'sales' || entity === 'returns' || entity === 'stock_movements') && insertData.itemId != null) {
       const localItemId = resolveFk(change.device_id ?? getDeviceId(), 'items', insertData.itemId);
       if (localItemId != null) insertData.itemId = localItemId;
+      else insertData.itemId = null; // unresolvable peer id would violate the FK
     }
     if (entity === 'sales' && insertData.packId != null) {
       const localPackId = resolveFk(change.device_id ?? getDeviceId(), 'item_packs', insertData.packId);
@@ -499,6 +518,15 @@ export function applyChange(change: HubChange, force = false): void {
   const updateData: Record<string, any> = { ...data };
   delete updateData.id;
   updateData.device_id = change.device_id ?? getDeviceId();
+  // Resolve peer FKs to local ids on the update path too (the insert path
+  // already does). Writing the sender's raw itemId would violate the
+  // stock_movements → items FOREIGN KEY when the row maps to a different
+  // local id.
+  if ((entity === 'stock_movements' || entity === 'sales' || entity === 'returns') && updateData.itemId != null) {
+    const localItemId = resolveFk(change.device_id ?? getDeviceId(), 'items', updateData.itemId);
+    if (localItemId != null) updateData.itemId = localItemId;
+    else delete updateData.itemId; // keep the existing local value rather than crash
+  }
   if (BUSINESS_SCOPED_ENTITIES.includes(entity) && updateData.business_id === null) {
     // Preserve the local business scope â€” a peer without the column must not
     // null it out (the local columns are NOT NULL).
@@ -552,6 +580,9 @@ async function buildChangesFromOutbox(): Promise<{ changes: HubChange[]; seqs: n
         continue;
       }
       for (const c of columnsOf(entity)) payload[c] = r[c];
+      if (CORE_BUSINESS_SCOPED_ENTITIES.includes(entity) && payload.businessId == null) {
+        payload.businessId = resolveLocalBusinessId();
+      }
     }
     const change: HubChange = { entity, entity_uuid: row.entity_uuid, op: row.op, payload };
     change.checksum = await changeChecksum(change);
@@ -594,7 +625,7 @@ export async function syncNow(): Promise<{ pushed: number; pulled: number; confl
   if (changes.length > 0) {
     const res = await httpJson(`${hubUrl}/sync/push`, {
       method: 'POST',
-      body: JSON.stringify({ device_id: deviceId, token, changes })
+      body: JSON.stringify({ device_id: deviceId, name: 'Shega Mobile', platform: 'mobile', token, changes })
     });
     pushed = changes.length;
     conflicts = Number(res?.conflicts ?? 0);
@@ -657,7 +688,7 @@ export async function pairDevice(): Promise<any> {
   const deviceId = getDeviceId();
   return httpJson(`${hubUrl}/sync/pair`, {
     method: 'POST',
-    body: JSON.stringify({ device_id: deviceId, name: 'Shega Mobile', token: getHubToken() })
+    body: JSON.stringify({ device_id: deviceId, name: 'Shega Mobile', platform: 'mobile', token: getHubToken() })
   });
 }
 

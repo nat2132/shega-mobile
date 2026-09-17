@@ -54,8 +54,6 @@ import { AppListItem } from '@/components/AppListItem';
 import { SafeFlatList } from '@/components/SafeFlatList';
 import { SkeletonList } from '@/components/Skeleton';
 import { getDashGlass } from './glass-dashboard';
-import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
-import { debtManagementTutorial } from '@/tutorials/definitions';
 
 type FilterMode = 'all' | 'overdue' | 'active';
 type SortMode = 'amount_desc' | 'amount_asc' | 'oldest';
@@ -134,7 +132,6 @@ const DebtManagementScreen: React.FC = () => {
   const G = getDashGlass(colors);
   const styles = useMemo(() => createStyles(G), [G]);
   const router = useRouter();
-  const tutorial = useTutorial({ tutorial: debtManagementTutorial });
 
   const [summary, setSummary] = useState<DebtSummary | null>(null);
   const [customers, setCustomers] = useState<DebtCustomer[]>([]);
@@ -235,7 +232,6 @@ const DebtManagementScreen: React.FC = () => {
       <View style={{ position: 'absolute', top: -60, left: -20, width: 180, height: 180, borderRadius: 90, backgroundColor: G.mutedLight, opacity: 0.3 }} />
       <View style={{ position: 'absolute', bottom: -40, right: -40, width: 200, height: 200, borderRadius: 100, backgroundColor: G.mutedLight, opacity: 0.2 }} />
       {/* Header */}
-      <TutorialTarget id="dm-header">
       <View style={styles.headerWrap}>
         <TouchableOpacity
           onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/dashboard'))}
@@ -258,12 +254,9 @@ const DebtManagementScreen: React.FC = () => {
             {t('debt.title')}
           </AppText>
         </View>
-        <TutorialButton tutorialId="debt-management" screenName={t('screen.debt_management')} />
       </View>
-      </TutorialTarget>
 
       {/* Summary */}
-      <TutorialTarget id="dm-summary">
       {loading ? (
         <View style={styles.summaryWrap}>
           <SummarySkeleton colors={colors} />
@@ -271,7 +264,6 @@ const DebtManagementScreen: React.FC = () => {
       ) : summary ? (
         <DebtSummaryHeader summary={summary} />
       ) : null}
-      </TutorialTarget>
 
       {/* Search + sort/filter row */}
       <View style={styles.searchRow}>
@@ -344,7 +336,6 @@ const DebtManagementScreen: React.FC = () => {
       </View>
 
       {/* List */}
-      <TutorialTarget id="dm-actions">
       {loading ? (
         <SkeletonList count={6} showAvatar style={{ marginTop: 8 }} />
       ) : (
@@ -376,7 +367,6 @@ const DebtManagementScreen: React.FC = () => {
           }
         />
       )}
-      </TutorialTarget>
     </View>
   );
 };

@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
+  ScrollView,
   StyleSheet,
   TextInput,
   TouchableOpacity,
@@ -20,8 +21,7 @@ import {
 
 import { AppText } from '@/components/ui';
 import { getInventoryGlass } from './glass-inventory';
-import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
-import { warehouseManagerTutorial } from '@/tutorials/definitions';
+
 interface WarehouseManagerProps {
   visible: boolean;
   onClose: () => void;
@@ -34,7 +34,6 @@ const WarehouseManagerModal: React.FC<WarehouseManagerProps> = ({ visible, onClo
   const { isReadOnly } = useSubscription();
   const G = getInventoryGlass(colors);
   const dialog = useDialog();
-  const tutorial = useTutorial({ tutorial: warehouseManagerTutorial });
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [formName, setFormName] = useState('');
@@ -127,21 +126,17 @@ const WarehouseManagerModal: React.FC<WarehouseManagerProps> = ({ visible, onClo
         <View style={styles.overlay}>
           <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
           <View style={[styles.sheet, { backgroundColor: G.bg }]}>
-            <TutorialTarget id="wm-header">
             <View style={styles.headerRow}>
               <Warehouse size={20} color={G.fg} />
               <AppText variant="title" weight="bold" style={[styles.title, { color: G.fg, marginLeft: 10 }]} numberOfLines={2}>{t('inv.warehouses_title')}</AppText>
               <TouchableOpacity onPress={() => { resetForm(); setShowForm(true); }} style={[styles.addBtn, { backgroundColor: colors.primary + '15' }]}>
                 <Plus size={18} color={colors.primary} />
               </TouchableOpacity>
-              <TutorialButton tutorialId="warehouse-manager" screenName={t('screen.warehouse_manager')} />
             </View>
-            </TutorialTarget>
 
             <View style={{ flex: 1 }}>
               {!showForm ? (
-                <TutorialTarget id="wm-list">
-                <TutorialScrollView style={styles.whList} showsVerticalScrollIndicator={false}>
+                <ScrollView style={styles.whList} showsVerticalScrollIndicator={false}>
                   <TouchableOpacity
                     style={[styles.whItem, { backgroundColor: G.bgCard, borderColor: !selectedWarehouseId ? colors.primary : G.border, borderWidth: !selectedWarehouseId ? 2 : 1 }]}
                     onPress={() => { onSelectWarehouse(null); onClose(); }}
@@ -184,10 +179,9 @@ const WarehouseManagerModal: React.FC<WarehouseManagerProps> = ({ visible, onClo
                       <AppText variant="body-sm" weight="medium" align="center" style={[styles.emptySubtext, { color: G.fgSecondary }]} numberOfLines={3}>{t('inv.no_warehouses_sub')}</AppText>
                     </View>
                   )}
-                </TutorialScrollView>
-                </TutorialTarget>
+                </ScrollView>
               ) : (
-                <TutorialScrollView style={styles.whList} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                <ScrollView style={styles.whList} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                   <View style={styles.formSection}>
                     <AppText variant="title" weight="bold" style={[styles.formTitle, { color: G.fg }]} numberOfLines={2}>
                       {t(editingId ? 'inv.edit_warehouse' : 'inv.new_warehouse')}
@@ -261,7 +255,7 @@ const WarehouseManagerModal: React.FC<WarehouseManagerProps> = ({ visible, onClo
                       </TouchableOpacity>
                     </View>
                   </View>
-                </TutorialScrollView>
+                </ScrollView>
               )}
             </View>
           </View>

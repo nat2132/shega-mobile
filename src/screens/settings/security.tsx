@@ -6,8 +6,6 @@ import { Eye, EyeOff, Lock, Shield, Trash2 } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { AppText, AppCard, AppButton, AppListItem, AppRow } from '@/components/ui';
-import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
-import { securitySettingsTutorial } from '@/tutorials/definitions';
 const SecuritySettings = () => {
   const { pin, setPin, colors, t } = useSettings();
   const dialog = useDialog();
@@ -35,8 +33,6 @@ const SecuritySettings = () => {
   useEffect(() => {
     setResolvedPin(pin);
   }, [pin]);
-
-  const tutorial = useTutorial({ tutorial: securitySettingsTutorial });
 
   const hasPin = !!resolvedPin;
 
@@ -117,12 +113,9 @@ const SecuritySettings = () => {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.container, { backgroundColor: colors.background }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-      <TutorialTarget id="sec-header">
       <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.header, { color: colors.textSecondary }]} numberOfLines={2}>{t('settings.security_settings')}</AppText>
       <AppText variant="display" weight="bold" style={[styles.subHeader, { color: colors.text }]} numberOfLines={2}>{hasPin ? t('security.change_pin') : t('settings.security')}</AppText>
-      </TutorialTarget>
 
-      <TutorialTarget id="sec-biometric">
       {/* Status Badge */}
       <View style={[
         styles.statusBadge,
@@ -135,9 +128,7 @@ const SecuritySettings = () => {
           {hasPin ? t('settings.pin_protection') : t('settings.no_pin')}
         </AppText>
       </View>
-      </TutorialTarget>
 
-      <TutorialTarget id="sec-pin">
       <View style={[styles.formCard, { borderColor: colors.border, backgroundColor: colors.card }]}>
         {hasPin && (
           <PinInput
@@ -170,9 +161,7 @@ const SecuritySettings = () => {
           </AppText>
         </TouchableOpacity>
       </View>
-      </TutorialTarget>
 
-      <TutorialTarget id="sec-recovery">
       {hasPin && (
         <View style={styles.removeSection}>
           <AppText variant="title" weight="bold" style={[styles.removeHeader, { color: colors.text }]} numberOfLines={2}>{t('settings.remove_pin')}</AppText>
@@ -185,9 +174,7 @@ const SecuritySettings = () => {
           </TouchableOpacity>
         </View>
       )}
-      </TutorialTarget>
       <View style={{ position: 'absolute', top: 50, right: 20, zIndex: 100 }}>
-        <TutorialButton tutorialId="security-settings" screenName={t('settings.security_settings')} />
       </View>
       </ScrollView>
     </KeyboardAvoidingView>

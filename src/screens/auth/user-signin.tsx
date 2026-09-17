@@ -393,7 +393,7 @@ export default function UserSigninScreen() {
           )}
 
           {mode === 'setup' && targetUser && (
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
               <View style={styles.setupCard}>
                 <View style={[styles.userAvatar, { alignSelf: 'center', backgroundColor: colors.primary + '1A' }]}>
                   {targetUser.avatar ? (

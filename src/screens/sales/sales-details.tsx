@@ -54,12 +54,11 @@ import {
   View,
 } from "react-native";
 import { AppText, AppNumber } from "@/components/ui";
+import { ProductImageStack } from "@/components/ProductImageStack";
 import { getSalesGlass } from './glass-sales';
 import { getActiveTaxType } from '@/services/taxService';
 import { getScopedBusinessId } from "@/database/db";
 import Animated, { FadeInDown, ZoomIn } from "react-native-reanimated";
-import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
-import { salesDetailsTutorial } from '@/tutorials/definitions';
 const SALES_GLASS = getSalesGlass(LightTheme);
 
 const SaleDetailsScreen = ({
@@ -77,7 +76,6 @@ const SaleDetailsScreen = ({
     return { name: at?.name || 'VAT', rate: at?.rate ?? 15 };
   }, [getScopedBusinessId()]);
   const { showToast } = useToast();
-  const tutorial = useTutorial({ tutorial: salesDetailsTutorial });
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState(sale);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -404,7 +402,6 @@ const SaleDetailsScreen = ({
   };
 
   const debtFieldsSection = editForm.paymentStatus === "Debt" && (
-    <TutorialTarget id="sd-customer">
     <Animated.View style={styles.section}>
       <AppText
         variant="micro"
@@ -550,7 +547,6 @@ const SaleDetailsScreen = ({
         </View>
       </View>
     </Animated.View>
-    </TutorialTarget>
   );
 
   return (
@@ -559,11 +555,10 @@ const SaleDetailsScreen = ({
         <View style={{ position: 'absolute', top: -100, left: -50, width: 300, height: 300, borderRadius: 150, backgroundColor: SALES_GLASS.mutedLight }} />
         <View style={{ position: 'absolute', bottom: -80, right: -40, width: 250, height: 250, borderRadius: 125, backgroundColor: SALES_GLASS.glow }} />
       </View>
-      {/* Transaction Insight Header */}
-      <TutorialTarget id="sd-header" style={styles.heroContainer}>
-        <View
-          style={[styles.heroWash, { backgroundColor: SALES_GLASS.fg + "05" }]}
-        />
+{/* Transaction Insight Header */}
+      <View
+        style={[styles.heroWash, { backgroundColor: SALES_GLASS.fg + "05" }]}
+      />
         <View style={styles.topActions}>
           <TouchableOpacity
             onPress={onClose}
@@ -574,7 +569,6 @@ const SaleDetailsScreen = ({
           >
             <ChevronLeft size={20} color={SALES_GLASS.fg} />
           </TouchableOpacity>
-          <TutorialButton tutorialId="sales-details" screenName={t('screen.sale_details')} />
           <View style={styles.row}>
             {isEditing ? (
               <View style={styles.editActions}>
@@ -646,32 +640,46 @@ const SaleDetailsScreen = ({
           </View>
         </View>
 
-        <TutorialTarget id="sd-summary">
         <Animated.View style={styles.heroContent}>
-          <View
-            style={[
-              styles.badgeContainer,
-              {
-                backgroundColor:
-                  editForm.paymentStatus === "Paid"
-                    ? colors.success + "15"
-                    : editForm.paymentStatus === "Cancelled"
-                      ? colors.error + "15"
-                      : colors.warning + "15",
-              },
-            ]}
-          >
-            <BadgeCheck
-              size={24}
-              color={
-                editForm.paymentStatus === "Paid"
-                  ? colors.success
-                  : editForm.paymentStatus === "Cancelled"
-                    ? colors.error
-                    : colors.warning
-              }
-            />
-          </View>
+          {(() => {
+            const statusColor =
+              editForm.paymentStatus === "Paid"
+                ? colors.success
+                : editForm.paymentStatus === "Cancelled"
+                  ? colors.error
+                  : colors.warning;
+            const statusBg = statusColor + "15";
+            const heroImages = isBatch
+              ? batchItems.map((it: any) => it.image).filter((x: any) => typeof x === "string" && x.trim().length > 0)
+              : sale?.image
+                ? [sale.image]
+                : [];
+            return (
+              <View
+                style={[
+                  styles.badgeContainer,
+                  { backgroundColor: statusBg, overflow: heroImages.length ? "hidden" : "visible" },
+                ]}
+              >
+                {heroImages.length ? (
+                  <>
+                    <ProductImageStack
+                      images={heroImages}
+                      totalCount={isBatch ? batchItems.length : 1}
+                      size={56}
+                      radius={14}
+                      ringColor={statusColor + "22"}
+                      backgroundColor={statusBg}
+                      iconColor={statusColor}
+                    />
+                    <View style={[styles.payDot, { backgroundColor: statusColor, borderColor: SALES_GLASS.bgCard }]} />
+                  </>
+                ) : (
+                  <BadgeCheck size={24} color={statusColor} />
+                )}
+              </View>
+            );
+          })()}
           <AppText
             variant="micro"
             weight="bold"
@@ -735,8 +743,6 @@ const SaleDetailsScreen = ({
             </View>
           )}
         </Animated.View>
-      </TutorialTarget>
-      </TutorialTarget>
 
       <ScrollView
         style={{ flex: 1 }}
@@ -745,7 +751,6 @@ const SaleDetailsScreen = ({
         keyboardShouldPersistTaps="handled"
       >
         {/* Settlement Intelligence */}
-        <TutorialTarget id="sd-payment">
         <Animated.View style={styles.section}>
           <AppText
             variant="micro"
@@ -996,10 +1001,8 @@ const SaleDetailsScreen = ({
             </View>
           </View>
         </Animated.View>
-        </TutorialTarget>
 
         {/* Intelligence Nodes - Batch Items or Single Item */}
-        <TutorialTarget id="sd-items">
         <Animated.View style={styles.section}>
           <AppText
             variant="micro"
@@ -1549,7 +1552,6 @@ const SaleDetailsScreen = ({
                 </View>
 
                 {/* Financial Core */}
-                <TutorialTarget id="sd-pricing">
                 <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.sectionTitle, { color: SALES_GLASS.fgSecondary }]} numberOfLines={1}>{t('detail.financial_core')}</AppText>
                 <View style={[styles.intelligenceBlock, { backgroundColor: SALES_GLASS.bgCard, borderColor: SALES_GLASS.border }]}>
                   <View style={styles.node}>
@@ -1588,7 +1590,6 @@ const SaleDetailsScreen = ({
                     <AppNumber value={Math.max(0, (editForm.totalPrice || 0))} size="body-sm" weight="bold" prefix={t('common.etb') + ' '} color={SALES_GLASS.fg} style={styles.nodeValue} />
                   </View>
                 </View>
-                </TutorialTarget>
 
                 {/* Tax Configuration */}
                 <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.sectionTitle, { color: SALES_GLASS.fgSecondary }]} numberOfLines={1}>{t('detail.tax_config')}</AppText>
@@ -1621,7 +1622,6 @@ const SaleDetailsScreen = ({
             ) : null}
           </View>
         </Animated.View>
-        </TutorialTarget>
 
         {debtFieldsSection}
 
@@ -1651,10 +1651,28 @@ const SaleDetailsScreen = ({
                 {returnHistory.map((ret: any, idx: number) => (
                   <View key={ret.id || idx} style={[styles.returnHistoryItem, idx < returnHistory.length - 1 && { borderBottomWidth: 1, borderBottomColor: SALES_GLASS.border, paddingBottom: 12, marginBottom: 12 }]}>
                     <View style={styles.returnHistoryHeader}>
-                      <View style={[styles.returnHistoryIcon, { backgroundColor: ret.itemCondition === 'Resellable' ? colors.success + '15' : colors.warning + '15' }]}>
-                        <RotateCcw size={16} color={ret.itemCondition === 'Resellable' ? colors.success : colors.warning} />
+                      <View style={[styles.returnHistoryIcon, { backgroundColor: 'transparent' }]}>
+                        {ret.image ? (
+                          <ProductImageStack
+                            images={[ret.image]}
+                            size={34}
+                            radius={9}
+                            ringColor={SALES_GLASS.bgCard}
+                            backgroundColor={ret.itemCondition === 'Resellable' ? colors.success + '15' : colors.warning + '15'}
+                            iconColor={ret.itemCondition === 'Resellable' ? colors.success : colors.warning}
+                          />
+                        ) : (
+                          <View style={[styles.returnHistoryIconInner, { backgroundColor: ret.itemCondition === 'Resellable' ? colors.success + '15' : colors.warning + '15' }]}>
+                            <RotateCcw size={16} color={ret.itemCondition === 'Resellable' ? colors.success : colors.warning} />
+                          </View>
+                        )}
                       </View>
                       <View style={{ flex: 1 }}>
+                        {ret.itemName ? (
+                          <AppText variant="micro" weight="bold" style={{ color: SALES_GLASS.fg, marginBottom: 2 }} numberOfLines={1}>
+                            {ret.itemName}
+                          </AppText>
+                        ) : null}
                         <AppText variant="body" weight="bold" style={{ color: SALES_GLASS.fg }}>
                           {ret.quantity} {ret.unit || 'pcs'} {t('common.returned')}
                         </AppText>
@@ -2420,6 +2438,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 15,
   },
+  payDot: {
+    position: "absolute",
+    right: 2,
+    bottom: 2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+  },
   heroSub: {
     fontSize: 13,
     fontFamily: Fonts.bold,
@@ -2913,9 +2940,18 @@ const styles = StyleSheet.create({
   returnHistoryIcon: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  returnHistoryIconInner: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 10,
   },
   returnHistoryDetails: {
     flexDirection: "row",

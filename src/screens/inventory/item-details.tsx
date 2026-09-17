@@ -44,10 +44,9 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  ScrollView,
 } from 'react-native';
 import Animated from 'react-native-reanimated';
-import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
-import { itemDetailsTutorial } from '@/tutorials/definitions';
 import { getInventoryGlass } from './glass-inventory';
 
 const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => void }) => {
@@ -55,7 +54,6 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => 
   const G = getInventoryGlass(colors);
   const styles = useMemo(() => createStyles(G), [G]);
   const dialog = useDialog();
-  const tutorial = useTutorial({ tutorial: itemDetailsTutorial });
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<any>(item);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -148,14 +146,12 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => 
       <View style={[styles.glowWash1, { backgroundColor: G.mutedLight }]} />
       <View style={[styles.glowWash2, { backgroundColor: G.mutedLight }]} />
       <View style={[styles.glowWash3, { backgroundColor: G.mutedLight }]} />
-      {/* Hero Header */}
-      <TutorialTarget id="id-header" style={styles.heroContainer}>
+{/* Hero Header */}
          <View style={[styles.heroWash, { backgroundColor: G.fg + '05' }]} />
          <View style={styles.topActions}>
             <TouchableOpacity onPress={onClose} style={[styles.circleBtn, { backgroundColor: G.bg + '80' }]}>
                <ChevronLeft size={20} color={G.fg} />
             </TouchableOpacity>
-            <TutorialButton tutorialId="item-details" screenName={t('screen.item_details')} />
             <View style={styles.row}>
                {isEditing ? (
                  <View style={styles.editActions}>
@@ -223,9 +219,7 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => 
                </AppText>
             </View>
           </Animated.View>
-       </TutorialTarget>
-
-       <TutorialScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
         {/* Supplier Call Card — only shown when supplierCallEnabled is on */}
         {Boolean(editForm.supplierCallEnabled) && (
@@ -425,9 +419,8 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => 
           </>
         )}
 
-        {/* Magnitude Cards */}
-        <TutorialTarget id="id-stats">
-        <Animated.View style={styles.row}>
+{/* Magnitude Cards */}
+         <Animated.View style={styles.row}>
            <View style={[styles.magnitudeCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
               <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.mLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('detail.unit_margin')}</AppText>
               <AppNumber value={margin} suffix="%" size="heading" style={styles.mValue} />
@@ -446,7 +439,6 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => 
               </View>
             </View>
          </Animated.View>
-         </TutorialTarget>
 
          {/* Intelligence Nodes */}
          <Animated.View style={styles.section}>
@@ -489,7 +481,6 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => 
            </View>
          </Animated.View>
 
-         <TutorialTarget id="id-details">
          <Animated.View style={styles.section}>
             <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.sectionTitle, { color: G.fgSecondary }]} numberOfLines={1}>{t('detail.logistics_scale')}</AppText>
            <View style={[styles.intelligenceBlock, { backgroundColor: G.bgCard, borderColor: G.border }]}>
@@ -567,9 +558,7 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => 
                 
             </View>
           </Animated.View>
-          </TutorialTarget>
 
-          <TutorialTarget id="id-history">
           <Animated.View style={styles.section}>
             <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.sectionTitle, { color: G.fgSecondary }]} numberOfLines={1}>{t('detail.temporal_audit')}</AppText>
            <View style={[styles.intelligenceBlock, { backgroundColor: G.bgCard, borderColor: G.border }]}>
@@ -624,13 +613,11 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => 
                </View>
             </View>
           </Animated.View>
-          </TutorialTarget>
 
          <View style={{ height: 100 }} />
-       </TutorialScrollView>
+       </ScrollView>
 
       {/* Action Float */}
-      <TutorialTarget id="id-actions">
       <View style={[styles.actionFloat, { backgroundColor: colors.background }]}>
          <TouchableOpacity 
             style={[styles.primaryAction, { backgroundColor: G.fg }]}
@@ -646,7 +633,6 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData, onClose?: () => 
             </AppText>
          </TouchableOpacity>
       </View>
-      </TutorialTarget>
 
       <CustomDatePicker
         visible={showExpiryPicker}

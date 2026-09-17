@@ -53,7 +53,7 @@ export default function SubscriptionPlans() {
       plans={plans}
       onSelectPlan={handleSelectPlan}
       onStartTrial={handleStartTrial}
-      onBack={() => safeBackOrFallback('/welcome-choice')}
+      onBack={() => safeBackOrFallback('/setup-wizard')}
     />
   );
 }

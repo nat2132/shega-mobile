@@ -38,127 +38,56 @@ export const Fonts = {
   bold: 'Inter_700Bold',
   extrabold: 'Inter_800ExtraBold',
   black: 'Inter_900Black',
-  light: 'Inter_400Regular',
   sans: 'Inter_400Regular',
 };
 
+// ────────────────────────────────────────────────────────────────
+// Shega theme system — light + dark only.
+// Token roles:
+//   primary      — strongest text / inverted section filler
+//   secondary    — secondary text (aliases textSecondary)
+//   background   — page canvas
+//   surface      — secondary surfaces: inputs, chips, cool-gray fill
+//   card         — card / panel fill
+//   text         — body text
+//   textSecondary — muted text
+//   border       — hairline border; alpha so it paints on any surface
+//   tint         — the singular functional accent
+//   tabBar/header — chrome surfaces
+// ────────────────────────────────────────────────────────────────
+
 export const LightTheme = {
-  primary: '#000000',
-  secondary: '#666666',
+  primary: '#0a0b0d',
+  secondary: '#5b616e',
   background: '#ffffff',
-  surface: '#ffffff',
-  card: '#f9f9f9',
-  text: '#000000',
-  textSecondary: '#666666',
-  border: '#e5e5e5',
+  surface: '#eef0f3',
+  card: '#ffffff',
+  text: '#0a0b0d',
+  textSecondary: '#5b616e',
+  border: 'rgba(91, 97, 110, 0.2)',
   success: '#34C759',
   warning: '#FF9500',
   error: '#FF3B30',
-  tint: '#000000',
+  tint: '#0052ff',
   tabBar: '#ffffff',
   header: '#ffffff',
 };
 
 export const DarkTheme = {
   primary: '#ffffff',
-  secondary: '#A0A0A0',
-  background: '#000000',
-  surface: '#121212',
-  card: '#1C1C1C',
-  text: '#ffffff',
-  textSecondary: '#A0A0A0',
-  border: '#2C2C2C',
+  secondary: '#a0a4ab',
+  background: '#0a0b0d',
+  surface: '#131519',
+  card: '#1b1e24',
+  text: '#f4f5f7',
+  textSecondary: '#a0a4ab',
+  border: 'rgba(139, 146, 155, 0.18)',
   success: '#30D158',
   warning: '#FF9F0A',
   error: '#FF453A',
-  tint: '#ffffff',
-  tabBar: '#121212',
-  header: '#000000',
-};
-
-export const MidnightTheme = {
-  primary: '#FFFFFF',
-  secondary: '#94A3B8',
-  background: '#050B14',
-  surface: '#0A1220',
-  card: '#131F37',
-  text: '#F8FAFC',
-  textSecondary: '#94A3B8',
-  border: '#203152',
-  success: '#34D399',
-  warning: '#FBBF24',
-  error: '#F87171',
-  tint: '#3B82F6',
-  tabBar: '#050B14',
-  header: '#050B14',
-};
-
-export const EmeraldTheme = {
-  primary: '#FFFFFF',
-  secondary: '#86EFAC',
-  background: '#041009',
-  surface: '#071A10',
-  card: '#102B1D',
-  text: '#F8FAFC',
-  textSecondary: '#A7F3D0',
-  border: '#1A402D',
-  success: '#10B981',
-  warning: '#F59E0B',
-  error: '#EF4444',
-  tint: '#10B981',
-  tabBar: '#041009',
-  header: '#041009',
-};
-
-export const CharcoalTheme = {
-  primary: '#FFFFFF',
-  secondary: '#A1A1AA',
-  background: '#09090B',
-  surface: '#121214',
-  card: '#1C1C1F',
-  text: '#FAFAFA',
-  textSecondary: '#A1A1AA',
-  border: '#27272A',
-  success: '#4ADE80',
-  warning: '#FBBF24',
-  error: '#F87171',
-  tint: '#F59E0B',
-  tabBar: '#09090B',
-  header: '#09090B',
-};
-
-export const SlateTheme = {
-  primary: '#FFFFFF',
-  secondary: '#94A3B8',
-  background: '#0F172A',
-  surface: '#1E293B',
-  card: '#293649',
-  text: '#F8FAFC',
-  textSecondary: '#94A3B8',
-  border: '#334155',
-  success: '#34D399',
-  warning: '#FBBF24',
-  error: '#F87171',
-  tint: '#6366F1',
-  tabBar: '#0F172A',
-  header: '#0F172A',
-};
-
-export const CocoaTheme = {
-  primary: '#FFFFFF',
-  secondary: '#A8A29E',
-  background: '#17100B',
-  surface: '#231811',
-  card: '#332319',
-  text: '#FAFAF9',
-  textSecondary: '#A8A29E',
-  border: '#443428',
-  success: '#4ADE80',
-  warning: '#FBBF24',
-  error: '#F87171',
-  tint: '#D97706',
-  tabBar: '#1C130D',
-  header: '#17100B',
+  tint: '#4C8CFF',
+  tabBar: '#0a0b0d',
+  header: '#0a0b0d',
 };
 
 export const Colors = LightTheme; // Legacy fallback

@@ -1,12 +1,5 @@
 import { LightTheme } from '@/constants/theme';
 
-function isDarkBg(c: typeof LightTheme): boolean {
-  const bg = c.background.toLowerCase();
-  return bg === '#000000' || bg === '#0b0b0b' || bg === '#0d1b2a' || bg === '#0d1f12' ||
-         bg === '#1a1614' || bg === '#121820' || bg === '#1c1510' || bg === '#111111' ||
-         bg === '#0f0f0f' || bg === '#0a0a0a';
-}
-
 function hexToRgb(hex: string) {
   const h = hex.replace('#', '');
   return {
@@ -16,15 +9,25 @@ function hexToRgb(hex: string) {
   };
 }
 
+// Perceived-luminance based dark detection. Any near-black surface hex
+// (e.g. `#0a0b0d`, `#070d16`, `#101013`) qualifies — no brittle hex lists.
+export function isDarkColor(hex: string): boolean {
+  const { r, g, b } = hexToRgb(hex);
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return lum < 128;
+}
+
 function rgba(hex: string, alpha: number) {
   const { r, g, b } = hexToRgb(hex);
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
 export function createGlassTokens(colors: typeof LightTheme) {
-  const dark = isDarkBg(colors);
+  const dark = isDarkColor(colors.background);
 
-  const accent = colors.tint === '#000000' || colors.tint === '#ffffff' ? colors.primary : colors.tint;
+  const accent = colors.tint === '#ffffff' || colors.tint === '#000000'
+    ? colors.primary
+    : colors.tint;
 
   return {
     bg: colors.background,

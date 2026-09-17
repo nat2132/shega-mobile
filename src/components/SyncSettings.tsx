@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   Pressable,
   StyleSheet,
@@ -26,7 +27,7 @@ import { useSync } from '@/context/SyncContext';
 import { AppText } from '@/components/ui';
 import { getSettingsGlass } from '@/screens/settings/glass-settings';
 import {
-  getConflicts, dismissConflict, resolveConflict,
+  getConflicts, dismissConflict, resolveConflict, resolveAllConflicts,
 } from '@/services/syncService';
 import { getHubUrl, getHubToken, setHubUrl, setHubToken, pairDevice } from '@/services/syncService';
 
@@ -132,6 +133,33 @@ export default function SyncSettings() {
   const refreshConflicts = () => {
     try { setConflicts(getConflicts()); } catch {}
     setConflictsOpen((o) => !o);
+  };
+
+  const resolveAll = (keepTheirs: boolean) => {
+    Alert.alert(
+      keepTheirs ? t('sync_settings.keep_desktop_all') : t('sync_settings.keep_mine_all'),
+      keepTheirs
+        ? t('sync_settings.keep_desktop_all_desc', { count: String(conflicts.length) })
+        : t('sync_settings.keep_mine_all_desc', { count: String(conflicts.length) }),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: keepTheirs ? t('sync_settings.keep_desktop') : t('sync_settings.keep_mine'),
+          style: keepTheirs ? 'default' : 'destructive',
+          onPress: () => {
+            const n = resolveAllConflicts(keepTheirs);
+            setConflicts([]);
+            setConflictsOpen(false);
+            showToast(
+              keepTheirs
+                ? t('sync_settings.resolved_all_desktop', { count: String(n) })
+                : t('sync_settings.resolved_all_mine', { count: String(n) }),
+              'success',
+            );
+          },
+        },
+      ],
+    );
   };
 
   return (
@@ -269,6 +297,25 @@ export default function SyncSettings() {
                 style={{ transform: [{ rotate: conflictsOpen ? '90deg' : '0deg' }] }}
               />
             </Pressable>
+            {conflictsOpen && (
+              <View style={[styles.bulkRow, { borderColor: G.border }]}>
+                <AppText variant="micro" style={{ color: G.muted, flex: 1 }} numberOfLines={2}>
+                  {t('sync_settings.bulk_hint')}
+                </AppText>
+                <Pressable
+                  style={[styles.chipBtn, { backgroundColor: '#FFB02022' }]}
+                  onPress={() => resolveAll(true)}
+                >
+                  <AppText variant="micro" weight="bold" style={{ color: '#FFB020' }}>{t('sync_settings.keep_desktop_all')}</AppText>
+                </Pressable>
+                <Pressable
+                  style={[styles.chipBtn, { backgroundColor: '#34C75922' }]}
+                  onPress={() => resolveAll(false)}
+                >
+                  <AppText variant="micro" weight="bold" style={{ color: '#34C759' }}>{t('sync_settings.keep_mine_all')}</AppText>
+                </Pressable>
+              </View>
+            )}
             {conflictsOpen &&
               conflicts.slice(0, 5).map((c) => (
                 <View key={c.id} style={[styles.conflictRow, { borderColor: G.border }]}>
@@ -431,6 +478,16 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 6,
+  },
+  bulkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    padding: 10,
+    marginTop: 8,
+    marginLeft: 48,
   },
   overlay: {
     flex: 1,

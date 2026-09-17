@@ -27,14 +27,14 @@ import { useToast } from '@/context/ToastContext';
 const GlobalHeader = () => {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { userProfile, theme, setTheme, previousDarkTheme, colors, t } = useSettings();
+  const { userProfile, theme, setTheme, colors, t } = useSettings();
   const { openSidebar } = useSidebar();
   const { notifCount } = useNotifications();
   const { status, busy, lastError, lastResult, runSync } = useSync();
   const { showToast } = useToast();
 
   const toggleTheme = () => {
-    setTheme(theme === 'light' ? previousDarkTheme : 'light');
+    setTheme(theme === 'light' ? 'dark' : 'light');
   };
 
   // Show toast on sync completion/error
@@ -127,7 +127,7 @@ const GlobalHeader = () => {
             {/* Sync Status Indicator */}
             <TouchableOpacity
               onPress={handleSyncPress}
-              style={[styles.iconBtn, { backgroundColor: colors.card } as const]}
+              style={styles.iconBtn}
               accessibilityLabel={t('sync.status_' + syncState)}
             >
               {renderSyncIcon()}
@@ -149,7 +149,7 @@ const GlobalHeader = () => {
             {/* Translation */}
             <TouchableOpacity
               onPress={() => router.push('/translation')}
-              style={[styles.iconBtn, { backgroundColor: colors.card } as const]}
+              style={styles.iconBtn}
             >
               <Languages size={18} color={colors.text} />
             </TouchableOpacity>
@@ -157,7 +157,7 @@ const GlobalHeader = () => {
             {/* Notifications */}
             <TouchableOpacity
               onPress={() => router.push('/notifications')}
-              style={[styles.iconBtn, { backgroundColor: colors.card } as const]}
+              style={styles.iconBtn}
             >
               <Bell size={18} color={colors.text} />
               {notifCount > 0 && (
@@ -178,12 +178,12 @@ const GlobalHeader = () => {
             {/* Theme Toggle */}
             <TouchableOpacity
               onPress={toggleTheme}
-              style={[styles.iconBtn, { backgroundColor: colors.text } as const]}
+              style={styles.iconBtn}
             >
               {theme === 'light' ? (
-                <Moon size={18} color={colors.background} />
+                <Moon size={18} color={colors.text} />
               ) : (
-                <Sun size={18} color={colors.background} />
+                <Sun size={18} color={colors.text} />
               )}
             </TouchableOpacity>
           </View>

@@ -15,12 +15,11 @@ import {
 import { useSettings } from '@/context/SettingsContext';
 import { getOnCreditItems, ItemData } from '@/database/db';
 import { AppNumber, AppText } from '@/components/ui';
+import { ProductImageStack } from '@/components/ProductImageStack';
 
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { getDashGlass } from './glass-dashboard';
 import { CreditItemDetail, pluralizeUnit } from './oncredit-list-con';
-import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
-import { oncreditListTutorial } from '@/tutorials/definitions';
 const OnCreditRow = React.memo(({
   item,
   index,
@@ -62,7 +61,18 @@ const OnCreditRow = React.memo(({
       >
         <View style={styles.headerRow}>
           <View style={[styles.iconNode, { backgroundColor: G.fg + '05' }]}>
-            <Building2 size={22} color={G.fg} />
+            {item.image ? (
+              <ProductImageStack
+                images={[item.image]}
+                size={50}
+                radius={14}
+                ringColor={G.bgCard}
+                backgroundColor={G.fg + '05'}
+                iconColor={G.fg}
+              />
+            ) : (
+              <Building2 size={22} color={G.fg} />
+            )}
           </View>
           <View style={styles.infoArea}>
             <AppText variant="title-sm" weight="bold" numberOfLines={2} style={[styles.itemTitle, { color: G.fg }]}>
@@ -104,7 +114,6 @@ const OnCreditItemsScreen = () => {
   const { colors, t } = useSettings();
   const G = getDashGlass(colors);
   const styles = useMemo(() => createStyles(G), [G]);
-  const tutorial = useTutorial({ tutorial: oncreditListTutorial });
   const [items, setItems] = useState<ItemData[]>([]);
   const [selectedItem, setSelectedItem] = useState<ItemData | null>(null);
 
@@ -140,7 +149,6 @@ const OnCreditItemsScreen = () => {
     <View style={[styles.container, { backgroundColor: G.bg }]}>
       <View style={{ position: 'absolute', top: -80, left: -30, width: 180, height: 180, borderRadius: 90, backgroundColor: G.mutedLight, opacity: 0.3 }} />
       <View style={{ position: 'absolute', bottom: -50, right: -20, width: 160, height: 160, borderRadius: 80, backgroundColor: G.mutedLight, opacity: 0.2 }} />
-      <TutorialTarget id="ocl-list">
       <FlatList
         data={items}
         keyExtractor={keyExtractor}
@@ -152,7 +160,6 @@ const OnCreditItemsScreen = () => {
         windowSize={7}
         removeClippedSubviews={true}
         ListHeaderComponent={
-          <TutorialTarget id="ocl-header">
           <View style={styles.headerNode}>
             <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.headerSub, { color: G.fgSecondary }]} numberOfLines={1}>
               {t('dash.supply_intel')}
@@ -160,9 +167,7 @@ const OnCreditItemsScreen = () => {
             <AppText variant="heading-lg" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>
               {t('dash.credit_inventory')}
             </AppText>
-            <TutorialButton tutorialId="oncredit-list" screenName={t('screen.on_credit_list')} />
           </View>
-          </TutorialTarget>
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
@@ -178,7 +183,6 @@ const OnCreditItemsScreen = () => {
           </View>
         }
       />
-      </TutorialTarget>
     </View>
   );
 };

@@ -35,7 +35,7 @@ function hexToRgb(hex: string) {
 }
 
 export function getAccent(colors: typeof LightTheme) {
-  if (colors.tint === '#000000' || colors.tint === '#ffffff') return '#0071e3';
+  if (colors.tint === '#ffffff' || colors.tint === '#000000') return '#0052ff';
   return colors.tint;
 }
 

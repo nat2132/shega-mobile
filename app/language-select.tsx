@@ -5,7 +5,7 @@ import FirstLanguageScreen from '../src/screens/onboarding/first-language';
 export default function LanguageSelectRoute() {
   return (
     <FirstLanguageScreen
-      onContinue={() => router.replace('/welcome-choice' as any)}
+      onContinue={() => router.replace('/setup-wizard' as any)}
     />
   );
 }

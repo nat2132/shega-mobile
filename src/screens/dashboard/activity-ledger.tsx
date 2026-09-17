@@ -12,6 +12,7 @@ import {
     Calendar,
     ChevronLeft,
     History,
+    Package,
     RefreshCw,
     Search,
     ShoppingBag,
@@ -31,14 +32,13 @@ import {
 } from 'react-native';
 import { AppNumber, AppText, AppListItem} from '@/components/ui';
 import { UserAvatar } from '@/components/UserAvatar';
+import { ProductImageStack } from '@/components/ProductImageStack';
 
 import Animated, {
     FadeInDown
 } from 'react-native-reanimated';
 import SaleDetailsScreen from '../sales/sales-details';
 import { getDashGlass } from './glass-dashboard';
-import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
-import { activityLedgerTutorial } from '@/tutorials/definitions';
 
 interface ActivityLedgerProps {
   onClose?: () => void;
@@ -48,7 +48,6 @@ const ActivityLedgerScreen: React.FC<ActivityLedgerProps> = ({ onClose }) => {
   const { colors, calendarType, language, timeSystem, t } = useSettings();
   const G = getDashGlass(colors);
   const styles = useMemo(() => createStyles(G), [G]);
-  const tutorial = useTutorial({ tutorial: activityLedgerTutorial });
   const [dateModalVisible, setDateModalVisible] = useState(false);
   
   const [activities, setActivities] = useState<any[]>([]);
@@ -132,6 +131,7 @@ data.forEach((item: any) => {
 
     const isSale = item.category === 'sale' || item.type === 'sale';
     const isAdjustment = item.category === 'adjustment' || item.type === 'adjustment';
+    const isInventory = item.category === 'inventory' || item.type === 'inventory';
     const isDeletion = item.category === 'deletion' || item.type === 'deletion';
     
     let Icon = TrendingUp;
@@ -164,6 +164,12 @@ data.forEach((item: any) => {
       iconBg = colors.warning;
       label = item.type === 'price_up' ? t('adjustment.price_increased') : 
               item.type === 'price_down' ? t('adjustment.price_decreased') : t('dashboard.activity.damaged');
+    } else if (isInventory) {
+      Icon = Package;
+      iconBg = colors.primary;
+      label = `${item.quantity || 0} ${t('dashboard.activity.added')}`;
+      amountColor = colors.success;
+      prefix = '+';
     } else if (isDeletion) {
       Icon = Trash2;
       iconBg = colors.error;
@@ -196,7 +202,16 @@ data.forEach((item: any) => {
       <AppListItem
         left={
           <View style={{ width: 36, height: 36, justifyContent: 'center', alignItems: 'center' }}>
-            {item.userAvatar ? (
+            {(isSale || isAdjustment || isInventory) && item.images?.length ? (
+              <ProductImageStack
+                images={item.images}
+                size={36}
+                radius={9}
+                ringColor={G.bgCard}
+                backgroundColor={iconBg + '15'}
+                iconColor={iconBg}
+              />
+            ) : item.userAvatar ? (
               <UserAvatar name={item.userName} avatarUri={item.userAvatar} size={36} />
             ) : (
               <View
@@ -261,7 +276,6 @@ data.forEach((item: any) => {
     <View style={[styles.container, { backgroundColor: G.bg }]}>
       <View style={{ position: 'absolute', top: -80, left: -40, width: 200, height: 200, borderRadius: 100, backgroundColor: G.mutedLight, opacity: 0.3 }} />
       <View style={{ position: 'absolute', bottom: -60, right: -30, width: 180, height: 180, borderRadius: 90, backgroundColor: G.mutedLight, opacity: 0.2 }} />
-      <TutorialTarget id="al-header">
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <TouchableOpacity onPress={onClose} style={[styles.backBtn, { backgroundColor: G.bgCard }]}>
@@ -274,10 +288,8 @@ data.forEach((item: any) => {
               <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.liveText, { color: G.fgSecondary }]} numberOfLines={1}>{t('common.live_audit')}</AppText>
             </View>
           </View>
-          <TutorialButton tutorialId="activity-ledger" screenName={t('screen.activity_ledger')} />
         </View>
 
-        <TutorialTarget id="al-filter">
         <View style={styles.searchContainer}>
           <View style={[styles.searchBar, { backgroundColor: G.bgCard, borderColor: G.border }]}>
             <Search size={20} color={G.fgSecondary} />
@@ -304,11 +316,8 @@ data.forEach((item: any) => {
             <Calendar size={20} color={selectedDate ? colors.primary : G.fgSecondary} />
           </TouchableOpacity>
         </View>
-        </TutorialTarget>
       </View>
-      </TutorialTarget>
 
-      <TutorialTarget id="al-feed">
       <FlatList
         data={activities}
         renderItem={renderActivityItem}
@@ -326,7 +335,6 @@ data.forEach((item: any) => {
           </View>
         }
       />
-      </TutorialTarget>
 
       <CustomDatePicker
         visible={dateModalVisible}

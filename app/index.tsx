@@ -35,8 +35,9 @@ export default function Index() {
           } catch {
             fromFirstRun = true;
           }
-          // Show login/register flow.
-          target = fromFirstRun ? '/language-select' : '/welcome-choice';
+          // Route straight to the setup wizard whose welcome stage offers
+          // Create / Join / Sign in — no separate welcome screen.
+          target = fromFirstRun ? '/language-select' : '/setup-wizard';
         } else {
           // 2. Resume a mid-join pairing request BEFORE the sign-in/subscription
           // gates: the pairing request lives on the backend, so after a restart
@@ -69,10 +70,10 @@ export default function Index() {
         targetRef.current = target;
         console.log('[SHEGA-INDEX] startup routing →', target, { hasLogin: !!token });
       } catch (error) {
-        // Never let startup die on this — fall back to login/register.
-        console.error('[SHEGA-INDEX] startup check failed, routing to welcome:', error);
+        // Never let startup die on this — fall back to the setup wizard.
+        console.error('[SHEGA-INDEX] startup check failed, routing to setup wizard:', error);
         if (cancelled) return;
-        targetRef.current = '/welcome-choice';
+        targetRef.current = '/setup-wizard';
       }
       if (!cancelled) setReady(true);
     })();
@@ -87,9 +88,9 @@ export default function Index() {
       try {
         router.replace(target as any);
       } catch (e) {
-        console.error('[SHEGA-INDEX] navigation failed, retrying with onboarding:', e);
+        console.error('[SHEGA-INDEX] navigation failed, retrying with setup wizard:', e);
         try {
-          router.replace('/welcome-choice' as any);
+          router.replace('/setup-wizard' as any);
         } catch (e2) {
           console.error('[SHEGA-INDEX] fallback navigation also failed:', e2);
         }

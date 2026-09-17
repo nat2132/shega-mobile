@@ -23,6 +23,8 @@ export default function QrPairScanner({ visible, onClose, onPaired }: Props) {
 
   const handleBarcode = ({ data }: { data: string }) => {
     if (!scanning) return;
+    // Accept desktop QRs and mobile-hub QRs (the mobile POS Hub adds
+    // &platform=mobile, which the desktop scanner ignores but we tolerate).
     const m = /shega:\/\/pair\?url=([^&]+)&token=([^&]+)/.exec(data);
     if (!m) {
       showToast('Not a Shega pairing QR', 'error');

@@ -6,7 +6,7 @@ export default function FirstOnboardingRoute() {
   return (
     <OnboardingScreen
       onNext={() => {
-        router.push('/welcome-choice');
+        router.push('/setup-wizard');
       }}
     />
   );

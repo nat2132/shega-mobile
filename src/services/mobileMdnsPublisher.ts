@@ -9,11 +9,14 @@
  * with a `platform=mobile` TXT record to distinguish them.
  */
 
-import { Zeroconf } from 'react-native-zeroconf';
+// The library ships untyped JS (publishService/unpublishAll exist at runtime);
+// type as any so the real API surface is usable.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const ZeroconfCtor: any = require('react-native-zeroconf').Zeroconf;
 import { getDeviceId } from './syncService';
 import { getMobileSyncPort } from './mobileSyncServer';
 
-let zeroconf: Zeroconf | null = null;
+let zeroconf: any | null = null;
 let isPublishing = false;
 
 function getPairingToken(): string {
@@ -58,11 +61,11 @@ export function publishMobileHub(): void {
   if (isPublishing) return;
 
   try {
-    if (!Zeroconf) {
+    if (!ZeroconfCtor) {
       console.warn('[mDNS] Cannot publish mobile hub: react-native-zeroconf unavailable');
       return;
     }
-    zeroconf = new Zeroconf();
+    zeroconf = new ZeroconfCtor();
     const deviceId = getDeviceId();
     const port = getMobileSyncPort();
     const token = getPairingToken();

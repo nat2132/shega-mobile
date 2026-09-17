@@ -6,8 +6,6 @@ import { useSettings } from '@/context/SettingsContext';
 import { formatDate, formatTime } from '@/utils/date-utils';
 import { AppText } from '@/components/ui';
 import { getSettingsGlass } from './glass-settings';
-import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
-import { dateTimeTutorial } from '@/tutorials/definitions';
 
 const DateTimeSettings = () => {
   const { calendarType, setCalendarType, timeSystem, setTimeSystem, language, colors, t } = useSettings();
@@ -19,7 +17,6 @@ const DateTimeSettings = () => {
   const sample = new Date().toISOString();
   const devicePreview = formatTime(sample, 'device', language);
   const ethiopianPreview = formatTime(sample, 'ethiopian', language);
-  const tutorial = useTutorial({ tutorial: dateTimeTutorial });
 
   return (
     <View style={[styles.container, { backgroundColor: G.bg }]}>
@@ -27,14 +24,11 @@ const DateTimeSettings = () => {
         <View style={[styles.glowWash, { backgroundColor: G.mutedLight, top: -80, left: -60, width: 200, height: 200, borderRadius: 100 }]} />
         <View style={[styles.glowWash, { backgroundColor: G.mutedLight, bottom: -40, right: -30, width: 160, height: 160, borderRadius: 80 }]} />
       </View>
-      <TutorialTarget id="dt-header">
       <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.headerLabel, { color: G.fgSecondary }]} numberOfLines={2}>{t('settings.date_time')}</AppText>
       <AppText variant="display" weight="bold" style={[styles.mainTitle, { color: G.fg }]} numberOfLines={2}>{t('settings.date_time_format')}</AppText>
       <AppText variant="body-sm" weight="medium" style={[styles.subtitle, { color: G.fgSecondary }]} numberOfLines={3}>{t('settings.date_time_desc')}</AppText>
-      </TutorialTarget>
 
       {/* Calendar Section */}
-      <TutorialTarget id="dt-calendar">
       <AppText variant="body" weight="bold" style={[styles.sectionLabel, { color: G.fg }]} numberOfLines={1}>{t('settings.calendar')}</AppText>
 
       <TouchableOpacity
@@ -70,10 +64,8 @@ const DateTimeSettings = () => {
         </View>
         {calendarType === 'gregorian' ? <CheckCircle2 color={G.fg} size={24} /> : <View style={[styles.radioOutline, { borderColor: G.border }]} />}
       </TouchableOpacity>
-      </TutorialTarget>
 
       {/* Time Section */}
-      <TutorialTarget id="dt-time">
       <AppText variant="body" weight="bold" style={[styles.sectionLabel, { color: G.fg, marginTop: 28 }]} numberOfLines={1}>{t('settings.time_system')}</AppText>
 
       <TouchableOpacity
@@ -109,9 +101,7 @@ const DateTimeSettings = () => {
         </View>
         {timeSystem === 'ethiopian' ? <CheckCircle2 color={G.fg} size={24} /> : <View style={[styles.radioOutline, { borderColor: G.border }]} />}
       </TouchableOpacity>
-      </TutorialTarget>
 
-      <TutorialTarget id="dt-save-btn">
       <View style={[styles.infoBox, { backgroundColor: G.bgCard, borderColor: G.border }]}>
         <AppText variant="body-sm" weight="medium" style={[styles.infoText, { color: G.fgSecondary }]} numberOfLines={3}>
           {t('settings.currently_active')}{' '}
@@ -120,11 +110,9 @@ const DateTimeSettings = () => {
           </AppText>
         </AppText>
       </View>
-      </TutorialTarget>
 
       <AppText variant="caption" weight="medium" style={[styles.note, { color: G.fgSecondary, textAlign: 'center', marginTop: 10 }]} numberOfLines={2}>{t('settings.immediate_apply')}</AppText>
       <View style={{ position: 'absolute', top: 50, right: 20, zIndex: 100 }}>
-        <TutorialButton tutorialId="date-time-settings" screenName={t('settings.date_time')} />
       </View>
     </View>
   );

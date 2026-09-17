@@ -46,8 +46,6 @@ import { AppNumber, AppText} from '@/components/ui';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import ItemDetailsScreen from './item-details';
 import { getInventoryGlass } from './glass-inventory';
-import { useTutorial, TutorialTarget, TutorialButton } from '@/tutorials';
-import { inventoryRecordsTutorial } from '@/tutorials/definitions';
 const InventoryRecordScreen = () => {
   const router = useRouter();
   const { colors, t } = useSettings();
@@ -67,7 +65,6 @@ const InventoryRecordScreen = () => {
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const debouncedSearch = useDebounce(searchQuery, 250);
-  const tutorial = useTutorial({ tutorial: inventoryRecordsTutorial });
 
   const loadData = useCallback(() => {
     const options: any = {
@@ -116,7 +113,6 @@ const InventoryRecordScreen = () => {
       <View style={[styles.glowWash2, { backgroundColor: G.mutedLight }]} />
       <View style={[styles.glowWash3, { backgroundColor: G.mutedLight }]} />
       {/* Header */}
-      <TutorialTarget id="ir-header">
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <TouchableOpacity 
@@ -129,11 +125,9 @@ const InventoryRecordScreen = () => {
             <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.headerSub, { color: G.fgSecondary }]} numberOfLines={1}>{t('inventory.header')}</AppText>
             <AppText variant="display" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2}>{t('inv.asset_vault')}</AppText>
           </View>
-          <TutorialButton tutorialId="inventory-records" screenName={t('screen.inventory_records')} />
         </View>
 
         {/* Summary + Warehouse Selector */}
-        <TutorialTarget id="ir-summary">
         <View style={styles.summaryRow}>
           <TouchableOpacity 
             style={[styles.summaryCard, { backgroundColor: G.bgCard, borderColor: G.border }]}
@@ -166,12 +160,9 @@ const InventoryRecordScreen = () => {
             </View>
           )}
         </View>
-        </TutorialTarget>
       </View>
-      </TutorialTarget>
 
       {/* Search & Filters */}
-      <TutorialTarget id="ir-filter">
       <View style={styles.filterSection}>
         <View style={[styles.searchBox, { backgroundColor: G.bgCard, borderColor: G.border }]}>
           <Search size={16} color={G.fgSecondary} />
@@ -212,10 +203,8 @@ const InventoryRecordScreen = () => {
           </View>
         </ScrollView>
       </View>
-      </TutorialTarget>
 
       {/* Inventory List */}
-      <TutorialTarget id="ir-list">
       {isLoading ? (
         <SkeletonList count={6} showAvatar style={styles.listContent} />
       ) : (
@@ -238,7 +227,6 @@ const InventoryRecordScreen = () => {
           }
         />
       )}
-      </TutorialTarget>
 
       {/* Item Details Modal */}
       <Modal visible={!!selectedItem} transparent animationType="slide">

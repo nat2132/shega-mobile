@@ -1,107 +1,349 @@
-import React, { useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+/**
+ * Premium first-launch onboarding for Shega Mobile.
+ *
+ * Flow: Welcome → Business name (+logo) → Business type → Location →
+ *       Owner account → Calendar → First product (optional) → Tax →
+ *       Warehouses → Payments → Review → POS.
+ *
+ * Principles: minimal fields, everything optional is skippable, progress is
+ * saved locally (SecureStore) so an interrupted setup resumes at the exact
+ * stage, and the business/user/device is created exactly once (idempotent
+ * guard) — never duplicated on resume.
+ */
+
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import * as Haptics from 'expo-haptics';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
-import { Building2, ChevronRight, Clock, Store, UserPlus, Users } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import {
+  ArrowRight, Building2, CalendarDays, Camera, Check, ChevronRight,
+  CreditCard, Fingerprint, ImagePlus, MapPin, Package,
+  Receipt, Store, User, Warehouse,
+} from 'lucide-react-native';
 
 import { AppText } from '@/components/ui';
 import { useSettings } from '@/context/SettingsContext';
-import { createBusiness, getBusinesses, getThisDeviceId } from '@/services/businessService';
+import { useAuth } from '@/context/AuthContext';
+import {
+  addLocation, createBusiness, getBusinesses, getLocations,
+  getOwnerOfBusiness, setBusinessLogo, setCurrentUserId, setUserPin,
+  getThisDeviceId,
+} from '@/services/businessService';
+import { storePinHash } from '@/services/crypto';
+import { isBiometricsAvailable, setBiometricsEnabled } from '@/services/biometrics';
+import { saveSaleTaxConfig } from '@/services/taxService';
+import { getDB, insertItem, setFeatureFlag } from '@/database/db';
 
-/**
- * Progressive first-time setup for owners (spec §9/§10):
- * Account (done before this screen) → Create Business → Add Team (optional)
- * → Add Another Business (optional) → Dashboard. Every optional step can be
- * skipped; only Account → Business → Dashboard is required.
- */
+type Stage =
+  | 'welcome' | 'name' | 'type' | 'location' | 'owner' | 'calendar'
+  | 'product' | 'tax' | 'warehouse' | 'payments' | 'review' | 'done';
 
-type Stage = 'welcome' | 'business' | 'team' | 'another' | 'done';
+const STAGE_ORDER: Stage[] = [
+  'welcome', 'name', 'type', 'location', 'owner', 'calendar',
+  'product', 'tax', 'warehouse', 'payments', 'review', 'done',
+];
 
-const markDone = (key: string) => {
-  SecureStore.setItemAsync(key, 'true').catch(() => {});
-};
+const WIZARD_STATE_KEY = 'setup_wizard_state';
+
+const BUSINESS_TYPES = [
+  { id: 'retail', label: 'Retail', emoji: '🛍️' },
+  { id: 'grocery', label: 'Grocery', emoji: '🥬' },
+  { id: 'pharmacy', label: 'Pharmacy', emoji: '💊' },
+  { id: 'wholesale', label: 'Wholesale', emoji: '📦' },
+  { id: 'distributor', label: 'Distributor', emoji: '🚚' },
+  { id: 'electronics', label: 'Electronics', emoji: '🔌' },
+  { id: 'clothing', label: 'Clothing', emoji: '👕' },
+  { id: 'restaurant', label: 'Restaurant', emoji: '🍽️' },
+  { id: 'other', label: 'Other', emoji: '🏪' },
+];
+
+const PAYMENT_OPTIONS = [
+  { id: 'cash', label: 'Physical Cash', sub: 'Bills and coins' },
+  { id: 'mobile', label: 'Mobile Money', sub: 'Telebirr, M-Pesa…' },
+  { id: 'both', label: 'Both', sub: 'Cash + Mobile Money' },
+];
+
+const COUNTRIES = ['Ethiopia', 'Kenya', 'Other'] as const;
+
+const markDone = (key: string) => { SecureStore.setItemAsync(key, 'true').catch(() => {}); };
 
 export default function SetupWizardScreen() {
-  const { colors } = useSettings();
-  const G = useMemo(
-    () => ({
-      bg: colors.background,
-      fg: colors.text,
-      muted: colors.textSecondary,
-      card: colors.card,
-      border: colors.border,
-      accent: colors.primary,
-    }),
-    [colors],
-  );
+  const { colors, calendarType, setCalendarType } = useSettings();
+  const { authenticate } = useAuth();
+  const G = useMemo(() => ({
+    bg: colors.background, fg: colors.text, muted: colors.textSecondary,
+    card: colors.card, border: colors.border, accent: colors.primary,
+  }), [colors]);
 
   const [stage, setStage] = useState<Stage>('welcome');
   const [businessName, setBusinessName] = useState('');
+  const [logoUri, setLogoUri] = useState<string | null>(null);
+  const [businessType, setBusinessType] = useState<string | null>(null);
+  const [country, setCountry] = useState<string>('Ethiopia');
+  const [countryCustom, setCountryCustom] = useState(false);
+  const [city, setCity] = useState('');
+  const [address, setAddress] = useState('');
   const [ownerName, setOwnerName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [useBiometrics, setUseBiometrics] = useState(false);
+  const [biometricsAvailable, setBiometricsAvailable] = useState(false);
+  const [productName, setProductName] = useState('');
+  const [productPrice, setProductPrice] = useState('');
+  const [productQty, setProductQty] = useState('1');
+  const [productUnit, setProductUnit] = useState('pcs');
+  const [taxEnabled, setTaxEnabled] = useState(false);
+  const [taxRate, setTaxRate] = useState('15');
+  const [warehouses, setWarehouses] = useState<boolean | null>(false);
+  const [payments, setPayments] = useState<string>('both');
+  const [receipts, setReceipts] = useState<boolean>(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [createdCount, setCreatedCount] = useState(0);
+  const [productsAdded, setProductsAdded] = useState(0);
+  const [bizId, setBizId] = useState<string | null>(null);
+  const doneRef = useRef(false);
+
+  /** Idempotent progress persistence — interrupted setup resumes where it left off. */
+  const persistProgress = (nextStage: Stage, overrides?: Record<string, unknown>) => {
+    if (doneRef.current) return;
+    const snapshot = {
+      stage: nextStage,
+      businessName, logoUri, businessType, country, countryCustom, city, address,
+      ownerName, phone, email,
+      useBiometrics,
+      productName, productPrice, productQty, productUnit,
+      taxEnabled, taxRate, warehouses, payments, receipts,
+      productsAdded, bizId,
+      ...overrides,
+    };
+    SecureStore.setItemAsync(WIZARD_STATE_KEY, JSON.stringify(snapshot)).catch(() => {});
+  };
+
+  const go = (next: Stage) => { setStage(next); persistProgress(next); };
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const raw = await SecureStore.getItemAsync(WIZARD_STATE_KEY);
+      const done = await SecureStore.getItemAsync('setup_wizard_done');
+      if (cancelled) return;
+      if (raw && done !== 'true') {
+        try {
+          const s = JSON.parse(raw);
+          if (s.stage && STAGE_ORDER.includes(s.stage) && s.stage !== 'done') {
+            setStage(s.stage);
+            if (typeof s.businessName === 'string') setBusinessName(s.businessName);
+            if (typeof s.logoUri === 'string' && s.logoUri) setLogoUri(s.logoUri);
+            if (typeof s.businessType === 'string' && s.businessType) setBusinessType(s.businessType);
+            if (typeof s.country === 'string') setCountry(s.country);
+            if (typeof s.countryCustom === 'boolean') setCountryCustom(s.countryCustom);
+            if (typeof s.city === 'string') setCity(s.city);
+            if (typeof s.address === 'string') setAddress(s.address);
+            if (typeof s.ownerName === 'string') setOwnerName(s.ownerName);
+            if (typeof s.phone === 'string') setPhone(s.phone);
+            if (typeof s.email === 'string') setEmail(s.email);
+            if (typeof s.useBiometrics === 'boolean') setUseBiometrics(s.useBiometrics);
+            if (typeof s.productName === 'string') setProductName(s.productName);
+            if (typeof s.productPrice === 'string') setProductPrice(s.productPrice);
+            if (typeof s.productQty === 'string') setProductQty(s.productQty);
+            if (typeof s.productUnit === 'string') setProductUnit(s.productUnit);
+            if (typeof s.taxEnabled === 'boolean') setTaxEnabled(s.taxEnabled);
+            if (typeof s.taxRate === 'string') setTaxRate(s.taxRate);
+            if (typeof s.warehouses === 'boolean') setWarehouses(s.warehouses);
+            if (typeof s.payments === 'string') setPayments(s.payments);
+            if (typeof s.receipts === 'boolean') setReceipts(s.receipts);
+            if (typeof s.productsAdded === 'number') setProductsAdded(s.productsAdded);
+            if (typeof s.bizId === 'string' && s.bizId) setBizId(s.bizId);
+          }
+        } catch { /* corrupted state — start fresh */ }
+      }
+    })();
+    isBiometricsAvailable().then(setBiometricsAvailable).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const hasBusiness = getBusinesses().length > 0;
 
+  /** Idempotent business creation — safe to resume after an interrupted setup. */
   const createNow = async () => {
+    if (bizId) return bizId; // already created (resumed setup) — never duplicate
+    if (hasBusiness) {
+      const existing = getBusinesses()[0];
+      setBizId(existing.id);
+      return existing.id;
+    }
     if (!businessName.trim() || !ownerName.trim()) {
       setError('Enter the business name and your name');
-      return;
+      return null;
     }
-    setSaving(true);
-    setError('');
+    setSaving(true); setError('');
     try {
-      createBusiness(
-        { name: businessName.trim(), ownerName: ownerName.trim() },
+      const biz = createBusiness(
+        {
+          name: businessName.trim(),
+          ownerName: ownerName.trim(),
+          phone: phone.trim() || undefined,
+          email: email.trim() || undefined,
+        },
         getThisDeviceId() ?? `dev-${Date.now().toString(36)}`,
       );
+      setBizId(biz.id);
+      // Owner identity must be known before any owner-only writes (e.g. logo).
+      const owner = getOwnerOfBusiness(biz.id);
+      if (owner) setCurrentUserId(owner.id);
       markDone('setup_business_created');
-      setCreatedCount((c) => c + 1);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setBusinessName('');
-      setOwnerName('');
-      setStage('team');
+      return biz.id;
     } catch (e: any) {
       setError(e?.message || 'Could not create the business');
+      return null;
     } finally {
       setSaving(false);
     }
   };
 
-  const finish = (route: '/(tabs)/dashboard' | '/teams' = '/(tabs)/dashboard') => {
-    markDone('setup_wizard_done');
-    router.replace(route as any);
+  const pickLogo = async (mode: 'camera' | 'library') => {
+    try {
+      if (mode === 'camera') {
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (!perm.granted) { setError('Camera permission is needed to take a photo.'); return; }
+      } else {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) { setError('Photo access is needed to choose a logo.'); return; }
+      }
+      const options = {
+        mediaTypes: ['images'] as const,
+        allowsEditing: true,
+        aspect: [1, 1] as [number, number],
+        quality: 0.6,
+      };
+      const result = mode === 'camera'
+        ? await ImagePicker.launchCameraAsync(options as any)
+        : await ImagePicker.launchImageLibraryAsync(options as any);
+      if (result.canceled || !result.assets?.length) return;
+      setLogoUri(result.assets[0].uri);
+      setError('');
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {
+      setError('Could not access the photo.');
+    }
   };
 
-  const PrimaryButton = ({ label, onPress, icon }: { label: string; onPress: () => void; icon?: React.ReactNode }) => (
+  const addFirstProduct = async () => {
+    if (!bizId) { setError('Finish the owner account first.'); return; }
+    if (!productName.trim() || !productPrice.trim()) {
+      setError('Enter at least the product name and price');
+      return;
+    }
+    try {
+      const db = getDB();
+      const cat = db.getFirstSync(
+        "SELECT id FROM categories WHERE businessId = ? LIMIT 1", [bizId]
+      ) as any;
+      let catId = cat?.id;
+      if (!catId) {
+        const r = db.runSync(
+          'INSERT INTO categories (name, businessId, uuid) VALUES (?, ?, ?)',
+          ['General', bizId, `${bizId}-general`]
+        );
+        catId = Number(r.lastInsertRowId);
+      }
+      insertItem({
+        name: productName.trim(),
+        categoryId: Number(catId),
+        companyName: '',
+        purchaseUnit: productUnit,
+        baseUnit: productUnit,
+        unitsPerPack: 0,
+        totalPackQuantity: 0,
+        totalBaseQuantity: Number(productQty) || 1,
+        packPurchasePrice: 0,
+        basePurchasePrice: 0,
+        baseSellingPrice: Number(productPrice) || 0,
+        packSellingPrice: 0,
+        allowSellByBaseUnit: true,
+        allowSellByPackUnit: false,
+      } as any);
+      setProductsAdded((c) => c + 1);
+      setProductName(''); setProductPrice(''); setProductQty('1');
+      setError('');
+      persistProgress(stage, { productsAdded: productsAdded + 1, productName: '', productPrice: '', productQty: '1' });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) {
+      setError(e?.message || 'Could not add the product');
+    }
+  };
+
+  const finish = async () => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    const id = bizId;
+    const locationText = [address.trim(), city.trim(), country.trim()].filter(Boolean).join(', ');
+
+    // Business profile: logo + location address (rides the sync outbox).
+    if (id) {
+      if (logoUri) setBusinessLogo(id, logoUri);
+      if (locationText) {
+        try {
+          const db = getDB();
+          db.runSync(
+            'UPDATE businesses SET address = ?, updated_at = ?, row_version = row_version + 1, is_synced = 0 WHERE id = ?',
+            [locationText, new Date().toISOString(), id]
+          );
+          if (getLocations(id).length === 0) {
+            addLocation(id, 'Main Location', locationText);
+          }
+        } catch { /* best-effort */ }
+      }
+    }
+
+    // Preferences that determine which features appear after onboarding.
+    setFeatureFlag('warehouses', warehouses !== false);
+
+    // Tax: apply the chosen per-sale VAT config (or leave tax disabled).
+    saveSaleTaxConfig({ taxType: taxEnabled ? 'VAT' : 'None', taxRate: taxRate || '15' });
+
+    // Biometrics unlock — only when the user opted in and hardware supports it.
+    if (useBiometrics) setBiometricsEnabled(true).catch(() => {});
+
+    markDone('setup_wizard_done');
+    SecureStore.setItemAsync('shega_payments_mode', payments).catch(() => {});
+    SecureStore.setItemAsync('shega_receipts_enabled', receipts ? 'true' : 'false').catch(() => {});
+    if (businessType) SecureStore.setItemAsync('shega_business_type', businessType).catch(() => {});
+    if (password.trim() && id) {
+      const owner = getOwnerOfBusiness(id);
+      if (owner) setUserPin(owner.id, password.trim());
+      try { await storePinHash(password.trim()); } catch { /* device PIN is best-effort */ }
+    }
+    SecureStore.deleteItemAsync(WIZARD_STATE_KEY).catch(() => {});
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    authenticate();
+    router.replace('/(tabs)/dashboard' as any);
+  };
+
+  const PrimaryButton = ({ label, onPress, icon, disabled }: { label: string; onPress: () => void; icon?: React.ReactNode; disabled?: boolean }) => (
     <TouchableOpacity
       activeOpacity={0.85}
-      onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        onPress();
-      }}
-      style={[styles.primaryBtn, { backgroundColor: G.fg }]}
+      disabled={disabled}
+      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onPress(); }}
+      style={[styles.primaryBtn, { backgroundColor: G.fg, opacity: disabled ? 0.5 : 1 }]}
     >
       {icon}
       <AppText variant="body" weight="bold" style={{ color: G.bg }}>{label}</AppText>
-      <ChevronRight size={16} color={G.bg} />
     </TouchableOpacity>
   );
 
   const GhostButton = ({ label, onPress }: { label: string; onPress: () => void }) => (
     <TouchableOpacity
       activeOpacity={0.85}
-      onPress={() => {
-        Haptics.selectionAsync();
-        onPress();
-      }}
+      onPress={() => { Haptics.selectionAsync(); onPress(); }}
       style={[styles.ghostBtn, { backgroundColor: G.card, borderColor: G.border }]}
     >
-      <Clock size={15} color={G.muted} />
       <AppText variant="body" weight="bold" style={{ color: G.muted }}>{label}</AppText>
     </TouchableOpacity>
   );
@@ -114,153 +356,511 @@ export default function SetupWizardScreen() {
     </View>
   );
 
+  const Input = ({ placeholder, value, onChange, keyboard, secure, multiline }: { placeholder: string; value: string; onChange: (v: string) => void; keyboard?: any; secure?: boolean; multiline?: boolean }) => (
+    <TextInput
+      style={[styles.input, { borderColor: G.border, color: G.fg, backgroundColor: G.card }]}
+      placeholder={placeholder}
+      placeholderTextColor={G.muted}
+      value={value}
+      onChangeText={(v) => { onChange(v); setError(''); }}
+      keyboardType={keyboard}
+      autoCapitalize={keyboard === 'numeric-address' ? 'none' : 'words'}
+      secureTextEntry={secure}
+      multiline={multiline}
+    />
+  );
+
+  const ChoiceRow = ({ selected, onPress, icon, title, sub, rightLabel }: {
+    selected?: boolean; onPress: () => void; icon?: React.ReactNode; title: string;
+    sub?: string; rightLabel?: string;
+  }) => (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onPress={() => { Haptics.selectionAsync(); onPress(); }}
+      style={[styles.choiceRow, { backgroundColor: G.card, borderColor: selected ? G.accent : G.border }]}
+    >
+      {icon}
+      <View style={{ flex: 1, marginLeft: icon ? 10 : 0 }}>
+        <AppText variant="body" weight="bold" style={{ color: G.fg }}>{title}</AppText>
+        {!!sub && <AppText variant="caption" style={{ color: G.muted }}>{sub}</AppText>}
+      </View>
+      {selected && <Check size={18} color={G.accent} />}
+      {rightLabel && !selected && <AppText variant="caption" weight="bold" style={{ color: G.muted }}>{rightLabel}</AppText>}
+    </TouchableOpacity>
+  );
+
+  const locationText = [address.trim(), city.trim(), country.trim()].filter(Boolean).join(', ') || '—';
+  const taxLabel = taxEnabled ? `VAT ${taxRate || '15'}%` : 'Not set — add later';
+  const warehouseLabel = warehouses === true ? 'Yes' : warehouses === false ? 'No' : '—';
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: G.bg }]} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets={true}>
+
+          {/* ── Welcome ── */}
           {stage === 'welcome' && (
             <Animated.View entering={FadeInDown.duration(350)} style={styles.stage}>
               <View style={[styles.iconCircle, { backgroundColor: G.card, borderColor: G.border }]}>
-                <SparklesIcon color={G.accent} />
+                <Store size={28} color={G.accent} />
               </View>
               <AppText variant="display" weight="bold" align="center" style={{ color: G.fg }}>
-                Welcome to Shega!
+                Welcome to Shega
               </AppText>
               <AppText variant="body" weight="medium" align="center" style={{ color: G.muted, marginTop: 10 }}>
-                Your account is ready. Let's set up your business in a few quick steps — it takes less than a minute.
+                Your simple, powerful business management system. Let's get you selling in a few minutes.
               </AppText>
-              <View style={{ marginTop: 28 }}>
-                <PrimaryButton label="Get Started" onPress={() => setStage('business')} icon={<Store size={17} color={G.bg} />} />
+              <View style={{ marginTop: 32 }}>
+                <PrimaryButton label="Create a New Business" onPress={() => go('name')} icon={<ArrowRight size={17} color={G.bg} />} />
+                <View style={{ marginTop: 12 }}>
+                  <GhostButton label="Join an Existing Business" onPress={() => router.replace('/join-existing' as any)} />
+                </View>
+                <View style={{ marginTop: 12 }}>
+                  <GhostButton label="Already have an account? Sign in" onPress={() => router.replace('/user-signin' as any)} />
+                </View>
               </View>
-              <StepBadge step={0} total={3} />
             </Animated.View>
           )}
 
-          {stage === 'business' && (
+          {/* ── Business name + logo ── */}
+          {stage === 'name' && (
             <Animated.View entering={FadeInDown.duration(350)} style={styles.stage}>
               <View style={[styles.iconCircle, { backgroundColor: G.card, borderColor: G.border }]}>
                 <Building2 size={26} color={G.accent} />
               </View>
               <AppText variant="display" weight="bold" align="center" style={{ color: G.fg }}>
-                {createdCount > 0 ? 'Add another business' : 'Create your business'}
+                Your business name
               </AppText>
               <AppText variant="body" weight="medium" align="center" style={{ color: G.muted, marginTop: 10 }}>
-                {createdCount > 0
-                  ? 'Give this business a name — you can switch between businesses anytime.'
-                  : 'Name your business and we\'ll make you the owner.'}
+                You can change it later in Settings.
               </AppText>
-              <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, marginTop: 24, marginBottom: 6 }}>
-                Business name
-              </AppText>
-              <TextInput
-                style={[styles.input, { borderColor: G.border, color: G.fg, backgroundColor: G.card }]}
-                placeholder="e.g. Shega Coffee Shop"
-                placeholderTextColor={G.muted}
-                value={businessName}
-                onChangeText={(v) => { setBusinessName(v); setError(''); }}
-                autoCapitalize="words"
-              />
-              <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, marginTop: 14, marginBottom: 6 }}>
-                Your name
-              </AppText>
-              <TextInput
-                style={[styles.input, { borderColor: G.border, color: G.fg, backgroundColor: G.card }]}
-                placeholder="e.g. Abebe Kebede"
-                placeholderTextColor={G.muted}
-                value={ownerName}
-                onChangeText={(v) => { setOwnerName(v); setError(''); }}
-                autoCapitalize="words"
-              />
-              {!!error && (
-                <AppText variant="caption" weight="bold" style={{ color: '#e74c3c', marginTop: 8 }}>{error}</AppText>
-              )}
-              <View style={{ marginTop: 24 }}>
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  disabled={saving}
-                  onPress={createNow}
-                  style={[styles.primaryBtn, { backgroundColor: G.fg, opacity: saving ? 0.6 : 1 }]}
-                >
-                  <Store size={17} color={G.bg} />
-                  <AppText variant="body" weight="bold" style={{ color: G.bg }}>
-                    {saving ? 'Creating…' : 'Create Business'}
-                  </AppText>
-                  <ChevronRight size={16} color={G.bg} />
-                </TouchableOpacity>
+              <View style={{ marginTop: 20 }}>
+                <Input placeholder="e.g. Natoli Electronics" value={businessName} onChange={setBusinessName} />
               </View>
-              {(hasBusiness || createdCount > 0) && (
-                <View style={{ marginTop: 12 }}>
-                  <GhostButton label="Skip for now" onPress={() => setStage('team')} />
+
+              <View style={{ alignItems: 'center', marginTop: 18 }}>
+                <View style={[styles.logoPreview, { backgroundColor: G.card, borderColor: G.border }]}>
+                  {logoUri ? (
+                    <Image source={{ uri: logoUri }} style={styles.logoImage} />
+                  ) : (
+                    <AppText style={{ fontSize: 30 }}>🪪</AppText>
+                  )}
                 </View>
-              )}
-              <StepBadge step={1} total={3} />
+                <AppText variant="caption" weight="medium" style={{ color: G.muted, marginTop: 8 }}>
+                  Optional business logo
+                </AppText>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+                  <TouchableOpacity
+                    onPress={() => { Haptics.selectionAsync(); pickLogo('camera'); }}
+                    style={[styles.logoBtn, { backgroundColor: G.card, borderColor: G.border }]}
+                  >
+                    <Camera size={15} color={G.fg} />
+                    <AppText variant="caption" weight="bold" style={{ color: G.fg, marginLeft: 5 }}>Take photo</AppText>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => { Haptics.selectionAsync(); pickLogo('library'); }}
+                    style={[styles.logoBtn, { backgroundColor: G.card, borderColor: G.border }]}
+                  >
+                    <ImagePlus size={15} color={G.fg} />
+                    <AppText variant="caption" weight="bold" style={{ color: G.fg, marginLeft: 5 }}>Choose image</AppText>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => { Haptics.selectionAsync(); setLogoUri(null); }}
+                    style={[styles.logoBtn, { backgroundColor: G.card, borderColor: G.border }]}
+                  >
+                    <AppText variant="caption" weight="bold" style={{ color: G.muted }}>Skip</AppText>
+                  </TouchableOpacity>
+                </View>
+                {!!error && <AppText variant="caption" weight="bold" style={{ color: '#e74c3c', marginTop: 8 }}>{error}</AppText>}
+              </View>
+
+              <View style={{ marginTop: 22 }}>
+                <PrimaryButton label="Continue" onPress={() => businessName.trim() && go('type')} icon={<ChevronRight size={17} color={G.bg} />} disabled={!businessName.trim()} />
+                <View style={{ marginTop: 12 }}>
+                  <GhostButton label="Back" onPress={() => go('welcome')} />
+                </View>
+              </View>
+              <StepBadge step={1} total={9} />
             </Animated.View>
           )}
 
-          {stage === 'team' && (
+          {/* ── Business type ── */}
+          {stage === 'type' && (
             <Animated.View entering={FadeInDown.duration(350)} style={styles.stage}>
-              <View style={[styles.iconCircle, { backgroundColor: G.card, borderColor: G.border }]}>
-                <Users size={26} color={G.accent} />
-              </View>
               <AppText variant="display" weight="bold" align="center" style={{ color: G.fg }}>
-                Add your team
+                What type of business do you run?
               </AppText>
               <AppText variant="body" weight="medium" align="center" style={{ color: G.muted, marginTop: 10 }}>
-                Invite cashiers and staff with a QR code. They join by scanning — you approve and assign their role.
+                This helps us tailor the experience. Optional.
               </AppText>
-              <View style={{ marginTop: 28 }}>
-                <PrimaryButton
-                  label="Add Users Now"
-                  onPress={() => {
-                    markDone('setup_wizard_done');
-                    router.replace('/teams' as any);
-                  }}
-                  icon={<UserPlus size={17} color={G.bg} />}
+              <View style={styles.typeGrid}>
+                {BUSINESS_TYPES.map((t) => (
+                  <TouchableOpacity
+                    key={t.id}
+                    activeOpacity={0.8}
+                    onPress={() => { Haptics.selectionAsync(); setBusinessType(t.id); }}
+                    style={[styles.typeCard, { backgroundColor: businessType === t.id ? G.accent + '18' : G.card, borderColor: businessType === t.id ? G.accent : G.border }]}
+                  >
+                    <AppText style={{ fontSize: 22 }}>{t.emoji}</AppText>
+                    <AppText variant="caption" weight="bold" style={{ color: G.fg, marginTop: 4 }}>{t.label}</AppText>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={{ marginTop: 24 }}>
+                <PrimaryButton label="Continue" onPress={() => go('location')} icon={<ChevronRight size={17} color={G.bg} />} />
+                <View style={{ marginTop: 12 }}>
+                  <GhostButton label="Skip" onPress={() => { setBusinessType(null); go('location'); }} />
+                </View>
+              </View>
+              <StepBadge step={2} total={9} />
+            </Animated.View>
+          )}
+
+          {/* ── Location ── */}
+          {stage === 'location' && (
+            <Animated.View entering={FadeInDown.duration(350)} style={styles.stage}>
+              <View style={[styles.iconCircle, { backgroundColor: G.card, borderColor: G.border }]}>
+                <MapPin size={26} color={G.accent} />
+              </View>
+              <AppText variant="display" weight="bold" align="center" style={{ color: G.fg }}>
+                Where is your business?
+              </AppText>
+              <AppText variant="body" weight="medium" align="center" style={{ color: G.muted, marginTop: 10 }}>
+                Used on receipts and reports. No location tracking is used.
+              </AppText>
+              <View style={{ marginTop: 18 }}>
+                <AppText variant="caption" weight="bold" style={{ color: G.muted, marginBottom: 6 }}>Country</AppText>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {COUNTRIES.map((c) => (
+                    <TouchableOpacity
+                      key={c}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        if (c === 'Other') { setCountryCustom(true); setCountry(''); }
+                        else { setCountryCustom(false); setCountry(c); }
+                      }}
+                      style={[styles.chip, {
+                        backgroundColor: (c === 'Other' ? countryCustom : !countryCustom && country === c) ? G.accent + '18' : G.card,
+                        borderColor: (c === 'Other' ? countryCustom : !countryCustom && country === c) ? G.accent : G.border,
+                      }]}
+                    >
+                      <AppText variant="caption" weight="bold" style={{ color: G.fg }}>{c}</AppText>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                {countryCustom && (
+                  <View style={{ marginTop: 10 }}>
+                    <Input placeholder="Country" value={country} onChange={setCountry} />
+                  </View>
+                )}
+                <View style={{ marginTop: 12 }}>
+                  <Input placeholder="City (e.g. Addis Ababa)" value={city} onChange={setCity} />
+                </View>
+                <View style={{ marginTop: 10 }}>
+                  <Input placeholder="Address (optional)" value={address} onChange={setAddress} />
+                </View>
+              </View>
+              <View style={{ marginTop: 24 }}>
+                <PrimaryButton label="Continue" onPress={() => go('owner')} icon={<ChevronRight size={17} color={G.bg} />} />
+                <View style={{ marginTop: 12 }}>
+                  <GhostButton label="Back" onPress={() => go('type')} />
+                </View>
+              </View>
+              <StepBadge step={3} total={9} />
+            </Animated.View>
+          )}
+
+          {/* ── Owner account ── */}
+          {stage === 'owner' && (
+            <Animated.View entering={FadeInDown.duration(350)} style={styles.stage}>
+              <View style={[styles.iconCircle, { backgroundColor: G.card, borderColor: G.border }]}>
+                <User size={26} color={G.accent} />
+              </View>
+              <AppText variant="display" weight="bold" align="center" style={{ color: G.fg }}>
+                Owner account
+              </AppText>
+              <AppText variant="body" weight="medium" align="center" style={{ color: G.muted, marginTop: 10 }}>
+                You'll be the Owner with full access. Email, security PIN and biometrics are optional.
+              </AppText>
+              <View style={{ marginTop: 20 }}>
+                <Input placeholder="Your name (e.g. Abebe Kebede)" value={ownerName} onChange={setOwnerName} />
+                <View style={{ marginTop: 10 }}>
+                  <Input placeholder="Phone number (optional)" value={phone} onChange={setPhone} keyboard="phone-pad" />
+                </View>
+                <View style={{ marginTop: 10 }}>
+                  <Input placeholder="Email (optional)" value={email} onChange={setEmail} keyboard="email-address" />
+                </View>
+                <View style={{ marginTop: 10 }}>
+                  <Input placeholder="Security PIN (4 digits, optional)" value={password} onChange={(v) => setPassword(v.replace(/\D/g, '').slice(0, 4))} keyboard="number-pad" secure />
+                </View>
+                {biometricsAvailable && (
+                  <View style={{ marginTop: 12 }}>
+                    <ChoiceRow
+                      selected={useBiometrics}
+                      onPress={() => setUseBiometrics((v) => !v)}
+                      icon={<Fingerprint size={18} color={G.fg} />}
+                      title="Enable biometrics to unlock"
+                      sub="Fingerprint or Face ID instead of typing your PIN"
+                    />
+                  </View>
+                )}
+              </View>
+              {!!error && <AppText variant="caption" weight="bold" style={{ color: '#e74c3c', marginTop: 10 }}>{error}</AppText>}
+              <View style={{ marginTop: 24 }}>
+                <PrimaryButton label="Create Business" onPress={() => createNow().then((id) => id && go('calendar'))} icon={<Check size={17} color={G.bg} />} disabled={saving} />
+                <View style={{ marginTop: 12 }}>
+                  <GhostButton label="Back" onPress={() => go('location')} />
+                </View>
+              </View>
+              <StepBadge step={4} total={9} />
+            </Animated.View>
+          )}
+
+          {/* ── Calendar ── */}
+          {stage === 'calendar' && (
+            <Animated.View entering={FadeInDown.duration(350)} style={styles.stage}>
+              <View style={[styles.iconCircle, { backgroundColor: G.card, borderColor: G.border }]}>
+                <CalendarDays size={26} color={G.accent} />
+              </View>
+              <AppText variant="display" weight="bold" align="center" style={{ color: G.fg }}>
+                Date system
+              </AppText>
+              <AppText variant="body" weight="medium" align="center" style={{ color: G.muted, marginTop: 10 }}>
+                Choose your calendar. Currency is set to ETB — you can change it later in Settings.
+              </AppText>
+              <View style={{ marginTop: 24 }}>
+                {(['ethiopian', 'gregorian'] as const).map((c) => (
+                  <TouchableOpacity
+                    key={c}
+                    activeOpacity={0.85}
+                    onPress={() => { Haptics.selectionAsync(); setCalendarType(c); }}
+                    style={[styles.choiceRow, { backgroundColor: G.card, borderColor: calendarType === c ? G.accent : G.border }]}
+                  >
+                    <AppText variant="body" weight="bold" style={{ color: G.fg, flex: 1 }}>
+                      {c === 'ethiopian' ? 'Ethiopian Calendar' : 'Gregorian Calendar'}
+                    </AppText>
+                    {calendarType === c && <Check size={18} color={G.accent} />}
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={{ marginTop: 24 }}>
+                <PrimaryButton label="Continue" onPress={() => go('product')} icon={<ChevronRight size={17} color={G.bg} />} />
+                <View style={{ marginTop: 12 }}>
+                  <GhostButton label="Back" onPress={() => go('owner')} />
+                </View>
+              </View>
+              <StepBadge step={5} total={9} />
+            </Animated.View>
+          )}
+
+          {/* ── First product (optional) ── */}
+          {stage === 'product' && (
+            <Animated.View entering={FadeInDown.duration(350)} style={styles.stage}>
+              <View style={[styles.iconCircle, { backgroundColor: G.card, borderColor: G.border }]}>
+                <Package size={26} color={G.accent} />
+              </View>
+              <AppText variant="display" weight="bold" align="center" style={{ color: G.fg }}>
+                {productsAdded > 0 ? 'Add another product' : 'Add your first product?'}
+              </AppText>
+              <AppText variant="body" weight="medium" align="center" style={{ color: G.muted, marginTop: 10 }}>
+                {productsAdded > 0
+                  ? `${productsAdded} product${productsAdded > 1 ? 's' : ''} added so far.`
+                  : 'Just the basics — name, price and stock. You can add everything else later.'}
+              </AppText>
+              <View style={{ marginTop: 20 }}>
+                <Input placeholder="Product name (e.g. Coca-Cola 500ml)" value={productName} onChange={setProductName} />
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Input placeholder="Price (ETB)" value={productPrice} onChange={setProductPrice} keyboard="decimal-pad" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Input placeholder="Stock qty" value={productQty} onChange={setProductQty} keyboard="number-pad" />
+                  </View>
+                  <View style={{ width: 90 }}>
+                    <Input placeholder="Unit" value={productUnit} onChange={setProductUnit} />
+                  </View>
+                </View>
+              </View>
+              {!!error && <AppText variant="caption" weight="bold" style={{ color: '#e74c3c', marginTop: 10 }}>{error}</AppText>}
+              <View style={{ marginTop: 24 }}>
+                <PrimaryButton label="Add Product" onPress={addFirstProduct} icon={<Check size={17} color={G.bg} />} />
+                <View style={{ marginTop: 12 }}>
+                  <GhostButton label={productsAdded > 0 ? 'Done adding products' : "I'll Do It Later"} onPress={() => go('tax')} />
+                </View>
+              </View>
+              <StepBadge step={6} total={9} />
+            </Animated.View>
+          )}
+
+          {/* ── Tax (optional) ── */}
+          {stage === 'tax' && (
+            <Animated.View entering={FadeInDown.duration(350)} style={styles.stage}>
+              <View style={[styles.iconCircle, { backgroundColor: G.card, borderColor: G.border }]}>
+                <Receipt size={26} color={G.accent} />
+              </View>
+              <AppText variant="display" weight="bold" align="center" style={{ color: G.fg }}>
+                Do you charge tax on sales?
+              </AppText>
+              <AppText variant="body" weight="medium" align="center" style={{ color: G.muted, marginTop: 10 }}>
+                Optional. You can fully configure withholding and income tax later in Settings → Tax.
+              </AppText>
+              <View style={{ marginTop: 20 }}>
+                <ChoiceRow
+                  selected={taxEnabled}
+                  onPress={() => setTaxEnabled(true)}
+                  icon={<Check size={18} color={G.fg} />}
+                  title="Tax per sale"
+                  sub="VAT is added to every sale automatically"
+                />
+                {taxEnabled && (
+                  <View style={{ marginTop: 10 }}>
+                    <Input placeholder="VAT rate (%)" value={taxRate} onChange={setTaxRate} keyboard="decimal-pad" />
+                  </View>
+                )}
+                <View style={{ marginTop: 10 }}>
+                  <GhostButton label="Skip — I'll add tax later" onPress={() => { setTaxEnabled(false); go('warehouse'); }} />
+                </View>
+              </View>
+              <View style={{ marginTop: 24 }}>
+                <PrimaryButton label="Continue" onPress={() => go('warehouse')} icon={<ChevronRight size={17} color={G.bg} />} />
+                <View style={{ marginTop: 12 }}>
+                  <GhostButton label="Back" onPress={() => go('product')} />
+                </View>
+              </View>
+              <StepBadge step={7} total={9} />
+            </Animated.View>
+          )}
+
+          {/* ── Warehouses ── */}
+          {stage === 'warehouse' && (
+            <Animated.View entering={FadeInDown.duration(350)} style={styles.stage}>
+              <View style={[styles.iconCircle, { backgroundColor: G.card, borderColor: G.border }]}>
+                <Warehouse size={26} color={G.accent} />
+              </View>
+              <AppText variant="display" weight="bold" align="center" style={{ color: G.fg }}>
+                Do you manage stock from more than one location?
+              </AppText>
+              <AppText variant="body" weight="medium" align="center" style={{ color: G.muted, marginTop: 10 }}>
+                A single shop keeps things simple. You can enable this later in Settings.
+              </AppText>
+              <View style={{ marginTop: 20 }}>
+                <ChoiceRow
+                  selected={warehouses === true}
+                  onPress={() => setWarehouses(true)}
+                  icon={<Warehouse size={18} color={G.fg} />}
+                  title="Yes, multiple locations"
+                  sub="Track stock separately per warehouse"
+                />
+                <ChoiceRow
+                  selected={warehouses === false}
+                  onPress={() => setWarehouses(false)}
+                  icon={<Check size={18} color={G.fg} />}
+                  title="No, just one shop"
+                  sub="Inventory and sales stay simple"
                 />
               </View>
-              <View style={{ marginTop: 12 }}>
-                <GhostButton label="I'll Do This Later" onPress={() => setStage('another')} />
+              <View style={{ marginTop: 24 }}>
+                <PrimaryButton label="Continue" onPress={() => go('payments')} icon={<ChevronRight size={17} color={G.bg} />} />
+                <View style={{ marginTop: 12 }}>
+                  <GhostButton label="Back" onPress={() => go('tax')} />
+                </View>
               </View>
-              <StepBadge step={2} total={3} />
+              <StepBadge step={8} total={9} />
             </Animated.View>
           )}
 
-          {stage === 'another' && (
+          {/* ── Payments & receipts ── */}
+          {stage === 'payments' && (
             <Animated.View entering={FadeInDown.duration(350)} style={styles.stage}>
               <View style={[styles.iconCircle, { backgroundColor: G.card, borderColor: G.border }]}>
-                <Building2 size={26} color={G.accent} />
+                <CreditCard size={26} color={G.accent} />
               </View>
               <AppText variant="display" weight="bold" align="center" style={{ color: G.fg }}>
-                Do you have another business?
+                How will you take payments?
               </AppText>
               <AppText variant="body" weight="medium" align="center" style={{ color: G.muted, marginTop: 10 }}>
-                You can manage multiple businesses from this one account and switch between them anytime.
+                You can add more payment methods later.
               </AppText>
-              <View style={{ marginTop: 28 }}>
-                <PrimaryButton label="Add Another Business" onPress={() => setStage('business')} icon={<Building2 size={17} color={G.bg} />} />
+              <View style={{ marginTop: 20 }}>
+                {PAYMENT_OPTIONS.map((p) => (
+                  <ChoiceRow
+                    key={p.id}
+                    selected={payments === p.id}
+                    onPress={() => setPayments(p.id)}
+                    title={p.label}
+                    sub={p.sub}
+                  />
+                ))}
+                <ChoiceRow
+                  selected={receipts}
+                  onPress={() => setReceipts(!receipts)}
+                  icon={<Receipt size={18} color={G.fg} />}
+                  title="Print receipts"
+                  sub="Configure printers in Settings → POS Hardware"
+                  rightLabel={receipts ? 'Yes' : 'No'}
+                />
+                <View style={[styles.noteBox, { backgroundColor: G.card, borderColor: G.border }]}>
+                  <AppText variant="caption" weight="medium" style={{ color: G.muted }}>
+                    Customers and debts are optional — you can add your first customer later from the Customers tab.
+                  </AppText>
+                </View>
               </View>
-              <View style={{ marginTop: 12 }}>
-                <GhostButton label="Do This Later" onPress={() => setStage('done')} />
+              <View style={{ marginTop: 24 }}>
+                <PrimaryButton label="Continue" onPress={() => go('review')} icon={<ChevronRight size={17} color={G.bg} />} />
+                <View style={{ marginTop: 12 }}>
+                  <GhostButton label="Back" onPress={() => go('warehouse')} />
+                </View>
               </View>
-              <StepBadge step={2} total={3} />
+              <StepBadge step={9} total={9} />
             </Animated.View>
           )}
 
-          {stage === 'done' && (
-            <Animated.View entering={FadeInUp.duration(350)} style={styles.stage}>
-              <View style={[styles.iconCircle, { backgroundColor: G.card, borderColor: G.border }]}>
-                <SparklesIcon color={G.accent} />
-              </View>
+          {/* ── Review ── */}
+          {stage === 'review' && (
+            <Animated.View entering={FadeInDown.duration(350)} style={styles.stage}>
               <AppText variant="display" weight="bold" align="center" style={{ color: G.fg }}>
-                You're all set!
+                Your Shega setup
               </AppText>
-              <AppText variant="body" weight="medium" align="center" style={{ color: G.muted, marginTop: 10 }}>
-                You can add team members, more businesses, and fine-tune everything from Settings whenever you're ready.
+              <AppText variant="body" weight="medium" align="center" style={{ color: G.muted, marginTop: 6 }}>
+                Tap any row to change it.
               </AppText>
-              <View style={{ marginTop: 28 }}>
-                <PrimaryButton label="Go to Dashboard" onPress={() => finish()} icon={<Store size={17} color={G.bg} />} />
+              <View style={[styles.reviewCard, { backgroundColor: G.card, borderColor: G.border }]}>
+                {([
+                  ['Business', businessName || '—', 'name'],
+                  ['Logo', logoUri ? 'Added' : 'None', 'name'],
+                  ['Business type', BUSINESS_TYPES.find((t) => t.id === businessType)?.label || '—', 'type'],
+                  ['Location', locationText, 'location'],
+                  ['Owner', ownerName || '—', 'owner'],
+                  ['Email', email || '—', 'owner'],
+                  ['Currency', 'ETB', 'calendar'],
+                  ['Date system', calendarType === 'ethiopian' ? 'Ethiopian Calendar' : 'Gregorian Calendar', 'calendar'],
+                  ['Products', `${productsAdded} added`, 'product'],
+                  ['Tax', taxLabel, 'tax'],
+                  ['Warehouses', warehouseLabel, 'warehouse'],
+                  ['Payments', PAYMENT_OPTIONS.find((p) => p.id === payments)?.label ?? '—', 'payments'],
+                  ['Receipts', receipts ? 'Yes' : 'No', 'payments'],
+                  ['Customers', 'Add later', 'payments'],
+                ] as [string, string, Stage][]).map(([k, v, target]) => (
+                  <TouchableOpacity
+                    key={k}
+                    activeOpacity={0.7}
+                    onPress={() => { Haptics.selectionAsync(); go(target); }}
+                    style={styles.reviewRow}
+                  >
+                    <AppText variant="caption" style={{ color: G.muted }}>{k}</AppText>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 1 }}>
+                      <AppText variant="body" weight="bold" style={{ color: G.fg, marginRight: 4 }} numberOfLines={1}>{v}</AppText>
+                      <ChevronRight size={14} color={G.muted} />
+                    </View>
+                  </TouchableOpacity>
+                ))}
               </View>
-              <StepBadge step={3} total={3} />
+              <AppText variant="caption" align="center" style={{ color: G.muted, marginTop: 10 }}>
+                Everything can be changed later in Settings.
+              </AppText>
+              <View style={{ marginTop: 20 }}>
+                <PrimaryButton label="Start Using Shega" onPress={finish} icon={<Store size={17} color={G.bg} />} />
+              </View>
             </Animated.View>
           )}
         </ScrollView>
@@ -269,51 +869,57 @@ export default function SetupWizardScreen() {
   );
 }
 
-const SparklesIcon = ({ color }: { color: string }) => (
-  <Store size={26} color={color} />
-);
-
 const styles = StyleSheet.create({
   container: { flex: 1 },
   flex: { flex: 1 },
-  scroll: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 28, paddingVertical: 24 },
-  stage: { alignItems: 'center' },
+  scroll: { flexGrow: 1, justifyContent: 'center', padding: 28, paddingBottom: 48 },
+  stage: { alignItems: 'stretch' },
   iconCircle: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    marginBottom: 20,
+    width: 60, height: 60, borderRadius: 18, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginBottom: 18,
   },
   input: {
-    width: '100%',
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    fontSize: 15,
+    borderWidth: 1, borderRadius: 14, paddingVertical: 13, paddingHorizontal: 15,
+    fontFamily: 'Inter_600SemiBold', fontSize: 15,
   },
   primaryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    width: '100%',
-    paddingVertical: 15,
-    borderRadius: 999,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 15, borderRadius: 999, gap: 8,
   },
   ghostBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    width: '100%',
-    paddingVertical: 14,
-    borderRadius: 999,
-    borderWidth: 1,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 14, borderRadius: 999, borderWidth: 1,
   },
-  stepRow: { flexDirection: 'row', gap: 6, marginTop: 32 },
+  stepRow: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 26 },
   stepDot: { width: 22, height: 4, borderRadius: 2 },
+  typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 20, justifyContent: 'center' },
+  typeCard: {
+    width: '30%', borderRadius: 16, borderWidth: 1, alignItems: 'center',
+    paddingVertical: 12, minWidth: 96,
+  },
+  choiceRow: {
+    flexDirection: 'row', alignItems: 'center', borderRadius: 16, borderWidth: 1,
+    paddingVertical: 14, paddingHorizontal: 16, marginBottom: 10,
+  },
+  chip: {
+    borderRadius: 999, borderWidth: 1, paddingVertical: 8, paddingHorizontal: 16,
+  },
+  logoPreview: {
+    width: 84, height: 84, borderRadius: 42, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+  },
+  logoImage: { width: 84, height: 84, borderRadius: 42 },
+  logoBtn: {
+    flexDirection: 'row', alignItems: 'center', borderRadius: 999,
+    paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1,
+  },
+  noteBox: {
+    borderRadius: 14, borderWidth: 1, paddingVertical: 10, paddingHorizontal: 14, marginTop: 4,
+  },
+  reviewCard: { borderRadius: 20, borderWidth: 1, marginTop: 20, overflow: 'hidden' },
+  reviewRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: 11, paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(128,128,128,0.2)',
+  },
 });

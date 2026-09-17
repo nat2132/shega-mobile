@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 import { getDB } from '@/database/db';
-import { getHubUrl, getHubToken, getSyncStatus, syncNow, type SyncStatus, type UnifiedSyncStatus, type PendingChange, type DeviceStatus, type SyncHistoryEntry, getUnifiedSyncStatus, getPendingChanges, getDeviceStatusList, getSyncHistory, recordSyncHistory } from '@/services/syncService';
+import { getHubUrl, getHubToken, getSyncStatus, type SyncStatus, type UnifiedSyncStatus, type PendingChange, type DeviceStatus, type SyncHistoryEntry, getUnifiedSyncStatus, getPendingChanges, getDeviceStatusList, getSyncHistory, recordSyncHistory } from '@/services/syncService';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { startPeerSyncManager, stopPeerSyncManager, getPeerSyncState, type PeerSyncState } from '@/services/peerSyncManager';
 import { mobileP2pSync } from '@/services/p2p-sync-manager';
@@ -168,8 +168,19 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       let err: unknown = null;
 
       try {
-        const res = await syncNow();
-        result = { ...res, transport: 'lan' };
+        // Prefer the peer-sync path: it includes mDNS discovery adoption and
+        // the stale-pairing-token retry (403 → re-adopt token → retry), which
+        // raw syncNow lacks. Without it, a token refresh on the desktop made
+        // the manual Sync Now button fail forever while background sync worked.
+        const { triggerSync } = await import('@/services/peerSyncManager');
+        const res = await triggerSync();
+        if (res?.lan) {
+          result = { ...res.lan, transport: 'lan' };
+        } else if (!getHubUrl()) {
+          // No hub configured and discovery found none — surface a real error
+          // instead of a silent no-op.
+          err = new Error('No sync hub found. Check that the desktop app is running on the same network.');
+        }
       } catch (e) {
         err = e;
       }
@@ -264,6 +275,22 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   // whenever any device persists data, which triggers an immediate pull below
   // while the WS client's own SYNC_PULL converges SQLite. This also keeps the
   // WebRTC signalling channel alive for dev builds.
+  //
+  // Re-runs whenever `hubUrl` becomes non-empty — including when the peer sync
+  // manager auto-adopts a discovered desktop hub (peerSyncManager.setHubUrl),
+  // so no app restart is needed for the signalling channel to come up.
+  const [hubUrlTick, setHubUrlTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => {
+      const u = getHubUrl();
+      if (u && u !== lastSeenHubUrl.current) {
+        lastSeenHubUrl.current = u;
+        setHubUrlTick((n) => n + 1);
+      }
+    }, 3000);
+    return () => clearInterval(t);
+  }, []);
+  const lastSeenHubUrl = useRef<string>('');
   useEffect(() => {
     if (!enabled) return;
     const hubUrl = getHubUrl();
@@ -300,7 +327,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       wsSyncClient.off('syncCompleted', onConnected);
       try { wsSyncClient.disconnect(); } catch {}
     };
-  }, [enabled, refresh, refreshUnifiedStatus, runSync]);
+  }, [enabled, hubUrlTick, refresh, refreshUnifiedStatus, runSync]);
 
   return (
     <SyncContext.Provider

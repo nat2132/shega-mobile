@@ -3,6 +3,7 @@ import {
   View, 
   StyleSheet, 
   TouchableOpacity, 
+  ScrollView,
 } from 'react-native';
 import { 
   Languages, 
@@ -24,8 +25,6 @@ import Animated, {
   Easing
 } from 'react-native-reanimated';
 import { getSettingsGlass } from './glass-settings';
-import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
-import { translationTutorial } from '@/tutorials/definitions';
 
 type LangId = 'en' | 'am' | 'om' | 'ti';
 
@@ -202,7 +201,6 @@ const TranslationSettings = () => {
   };
 
   const currentPreview = LANGUAGES.find(l => l.id === language)?.preview ?? t('inventory.header');
-  const tutorial = useTutorial({ tutorial: translationTutorial });
 
   return (
     <View style={[styles.container, { backgroundColor: G.bg }]}>
@@ -211,18 +209,15 @@ const TranslationSettings = () => {
         <View style={[styles.glowWash, { backgroundColor: G.mutedLight, bottom: -40, right: -30, width: 160, height: 160, borderRadius: 80 }]} />
         <View style={[styles.glowWash, { backgroundColor: G.mutedLight, top: '40%', right: -50, width: 140, height: 140, borderRadius: 70 }]} />
       </View>
-      <TutorialScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <Animated.View entering={FadeIn.duration(600)}>
-          <TutorialTarget id="tr-header">
-            <View style={styles.headerNode}>
+          <View style={styles.headerNode}>
               <PremiumTransitionText variant="body" weight="medium" style={[styles.headerSub, { color: G.fgSecondary }]} numberOfLines={2} text={t('translation.localization')} />
               <PremiumTransitionText variant="display" weight="bold" style={[styles.headerTitle, { color: G.fg }]} numberOfLines={2} text={t('translation.global_hub')} />
             </View>
-          </TutorialTarget>
 
           {/* Intelligence Preview Node */}
-          <TutorialTarget id="tr-current">
-            <View style={[styles.previewBlueprint, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+          <View style={[styles.previewBlueprint, { backgroundColor: G.bgCard, borderColor: G.border }]}>
               <View style={styles.blueprintHead}>
                 <View style={[styles.iconTag, { backgroundColor: G.fg + '08' }]}>
                   <Languages size={22} color={G.fg} />
@@ -236,14 +231,12 @@ const TranslationSettings = () => {
               <View style={styles.blueprintFooter}>
                 <PremiumTransitionText variant="body-sm" weight="medium" style={[styles.footerText, { color: G.fgSecondary }]} numberOfLines={2} text={t('translation.preview_desc')} />
                 <Sparkles size={16} color={colors.primary} />
-              </View>
-            </View>
-          </TutorialTarget>
+</View>
+          </View>
 
           <PremiumTransitionText variant="caption" weight="bold" style={[styles.selectionHeading, { color: G.fgSecondary }]} numberOfLines={1} text={t('translation.selection_heading')} />
 
-          <TutorialTarget id="tr-list">
-            <View style={{ position: 'relative' }}>
+          <View style={{ position: 'relative' }}>
               <Animated.View style={animatedSelectionStyle} />
               {LANGUAGES.map((lang, index) => {
                 const isSelected = language === lang.id;
@@ -282,16 +275,14 @@ const TranslationSettings = () => {
                 );
               })}
             </View>
-          </TutorialTarget>
 
           <View style={[styles.infoNode, { backgroundColor: G.fg + '05' }]}>
             <Zap size={18} color={G.fgSecondary} />
             <PremiumTransitionText variant="body-sm" weight="medium" style={[styles.noticeText, { color: G.fgSecondary }]} numberOfLines={3} text={t('translation.schema_notice')} />
           </View>
         </Animated.View>
-      </TutorialScrollView>
+      </ScrollView>
       <View style={{ position: 'absolute', top: 50, right: 20, zIndex: 100 }}>
-        <TutorialButton tutorialId="translation-settings" screenName={t('translation.localization')} />
       </View>
     </View>
   );

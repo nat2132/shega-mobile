@@ -2,7 +2,7 @@ import { EventEmitter } from 'events';
 import { Platform } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import { getDB } from '../database/db';
-import { applyChange } from './syncService';
+import { applyChange, APPLY_ORDER, CORE_BUSINESS_SCOPED_ENTITIES, resolveLocalBusinessId } from './syncService';
 import { DEVICE_JOIN_MSG, PERIPHERAL_MSG } from '@shega/shared';
 
 // Simple logger (defined before first use)
@@ -118,6 +118,7 @@ export class WsSyncClient extends EventEmitter {
     await this.sendRequest('PAIR_REQUEST', {
       device_id: this.config.deviceId,
       name: 'Shega Mobile',
+      platform: 'mobile',
       token: this.config.hubToken,
     });
   }
@@ -171,6 +172,7 @@ export class WsSyncClient extends EventEmitter {
         this.lastServerSeq = typeof msg.payload?.serverSeq === 'number' ? Math.max(this.lastServerSeq, msg.payload.serverSeq) : this.lastServerSeq;
         this.emit('dataChanged', msg.payload);
         this.syncNow().catch(() => {});
+        break;
 
       case DEVICE_JOIN_MSG.ACK:
       case DEVICE_JOIN_MSG.RESPONSE:
@@ -231,7 +233,6 @@ export class WsSyncClient extends EventEmitter {
   private async handleIncomingChanges(changes: any[]): Promise<void> {
     if (!changes.length) return;
 
-    const APPLY_ORDER = ['categories', 'items', 'item_packs', 'customers', 'sales', 'debt_payments', 'adjustments', 'returns'];
     const sorted = changes.slice().sort((a: any, b: any) => {
       const ia = APPLY_ORDER.indexOf(a.entity);
       const ib = APPLY_ORDER.indexOf(b.entity);
@@ -452,6 +453,9 @@ export class WsSyncClient extends EventEmitter {
           const payload: any = {};
           const cols = Object.keys(r);
           for (const c of cols) payload[c] = r[c];
+          if (CORE_BUSINESS_SCOPED_ENTITIES.includes(row.entity) && payload.businessId == null) {
+            payload.businessId = resolveLocalBusinessId();
+          }
           const checksum = await this.computeChecksum({ entity: row.entity, entity_uuid: row.entity_uuid, op: row.op, payload });
           changes.push({ entity: row.entity, entity_uuid: row.entity_uuid, op: row.op, payload, checksum, client_seq: row.seq });
           seqs.push(row.seq);

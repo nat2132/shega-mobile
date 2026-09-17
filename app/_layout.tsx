@@ -9,7 +9,6 @@ import { NavigationIntentProvider } from '@/context/NavigationIntentContext';
 import { WarehouseProvider } from '@/context/WarehouseContext';
 import { UpdateProvider } from '@/context/UpdateContext';
 import { SyncProvider } from '@/context/SyncContext';
-import { TutorialProvider, TutorialOverlay } from '@/tutorials';
 import { initDB } from '@/database/db';
 import { playStart } from '@/services/soundService';
 import {
@@ -111,8 +110,7 @@ function AppShell({ dbWarning }: { dbWarning?: string | null }) {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar style={theme !== 'light' ? 'light' : 'dark'} />
       <ErrorBoundary>
-        <TutorialProvider>
-          <Stack screenOptions={{ headerShown: false }}>
+        <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="index" options={{ animation: 'fade' }} />
             <Stack.Screen name="language-select" options={{ animation: 'fade' }} />
             <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
@@ -130,11 +128,9 @@ function AppShell({ dbWarning }: { dbWarning?: string | null }) {
             <Stack.Screen name="login" options={{ animation: 'fade' }} />
             <Stack.Screen name="register" options={{ animation: 'fade' }} />
           </Stack>
-          <TutorialOverlay />
           <SidebarOverlay />
           <DeviceLockOverlay />
-        </TutorialProvider>
-      </ErrorBoundary>
+        </ErrorBoundary>
     </View>
   );
 }

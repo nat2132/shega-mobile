@@ -10,6 +10,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
 import { CheckCircle2, Loader2, PartyPopper, XCircle } from 'lucide-react-native';
 import { useSettings } from '@/context/SettingsContext';
 import { AppText } from '@/components/ui';
@@ -156,7 +157,12 @@ export default function InitialSyncScreen({ info }: { info: SetupReadyInfo }) {
           </View>
           <TouchableOpacity
             style={[styles.primaryBtn, { backgroundColor: G.fg }]}
-            onPress={() => router.replace('/(tabs)/dashboard' as any)}
+            onPress={() => {
+              // Joiners finish onboarding here — mark the setup wizard done so
+              // a later login isn't re-routed into the create-business wizard.
+              SecureStore.setItemAsync('setup_wizard_done', 'true').catch(() => {});
+              router.replace('/(tabs)/dashboard' as any);
+            }}
           >
             <AppText variant="body" weight="bold" style={{ color: G.bg }}>Go to Dashboard</AppText>
           </TouchableOpacity>
@@ -166,11 +172,24 @@ export default function InitialSyncScreen({ info }: { info: SetupReadyInfo }) {
       {failed && !allDone && (
         <>
           <AppText variant="caption" weight="medium" align="center" style={{ color: '#e74c3c', marginTop: 12 }}>
-            Sync is taking longer than expected. You can continue — data keeps arriving in the background.
+            Unable to reach the POS Hub. Check that both devices are on the same network — data keeps arriving in the background once connected.
           </AppText>
           <TouchableOpacity
-            style={[styles.primaryBtn, { backgroundColor: G.accentGlass, borderColor: G.border, borderWidth: 1, marginTop: 14 }]}
-            onPress={() => router.replace('/(tabs)/dashboard' as any)}
+            style={[styles.primaryBtn, { backgroundColor: G.fg, marginTop: 14 }]}
+            onPress={() => {
+              // Real retry: re-run a sync cycle and resume probing the DB.
+              setFailed(false);
+              import('@/services/peerSyncManager').then(({ triggerSync }) => triggerSync().catch(() => {}));
+            }}
+          >
+            <AppText variant="body" weight="bold" style={{ color: G.bg }}>Retry</AppText>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.primaryBtn, { backgroundColor: G.accentGlass, borderColor: G.border, borderWidth: 1, marginTop: 10 }]}
+            onPress={() => {
+              SecureStore.setItemAsync('setup_wizard_done', 'true').catch(() => {});
+              router.replace('/(tabs)/dashboard' as any);
+            }}
           >
             <AppText variant="body" weight="bold" style={{ color: G.fg }}>Open Business Anyway</AppText>
           </TouchableOpacity>

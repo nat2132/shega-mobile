@@ -8,6 +8,7 @@
 import React, { useEffect } from 'react';
 import {
   Platform,
+  ScrollView,
   StyleSheet,
   Switch,
   TextInput,
@@ -30,8 +31,6 @@ import { useSettings } from '@/context/SettingsContext';
 import { useNotificationCenter } from '@/context/NotificationContext';
 import { AppText } from '@/components/ui';
 import { getSettingsGlass } from './glass-settings';
-import { useTutorial, TutorialTarget, TutorialButton, TutorialScrollView } from '@/tutorials';
-import { notificationSettingsTutorial } from '@/tutorials/definitions';
 let Notifications: any;
 try {
   Notifications = require('expo-notifications');
@@ -46,7 +45,6 @@ const NotificationSettings = () => {
   const { notifications, setNotifications, colors, t, featureFlags, soundEnabled, setSoundEnabled } = useSettings();
   const G = getSettingsGlass(colors);
   const { preferences, updatePreference } = useNotificationCenter();
-  useTutorial({ tutorial: notificationSettingsTutorial });
 
   const getPref = (key: string) =>
     preferences.find((p) => p.key === key) || {
@@ -114,13 +112,11 @@ const NotificationSettings = () => {
         <View style={[styles.glowWash, { backgroundColor: G.mutedLight, bottom: -40, right: -30, width: 160, height: 160, borderRadius: 80 }]} />
         <View style={[styles.glowWash, { backgroundColor: G.mutedLight, top: '40%', right: -50, width: 140, height: 140, borderRadius: 70 }]} />
       </View>
-      <TutorialScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-        <TutorialTarget id="ns-header">
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
         <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.headerLabel, { color: G.fgSecondary }]} numberOfLines={2}>
           {t('settings.notification_settings')}
         </AppText>
         <AppText variant="display" weight="bold" style={[styles.mainTitle, { color: G.fg }]} numberOfLines={2}>{t('settings.notifications')}</AppText>
-        </TutorialTarget>
 
         {/* Global delivery */}
         <View style={styles.sectionHeader}>
@@ -186,7 +182,6 @@ const NotificationSettings = () => {
         )}
 
         {/* Per category */}
-        <TutorialTarget id="ns-stock">
         <View style={styles.sectionHeader}>
           <Package size={20} color={G.fg} />
           <AppText variant="subtitle" weight="bold" style={[styles.sectionTitle, { color: G.fg }]} numberOfLines={2}>
@@ -207,7 +202,6 @@ const NotificationSettings = () => {
           onValueChange={() => toggle('expiration')}
           icon={Clock}
         />
-        </TutorialTarget>
 
         <View style={styles.sectionHeader}>
           <LineChart size={20} color={G.fg} />
@@ -223,7 +217,6 @@ const NotificationSettings = () => {
           icon={LineChart}
         />
 
-        <TutorialTarget id="ns-payment">
         <View style={styles.sectionHeader}>
           <Wallet size={20} color={G.fg} />
           <AppText variant="subtitle" weight="bold" style={[styles.sectionTitle, { color: G.fg }]} numberOfLines={2}>
@@ -246,14 +239,12 @@ const NotificationSettings = () => {
             icon={CheckCircle2}
           />
         )}
-        </TutorialTarget>
 
         <AppText variant="caption" weight="medium" style={[styles.persistNote, { color: G.fgSecondary }]} numberOfLines={2}>
           {t('settings.auto_save')}
         </AppText>
-      </TutorialScrollView>
+      </ScrollView>
       <View style={{ position: 'absolute', top: 50, right: 20, zIndex: 100 }}>
-        <TutorialButton tutorialId="notification-settings" screenName={t('settings.notification_settings')} />
       </View>
     </View>
   );

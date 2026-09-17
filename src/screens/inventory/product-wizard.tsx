@@ -33,7 +33,6 @@ import {
   suggestedSellingPrice,
 } from '@/utils/pricing';
 import { getActiveTaxType } from '@/services/taxService';
-import { TutorialButton, TutorialScrollView, TutorialTarget } from '@/tutorials';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -1056,8 +1055,7 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
         {t('wizard.product_info')}
       </AppText>
 
-      <TutorialTarget id="if-name">
-        <View style={styles.inputNode}>
+      <View style={styles.inputNode}>
           <View style={styles.nodeHeader}>
             <Tag size={14} color={G.fgSecondary} />
             <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('form.official_name')}</AppText>
@@ -1073,7 +1071,6 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
           />
           {errors.itemName && <AppText variant="caption" weight="medium" style={[styles.errorText, { color: colors.error }]} numberOfLines={2}>{errors.itemName}</AppText>}
         </View>
-      </TutorialTarget>
 
       <View style={styles.inputNode}>
         <View style={styles.nodeHeader}>
@@ -1129,8 +1126,7 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
         )}
       </View>
 
-      <TutorialTarget id="if-brand">
-        <View style={styles.inputNode}>
+      <View style={styles.inputNode}>
           <View style={styles.nodeHeader}>
             <Building2 size={14} color={G.fgSecondary} />
             <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('form.brand')}</AppText>
@@ -1145,10 +1141,8 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
             maxLength={50}
           />
         </View>
-      </TutorialTarget>
 
-      <TutorialTarget id="if-unit">
-        <View style={styles.inputNode}>
+      <View style={styles.inputNode}>
           <View style={styles.nodeHeader}>
             <Package size={14} color={G.fgSecondary} />
             <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('form.base_unit')}</AppText>
@@ -1162,7 +1156,6 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
             maxLength={12}
           />
         </View>
-      </TutorialTarget>
 
     </Animated.View>
   );
@@ -1406,7 +1399,6 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
   //  STEP 4 · PRICING & TAX
   // ===========================================================================
   const renderPricing = () => (
-    <TutorialTarget id="if-pricing">
       <Animated.View entering={FadeInDown} key="pricing" style={styles.formCard}>
         <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.cardTitle, { color: G.fgSecondary }]} numberOfLines={1}>
           {t('wizard.pricing_tax')}
@@ -1582,7 +1574,6 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
         </View>
       )}
       </Animated.View>
-    </TutorialTarget>
   );
 
   // ===========================================================================
@@ -1789,7 +1780,6 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
         )}
 
         {/* Supplier */}
-        <TutorialTarget id="if-supplier">
           <TouchableOpacity
             style={[
               styles.intelligenceBlock,
@@ -1826,7 +1816,6 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
           {errors.supplier && (
             <AppText variant="caption" weight="medium" style={[styles.errorText, { color: colors.error, marginTop: 6 }]} numberOfLines={2}>{errors.supplier}</AppText>
           )}
-        </TutorialTarget>
 
         {!supplierCallEnabled && creditToggle !== 'Yes' && (
           <View style={styles.supplierChips}>
@@ -1916,7 +1905,6 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
           </View>
           <View style={{ flex: 1 }}>
             <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary, marginBottom: 8 }]} numberOfLines={1}>{t('form.expiration_archive')}</AppText>
-            <TutorialTarget id="if-expiry">
               <TouchableOpacity
                 style={[styles.input, { flexDirection: 'row', alignItems: 'center' }]}
                 onPress={() => setShowExpiryPicker(true)}
@@ -1928,7 +1916,6 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
                 </AppText>
                 <ChevronDown size={16} color={G.fgSecondary} />
               </TouchableOpacity>
-            </TutorialTarget>
           </View>
         </View>
 
@@ -2083,8 +2070,7 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
       <View style={[styles.glowWash2, { backgroundColor: G.mutedLight }]} />
       <View style={[styles.glowWash3, { backgroundColor: G.mutedLight }]} />
 
-      <TutorialTarget id="if-header">
-        <View style={styles.header}>
+      <View style={styles.header}>
           <TouchableOpacity onPress={done ? handleAddAnother : cancel} style={[styles.closeBtn, { borderColor: G.border }]}>
             {done ? <RefreshCw size={18} color={G.fg} /> : <X size={20} color={G.fg} />}
           </TouchableOpacity>
@@ -2098,10 +2084,8 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
                   : (t('inventory.add_what'))}
             </AppText>
           </View>
-          {!done && <TutorialButton tutorialId="inventory-form" screenName={t('screen.add_inventory_item')} />}
           {done && <View style={{ width: 40 }} />}
         </View>
-      </TutorialTarget>
 
       {showIndicator ? renderStepIndicator() : (!done && activeStep === 6 && renderReviewChip())}
 
@@ -2110,7 +2094,7 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-        <TutorialScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {done ? (
             renderSuccess()
           ) : (
@@ -2135,10 +2119,9 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
               )}
             </Animated.View>
           )}
-        </TutorialScrollView>
+        </ScrollView>
 
         {!done && mode && (
-          <TutorialTarget id="if-commit-btn">
             <View style={styles.actionDock}>
               <TouchableOpacity style={[styles.backBtn, { borderColor: G.border }]} onPress={handleBack} activeOpacity={0.8}>
                 <ChevronLeft size={20} color={G.fg} />
@@ -2161,7 +2144,6 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
                 )}
               </TouchableOpacity>
             </View>
-          </TutorialTarget>
         )}
       </KeyboardAvoidingView>
 

@@ -31,6 +31,23 @@ export interface AppButtonProps {
   testID?: string;
 }
 
+// WCAG-relative-luminance contrast picker: near-white surfaces get near-black
+// labels, saturated/dark surfaces get white. Keeps the single blue accent
+// legible on both the light (`#0052ff`) and dark (`#4C8CFF`) themes.
+// Crossover is L ≈ 0.179 (where contrast against black equals white).
+function readableOn(hex: string): string {
+  const h = hex.replace('#', '');
+  const channel = (v: number) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  };
+  const r = channel(parseInt(h.slice(0, 2), 16));
+  const g = channel(parseInt(h.slice(2, 4), 16));
+  const b = channel(parseInt(h.slice(4, 6), 16));
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return lum > 0.179 ? '#0a0b0d' : '#ffffff';
+}
+
 export const AppButton: React.FC<AppButtonProps> = React.memo(({
   label,
   onPress,
@@ -55,8 +72,8 @@ export const AppButton: React.FC<AppButtonProps> = React.memo(({
     fg: string;
     border?: string;
   }> = {
-    primary:   { bg: colors.tint,     fg: colors.background },
-    secondary: { bg: 'transparent',   fg: colors.text, border: colors.border },
+    primary:   { bg: colors.tint,     fg: readableOn(colors.tint) },
+    secondary: { bg: 'transparent',   fg: colors.primary, border: colors.border },
     ghost:     { bg: 'transparent',   fg: colors.tint },
     danger:    { bg: colors.error,    fg: '#FFFFFF' },
   };
@@ -82,7 +99,8 @@ export const AppButton: React.FC<AppButtonProps> = React.memo(({
           paddingHorizontal: padding,
           paddingVertical: Math.max(10, padding - 6),
           alignSelf: fullWidth ? 'stretch' : 'flex-start',
-          opacity: disabled ? 0.4 : pressed ? 0.85 : 1,
+          opacity: disabled ? 0.4 : pressed ? 0.8 : 1,
+          transform: pressed ? [{ scale: 0.985 }] : undefined,
         },
         style,
       ]}
@@ -116,8 +134,8 @@ AppButton.displayName = 'AppButton';
 
 const styles = StyleSheet.create({
   base: {
-    minHeight: 44,
-    borderRadius: BorderRadius.md,
+    minHeight: 48,
+    borderRadius: BorderRadius.full,
     justifyContent: 'center',
     alignItems: 'center',
     flexWrap: 'wrap',
@@ -132,6 +150,7 @@ const styles = StyleSheet.create({
   icon: { alignItems: 'center', justifyContent: 'center' },
   label: {
     flexShrink: 1,
+    letterSpacing: 0.2,
   },
 });
 

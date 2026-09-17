@@ -86,8 +86,8 @@ export default function PairingQrScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: G.bg }]}>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets={true}>
           <TouchableOpacity onPress={() => router.back()} style={styles.back}>
             <ArrowLeft size={20} color={G.fg} />
             <AppText variant="body" weight="bold" style={{ color: G.fg }}>Back</AppText>
