@@ -1,6 +1,9 @@
-import { Zeroconf } from 'react-native-zeroconf';
 import { EventEmitter } from 'events';
 import { Platform } from 'react-native';
+// The library's CJS build exposes the class as exports.default; a named
+// ESM import resolves to undefined and `new` throws at runtime.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const Zeroconf: any = require('react-native-zeroconf').default;
 
 export interface DiscoveredHub {
   deviceId: string;
@@ -22,7 +25,8 @@ type DiscoveryEventMap = {
 };
 
 class MobileMdnsDiscovery extends EventEmitter {
-  private zeroconf: Zeroconf | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private zeroconf: any | null = null;
   private isScanning = false;
   private discoveredHubs = new Map<string, DiscoveredHub>();
 
@@ -47,7 +51,7 @@ class MobileMdnsDiscovery extends EventEmitter {
       this.isScanning = true;
       return;
     }
-    this.zeroconf.on('resolved', (service) => {
+    this.zeroconf.on('resolved', (service: any) => {
       const deviceId = service.txtRecord?.device_id;
       if (!deviceId) return;
 
@@ -69,7 +73,7 @@ class MobileMdnsDiscovery extends EventEmitter {
       this.emit('up', hub);
     });
 
-    this.zeroconf.on('remove', (service) => {
+    this.zeroconf.on('remove', (service: any) => {
       const deviceId = service.txtRecord?.device_id;
       if (!deviceId) return;
 
@@ -81,7 +85,7 @@ class MobileMdnsDiscovery extends EventEmitter {
       }
     });
 
-    this.zeroconf.on('error', (err) => {
+    this.zeroconf.on('error', (err: any) => {
       console.error('[mDNS] Zeroconf error:', err);
       this.emit('error', err as Error);
     });

@@ -299,10 +299,10 @@ function handlePairRequest(client: TcpClient, msg: any): void {
     return;
   }
 
-  // Verify pairing token
+  // Verify pairing token — the token is REQUIRED (no more token-less pairing).
   const hubToken = getPairingToken();
-  if (token && token.trim().toUpperCase() !== hubToken) {
-    sendError(client.socket, 'PAIR_FAILED', 'Invalid pairing token');
+  if (String(token ?? '').trim().toUpperCase() !== hubToken) {
+    sendError(client.socket, 'PAIR_FAILED', token ? 'Invalid pairing token' : 'Pairing token required');
     return;
   }
 
@@ -351,7 +351,6 @@ function handlePairRequest(client: TcpClient, msg: any): void {
     payload: {
       success: true,
       hubId: getDeviceId(),
-      pairingToken: hubToken,
       schemaVersion: 21,
     },
   });

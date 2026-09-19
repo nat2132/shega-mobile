@@ -118,6 +118,22 @@ export function validateInviteCode(code: string): InviteRow | undefined {
 }
 
 /**
+ * The device id this install registered its current join under. Persisted when
+ * the request is submitted so approval-status polls always query the exact id
+ * the hub recorded — a fresh install with no sync_meta row yet must not fall
+ * back to a different (blank) id while waiting for the owner.
+ */
+export function resolveJoinDeviceId(): string {
+  const db = getDB();
+  try {
+    const row = db.getFirstSync(
+      "SELECT value FROM app_settings WHERE key = 'pending_join_device_id'") as any;
+    if (row?.value) return row.value;
+  } catch { /* settings table may not exist yet on very fresh installs */ }
+  return getThisDeviceId() ?? `dev-${Date.now().toString(36)}`;
+}
+
+/**
  * Joiner side: submit a join request so the owner can approve. Prefers the LAN
  * hub channel; falls back to a local pending record delivered on next connect.
  * Returns the staged request.
@@ -131,7 +147,12 @@ export async function submitJoinRequest(input: {
   role: string;
   platform?: 'mobile' | 'desktop';
 }): Promise<{ requestId?: string; relayed: boolean }> {
-  const deviceId = getThisDeviceId() ?? `dev-${Date.now().toString(36)}`;
+  const deviceId = resolveJoinDeviceId();
+  try {
+    const db = getDB();
+    db.runSync('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)',
+      ['pending_join_device_id', deviceId]);
+  } catch { /* best-effort; the status poll falls back to getThisDeviceId() */ }
   const payload = {
     businessId: input.businessId,
     code: input.code,
@@ -216,6 +237,9 @@ export function restoreBusinessFromJoin(info: {
   joinerName?: string;
 }): Business {
   const db = getDB();
+  try {
+    db.runSync("DELETE FROM app_settings WHERE key = 'pending_join_device_id'");
+  } catch { /* ignore */ }
   const existing = getBusiness(info.businessId);
   if (existing) {
     setActiveBusiness(info.businessId);

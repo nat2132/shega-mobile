@@ -138,6 +138,7 @@ export class WsSyncClient extends EventEmitter {
           logger.info('[WS] Paired with hub');
           this.lastServerSeq = msg.payload?.serverSeq || 0;
           this.emit('connected');
+          this.flushPendingInvitePublishes().catch(() => {});
         } else {
           this.emit('error', new Error(msg.payload?.message || 'Pairing failed'));
         }
@@ -295,8 +296,67 @@ export class WsSyncClient extends EventEmitter {
   }
 
   async publishInvitation(payload: any): Promise<any> {
-    if (!this._isConnected) throw new Error('Not connected to hub');
-    return this.sendRequest(DEVICE_JOIN_MSG.PUBLISH, payload);
+    if (!this._isConnected) {
+      // Offline-first: stage the invite locally so it reaches the hub on the
+      // next successful pair (the wizard's tap is otherwise silently lost).
+      this.stagePendingInvitePublish(payload);
+      return { published: true, queued: true, relayed: false };
+    }
+    try {
+      return await this.sendRequest(DEVICE_JOIN_MSG.PUBLISH, payload);
+    } catch (e) {
+      this.stagePendingInvitePublish(payload);
+      throw e;
+    }
+  }
+
+  /**
+   * Persist a not-yet-published invitation so it can be flushed once this
+   * client connects to (and pairs with) the LAN hub. Idempotent per invite id.
+   */
+  private stagePendingInvitePublish(payload: any): void {
+    try {
+      const db = getDB();
+      const row = db.getFirstSync(
+        `SELECT value FROM app_settings WHERE key = 'pending_invite_publishes'`) as any;
+      let list: any[] = [];
+      try { list = JSON.parse(row?.value ?? '[]'); } catch { list = []; }
+      if (!payload?.id) return;
+      list = list.filter((p: any) => p?.id !== payload.id);
+      list.push(payload);
+      db.runSync('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)',
+        ['pending_invite_publishes', JSON.stringify(list.slice(-25))]);
+      logger.info(`[WS] Queued invite publish ${payload.id} for the next hub connection`);
+    } catch (e: any) {
+      logger.warn('[WS] Could not stage pending invite publish:', e?.message);
+    }
+  }
+
+  /** Push every queued invite publish to the hub (requires a paired socket). */
+  private async flushPendingInvitePublishes(): Promise<void> {
+    let list: any[] = [];
+    try {
+      const db = getDB();
+      const row = db.getFirstSync(
+        `SELECT value FROM app_settings WHERE key = 'pending_invite_publishes'`) as any;
+      try { list = JSON.parse(row?.value ?? '[]'); } catch { list = []; }
+      if (!list.length) return;
+      const ok: string[] = [];
+      for (const p of list) {
+        try {
+          await this.sendRequest(DEVICE_JOIN_MSG.PUBLISH, p);
+          ok.push(p.id);
+          logger.info(`[WS] Flushed queued invite publish ${p.id}`);
+        } catch (e: any) {
+          logger.warn(`[WS] Flush failed for invite ${p?.id}:`, e?.message);
+        }
+      }
+      const remaining = list.filter((p: any) => !ok.includes(p.id));
+      db.runSync('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)',
+        ['pending_invite_publishes', JSON.stringify(remaining)]);
+    } catch (e: any) {
+      logger.warn('[WS] Could not flush pending invite publishes:', e?.message);
+    }
   }
 
   async resolveInvitation(code: string): Promise<any> {

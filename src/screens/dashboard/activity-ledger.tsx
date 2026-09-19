@@ -230,7 +230,7 @@ data.forEach((item: any) => {
           </View>
         }
         title={itemName}
-        subtitle={item.userName ? `${item.userName} · ${label}` : label}
+        subtitle={item.userName ? `${item.isMe ? t('common.me') : item.userName} · ${label}` : label}
         titleMaxLines={1}
         subtitleMaxLines={1}
         right={

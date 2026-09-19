@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -9,18 +9,20 @@ import {
   View,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, CheckCircle2, ShieldAlert, Store } from 'lucide-react-native';
+import { ArrowLeft, CheckCircle2, Radar, ShieldAlert, Smartphone, Store } from 'lucide-react-native';
 import { useSettings } from '@/context/SettingsContext';
 import { useToast } from '@/context/ToastContext';
 import { AppText } from '@/components/ui';
 import { getGlass } from './glass-theme';
 import { wsSyncClient } from '@/services/wsSyncClient';
-import { validateInviteCode, submitJoinRequest, restoreBusinessFromJoin } from '@/services/invitationService';
+import { validateInviteCode, submitJoinRequest, restoreBusinessFromJoin, resolveJoinDeviceId } from '@/services/invitationService';
 import { getThisDeviceId } from '@/services/businessService';
+import { getHubUrl, setHubToken } from '@/services/syncService';
 import { acceptPairing, lookupPairingInvite, pairingStatus, type PairingStatus } from '@/services/pairingService';
 import { fetchMyMemberships } from '@/services/api';
 import { ensureRemoteBusinessSeeded } from '@/services/businessService';
 import { setJoinResumeDone } from '@/services/postAuthRouter';
+import { mobilePairingBeacon } from '@/services/mobilePairingBeacon';
 
 type Stage = 'idle' | 'resolved' | 'sent';
 
@@ -28,6 +30,9 @@ export default function JoinExistingScreen() {
   const { colors } = useSettings();
   const G = getGlass(colors);
   const { showToast } = useToast();
+  // C10 guard: auto-poll and the manual "Check Approval Status" can both fire
+  // before state settles — navigate to /initial-sync exactly once.
+  const doneRef = useRef(false);
   const [code, setCode] = useState('');
   const [stage, setStage] = useState<Stage>('idle');
   const [name, setName] = useState('');
@@ -38,10 +43,35 @@ export default function JoinExistingScreen() {
     role?: string;
     name?: string;
     source?: 'lan' | 'cloud';
+    kind?: 'join' | 'shg';
   } | null>(null);
   const [cloudInvitationId, setCloudInvitationId] = useState<string | null>(null);
   const [decision, setDecision] = useState<{ status: string; role?: string; joinerUser?: string; name?: string } | null>(null);
   const [checking, setChecking] = useState(false);
+  // Bluetooth-style discovery: nearby owners broadcasting pairing beacons.
+  const [nearby, setNearby] = useState<Array<{ businessId: string; businessName: string; code: string; ownerPlatform?: string; ownerName?: string }>>([]);
+  const [scanning, setScanning] = useState(false);
+
+  const scanNearby = () => {
+    setScanning(true);
+    try {
+      mobilePairingBeacon.startBrowsing();
+      const owners = mobilePairingBeacon.getNearbyOwners().map(({ beacon }) => ({
+        businessId: beacon.businessId,
+        businessName: beacon.businessName,
+        code: beacon.code,
+        ownerPlatform: beacon.owner?.platform,
+        ownerName: beacon.owner?.deviceName,
+      }));
+      setNearby(owners);
+    } catch { setNearby([]); }
+    finally { setTimeout(() => setScanning(false), 800); }
+  };
+
+  const pickNearby = (b: { businessName: string; code: string }) => {
+    setCode(b.code.toUpperCase());
+    void resolve(b.code); // pass the code directly — state update is async
+  };
 
   const params = useLocalSearchParams<{ resume?: string }>();
   const resumeId = params.resume;
@@ -59,8 +89,10 @@ export default function JoinExistingScreen() {
     }
     void setJoinResumeDone(String(rec.id));
     if (rec.status === 'approved') {
+      if (doneRef.current) return;
       const personName = (opts?.personName || name.trim() || resolved?.name || 'New Member').trim();
       const bizName = await seedJoinedBusiness(personName);
+      doneRef.current = true;
       setDecision({ status: 'approved', role: rec.role || resolved?.role, name: personName });
       showToast(`You're in! Welcome to ${bizName}.`, 'success');
       router.replace({ pathname: '/initial-sync', params: { business: bizName, role: rec.role || resolved?.role || 'cashier', device: 'This Device' } } as any);
@@ -123,12 +155,35 @@ export default function JoinExistingScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage, cloudInvitationId, resolved, decision?.status, name]);
 
-  const resolve = async () => {
-    const trimmed = code.trim();
+  // LAN path (C7/C10): the hub neither pushes the decision nor has a cloud
+  // record to poll, so poll the record the manual button checks every 4s until
+  // a terminal outcome. doneRef makes concurrent polls idempotent.
+  useEffect(() => {
+    if (stage !== 'sent' || resolved?.source !== 'lan') return;
+    if (decision?.status === 'approved' || decision?.status === 'rejected') return;
+    const timer = setInterval(() => {
+      (async () => {
+        try {
+          await checkStatus(true);
+        } catch {
+          /* keep polling; transient LAN noise must not kill the wait */
+        }
+      })();
+    }, 4000);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage, resolved, decision?.status, name, code]);
+
+  const resolve = async (overrideCode?: string) => {
+    const trimmed = (overrideCode ?? code).trim();
     if (!trimmed) { showToast('Enter the invitation code', 'error'); return; }
 
     // 1) LAN hub is the fastest path when it is on the same network.
-    let inviteInfo: { businessId: string; code: string; businessName?: string; role?: string; name?: string; source?: 'lan' | 'cloud' } | null = null;
+    //    Desktop user-invites (SHG-…) are a different request family — they
+    //    live in user_invites, not invitations — so a failed join resolve on an
+    //    SHG-… code falls through to the dedicated user-invite query below.
+    const isShg = /^SHG-/i.test(trimmed);
+    let inviteInfo: { businessId: string; code: string; businessName?: string; role?: string; name?: string; source?: 'lan' | 'cloud'; kind?: 'join' | 'shg' } | null = null;
     if (wsSyncClient.isConnected) {
       try {
         const res = await wsSyncClient.resolveInvitation(trimmed);
@@ -137,7 +192,7 @@ export default function JoinExistingScreen() {
           inviteInfo = {
             businessId: inv.businessId,
             code: inv.code,
-            businessName: undefined,
+            businessName: inv.businessName ?? undefined,
             role: inv.role ?? undefined,
             name: inv.name ?? undefined,
             source: 'lan',
@@ -145,9 +200,26 @@ export default function JoinExistingScreen() {
         }
       } catch (e: any) {
         if (String(e?.message).includes('INVITE_INVALID')) {
-          showToast('Invitation not found or expired', 'error');
-          return;
+          if (!isShg) { showToast('Invitation not found or expired', 'error'); return; }
         }
+      }
+      if (!inviteInfo && isShg) {
+        try {
+          const invRes = await wsSyncClient.getHubInviteStatus(trimmed);
+          const inv = invRes?.invite;
+          if (inv) {
+            if (inv.status === 'pending') { showToast('This invitation was already claimed by another device.', 'error'); return; }
+            if (inv.status !== 'open') { showToast(inv.status === 'approved' ? 'This invitation was already approved.' : 'This invitation is no longer available.', 'error'); return; }
+            inviteInfo = {
+              businessId: String(inv.businessId),
+              code: trimmed,
+              businessName: inv.businessName,
+              role: inv.suggestedRole ?? undefined,
+              source: 'lan',
+              kind: 'shg',
+            };
+          }
+        } catch { /* fall through to the generic not-found */ }
       }
     }
     // 2) Cloud: the 6-digit manual code resolves against the backend, so a
@@ -207,6 +279,14 @@ export default function JoinExistingScreen() {
         }
         return;
       }
+      if (resolved.kind === 'shg') {
+        // Desktop user-invite: claim it with our name + persistent device id;
+        // the owner approves from Teams on the desktop.
+        await wsSyncClient.claimHubInvite(resolved.code, personName, resolveJoinDeviceId());
+        setStage('sent');
+        showToast('Request sent. Waiting for the owner to approve.', 'success');
+        return;
+      }
       await submitJoinRequest({
         businessId: resolved.businessId,
         code: resolved.code,
@@ -238,7 +318,29 @@ export default function JoinExistingScreen() {
     return resolved?.businessName ?? personName;
   };
 
-  const checkStatus = async () => {
+  // Post-approval: an admitted device receives the hub's LAN pairing credential
+  // so it can actually pair + sync — a bare join can't complete otherwise.
+  // Best-effort: surfacing the business still succeeds if pairing hiccups.
+  const reconnectWithGrantedToken = async (token: string | null | undefined, deviceId: string) => {
+    if (!token || !token.trim()) return;
+    try {
+      setHubToken(token.trim());
+      const hubUrl = getHubUrl();
+      const device = getThisDeviceId() ?? deviceId;
+      if (hubUrl && device) {
+        try {
+          await wsSyncClient.disconnect();
+          await wsSyncClient.connect({
+            hubUrl: hubUrl.replace(':5757', ':5758'),
+            hubToken: token.trim(),
+            deviceId: device,
+          });
+        } catch { /* sync session re-pairing is not required to enter the business */ }
+      }
+    } catch { /* token grant is best-effort too */ }
+  };
+
+  const checkStatus = async (quiet = false) => {
     if (!resolved) return;
     setChecking(true);
     try {
@@ -247,16 +349,51 @@ export default function JoinExistingScreen() {
         await applyStatus(await pairingStatus(cloudInvitationId));
         return;
       }
-      if (!wsSyncClient.isConnected) { showToast('Connect to your business LAN to check approval', 'error'); return; }
-      const deviceId = getThisDeviceId() ?? '';
+      // Desktop user-invite (SHG-…): poll the hub's invite record. No human
+      // decision is needed past the claim — the owner approves from Teams.
+      if (resolved.kind === 'shg') {
+        if (!wsSyncClient.isConnected) { if (!quiet) showToast('Connect to your business LAN to check approval', 'error'); return; }
+        const inv = (await wsSyncClient.getHubInviteStatus(resolved.code))?.invite;
+        if (!inv) { if (!quiet) showToast('Invitation no longer available', 'error'); return; }
+        if (inv.status === 'open' || inv.status === 'pending') {
+          setDecision({ status: 'pending' });
+          if (!quiet) showToast(inv.status === 'open' ? 'Your request has not been sent yet.' : 'Still waiting for the owner to approve.', 'info');
+        } else if (inv.status === 'rejected') {
+          setDecision({ status: 'rejected' });
+          if (!quiet) showToast('Request declined.', 'info');
+        } else if (inv.status === 'approved') {
+          if (doneRef.current) return;
+          await reconnectWithGrantedToken(inv.pairingToken, resolveJoinDeviceId());
+          const restored = restoreBusinessFromJoin({
+            businessId: resolved.businessId,
+            name: resolved.businessName ?? 'My Business',
+            joinerUser: (name.trim() || resolved.name || 'New Member').trim(),
+            role: inv.suggestedRole || resolved.role || 'cashier',
+            joinerName: 'My Device',
+          });
+          doneRef.current = true;
+          setDecision({ status: 'approved', role: inv.suggestedRole || resolved.role });
+          showToast(`You're in! Welcome to ${restored.name}.`, 'success');
+          router.replace({ pathname: '/initial-sync', params: { business: restored.name || 'Your Business', role: inv.suggestedRole || resolved.role || 'cashier', device: 'This Device' } } as any);
+        }
+        return;
+      }
+      if (!wsSyncClient.isConnected) { if (!quiet) showToast('Connect to your business LAN to check approval', 'error'); return; }
+      // Use the exact id that was submitted — never a divergent blank fallback.
+      const deviceId = resolveJoinDeviceId();
       const res = await wsSyncClient.checkDeviceJoinStatus(resolved.code, deviceId);
       const rec = res?.record;
       if (!rec || rec.status === 'pending') {
         setDecision({ status: 'pending' });
-        showToast('Still waiting for the owner to approve.', 'info');
+        if (!quiet) showToast('Still waiting for the owner to approve.', 'info');
       } else if (rec.status === 'rejected') {
         setDecision({ status: 'rejected' });
+        if (!quiet) showToast('Request declined.', 'info');
       } else if (rec.status === 'approved') {
+        if (doneRef.current) return;
+        // Approval hands this admitted device the hub pairing credential so it
+        // can actually pair/sync.
+        await reconnectWithGrantedToken(res?.pairingToken, deviceId);
         const restored = restoreBusinessFromJoin({
           businessId: resolved.businessId,
           name: resolved.businessName ?? 'My Business',
@@ -264,12 +401,13 @@ export default function JoinExistingScreen() {
           role: rec.role || resolved.role || 'cashier',
           joinerName: rec.joinerName || 'My Device',
         });
+        doneRef.current = true;
         setDecision({ status: 'approved' });
         showToast(`You're in! Welcome to ${restored.name}.`, 'success');
         router.replace({ pathname: '/initial-sync', params: { business: restored.name || 'Your Business', role: rec.role || resolved.role || 'cashier', device: 'This Device' } } as any);
       }
     } catch (e: any) {
-      showToast(e?.message || 'Could not check approval status', 'error');
+      if (!quiet) showToast(e?.message || 'Could not check approval status', 'error');
     } finally {
       setChecking(false);
     }
@@ -296,6 +434,33 @@ export default function JoinExistingScreen() {
 
           {stage === 'idle' && (
             <View style={[styles.card, { backgroundColor: G.glassCard, borderColor: G.glassBorder }]}>
+              {/* Bluetooth-style discovery list — nearby owners first */}
+              <TouchableOpacity onPress={scanNearby} style={[styles.nearbyBtn, { borderColor: G.border }]}>
+                <Radar size={14} color={G.muted} />
+                <AppText variant="caption" weight="bold" style={{ color: G.muted, marginLeft: 6 }}>
+                  {scanning ? 'Scanning nearby…' : nearby.length > 0 ? `Nearby businesses (${nearby.length})` : 'Scan for nearby businesses'}
+                </AppText>
+              </TouchableOpacity>
+              {nearby.map((o) => (
+                <TouchableOpacity
+                  key={`${o.businessId}-${o.code}`}
+                  onPress={() => pickNearby(o)}
+                  style={[styles.nearbyRow, { backgroundColor: G.bg, borderColor: G.border }]}
+                >
+                  <View style={[styles.nearbyIcon, { backgroundColor: 'rgba(46,204,113,0.12)' }]}>
+                    {o.ownerPlatform === 'desktop' ? <Store size={15} color="#2ecc71" /> : <Smartphone size={15} color="#2ecc71" />}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <AppText variant="body" weight="bold" style={{ color: G.fg }} numberOfLines={1}>{o.businessName}</AppText>
+                    <AppText variant="micro" weight="bold" style={{ color: G.muted }}>Nearby · tap to join</AppText>
+                  </View>
+                </TouchableOpacity>
+              ))}
+              <View style={styles.orRow}>
+                <View style={[styles.orLine, { backgroundColor: G.border }]} />
+                <AppText variant="micro" weight="bold" style={{ color: G.muted }}>or enter code</AppText>
+                <View style={[styles.orLine, { backgroundColor: G.border }]} />
+              </View>
               <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, marginBottom: 8 }}>Invitation code</AppText>
               <TextInput
                 style={[styles.input, { borderColor: G.border, color: G.fg, backgroundColor: G.bg }]}
@@ -306,7 +471,7 @@ export default function JoinExistingScreen() {
                 autoCapitalize="characters"
                 autoCorrect={false}
               />
-              <TouchableOpacity onPress={resolve} style={[styles.primaryBtn, { backgroundColor: G.fg }]}>
+              <TouchableOpacity onPress={() => resolve()} style={[styles.primaryBtn, { backgroundColor: G.fg }]}>
                 <AppText variant="body" weight="bold" style={{ color: G.bg }}>Continue</AppText>
               </TouchableOpacity>
             </View>
@@ -366,7 +531,7 @@ export default function JoinExistingScreen() {
                   <AppText variant="body" weight="medium" style={{ color: G.muted, marginVertical: 12 }}>
                     The owner declined your request. Ask them to approve it or generate a new invitation.
                   </AppText>
-                  <TouchableOpacity onPress={() => { setDecision(null); setStage('idle'); setCode(''); }} style={[styles.primaryBtn, { backgroundColor: G.fg, marginTop: 16 }]}>
+                  <TouchableOpacity onPress={() => { setDecision(null); setStage('idle'); setCode(''); doneRef.current = false; }} style={[styles.primaryBtn, { backgroundColor: G.fg, marginTop: 16 }]}>
                     <AppText variant="body" weight="bold" style={{ color: G.bg }}>Try another code</AppText>
                   </TouchableOpacity>
                 </>
@@ -385,7 +550,7 @@ export default function JoinExistingScreen() {
                       {`You'll get full access once the owner approves your device.`}
                     </AppText>
                   </View>
-                  <TouchableOpacity onPress={checkStatus} disabled={checking} style={[styles.primaryBtn, { backgroundColor: G.fg, marginTop: 16, opacity: checking ? 0.6 : 1 }]}>
+                  <TouchableOpacity onPress={() => checkStatus()} disabled={checking} style={[styles.primaryBtn, { backgroundColor: G.fg, marginTop: 16, opacity: checking ? 0.6 : 1 }]}>
                     <AppText variant="body" weight="bold" style={{ color: G.bg }}>{checking ? 'Checking…' : 'Check Approval Status'}</AppText>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => router.replace('/setup-wizard')} style={[styles.primaryBtn, { backgroundColor: G.accentGlass, marginTop: 10 }]}>
@@ -412,6 +577,18 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   input: { borderRadius: 14, paddingVertical: 14, paddingHorizontal: 16, fontSize: 16, borderWidth: 1, marginBottom: 14 },
   primaryBtn: { alignItems: 'center', paddingVertical: 15, borderRadius: 999 },
+  nearbyBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderRadius: 12, borderStyle: 'dashed',
+    paddingVertical: 11, marginBottom: 10,
+  },
+  nearbyRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    borderWidth: 1, borderRadius: 14, padding: 12, marginBottom: 8,
+  },
+  nearbyIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  orRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 12 },
+  orLine: { flex: 1, height: StyleSheet.hairlineWidth, opacity: 0.5 },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
   infoCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, padding: 14, borderWidth: 1 },
 });

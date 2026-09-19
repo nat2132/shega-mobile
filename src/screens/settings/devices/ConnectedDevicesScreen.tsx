@@ -25,7 +25,8 @@ import { mobileP2pSync } from '@/services/p2p-sync-manager';
 import { companionService } from '@/services/companionService';
 import { wsSyncClient } from '@/services/wsSyncClient';
 import { getActiveBusiness } from '@/services/businessService';
-import { issuePairingInvite } from '@/services/pairingService';
+import { generateInvitation } from '@/services/invitationService';
+import { mobilePairingBeacon } from '@/services/mobilePairingBeacon';
 
 const STATE_DOT: Record<string, string> = {
   synced: '#2ECC71',
@@ -231,7 +232,7 @@ export function ConnectedDevicesScreen({ onBack }: { onBack: () => void }) {
       {/* Pair modal */}
       <Modal visible={pairOpen} transparent animationType="fade" onRequestClose={() => setPairOpen(false)}>
         <View style={styles.modalOverlay}>
-          <PairCard businessName={businessName} counts={counts} onClose={() => { setPairOpen(false); load(); }} G={G} />
+          <PairCard businessName={businessName} businessId={getActiveBusiness()?.id || ''} counts={counts} onClose={() => { mobilePairingBeacon.stopPublishing(); setPairOpen(false); load(); }} G={G} />
         </View>
       </Modal>
 
@@ -312,14 +313,15 @@ export function ConnectedDevicesScreen({ onBack }: { onBack: () => void }) {
   );
 }
 
-/** Pairing card: generate QR / enter code. Reuses the cloud pairing invite. */
-function PairCard({ businessName, counts, onClose, G }: {
+/** Pairing card: generate QR / enter code. Uses the offline-first local invitation. */
+function PairCard({ businessName, businessId, counts, onClose, G }: {
   businessName: string;
+  businessId: string;
   counts: Record<string, number>;
   onClose: () => void;
   G: any;
 }) {
-  const [invite, setInvite] = useState<{ qr_uri: string; code: string } | null>(null);
+  const [invite, setInvite] = useState<{ qr_uri: string; code: string; id: string } | null>(null);
   const [mode, setMode] = useState<'qr' | 'code'>('qr');
   const [manual, setManual] = useState('');
   const [busy, setBusy] = useState(false);
@@ -328,10 +330,16 @@ function PairCard({ businessName, counts, onClose, G }: {
   const generate = async () => {
     setBusy(true);
     try {
-      const inv = await issuePairingInvite({ role: 'cashier' });
-      setInvite({ qr_uri: inv.qr_uri, code: inv.code });
+      // Offline-first: generate the invitation locally (no cloud dependency),
+      // then advertise a pairing beacon so nearby devices discover us.
+      const inv = generateInvitation({ businessId, role: 'cashier', platform: 'mobile' });
+      mobilePairingBeacon.advertiseInvitation({ id: inv.id, code: inv.code, businessId, role: 'cashier', expiresAt: inv.expiresAt });
+      if (wsSyncClient.isConnected) {
+        wsSyncClient.publishInvitation({ id: inv.id, businessId, code: inv.code, role: 'cashier', platform: 'mobile', expiresAt: inv.expiresAt }).catch(() => {});
+      }
+      setInvite({ qr_uri: inv.qrUri || '', code: inv.code, id: inv.id });
     } catch (e: any) {
-      showToast(e?.message || 'Could not generate a pairing code — check your connection.', 'error');
+      showToast(e?.message || 'Could not generate a pairing code.', 'error');
     } finally {
       setBusy(false);
     }
@@ -370,7 +378,7 @@ function PairCard({ businessName, counts, onClose, G }: {
       {mode === 'qr' ? (
         <View style={{ alignItems: 'center' }}>
           <View style={[styles.qrFrame, { backgroundColor: '#fff' }]}>
-            {invite ? <QRCode value={invite.qr_uri} size={170} /> : <QrCode size={48} color="#ccc" />}
+            {invite?.qr_uri ? <QRCode value={invite.qr_uri} size={170} /> : <QrCode size={48} color="#ccc" />}
           </View>
           {invite && (
             <View style={[styles.codeChip, { backgroundColor: G.accentGlass, borderColor: G.border, marginTop: 10 }]}>

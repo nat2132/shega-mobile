@@ -12,26 +12,14 @@
 // The library ships untyped JS (publishService/unpublishAll exist at runtime);
 // type as any so the real API surface is usable.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const ZeroconfCtor: any = require('react-native-zeroconf').Zeroconf;
+const ZeroconfMod: any = require('react-native-zeroconf');
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const ZeroconfCtor: any = ZeroconfMod?.default ?? ZeroconfMod?.Zeroconf;
 import { getDeviceId } from './syncService';
 import { getMobileSyncPort } from './mobileSyncServer';
 
 let zeroconf: any | null = null;
 let isPublishing = false;
-
-function getPairingToken(): string {
-  try {
-    // Import dynamically to avoid circular deps
-    const { getDB } = require('../database/db');
-    const db = getDB();
-    const row = db.getFirstSync(
-      "SELECT value FROM app_settings WHERE key = 'mobile_pairing_token'"
-    );
-    return row?.value || '';
-  } catch {
-    return '';
-  }
-}
 
 function getCurrentBusinessId(): string | null {
   try {
@@ -68,7 +56,6 @@ export function publishMobileHub(): void {
     zeroconf = new ZeroconfCtor();
     const deviceId = getDeviceId();
     const port = getMobileSyncPort();
-    const token = getPairingToken();
     const businessId = getCurrentBusinessId();
 
     zeroconf.publishService({
@@ -78,7 +65,6 @@ export function publishMobileHub(): void {
       port,
       txt: {
         device_id: deviceId,
-        pairing_token: token,
         schema_version: '21',
         port: String(port),
         platform: 'mobile',

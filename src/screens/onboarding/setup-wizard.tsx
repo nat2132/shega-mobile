@@ -22,8 +22,12 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import {
   ArrowRight, Building2, CalendarDays, Camera, Check, ChevronRight,
   CreditCard, Fingerprint, ImagePlus, MapPin, Package,
-  Receipt, Store, User, Warehouse,
+  Receipt, Store, User, Users, Warehouse,
 } from 'lucide-react-native';
+import QRCode from 'react-native-qrcode-svg';
+import { wsSyncClient } from '@/services/wsSyncClient';
+import { generateInvitation, revokeInvitation } from '@/services/invitationService';
+import { mobilePairingBeacon } from '@/services/mobilePairingBeacon';
 
 import { AppText } from '@/components/ui';
 import { useSettings } from '@/context/SettingsContext';
@@ -40,11 +44,11 @@ import { getDB, insertItem, setFeatureFlag } from '@/database/db';
 
 type Stage =
   | 'welcome' | 'name' | 'type' | 'location' | 'owner' | 'calendar'
-  | 'product' | 'tax' | 'warehouse' | 'payments' | 'review' | 'done';
+  | 'product' | 'tax' | 'warehouse' | 'payments' | 'team' | 'review' | 'done';
 
 const STAGE_ORDER: Stage[] = [
   'welcome', 'name', 'type', 'location', 'owner', 'calendar',
-  'product', 'tax', 'warehouse', 'payments', 'review', 'done',
+  'product', 'tax', 'warehouse', 'payments', 'team', 'review', 'done',
 ];
 
 const WIZARD_STATE_KEY = 'setup_wizard_state';
@@ -102,6 +106,10 @@ export default function SetupWizardScreen() {
   const [warehouses, setWarehouses] = useState<boolean | null>(false);
   const [payments, setPayments] = useState<string>('both');
   const [receipts, setReceipts] = useState<boolean>(true);
+  // Team-pairing step state (owner generates a QR + code for the new member).
+  const [teamInvite, setTeamInvite] = useState<null | { id: string; code: string; qrUri: string; expiresAt: string }>(null);
+  const [teamRole, setTeamRole] = useState<'cashier' | 'manager' | 'inventory'>('cashier');
+  const [teamPublishing, setTeamPublishing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [productsAdded, setProductsAdded] = useState(0);
@@ -480,7 +488,7 @@ export default function SetupWizardScreen() {
                   <GhostButton label="Back" onPress={() => go('welcome')} />
                 </View>
               </View>
-              <StepBadge step={1} total={9} />
+              <StepBadge step={1} total={10} />
             </Animated.View>
           )}
 
@@ -512,7 +520,7 @@ export default function SetupWizardScreen() {
                   <GhostButton label="Skip" onPress={() => { setBusinessType(null); go('location'); }} />
                 </View>
               </View>
-              <StepBadge step={2} total={9} />
+              <StepBadge step={2} total={10} />
             </Animated.View>
           )}
 
@@ -566,7 +574,7 @@ export default function SetupWizardScreen() {
                   <GhostButton label="Back" onPress={() => go('type')} />
                 </View>
               </View>
-              <StepBadge step={3} total={9} />
+              <StepBadge step={3} total={10} />
             </Animated.View>
           )}
 
@@ -612,7 +620,7 @@ export default function SetupWizardScreen() {
                   <GhostButton label="Back" onPress={() => go('location')} />
                 </View>
               </View>
-              <StepBadge step={4} total={9} />
+              <StepBadge step={4} total={10} />
             </Animated.View>
           )}
 
@@ -649,7 +657,7 @@ export default function SetupWizardScreen() {
                   <GhostButton label="Back" onPress={() => go('owner')} />
                 </View>
               </View>
-              <StepBadge step={5} total={9} />
+              <StepBadge step={5} total={10} />
             </Animated.View>
           )}
 
@@ -688,7 +696,7 @@ export default function SetupWizardScreen() {
                   <GhostButton label={productsAdded > 0 ? 'Done adding products' : "I'll Do It Later"} onPress={() => go('tax')} />
                 </View>
               </View>
-              <StepBadge step={6} total={9} />
+              <StepBadge step={6} total={10} />
             </Animated.View>
           )}
 
@@ -727,7 +735,7 @@ export default function SetupWizardScreen() {
                   <GhostButton label="Back" onPress={() => go('product')} />
                 </View>
               </View>
-              <StepBadge step={7} total={9} />
+              <StepBadge step={7} total={10} />
             </Animated.View>
           )}
 
@@ -765,7 +773,7 @@ export default function SetupWizardScreen() {
                   <GhostButton label="Back" onPress={() => go('tax')} />
                 </View>
               </View>
-              <StepBadge step={8} total={9} />
+              <StepBadge step={8} total={10} />
             </Animated.View>
           )}
 
@@ -806,12 +814,113 @@ export default function SetupWizardScreen() {
                 </View>
               </View>
               <View style={{ marginTop: 24 }}>
-                <PrimaryButton label="Continue" onPress={() => go('review')} icon={<ChevronRight size={17} color={G.bg} />} />
+                <PrimaryButton label="Continue" onPress={() => go('team')} icon={<ChevronRight size={17} color={G.bg} />} />
                 <View style={{ marginTop: 12 }}>
                   <GhostButton label="Back" onPress={() => go('warehouse')} />
                 </View>
               </View>
-              <StepBadge step={9} total={9} />
+              <StepBadge step={9} total={10} />
+            </Animated.View>
+          )}
+
+          {/* ── Set up your team (optional) ── */}
+          {stage === 'team' && (
+            <Animated.View entering={FadeInDown.duration(350)} style={styles.stage}>
+              <View style={[styles.iconCircle, { backgroundColor: G.card, borderColor: G.border }]}>
+                <Users size={26} color={G.accent} />
+              </View>
+              <AppText variant="display" weight="bold" align="center" style={{ color: G.fg }}>
+                Set up your team
+              </AppText>
+              <AppText variant="body" weight="medium" align="center" style={{ color: G.muted, marginTop: 10 }}>
+                Add your team members and connect their devices to this business. You can do this any time from Settings → Team.
+              </AppText>
+
+              {!teamInvite ? (
+                <View style={{ marginTop: 24 }}>
+                  <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, marginBottom: 8 }}>Role for the new member</AppText>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {(['cashier', 'manager', 'inventory'] as const).map((r) => (
+                      <TouchableOpacity
+                        key={r}
+                        onPress={() => { Haptics.selectionAsync(); setTeamRole(r); }}
+                        style={{
+                          flex: 1, paddingVertical: 12, borderRadius: 14, borderWidth: 1.5,
+                          alignItems: 'center',
+                          backgroundColor: teamRole === r ? G.fg : G.card,
+                          borderColor: teamRole === r ? G.fg : G.border,
+                        }}
+                      >
+                        <AppText variant="caption" weight="bold" style={{ color: teamRole === r ? G.bg : G.fg, textTransform: 'capitalize' }}>{r}</AppText>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <View style={{ marginTop: 20 }}>
+                    <PrimaryButton
+                      label="Add team member"
+                      icon={<Users size={17} color={G.bg} />}
+                      disabled={!bizId}
+                      onPress={() => {
+                        if (!bizId) { setError('Finish creating the business first.'); return; }
+                        const inv = generateInvitation({ businessId: bizId, role: teamRole, platform: 'mobile' });
+                        setTeamInvite(inv);
+                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                        // Bluetooth-style discovery: advertise a pairing beacon so
+                        // nearby devices see this business in their join list.
+                        try {
+                          mobilePairingBeacon.advertiseInvitation({ id: inv.id, code: inv.code, businessId: bizId, role: teamRole, expiresAt: inv.expiresAt });
+                        } catch (e: any) {
+                          console.warn('pairing beacon unavailable:', e?.message);
+                        }
+                        // Best-effort: publish to the LAN hub so nearby devices resolve it.
+                        setTeamPublishing(true);
+                        wsSyncClient.publishInvitation({
+                          id: inv.id, businessId: bizId, code: inv.code, role: teamRole,
+                          platform: 'mobile', expiresAt: inv.expiresAt,
+                        }).catch(() => {}).finally(() => setTeamPublishing(false));
+                      }}
+                    />
+                    <View style={{ marginTop: 12 }}>
+                      <GhostButton label="Do this later" onPress={() => go('review')} />
+                    </View>
+                    {!bizId && (
+                      <View style={[styles.noteBox, { backgroundColor: G.card, borderColor: G.border, marginTop: 12 }]}>
+                        <AppText variant="caption" weight="medium" style={{ color: G.muted }}>
+                          Create your business first — go back to the owner step.
+                        </AppText>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              ) : (
+                <View style={{ marginTop: 24, alignItems: 'center' }}>
+                  <View style={{ backgroundColor: '#fff', borderRadius: 20, padding: 14, borderWidth: 1, borderColor: G.border }}>
+                    <QRCode
+                      value={teamInvite.qrUri}
+                      size={190}
+                      backgroundColor="transparent"
+                      color="#111"
+                    />
+                  </View>
+                  <View style={{ marginTop: 16, alignItems: 'center' }}>
+                    <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted }}>Pairing code</AppText>
+                    <AppText variant="heading-lg" weight="bold" style={{ color: G.fg, letterSpacing: 4, marginTop: 2 }}>{teamInvite.code}</AppText>
+                  </View>
+                  <AppText variant="caption" weight="medium" align="center" style={{ color: G.muted, marginTop: 10 }}>
+                    Ask your team member to open Shega and choose “Join an existing business”, then scan this code.{teamPublishing ? ' Publishing to your network…' : ''}
+                  </AppText>
+                  <View style={{ marginTop: 20, alignSelf: 'stretch' }}>
+                    <PrimaryButton label="Continue" onPress={() => { try { revokeInvitation(teamInvite.id); } catch { /* noop */ } mobilePairingBeacon.stopPublishing(); go('review'); }} icon={<ChevronRight size={17} color={G.bg} />} />
+                    <View style={{ marginTop: 12 }}>
+                      <GhostButton label="Cancel pairing" onPress={() => { try { revokeInvitation(teamInvite.id); } catch { /* noop */ } mobilePairingBeacon.stopPublishing(); setTeamInvite(null); }} />
+                    </View>
+                  </View>
+                </View>
+              )}
+              <View style={{ marginTop: 16 }}>
+                <GhostButton label={teamInvite ? '' : 'Back'} onPress={() => go('payments')} />
+              </View>
+              <StepBadge step={10} total={10} />
             </Animated.View>
           )}
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TextInput,
+  ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TextInput,
   TouchableOpacity, View,
 } from 'react-native';
 import { router } from 'expo-router';
@@ -182,7 +182,7 @@ export default function PairingQrScreen() {
                 </AppText>
               )}
               <View style={[styles.qrFrame, { backgroundColor: '#FFFFFF', borderColor: G.border }]}>
-                <QRCode value={invite.qr_uri} size={230} />
+                {invite?.qr_uri ? <QRCode value={invite.qr_uri} size={230} /> : <ActivityIndicator />}
               </View>
               <View style={[styles.codeBox, { backgroundColor: G.accentGlass, borderColor: G.border, marginTop: 16 }]}>
                 <AppText variant="heading-lg" weight="bold" align="center" style={{ color: G.fg, letterSpacing: 3 }}>{invite.code}</AppText>

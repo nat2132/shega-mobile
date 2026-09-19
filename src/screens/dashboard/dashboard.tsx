@@ -551,7 +551,7 @@ SparklineChart.displayName = 'SparklineChart';
               <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 6 }}>
                 <UserAvatar name={activity.userName} avatarUri={activity.userAvatar} size={16} />
                 <AppText variant="body-sm" weight="semibold" style={{ color: colors.primary, marginLeft: 3 }} numberOfLines={1}>
-                  {activity.userName}
+                  {activity.isMe ? t('common.me') : activity.userName}
                 </AppText>
               </View>
             ) : null}

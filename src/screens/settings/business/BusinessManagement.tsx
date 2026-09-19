@@ -39,6 +39,7 @@ import {
   canAddDevice, getActiveDeviceCount,
 } from '@/services/invitationService';
 import { wsSyncClient } from '@/services/wsSyncClient';
+import { mobilePairingBeacon } from '@/services/mobilePairingBeacon';
 import { listPairingInvitations, decidePairing, revokePairing, listCloudDevices, manageDevice, removeCloudDevice, type CloudDeviceEntry } from '@/services/pairingService';
 
 type Tab = 'overview' | 'people' | 'devices' | 'registers' | 'permissions' | 'ownership' | 'businesses';
@@ -833,6 +834,8 @@ function InviteModal({ businessId, canAdd, activeCount, onClose, glass }: {
   const create = () => {
     const generated = generateInvitation({ businessId, name: name.trim() || undefined, role, platform: 'mobile' });
     setInvite(generated);
+    // Bluetooth-style discovery: advertise a beacon while this invite is open.
+    mobilePairingBeacon.advertiseInvitation({ id: generated.id, code: generated.code, businessId, role, expiresAt: generated.expiresAt });
     if (wsSyncClient.isConnected) {
       wsSyncClient.publishInvitation({
         id: generated.id, businessId, code: generated.code, name: name.trim() || undefined,
@@ -871,7 +874,7 @@ function InviteModal({ businessId, canAdd, activeCount, onClose, glass }: {
                   {t('business.invite_not_connected')}
                 </AppText>
               )}
-              <TouchableOpacity onPress={() => { revokeInvitation(invite.id); setInvite(null); }} style={[styles.btn, { backgroundColor: glass.accentGlass, marginTop: 16 }]}>
+              <TouchableOpacity onPress={() => { revokeInvitation(invite.id); mobilePairingBeacon.stopPublishing(); setInvite(null); }} style={[styles.btn, { backgroundColor: glass.accentGlass, marginTop: 16 }]}>
                 <AppText variant="body" weight="bold" style={{ color: glass.fg }}>{t('business.done_revoke')}</AppText>
               </TouchableOpacity>
             </View>
@@ -927,8 +930,15 @@ function JoinRequestsSection({ businessId, people, glass }: { businessId: string
   }, [businessId]);
 
   useEffect(() => { refresh(); }, [refresh]);
+  // Real-time-ish: poll for incoming join requests so the owner sees the
+  // request promptly, wherever they are in the app (spec §4 modal trigger).
+  useEffect(() => {
+    if (!businessId) return;
+    const timer = setInterval(refresh, 6000);
+    return () => clearInterval(timer);
+  }, [businessId, refresh]);
 
-  const decide = async (re: any, approve: boolean) => {
+  const decide = async (re: any, approve: boolean, roleOverride?: string) => {
     setRefreshing(true);
     try {
       if (approve && wsSyncClient.isConnected) {
@@ -936,14 +946,42 @@ function JoinRequestsSection({ businessId, people, glass }: { businessId: string
       }
       // Mirror on this owner device: create the employee + an active device.
       if (approve) {
-        const person = addUser({ businessId, name: re.joinerUser || re.joinerName || t('business.new_member'), role: re.role || 'cashier' });
-        addDevice({ businessId, name: re.joinerName || t('business.new_device'), platform: re.platform === 'desktop' ? 'desktop' : 'mobile', userId: person.id, role: re.role || 'cashier' }, '');
+        const finalRole = roleOverride || re.role || 'cashier';
+        const person = addUser({ businessId, name: re.joinerUser || re.joinerName || t('business.new_member'), role: finalRole });
+        // Use the REAL joiner device id so the hub-side roster row created at
+        // submit and this local mirror coalesce on the same identity.
+        addDevice({ businessId, name: re.joinerName || t('business.new_device'), platform: re.platform === 'desktop' ? 'desktop' : 'mobile', userId: person.id, role: finalRole }, re.joinerDeviceId ?? '');
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType[approve ? 'Success' : 'Warning']);
       setRequests((prev) => prev.filter((x) => x.requestId !== re.requestId));
     } finally {
       setRefreshing(false);
     }
+  };
+
+  /** Spec §4 approval: role selector (Owner/Cashier/Custom) → Approve & Sync. */
+  const decideWithRoleLocal = (re: any) => {
+    Alert.alert(
+      `New team member — ${re.joinerUser || re.joinerName || 'Unknown'}`,
+      `${re.joinerName || 'A device'} (${re.platform === 'desktop' ? 'Desktop' : 'Mobile'}) wants to join. Choose their role — initial data sync begins on approval.`,
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: '👑 Owner', onPress: () => decide(re, true, 'owner') },
+        { text: 'Cashier', onPress: () => decide(re, true, 'cashier') },
+        {
+          text: 'Custom…',
+          onPress: () =>
+            Alert.prompt(
+              'Custom role',
+              'manager, inventory, accountant, reports, warehouse…',
+              [
+                { text: t('common.cancel'), style: 'cancel' },
+                { text: 'Approve & Sync', onPress: (v?: string) => v && v.trim() && decide(re, true, v.trim().toLowerCase()) },
+              ],
+            ),
+        },
+      ],
+    );
   };
 
   if (!loaded && wsSyncClient.isConnected) return null;
@@ -965,8 +1003,8 @@ function JoinRequestsSection({ businessId, people, glass }: { businessId: string
             <TouchableOpacity onPress={() => decide(re, false)} style={[styles.smallBtn, { backgroundColor: '#e74c3c' }]}>
               <ShieldX size={15} color="#fff" /><AppText variant="caption" weight="bold" style={{ color: '#fff', marginLeft: 4 }}>{t('business.reject')}</AppText>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => decide(re, true)} style={[styles.smallBtn, { backgroundColor: '#2ecc71' }]}>
-              <ShieldCheck size={15} color="#fff" /><AppText variant="caption" weight="bold" style={{ color: '#fff', marginLeft: 4 }}>{t('business.approve')}</AppText>
+            <TouchableOpacity onPress={() => decideWithRoleLocal(re)} style={[styles.smallBtn, { backgroundColor: '#2ecc71' }]}>
+              <ShieldCheck size={15} color="#fff" /><AppText variant="caption" weight="bold" style={{ color: '#fff', marginLeft: 4 }}>Approve & Sync</AppText>
             </TouchableOpacity>
           </View>
         </View>

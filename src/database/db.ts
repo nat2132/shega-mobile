@@ -3245,6 +3245,17 @@ export const getActivityFeed = (options: { search?: string, date?: string, limit
       .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, limit);
 
+    // "Me" display: when the acting user is the currently signed-in user on
+    // this device, flag the row so the UI shows "Me" instead of their name.
+    try {
+      const meName = getCurrentUserName().trim().toLowerCase();
+      if (meName && meName !== 'staff') {
+        for (const row of combined) {
+          row.isMe = !!row.userName && String(row.userName).trim().toLowerCase() === meName;
+        }
+      }
+    } catch { /* attribution is best-effort */ }
+
     if (options.search) {
       const q = options.search.toLowerCase();
       return combined.filter((item: any) => 
