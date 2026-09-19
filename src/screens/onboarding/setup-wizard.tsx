@@ -11,7 +11,7 @@
  * guard) — never duplicated on resume.
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -326,7 +326,7 @@ export default function SetupWizardScreen() {
     router.replace('/(tabs)/dashboard' as any);
   };
 
-  const PrimaryButton = ({ label, onPress, icon, disabled }: { label: string; onPress: () => void; icon?: React.ReactNode; disabled?: boolean }) => (
+  const PrimaryButton = useCallback(({ label, onPress, icon, disabled }: { label: string; onPress: () => void; icon?: React.ReactNode; disabled?: boolean }) => (
     <TouchableOpacity
       activeOpacity={0.85}
       disabled={disabled}
@@ -336,9 +336,9 @@ export default function SetupWizardScreen() {
       {icon}
       <AppText variant="body" weight="bold" style={{ color: G.bg }}>{label}</AppText>
     </TouchableOpacity>
-  );
+  ), [G]);
 
-  const GhostButton = ({ label, onPress }: { label: string; onPress: () => void }) => (
+  const GhostButton = useCallback(({ label, onPress }: { label: string; onPress: () => void }) => (
     <TouchableOpacity
       activeOpacity={0.85}
       onPress={() => { Haptics.selectionAsync(); onPress(); }}
@@ -346,17 +346,17 @@ export default function SetupWizardScreen() {
     >
       <AppText variant="body" weight="bold" style={{ color: G.muted }}>{label}</AppText>
     </TouchableOpacity>
-  );
+  ), [G]);
 
-  const StepBadge = ({ step, total }: { step: number; total: number }) => (
+  const StepBadge = useCallback(({ step, total }: { step: number; total: number }) => (
     <View style={styles.stepRow}>
       {Array.from({ length: total }).map((_, i) => (
         <View key={i} style={[styles.stepDot, { backgroundColor: i < step ? G.accent : G.border }]} />
       ))}
     </View>
-  );
+  ), [G]);
 
-  const Input = ({ placeholder, value, onChange, keyboard, secure, multiline }: { placeholder: string; value: string; onChange: (v: string) => void; keyboard?: any; secure?: boolean; multiline?: boolean }) => (
+  const Input = useCallback(({ placeholder, value, onChange, keyboard, secure, multiline }: { placeholder: string; value: string; onChange: (v: string) => void; keyboard?: any; secure?: boolean; multiline?: boolean }) => (
     <TextInput
       style={[styles.input, { borderColor: G.border, color: G.fg, backgroundColor: G.card }]}
       placeholder={placeholder}
@@ -368,7 +368,7 @@ export default function SetupWizardScreen() {
       secureTextEntry={secure}
       multiline={multiline}
     />
-  );
+  ), [G]);
 
   const ChoiceRow = ({ selected, onPress, icon, title, sub, rightLabel }: {
     selected?: boolean; onPress: () => void; icon?: React.ReactNode; title: string;
