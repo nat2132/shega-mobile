@@ -1,9 +1,11 @@
 /**
  * Premium first-launch onboarding for Shega Mobile.
  *
- * Flow: Welcome → Business name (+logo) → Business type → Location →
- *       Owner account → Calendar → First product (optional) → Tax →
- *       Warehouses → Payments → Review → POS.
+ * Flow: Welcome → 1. Business info (name + logo) → 2. Business type
+ *       → 3. Location (city only, country = Ethiopia) → 4. Owner account
+ *       → 5. Date system → 6. Sales tax (VAT/TOT/No tax) →
+ *       7. Multiple locations → 8. Team setup (nearby-device discovery +
+ *       member identity/role/permissions) → Review → POS.
  *
  * Principles: minimal fields, everything optional is skippable, progress is
  * saved locally (SecureStore) so an interrupted setup resumes at the exact
@@ -24,10 +26,11 @@ import {
   CreditCard, Fingerprint, ImagePlus, MapPin, Package,
   Receipt, Store, User, Users, Warehouse,
 } from 'lucide-react-native';
-import QRCode from 'react-native-qrcode-svg';
 import { wsSyncClient } from '@/services/wsSyncClient';
+import MemberApprovalModal from '@/components/MemberApprovalModal';
+import { RadarPulse } from '@/components/RadarPulse';
 import { generateInvitation, revokeInvitation } from '@/services/invitationService';
-import { mobilePairingBeacon } from '@/services/mobilePairingBeacon';
+import { mobilePairingBeacon, getThisDeviceName } from '@/services/mobilePairingBeacon';
 
 import { AppText } from '@/components/ui';
 import { useSettings } from '@/context/SettingsContext';
@@ -46,10 +49,20 @@ type Stage =
   | 'welcome' | 'name' | 'type' | 'location' | 'owner' | 'calendar'
   | 'product' | 'tax' | 'warehouse' | 'payments' | 'team' | 'review' | 'done';
 
+// Required flow order (per spec): business info → type → location → owner →
+// date system → sales tax → multiple locations → team setup. Optional stages
+// (product, payments) sit in the flow but can be skipped without breaking
+// the numbered progress indicator.
 const STAGE_ORDER: Stage[] = [
   'welcome', 'name', 'type', 'location', 'owner', 'calendar',
   'product', 'tax', 'warehouse', 'payments', 'team', 'review', 'done',
 ];
+
+/** Numbered steps shown to the user (matches the shared 8-step spec). */
+const STAGE_STEP_NUMBER: Partial<Record<Stage, number>> = {
+  name: 1, type: 2, location: 3, owner: 4, calendar: 5,
+  tax: 6, warehouse: 7, team: 8,
+};
 
 const WIZARD_STATE_KEY = 'setup_wizard_state';
 
@@ -71,7 +84,7 @@ const PAYMENT_OPTIONS = [
   { id: 'both', label: 'Both', sub: 'Cash + Mobile Money' },
 ];
 
-const COUNTRIES = ['Ethiopia', 'Kenya', 'Other'] as const;
+const COUNTRIES = ['Ethiopia'] as const;
 
 const markDone = (key: string) => { SecureStore.setItemAsync(key, 'true').catch(() => {}); };
 
@@ -87,8 +100,8 @@ export default function SetupWizardScreen() {
   const [businessName, setBusinessName] = useState('');
   const [logoUri, setLogoUri] = useState<string | null>(null);
   const [businessType, setBusinessType] = useState<string | null>(null);
+  const [businessTypeCustom, setBusinessTypeCustom] = useState('');
   const [country, setCountry] = useState<string>('Ethiopia');
-  const [countryCustom, setCountryCustom] = useState(false);
   const [city, setCity] = useState('');
   const [address, setAddress] = useState('');
   const [ownerName, setOwnerName] = useState('');
@@ -101,15 +114,20 @@ export default function SetupWizardScreen() {
   const [productPrice, setProductPrice] = useState('');
   const [productQty, setProductQty] = useState('1');
   const [productUnit, setProductUnit] = useState('pcs');
-  const [taxEnabled, setTaxEnabled] = useState(false);
+  const [taxMode, setTaxMode] = useState<'VAT' | 'TOT' | 'None'>('VAT');
   const [taxRate, setTaxRate] = useState('15');
   const [warehouses, setWarehouses] = useState<boolean | null>(false);
+  const [warehouseList, setWarehouseList] = useState<Array<{ name: string; city: string }>>([]);
   const [payments, setPayments] = useState<string>('both');
   const [receipts, setReceipts] = useState<boolean>(true);
   // Team-pairing step state (owner generates a QR + code for the new member).
   const [teamInvite, setTeamInvite] = useState<null | { id: string; code: string; qrUri: string; expiresAt: string }>(null);
   const [teamRole, setTeamRole] = useState<'cashier' | 'manager' | 'inventory'>('cashier');
   const [teamPublishing, setTeamPublishing] = useState(false);
+  const [nearbyDevices, setNearbyDevices] = useState<Array<{ deviceId: string; deviceName: string; platform: string; role?: string; hasInvite: boolean; code?: string }>>([]);
+  const [configuringDevice, setConfiguringDevice] = useState<{ deviceId: string; deviceName: string; platform: string; code: string } | null>(null);
+  const [whName, setWhName] = useState('');
+  const [whCity, setWhCity] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [productsAdded, setProductsAdded] = useState(0);
@@ -121,11 +139,11 @@ export default function SetupWizardScreen() {
     if (doneRef.current) return;
     const snapshot = {
       stage: nextStage,
-      businessName, logoUri, businessType, country, countryCustom, city, address,
+      businessName, logoUri, businessType, businessTypeCustom, country, city, address,
       ownerName, phone, email,
       useBiometrics,
       productName, productPrice, productQty, productUnit,
-      taxEnabled, taxRate, warehouses, payments, receipts,
+      taxMode, taxRate, warehouses, warehouseList, payments, receipts,
       productsAdded, bizId,
       ...overrides,
     };
@@ -133,6 +151,59 @@ export default function SetupWizardScreen() {
   };
 
   const go = (next: Stage) => { setStage(next); persistProgress(next); };
+
+  const inviteCreatingRef = useRef(false);
+  /** Publish this business's open invitation as a discovery beacon. */
+  const createTeamInvite = useCallback(() => {
+    if (!bizId) return;
+    inviteCreatingRef.current = true;
+    try {
+      const inv = generateInvitation({ businessId: bizId, role: teamRole, platform: 'mobile' });
+      setTeamInvite(inv as any);
+      try {
+        mobilePairingBeacon.advertiseInvitation({ id: inv.id, code: inv.code, businessId: bizId, role: teamRole, expiresAt: inv.expiresAt });
+      } catch (e: any) { console.warn('pairing beacon unavailable:', e?.message); }
+      wsSyncClient.publishInvitation({ id: inv.id, businessId: bizId, code: inv.code, role: teamRole, platform: 'mobile', expiresAt: inv.expiresAt }).catch(() => {});
+    } catch (e: any) {
+      setError(e?.message || 'Could not start discovery.');
+    } finally {
+      inviteCreatingRef.current = false;
+    }
+  }, [bizId, teamRole]);
+
+  // Team step: while it is open, automatically discover nearby Shega devices
+  // (LAN mDNS + pairing beacons) AND advertise our own invite so the device
+  // list stays live on both sides.
+  useEffect(() => {
+    if (stage !== 'team') return;
+    try { mobilePairingBeacon.startBrowsing(); } catch { /* mDNS unavailable */ }
+    const scan = () => {
+      try {
+        const fromBeacons = mobilePairingBeacon.getNearbyOwners().map(({ beacon, host }) => ({
+          deviceId: beacon.owner?.deviceId || host || beacon.businessId,
+          deviceName: beacon.owner?.deviceName || 'Nearby device',
+          platform: beacon.owner?.platform || 'mobile',
+          role: beacon.role,
+          hasInvite: !!beacon.code,
+          code: beacon.code || undefined,
+        }));
+        setNearbyDevices(fromBeacons as any);
+        if (!teamInvite && !inviteCreatingRef.current && !fromBeacons.some((d) => d.hasInvite)) {
+          // Publish our own open invitation so nearby joiners connect by
+          // themselves; without a business yet, fall back to a discovery beacon.
+          if (bizId) createTeamInvite();
+          else mobilePairingBeacon.setDiscoverable(true, businessName || 'Shega', 'owner');
+        }
+      } catch { /* ignore */ }
+    };
+    scan();
+    const timer = setInterval(scan, 5000);
+    return () => {
+      clearInterval(timer);
+      try { mobilePairingBeacon.stopBrowsing(); mobilePairingBeacon.setDiscoverable(false); } catch { /* ignore */ }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage, bizId, teamInvite?.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -148,8 +219,8 @@ export default function SetupWizardScreen() {
             if (typeof s.businessName === 'string') setBusinessName(s.businessName);
             if (typeof s.logoUri === 'string' && s.logoUri) setLogoUri(s.logoUri);
             if (typeof s.businessType === 'string' && s.businessType) setBusinessType(s.businessType);
+            if (typeof s.businessTypeCustom === 'string') setBusinessTypeCustom(s.businessTypeCustom);
             if (typeof s.country === 'string') setCountry(s.country);
-            if (typeof s.countryCustom === 'boolean') setCountryCustom(s.countryCustom);
             if (typeof s.city === 'string') setCity(s.city);
             if (typeof s.address === 'string') setAddress(s.address);
             if (typeof s.ownerName === 'string') setOwnerName(s.ownerName);
@@ -160,9 +231,10 @@ export default function SetupWizardScreen() {
             if (typeof s.productPrice === 'string') setProductPrice(s.productPrice);
             if (typeof s.productQty === 'string') setProductQty(s.productQty);
             if (typeof s.productUnit === 'string') setProductUnit(s.productUnit);
-            if (typeof s.taxEnabled === 'boolean') setTaxEnabled(s.taxEnabled);
+            if (typeof s.taxMode === 'string') setTaxMode(s.taxMode as any);
             if (typeof s.taxRate === 'string') setTaxRate(s.taxRate);
             if (typeof s.warehouses === 'boolean') setWarehouses(s.warehouses);
+            if (Array.isArray(s.warehouseList)) setWarehouseList(s.warehouseList);
             if (typeof s.payments === 'string') setPayments(s.payments);
             if (typeof s.receipts === 'boolean') setReceipts(s.receipts);
             if (typeof s.productsAdded === 'number') setProductsAdded(s.productsAdded);
@@ -306,6 +378,10 @@ export default function SetupWizardScreen() {
           if (getLocations(id).length === 0) {
             addLocation(id, 'Main Location', locationText);
           }
+          // Multiple locations configured during onboarding (step 7: Yes).
+          for (const w of warehouseList) {
+            try { addLocation(id, w.name, [w.city, 'Ethiopia'].filter(Boolean).join(', ')); } catch { /* best-effort */ }
+          }
         } catch { /* best-effort */ }
       }
     }
@@ -314,7 +390,8 @@ export default function SetupWizardScreen() {
     setFeatureFlag('warehouses', warehouses !== false);
 
     // Tax: apply the chosen per-sale VAT config (or leave tax disabled).
-    saveSaleTaxConfig({ taxType: taxEnabled ? 'VAT' : 'None', taxRate: taxRate || '15' });
+    // Tax: apply the chosen per-sale config (VAT/TOT/None) — used app-wide.
+    saveSaleTaxConfig({ taxType: taxMode, taxRate: taxRate || '15' });
 
     // Biometrics unlock — only when the user opted in and hardware supports it.
     if (useBiometrics) setBiometricsEnabled(true).catch(() => {});
@@ -397,8 +474,11 @@ export default function SetupWizardScreen() {
     </TouchableOpacity>
   );
 
-  const locationText = [address.trim(), city.trim(), country.trim()].filter(Boolean).join(', ') || '—';
-  const taxLabel = taxEnabled ? `VAT ${taxRate || '15'}%` : 'Not set — add later';
+  const locationText = [address.trim(), city.trim(), 'Ethiopia'].filter(Boolean).join(', ') || '—';
+
+  /** Back target for the tax step — skips the optional product stage when unused. */
+  const calendarNavBack = () => (productsAdded > 0 ? 'product' : 'calendar') as Stage;
+  const taxLabel = taxMode === 'None' ? 'No tax' : `${taxMode} ${taxRate || '15'}%`;
   const warehouseLabel = warehouses === true ? 'Yes' : warehouses === false ? 'No' : '—';
 
   return (
@@ -488,7 +568,7 @@ export default function SetupWizardScreen() {
                   <GhostButton label="Back" onPress={() => go('welcome')} />
                 </View>
               </View>
-              <StepBadge step={1} total={10} />
+              <StepBadge step={1} total={8} />
             </Animated.View>
           )}
 
@@ -514,13 +594,18 @@ export default function SetupWizardScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
+              {businessType === 'other' && (
+                <View style={{ marginTop: 12 }}>
+                  <Input placeholder="Describe your business type (e.g. Auto Garage)" value={businessTypeCustom} onChange={setBusinessTypeCustom} />
+                </View>
+              )}
               <View style={{ marginTop: 24 }}>
                 <PrimaryButton label="Continue" onPress={() => go('location')} icon={<ChevronRight size={17} color={G.bg} />} />
                 <View style={{ marginTop: 12 }}>
-                  <GhostButton label="Skip" onPress={() => { setBusinessType(null); go('location'); }} />
+                  <GhostButton label="Back" onPress={() => go('name')} />
                 </View>
               </View>
-              <StepBadge step={2} total={10} />
+              <StepBadge step={2} total={8} />
             </Animated.View>
           )}
 
@@ -531,41 +616,20 @@ export default function SetupWizardScreen() {
                 <MapPin size={26} color={G.accent} />
               </View>
               <AppText variant="display" weight="bold" align="center" style={{ color: G.fg }}>
-                Where is your business?
+                Where is your business located?
               </AppText>
               <AppText variant="body" weight="medium" align="center" style={{ color: G.muted, marginTop: 10 }}>
-                Used on receipts and reports. No location tracking is used.
+                Shega is for businesses in Ethiopia — country is set automatically. Just tell us the city.
               </AppText>
               <View style={{ marginTop: 18 }}>
-                <AppText variant="caption" weight="bold" style={{ color: G.muted, marginBottom: 6 }}>Country</AppText>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                  {COUNTRIES.map((c) => (
-                    <TouchableOpacity
-                      key={c}
-                      onPress={() => {
-                        Haptics.selectionAsync();
-                        if (c === 'Other') { setCountryCustom(true); setCountry(''); }
-                        else { setCountryCustom(false); setCountry(c); }
-                      }}
-                      style={[styles.chip, {
-                        backgroundColor: (c === 'Other' ? countryCustom : !countryCustom && country === c) ? G.accent + '18' : G.card,
-                        borderColor: (c === 'Other' ? countryCustom : !countryCustom && country === c) ? G.accent : G.border,
-                      }]}
-                    >
-                      <AppText variant="caption" weight="bold" style={{ color: G.fg }}>{c}</AppText>
-                    </TouchableOpacity>
-                  ))}
+                <View style={[styles.chip, { alignSelf: 'center', backgroundColor: G.card, borderColor: G.border }]}>
+                  <AppText variant="caption" weight="bold" style={{ color: G.fg }}>🇪🇹 Ethiopia</AppText>
                 </View>
-                {countryCustom && (
-                  <View style={{ marginTop: 10 }}>
-                    <Input placeholder="Country" value={country} onChange={setCountry} />
-                  </View>
-                )}
                 <View style={{ marginTop: 12 }}>
                   <Input placeholder="City (e.g. Addis Ababa)" value={city} onChange={setCity} />
                 </View>
                 <View style={{ marginTop: 10 }}>
-                  <Input placeholder="Address (optional)" value={address} onChange={setAddress} />
+                  <Input placeholder="Street address (optional)" value={address} onChange={setAddress} />
                 </View>
               </View>
               <View style={{ marginTop: 24 }}>
@@ -574,7 +638,7 @@ export default function SetupWizardScreen() {
                   <GhostButton label="Back" onPress={() => go('type')} />
                 </View>
               </View>
-              <StepBadge step={3} total={10} />
+              <StepBadge step={3} total={8} />
             </Animated.View>
           )}
 
@@ -588,18 +652,18 @@ export default function SetupWizardScreen() {
                 Owner account
               </AppText>
               <AppText variant="body" weight="medium" align="center" style={{ color: G.muted, marginTop: 10 }}>
-                You'll be the Owner with full access. Email, security PIN and biometrics are optional.
+                You'll be the Owner with full access.
               </AppText>
               <View style={{ marginTop: 20 }}>
                 <Input placeholder="Your name (e.g. Abebe Kebede)" value={ownerName} onChange={setOwnerName} />
                 <View style={{ marginTop: 10 }}>
+                  <Input placeholder="Email" value={email} onChange={setEmail} keyboard="email-address" />
+                </View>
+                <View style={{ marginTop: 10 }}>
+                  <Input placeholder="Password (min 4 characters)" value={password} onChange={setPassword} secure />
+                </View>
+                <View style={{ marginTop: 10 }}>
                   <Input placeholder="Phone number (optional)" value={phone} onChange={setPhone} keyboard="phone-pad" />
-                </View>
-                <View style={{ marginTop: 10 }}>
-                  <Input placeholder="Email (optional)" value={email} onChange={setEmail} keyboard="email-address" />
-                </View>
-                <View style={{ marginTop: 10 }}>
-                  <Input placeholder="Security PIN (4 digits, optional)" value={password} onChange={(v) => setPassword(v.replace(/\D/g, '').slice(0, 4))} keyboard="number-pad" secure />
                 </View>
                 {biometricsAvailable && (
                   <View style={{ marginTop: 12 }}>
@@ -615,12 +679,20 @@ export default function SetupWizardScreen() {
               </View>
               {!!error && <AppText variant="caption" weight="bold" style={{ color: '#e74c3c', marginTop: 10 }}>{error}</AppText>}
               <View style={{ marginTop: 24 }}>
-                <PrimaryButton label="Create Business" onPress={() => createNow().then((id) => id && go('calendar'))} icon={<Check size={17} color={G.bg} />} disabled={saving} />
+                <PrimaryButton
+                  label="Create Business"
+                  onPress={() => {
+                    if (!ownerName.trim() || !password.trim()) { setError('Enter your name and a password'); return; }
+                    createNow().then((id) => id && go('calendar'));
+                  }}
+                  icon={<Check size={17} color={G.bg} />}
+                  disabled={saving}
+                />
                 <View style={{ marginTop: 12 }}>
                   <GhostButton label="Back" onPress={() => go('location')} />
                 </View>
               </View>
-              <StepBadge step={4} total={10} />
+              <StepBadge step={4} total={8} />
             </Animated.View>
           )}
 
@@ -652,12 +724,12 @@ export default function SetupWizardScreen() {
                 ))}
               </View>
               <View style={{ marginTop: 24 }}>
-                <PrimaryButton label="Continue" onPress={() => go('product')} icon={<ChevronRight size={17} color={G.bg} />} />
+                <PrimaryButton label="Continue" onPress={() => go('tax')} icon={<ChevronRight size={17} color={G.bg} />} />
                 <View style={{ marginTop: 12 }}>
                   <GhostButton label="Back" onPress={() => go('owner')} />
                 </View>
               </View>
-              <StepBadge step={5} total={10} />
+              <StepBadge step={5} total={8} />
             </Animated.View>
           )}
 
@@ -696,7 +768,7 @@ export default function SetupWizardScreen() {
                   <GhostButton label={productsAdded > 0 ? 'Done adding products' : "I'll Do It Later"} onPress={() => go('tax')} />
                 </View>
               </View>
-              <StepBadge step={6} total={10} />
+              <StepBadge step={5} total={8} />
             </Animated.View>
           )}
 
@@ -713,29 +785,33 @@ export default function SetupWizardScreen() {
                 Optional. You can fully configure withholding and income tax later in Settings → Tax.
               </AppText>
               <View style={{ marginTop: 20 }}>
-                <ChoiceRow
-                  selected={taxEnabled}
-                  onPress={() => setTaxEnabled(true)}
-                  icon={<Check size={18} color={G.fg} />}
-                  title="Tax per sale"
-                  sub="VAT is added to every sale automatically"
-                />
-                {taxEnabled && (
+                {([
+                  { id: 'VAT', label: 'VAT', sub: 'Value Added Tax — added to every sale (default 15%)' },
+                  { id: 'TOT', label: 'TOT', sub: 'Turnover Tax — a flat 2% on monthly turnover' },
+                  { id: 'None', label: 'No Tax', sub: "Don't charge tax on sales" },
+                ] as const).map((o) => (
+                  <ChoiceRow
+                    key={o.id}
+                    selected={taxMode === o.id}
+                    onPress={() => { setTaxMode(o.id); if (o.id === 'TOT') setTaxRate('2'); if (o.id === 'VAT' && taxRate === '2') setTaxRate('15'); }}
+                    icon={<Receipt size={18} color={G.fg} />}
+                    title={o.label}
+                    sub={o.sub}
+                  />
+                ))}
+                {taxMode !== 'None' && (
                   <View style={{ marginTop: 10 }}>
-                    <Input placeholder="VAT rate (%)" value={taxRate} onChange={setTaxRate} keyboard="decimal-pad" />
+                    <Input placeholder={`${taxMode} rate (%)`} value={taxRate} onChange={setTaxRate} keyboard="decimal-pad" />
                   </View>
                 )}
-                <View style={{ marginTop: 10 }}>
-                  <GhostButton label="Skip — I'll add tax later" onPress={() => { setTaxEnabled(false); go('warehouse'); }} />
-                </View>
               </View>
               <View style={{ marginTop: 24 }}>
                 <PrimaryButton label="Continue" onPress={() => go('warehouse')} icon={<ChevronRight size={17} color={G.bg} />} />
                 <View style={{ marginTop: 12 }}>
-                  <GhostButton label="Back" onPress={() => go('product')} />
+                  <GhostButton label="Back" onPress={() => go(calendarNavBack())} />
                 </View>
               </View>
-              <StepBadge step={7} total={10} />
+              <StepBadge step={6} total={8} />
             </Animated.View>
           )}
 
@@ -757,7 +833,7 @@ export default function SetupWizardScreen() {
                   onPress={() => setWarehouses(true)}
                   icon={<Warehouse size={18} color={G.fg} />}
                   title="Yes, multiple locations"
-                  sub="Track stock separately per warehouse"
+                  sub="Add your warehouses/branches below"
                 />
                 <ChoiceRow
                   selected={warehouses === false}
@@ -766,14 +842,49 @@ export default function SetupWizardScreen() {
                   title="No, just one shop"
                   sub="Inventory and sales stay simple"
                 />
+                {warehouses === true && (
+                  <View style={{ marginTop: 12 }}>
+                    {warehouseList.map((w, i) => (
+                      <View key={i} style={[styles.choiceRow, { backgroundColor: G.card, borderColor: G.border, paddingVertical: 10 }]}>
+                        <Warehouse size={15} color={G.muted} />
+                        <View style={{ flex: 1, marginLeft: 8 }}>
+                          <AppText variant="caption" weight="bold" style={{ color: G.fg }}>{w.name}</AppText>
+                          {!!w.city && <AppText variant="micro" style={{ color: G.muted }}>{w.city}</AppText>}
+                        </View>
+                        <TouchableOpacity onPress={() => setWarehouseList((l) => l.filter((_, j) => j !== i))} hitSlop={8}>
+                          <AppText variant="caption" weight="bold" style={{ color: '#e74c3c' }}>Remove</AppText>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <View style={{ flex: 1 }}>
+                        <Input placeholder="Location name (e.g. Bole Branch)" value={whName} onChange={setWhName} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Input placeholder="City (optional)" value={whCity} onChange={setWhCity} />
+                      </View>
+                    </View>
+                    <View style={{ marginTop: 10 }}>
+                      <GhostButton
+                        label={whName.trim() ? '+ Add this location' : 'Enter a location name above'}
+                        onPress={() => {
+                          if (!whName.trim()) return;
+                          setWarehouseList((l) => [...l, { name: whName.trim(), city: whCity.trim() }]);
+                          setWhName(''); setWhCity('');
+                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                        }}
+                      />
+                    </View>
+                  </View>
+                )}
               </View>
               <View style={{ marginTop: 24 }}>
-                <PrimaryButton label="Continue" onPress={() => go('payments')} icon={<ChevronRight size={17} color={G.bg} />} />
+                <PrimaryButton label="Continue" onPress={() => go('team')} icon={<ChevronRight size={17} color={G.bg} />} />
                 <View style={{ marginTop: 12 }}>
                   <GhostButton label="Back" onPress={() => go('tax')} />
                 </View>
               </View>
-              <StepBadge step={8} total={10} />
+              <StepBadge step={7} total={8} />
             </Animated.View>
           )}
 
@@ -819,11 +930,11 @@ export default function SetupWizardScreen() {
                   <GhostButton label="Back" onPress={() => go('warehouse')} />
                 </View>
               </View>
-              <StepBadge step={9} total={10} />
+              <StepBadge step={8} total={8} />
             </Animated.View>
           )}
 
-          {/* ── Set up your team (optional) ── */}
+          {/* ── Set up your team: nearby-device discovery + member config ── */}
           {stage === 'team' && (
             <Animated.View entering={FadeInDown.duration(350)} style={styles.stage}>
               <View style={[styles.iconCircle, { backgroundColor: G.card, borderColor: G.border }]}>
@@ -833,94 +944,67 @@ export default function SetupWizardScreen() {
                 Set up your team
               </AppText>
               <AppText variant="body" weight="medium" align="center" style={{ color: G.muted, marginTop: 10 }}>
-                Add your team members and connect their devices to this business. You can do this any time from Settings → Team.
+                Nearby devices running Shega appear here automatically over LAN/P2P. Tap one to invite it to your business.
               </AppText>
 
-              {!teamInvite ? (
-                <View style={{ marginTop: 24 }}>
-                  <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, marginBottom: 8 }}>Role for the new member</AppText>
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    {(['cashier', 'manager', 'inventory'] as const).map((r) => (
-                      <TouchableOpacity
-                        key={r}
-                        onPress={() => { Haptics.selectionAsync(); setTeamRole(r); }}
-                        style={{
-                          flex: 1, paddingVertical: 12, borderRadius: 14, borderWidth: 1.5,
-                          alignItems: 'center',
-                          backgroundColor: teamRole === r ? G.fg : G.card,
-                          borderColor: teamRole === r ? G.fg : G.border,
-                        }}
-                      >
-                        <AppText variant="caption" weight="bold" style={{ color: teamRole === r ? G.bg : G.fg, textTransform: 'capitalize' }}>{r}</AppText>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                  <View style={{ marginTop: 20 }}>
-                    <PrimaryButton
-                      label="Add team member"
-                      icon={<Users size={17} color={G.bg} />}
-                      disabled={!bizId}
-                      onPress={() => {
-                        if (!bizId) { setError('Finish creating the business first.'); return; }
-                        const inv = generateInvitation({ businessId: bizId, role: teamRole, platform: 'mobile' });
-                        setTeamInvite(inv);
-                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                        // Bluetooth-style discovery: advertise a pairing beacon so
-                        // nearby devices see this business in their join list.
-                        try {
-                          mobilePairingBeacon.advertiseInvitation({ id: inv.id, code: inv.code, businessId: bizId, role: teamRole, expiresAt: inv.expiresAt });
-                        } catch (e: any) {
-                          console.warn('pairing beacon unavailable:', e?.message);
-                        }
-                        // Best-effort: publish to the LAN hub so nearby devices resolve it.
-                        setTeamPublishing(true);
-                        wsSyncClient.publishInvitation({
-                          id: inv.id, businessId: bizId, code: inv.code, role: teamRole,
-                          platform: 'mobile', expiresAt: inv.expiresAt,
-                        }).catch(() => {}).finally(() => setTeamPublishing(false));
-                      }}
-                    />
-                    <View style={{ marginTop: 12 }}>
-                      <GhostButton label="Do this later" onPress={() => go('review')} />
-                    </View>
-                    {!bizId && (
-                      <View style={[styles.noteBox, { backgroundColor: G.card, borderColor: G.border, marginTop: 12 }]}>
-                        <AppText variant="caption" weight="medium" style={{ color: G.muted }}>
-                          Create your business first — go back to the owner step.
-                        </AppText>
-                      </View>
-                    )}
-                  </View>
-                </View>
-              ) : (
-                <View style={{ marginTop: 24, alignItems: 'center' }}>
-                  <View style={{ backgroundColor: '#fff', borderRadius: 20, padding: 14, borderWidth: 1, borderColor: G.border }}>
-                    <QRCode
-                      value={teamInvite.qrUri}
-                      size={190}
-                      backgroundColor="transparent"
-                      color="#111"
-                    />
-                  </View>
-                  <View style={{ marginTop: 16, alignItems: 'center' }}>
-                    <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted }}>Pairing code</AppText>
-                    <AppText variant="heading-lg" weight="bold" style={{ color: G.fg, letterSpacing: 4, marginTop: 2 }}>{teamInvite.code}</AppText>
-                  </View>
-                  <AppText variant="caption" weight="medium" align="center" style={{ color: G.muted, marginTop: 10 }}>
-                    Ask your team member to open Shega and choose “Join an existing business”, then scan this code.{teamPublishing ? ' Publishing to your network…' : ''}
-                  </AppText>
-                  <View style={{ marginTop: 20, alignSelf: 'stretch' }}>
-                    <PrimaryButton label="Continue" onPress={() => { try { revokeInvitation(teamInvite.id); } catch { /* noop */ } mobilePairingBeacon.stopPublishing(); go('review'); }} icon={<ChevronRight size={17} color={G.bg} />} />
-                    <View style={{ marginTop: 12 }}>
-                      <GhostButton label="Cancel pairing" onPress={() => { try { revokeInvitation(teamInvite.id); } catch { /* noop */ } mobilePairingBeacon.stopPublishing(); setTeamInvite(null); }} />
-                    </View>
-                  </View>
-                </View>
-              )}
-              <View style={{ marginTop: 16 }}>
-                <GhostButton label={teamInvite ? '' : 'Back'} onPress={() => go('payments')} />
+              {/* Discovery radar — this is the join surface, there is no QR/code */}
+              <View style={{ marginTop: 18 }}>
+                <RadarPulse
+                  glass={G}
+                  compact
+                  deviceName={getThisDeviceName()}
+                  tone={nearbyDevices.length > 0 ? 'found' : 'searching'}
+                  status={nearbyDevices.length > 0
+                    ? `${nearbyDevices.length} device${nearbyDevices.length === 1 ? '' : 's'} found`
+                    : 'Searching for nearby devices…'}
+                  peers={nearbyDevices.map((d) => ({
+                    id: d.deviceId,
+                    name: d.deviceName,
+                    platform: d.platform,
+                    detail: `${d.role === 'owner' ? 'Owner' : 'Team'} · ${d.hasInvite ? 'tap to invite' : 'no open invite yet'}`,
+                    disabled: !(d.hasInvite && d.code),
+                  }))}
+                  onPickPeer={(p) => {
+                    const d = nearbyDevices.find((x) => x.deviceId === p.id);
+                    if (d?.hasInvite && d.code) {
+                      setConfiguringDevice({ deviceId: d.deviceId, deviceName: d.deviceName, platform: d.platform, code: d.code });
+                    }
+                  }}
+                  emptyHint="Keep both devices on the same Wi-Fi with Shega open."
+                />
               </View>
-              <StepBadge step={10} total={10} />
+
+              {/* Nearby devices — auto-discovered, always scanning while this step is open */}
+              <View style={{ marginTop: 20 }}>
+                {nearbyDevices.length === 0 && (
+                  <View style={[styles.noteBox, { backgroundColor: G.card, borderColor: G.border }]}>
+                    <AppText variant="caption" weight="medium" style={{ color: G.muted }}>
+                      {teamPublishing
+                        ? 'Searching for nearby Shega devices…'
+                        : 'No nearby devices yet. Make sure the other device has Shega open, then scan again.'}
+                    </AppText>
+                  </View>
+                )}
+              </View>
+
+              {/* No QR and no pairing code — joining happens through the radar. */}
+              <View style={{ marginTop: 18, alignItems: 'center' }}>
+                <GhostButton
+                  label="Scan again"
+                  onPress={() => {
+                    try { mobilePairingBeacon.startBrowsing(); } catch { /* mDNS unavailable */ }
+                    if (!teamInvite) createTeamInvite();
+                  }}
+                />
+              </View>
+
+              <View style={{ marginTop: 22 }}>
+                <PrimaryButton label="Continue" onPress={() => { try { if (teamInvite) revokeInvitation(teamInvite.id); } catch { /* noop */ } mobilePairingBeacon.stopPublishing(); go('review'); }} icon={<ChevronRight size={17} color={G.bg} />} />
+                <View style={{ marginTop: 12 }}>
+                  <GhostButton label="Back" onPress={() => go('warehouse')} />
+                </View>
+              </View>
+              <StepBadge step={8} total={8} />
             </Animated.View>
           )}
 
@@ -974,6 +1058,58 @@ export default function SetupWizardScreen() {
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Owner configures the joining member: name, photo, role, permissions */}
+      {configuringDevice && bizId && (
+        <MemberApprovalModal
+          request={{
+            joinerUser: configuringDevice.deviceName,
+            joinerName: configuringDevice.deviceName,
+            platform: configuringDevice.platform,
+          }}
+          glass={{ bgCard: G.card, border: G.border, fg: G.fg, muted: G.muted, bg: G.bg }}
+          onClose={() => setConfiguringDevice(null)}
+          onConfirm={async (cfg) => {
+            const target = configuringDevice;
+            setConfiguringDevice(null);
+            try {
+              // Generate an invite scoped to this member, advertise it, and
+              // stage the assigned identity so their device receives it on join.
+              const inv = generateInvitation({ businessId: bizId, role: cfg.role, platform: target.platform === 'desktop' ? 'desktop' : 'mobile' });
+              try {
+                mobilePairingBeacon.advertiseInvitation({ id: inv.id, code: inv.code, businessId: bizId, role: cfg.role, expiresAt: inv.expiresAt });
+              } catch { /* best-effort */ }
+              wsSyncClient.publishInvitation({ id: inv.id, businessId: bizId, code: inv.code, role: cfg.role, platform: target.platform, expiresAt: inv.expiresAt }).catch(() => {});
+              // Persist the assigned identity on a device_requests row so the
+              // joiner's STATUS poll (and the roster mirror) adopt it.
+              try {
+                const db = getDB();
+                db.runSync(
+                  `INSERT OR REPLACE INTO device_requests
+                     (id, business_id, code, joiner_device_id, joiner_name, joiner_model, joiner_user, role, platform, status, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+                  [`cfg-${inv.id}`, bizId, inv.code, target.deviceId, target.deviceName,
+                   target.platform, cfg.name, cfg.role, target.platform, new Date().toISOString()],
+                );
+                try {
+                  db.runSync('UPDATE device_requests SET assigned_name = ?, assigned_avatar = ?, assigned_permissions = ? WHERE id = ?',
+                    [cfg.name, cfg.avatar, cfg.permissions ? JSON.stringify(cfg.permissions) : null, `cfg-${inv.id}`]);
+                } catch {
+                  db.runSync('ALTER TABLE device_requests ADD COLUMN assigned_name TEXT');
+                  db.runSync('ALTER TABLE device_requests ADD COLUMN assigned_avatar TEXT');
+                  db.runSync('ALTER TABLE device_requests ADD COLUMN assigned_permissions TEXT');
+                  db.runSync('UPDATE device_requests SET assigned_name = ?, assigned_avatar = ?, assigned_permissions = ? WHERE id = ?',
+                    [cfg.name, cfg.avatar, cfg.permissions ? JSON.stringify(cfg.permissions) : null, `cfg-${inv.id}`]);
+                }
+              } catch { /* best-effort */ }
+              setTeamInvite(inv);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            } catch (e: any) {
+              setError(e?.message || 'Could not send the invitation');
+            }
+          }}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -1024,6 +1160,9 @@ const styles = StyleSheet.create({
   },
   noteBox: {
     borderRadius: 14, borderWidth: 1, paddingVertical: 10, paddingHorizontal: 14, marginTop: 4,
+  },
+  nearbyIcon: {
+    width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
   },
   reviewCard: { borderRadius: 20, borderWidth: 1, marginTop: 20, overflow: 'hidden' },
   reviewRow: {

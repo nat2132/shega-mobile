@@ -18,6 +18,7 @@
 
 import { getDB } from '../database/db';
 import { getDeviceId, currentOutboxSeq, pruneOutboxEchoes } from './syncService';
+import { validateInviteCode } from './invitationService';
 import { bumpDataVersion } from './dataVersion';
 import * as Crypto from 'expo-crypto';
 
@@ -287,6 +288,26 @@ function handleMessage(client: TcpClient, data: string): void {
       handleSyncPull(client, msg);
       break;
 
+    case 'INVITE_RESOLVE':
+      handleInviteResolve(client, msg);
+      break;
+
+    case 'DEVICE_JOIN_SUBMIT':
+      handleJoinSubmit(client, msg);
+      break;
+
+    case 'DEVICE_JOIN_STATUS':
+      handleJoinStatus(client, msg);
+      break;
+
+    case 'DEVICE_JOIN_LIST':
+      handleJoinList(client, msg);
+      break;
+
+    case 'DEVICE_JOIN_DECIDE':
+      handleJoinDecide(client, msg);
+      break;
+
     default:
       sendError(client.socket, 'UNKNOWN_TYPE', `Unknown message type: ${msg.type}`);
   }
@@ -406,6 +427,276 @@ function sendError(socket: any, code: string, message: string): void {
   sendTo(socket, { type: 'ERROR', payload: { code, message } });
 }
 
+// ─── Device-join channel (hub side) ─────────────────────────────────────────
+// Mirrors the desktop WS hub's DEVICE_JOIN channel so a mobile phone acting
+// as the main connector can serve joiners (mobile OR desktop) without any
+// cloud dependency. Codes resolve against THIS phone's `invitations` table;
+// requests are staged into `device_requests`; the owner's BusinessManagement
+// screen lists and decides them — all locally, all offline.
+
+const normalizeCode = (code: string) => String(code ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+/** Local `device_requests` rows for a business, newest decisions last. */
+function listLocalJoinRequests(businessId: string): any[] {
+  const db = getDB();
+  return db.getAllSync(
+    `SELECT * FROM device_requests WHERE business_id = ?
+     ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, created_at DESC LIMIT 100`,
+    [businessId],
+  ).map((r: any) => ({
+    requestId: r.id,
+    businessId: r.business_id,
+    code: r.code,
+    joinerDeviceId: r.joiner_device_id,
+    joinerName: r.joiner_name,
+    joinerModel: r.joiner_model,
+    joinerUser: r.joiner_user,
+    role: r.role,
+    platform: r.platform,
+    status: r.status,
+    createdAt: r.created_at,
+    decidedAt: r.decided_at,
+    assignedName: r.assigned_name ?? null,
+    assignedAvatar: r.assigned_avatar ?? null,
+    assignedPermissions: r.assigned_permissions ? safeParse(r.assigned_permissions) : null,
+  }));
+}
+
+function ensureJoinTables(): void {
+  const db = getDB();
+  db.runSync(`CREATE TABLE IF NOT EXISTS device_requests (
+      id TEXT PRIMARY KEY,
+      business_id TEXT NOT NULL,
+      code TEXT,
+      joiner_device_id TEXT NOT NULL,
+      joiner_name TEXT,
+      joiner_model TEXT,
+      joiner_user TEXT,
+      role TEXT,
+      platform TEXT DEFAULT 'mobile',
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TEXT,
+      decided_at TEXT,
+      assigned_name TEXT,
+      assigned_avatar TEXT,
+      assigned_permissions TEXT
+    )`);
+  for (const col of ['assigned_name TEXT', 'assigned_avatar TEXT', 'assigned_permissions TEXT']) {
+    try { db.runSync(`ALTER TABLE device_requests ADD COLUMN ${col}`); } catch { /* already present */ }
+  }
+}
+
+/**
+ * Owner "configure before they ask" handoff, keyed by joiner device id.
+ *
+ * The Add-Team radar lets the owner configure a discovered phone/desktop that
+ * is still waiting to join. Storing the configuration here means the request
+ * is approved with the assigned identity the instant it arrives — one
+ * confirmation, no second approval step.
+ */
+const preassignedJoins = new Map<string, { name?: string; avatar?: string | null; role?: string; permissions?: Record<string, unknown> }>();
+
+export function preassignJoinIdentity(
+  deviceId: string,
+  cfg: { name?: string; avatar?: string | null; role?: string; permissions?: Record<string, unknown> },
+): void {
+  if (!deviceId) return;
+  preassignedJoins.set(deviceId, cfg);
+}
+
+function handleInviteResolve(client: TcpClient, msg: any): void {
+  const code = String(msg.payload?.code ?? '');
+  if (!code) { sendError(client.socket, 'INVITE_FAILED', 'code required'); return; }
+  const inv = validateInviteCode(code);
+  if (!inv) { sendError(client.socket, 'INVITE_INVALID', 'Invitation not found or expired'); return; }
+  const db = getDB();
+  const biz = db.getFirstSync(
+    'SELECT uuid, name FROM businesses WHERE uuid = ? OR id = ? LIMIT 1',
+    [inv.business_id, inv.business_id],
+  ) as any;
+  sendTo(client.socket, {
+    type: 'DEVICE_JOIN_RESPONSE',
+    requestId: msg.requestId,
+    payload: {
+      invitation: {
+        id: inv.id,
+        businessId: biz?.uuid ?? String(inv.business_id),
+        code: inv.code,
+        name: inv.name,
+        role: inv.role,
+        platform: inv.platform,
+        expiresAt: inv.expires_at,
+        businessName: biz?.name ?? null,
+      },
+    },
+  });
+}
+
+function handleJoinSubmit(client: TcpClient, msg: any): void {
+  const p = msg.payload || {};
+  if (!p.code || !p.joinerDeviceId) {
+    sendError(client.socket, 'DEVICE_JOIN_FAILED', 'code and joinerDeviceId required');
+    return;
+  }
+  const inv = validateInviteCode(p.code);
+  if (!inv) { sendError(client.socket, 'INVITE_INVALID', 'Invitation not found or expired'); return; }
+  const db = getDB();
+  const biz = db.getFirstSync(
+    'SELECT uuid FROM businesses WHERE uuid = ? OR id = ? LIMIT 1',
+    [inv.business_id, inv.business_id],
+  ) as any;
+  const canonicalBizId = String(biz?.uuid ?? inv.business_id);
+  ensureJoinTables();
+  const existing = db.getFirstSync(
+    "SELECT id FROM device_requests WHERE business_id = ? AND joiner_device_id = ? AND status = 'pending'",
+    [canonicalBizId, p.joinerDeviceId],
+  ) as any;
+  const requestId = existing?.id ?? `jr-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
+  if (!existing) {
+    db.runSync(
+      `INSERT INTO device_requests
+         (id, business_id, code, joiner_device_id, joiner_name, joiner_model, joiner_user, role, platform, status, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+      [requestId, canonicalBizId, p.code, p.joinerDeviceId, p.joinerName ?? null,
+       p.joinerModel ?? null, p.joinerUser ?? 'New Member', p.role ?? inv.role ?? 'cashier',
+       p.platform ?? 'mobile', new Date().toISOString()],
+    );
+  }
+  client.paired = true; // joiners may poll status through this connection
+  client.deviceId = p.joinerDeviceId;
+  // Pre-configured in the owner's Add-Team radar: apply the assigned identity
+  // and approve on arrival so the joiner lands straight in the business.
+  const pre = preassignedJoins.get(p.joinerDeviceId);
+  if (pre) {
+    preassignedJoins.delete(p.joinerDeviceId);
+    try {
+      db.runSync(
+        `UPDATE device_requests SET assigned_name = ?, assigned_avatar = ?, assigned_permissions = ?,
+           role = ?, status = 'approved', decided_at = ? WHERE id = ?`,
+        [pre.name ?? null, pre.avatar ?? null, pre.permissions ? JSON.stringify(pre.permissions) : null,
+         pre.role ?? 'cashier', new Date().toISOString(), requestId],
+      );
+      db.runSync("UPDATE invitations SET status = 'used' WHERE code = ?", [p.code]);
+      try {
+        const req = db.getFirstSync('SELECT * FROM device_requests WHERE id = ?', [requestId]) as any;
+        db.runSync(
+          `INSERT OR REPLACE INTO devices (id, business_id, user_id, name, platform, status, is_active, uuid, created_at, updated_at)
+           VALUES (?, ?, NULL, ?, ?, 'active', 1, ?, ?, ?)`,
+          [p.joinerDeviceId, canonicalBizId, pre.name || p.joinerName || p.joinerDeviceId.slice(0, 8),
+           p.platform === 'desktop' ? 'desktop' : 'mobile', p.joinerDeviceId,
+           new Date().toISOString(), new Date().toISOString()],
+        );
+        void req;
+      } catch { /* roster mirror is best-effort */ }
+    } catch { /* fall back to the manual approval flow below */ }
+    sendTo(client.socket, { type: 'DEVICE_JOIN_ACK', requestId: msg.requestId, payload: { requestId, status: 'approved' } });
+    console.log(`[MobileSync] Device join auto-approved (pre-configured): ${p.joinerDeviceId}`);
+    return;
+  }
+  sendTo(client.socket, { type: 'DEVICE_JOIN_ACK', requestId: msg.requestId, payload: { requestId, status: 'pending' } });
+  console.log(`[MobileSync] Device join staged: ${p.joinerDeviceId} -> ${canonicalBizId}`);
+}
+
+function handleJoinStatus(client: TcpClient, msg: any): void {
+  const { code, joinerDeviceId } = msg.payload || {};
+  if (!code || !joinerDeviceId) {
+    sendError(client.socket, 'DEVICE_JOIN_FAILED', 'code and joinerDeviceId required');
+    return;
+  }
+  ensureJoinTables();
+  const n = normalizeCode(code);
+  const db = getDB();
+  const row = db.getFirstSync(
+    `SELECT * FROM device_requests WHERE replace(replace(upper(coalesce(code,'')), '-', ''), ' ', '') = ?
+       AND joiner_device_id = ? ORDER BY created_at DESC LIMIT 1`,
+    [n, joinerDeviceId],
+  ) as any;
+  const record = row ? {
+    requestId: row.id, businessId: row.business_id, code: row.code,
+    joinerDeviceId: row.joiner_device_id, joinerName: row.joiner_name,
+    joinerModel: row.joiner_model, joinerUser: row.assigned_name || row.joiner_user,
+    role: row.role, platform: row.platform, status: row.status,
+    createdAt: row.created_at, decidedAt: row.decided_at,
+    // Owner-assigned identity rides along so the joiner adopts it on approval.
+    assignedName: row.assigned_name ?? null,
+    assignedAvatar: row.assigned_avatar ?? null,
+    assignedPermissions: row.assigned_permissions ? safeParse(row.assigned_permissions) : null,
+  } : null;
+  const payload: any = { record };
+  // Approval grants the hub pairing credential in-band (same as desktop).
+  if (record && record.status === 'approved') payload.pairingToken = getPairingToken();
+  sendTo(client.socket, { type: 'DEVICE_JOIN_RESPONSE', requestId: msg.requestId, payload });
+}
+
+function safeParse(json: string): any {
+  try { return JSON.parse(json); } catch { return null; }
+}
+
+function handleJoinList(client: TcpClient, msg: any): void {
+  const { businessId } = msg.payload || {};
+  if (!businessId) { sendError(client.socket, 'DEVICE_JOIN_FAILED', 'businessId required'); return; }
+  ensureJoinTables();
+  sendTo(client.socket, { type: 'DEVICE_JOIN_RESPONSE', requestId: msg.requestId, payload: { requests: listLocalJoinRequests(String(businessId)) } });
+}
+
+function handleJoinDecide(client: TcpClient, msg: any): void {
+  const p = msg.payload || {};
+  if (!p.requestId || !['approved', 'rejected'].includes(p.decision)) {
+    sendError(client.socket, 'DEVICE_JOIN_FAILED', 'requestId and valid decision required');
+    return;
+  }
+  ensureJoinTables();
+  const db = getDB();
+  const row = db.getFirstSync('SELECT * FROM device_requests WHERE id = ?', [p.requestId]) as any;
+  if (!row) { sendError(client.socket, 'DEVICE_JOIN_FAILED', 'request not found'); return; }
+  db.runSync('UPDATE device_requests SET status = ?, decided_at = ? WHERE id = ?',
+    [p.decision, new Date().toISOString(), p.requestId]);
+  // Persist the owner-assigned identity so the joiner's STATUS poll returns it.
+  try {
+    const sets: string[] = [];
+    const vals: any[] = [];
+    if (p.assignedName) { sets.push('assigned_name = ?'); vals.push(p.assignedName); }
+    if (p.assignedRole) { sets.push('role = ?'); vals.push(p.assignedRole); }
+    if (p.assignedAvatar !== undefined && p.assignedAvatar !== null) { sets.push('assigned_avatar = ?'); vals.push(p.assignedAvatar); }
+    if (p.assignedPermissions && typeof p.assignedPermissions === 'object') { sets.push('assigned_permissions = ?'); vals.push(JSON.stringify(p.assignedPermissions)); }
+    if (sets.length) { vals.push(p.requestId); db.runSync(`UPDATE device_requests SET ${sets.join(', ')} WHERE id = ?`, vals); }
+  } catch {
+    try {
+      db.runSync('ALTER TABLE device_requests ADD COLUMN assigned_name TEXT');
+      db.runSync('ALTER TABLE device_requests ADD COLUMN assigned_avatar TEXT');
+      db.runSync('ALTER TABLE device_requests ADD COLUMN assigned_permissions TEXT');
+    } catch { /* columns exist */ }
+  }
+  if (p.decision === 'approved') {
+    // Consume the invite + promote the device on this owner phone so both
+    // sides' rosters agree. The joiner learns the outcome via STATUS polling.
+    try { db.runSync("UPDATE invitations SET status = 'used' WHERE code = ?", [row.code]); } catch { /* best-effort */ }
+    try {
+      db.runSync(
+        `INSERT OR REPLACE INTO devices (id, business_id, user_id, name, platform, status, is_active, uuid, created_at, updated_at)
+         VALUES (?, ?, NULL, ?, ?, 'active', 1, ?, ?, ?)`,
+        [row.joiner_device_id, row.business_id, row.joiner_name || row.joiner_device_id.slice(0, 8),
+         row.platform === 'desktop' ? 'desktop' : 'mobile', row.joiner_device_id,
+         new Date().toISOString(), new Date().toISOString()],
+      );
+    } catch { /* roster mirror is best-effort */ }
+  }
+  const updated = db.getFirstSync('SELECT * FROM device_requests WHERE id = ?', [p.requestId]) as any;
+  sendTo(client.socket, {
+    type: 'DEVICE_JOIN_RESPONSE',
+    requestId: msg.requestId,
+    payload: { record: { requestId: updated.id, businessId: updated.business_id, code: updated.code,
+      joinerDeviceId: updated.joiner_device_id, joinerName: updated.joiner_name,
+      joinerModel: updated.joiner_model, joinerUser: updated.assigned_name || updated.joiner_user,
+      role: updated.role, platform: updated.platform, status: updated.status,
+      createdAt: updated.created_at, decidedAt: updated.decided_at,
+      assignedName: updated.assigned_name ?? null,
+      assignedAvatar: updated.assigned_avatar ?? null,
+      assignedPermissions: updated.assigned_permissions ? safeParse(updated.assigned_permissions) : null } },
+  });
+  console.log(`[MobileSync] Device join ${p.decision}: ${row.joiner_device_id}`);
+}
+
 // ─── Public API ─────────────────────────────────────────────────────────────
 
 export async function startMobileSyncServer(): Promise<boolean> {
@@ -423,7 +714,7 @@ export async function startMobileSyncServer(): Promise<boolean> {
       };
       clients.set(clientId, client);
 
-      socket.on('data', (data: Buffer) => {
+      socket.on('data', (data: any) => {
         const text = data.toString('utf8');
         // Handle multiple messages in one buffer (newline-delimited)
         const messages = text.split('\n').filter(Boolean);

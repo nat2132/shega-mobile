@@ -39,7 +39,11 @@ import {
   canAddDevice, getActiveDeviceCount,
 } from '@/services/invitationService';
 import { wsSyncClient } from '@/services/wsSyncClient';
-import { mobilePairingBeacon } from '@/services/mobilePairingBeacon';
+import { getDB } from '@/database/db';
+import MemberApprovalModal from '@/components/MemberApprovalModal';
+import { mobilePairingBeacon, getThisDeviceName } from '@/services/mobilePairingBeacon';
+import { preassignJoinIdentity } from '@/services/mobileSyncServer';
+import { RadarPulse } from '@/components/RadarPulse';
 import { listPairingInvitations, decidePairing, revokePairing, listCloudDevices, manageDevice, removeCloudDevice, type CloudDeviceEntry } from '@/services/pairingService';
 
 type Tab = 'overview' | 'people' | 'devices' | 'registers' | 'permissions' | 'ownership' | 'businesses';
@@ -826,10 +830,40 @@ function InviteModal({ businessId, canAdd, activeCount, onClose, glass }: {
   businessId: string; canAdd: boolean; activeCount: number; onClose: () => void; glass: any;
 }) {
   const { t } = useSettings();
+  const { showToast } = useToast();
   const [invite, setInvite] = useState<null | { id: string; code: string; expiresAt: string; qrUri: string }>(null);
   const [name, setName] = useState('');
   const [role, setRole] = useState('cashier');
   const roles: BuiltinRoleKey[] = ['cashier', 'inventory', 'manager', 'reports', 'accountant'];
+  // Nearby team devices in Joining Mode, shown so the owner can identify who
+  // is waiting to join ("Team · device name").
+  const [nearbyTeam, setNearbyTeam] = useState<Array<{ deviceId: string; deviceName: string; platform: string; role?: string }>>([]);
+  // Discovery mode for as long as the Add-Team sheet is open: other devices
+  // (joiners AND owners) see this device immediately — even before an invite
+  // is generated — and we browse so team devices appear here by name.
+  useEffect(() => {
+    try { mobilePairingBeacon.setDiscoverable(true, 'Shega', 'owner'); } catch { /* ignore */ }
+    try { mobilePairingBeacon.startBrowsing(); } catch { /* ignore */ }
+    const refresh = () => {
+      try {
+        setNearbyTeam(mobilePairingBeacon.getNearbyOwners().map(({ beacon }) => ({
+          deviceId: beacon.owner?.deviceId || beacon.businessId,
+          deviceName: beacon.owner?.deviceName || 'Nearby device',
+          platform: beacon.owner?.platform || 'mobile',
+          role: beacon.role,
+        })));
+      } catch { /* ignore */ }
+    };
+    const sub = mobilePairingBeacon.onFound(refresh);
+    refresh();
+    const timer = setInterval(refresh, 5000);
+    return () => {
+      sub();
+      clearInterval(timer);
+      try { mobilePairingBeacon.stopBrowsing(); } catch { /* ignore */ }
+      try { mobilePairingBeacon.setDiscoverable(false); } catch { /* ignore */ }
+    };
+  }, []);
 
   const create = () => {
     const generated = generateInvitation({ businessId, name: name.trim() || undefined, role, platform: 'mobile' });
@@ -859,12 +893,35 @@ function InviteModal({ businessId, canAdd, activeCount, onClose, glass }: {
               <AppText variant="body" weight="medium" align="center" style={{ color: glass.muted, marginVertical: 8 }}>
                 {name.trim() || t('business.new_member')} · {getRoleLabel(role)}
               </AppText>
-              <View style={[styles.codeBox, { backgroundColor: glass.accentGlass, borderColor: glass.border }]}>
-                <AppText variant="heading-lg" weight="bold" align="center" style={{ color: glass.fg, letterSpacing: 3 }}>{invite.code}</AppText>
-              </View>
-              <AppText variant="caption" weight="medium" align="center" style={{ color: glass.muted, marginTop: 8 }}>
-                {t('business.ask_employee_code')} <AppText variant="caption" weight="bold" style={{ color: glass.fg }}>{t('business.join_existing_business')}</AppText>.
-              </AppText>
+              {/* Discovery radar: no code, no QR — tap the waiting device. */}
+              <RadarPulse
+                glass={glass}
+                compact
+                deviceName={getThisDeviceName()}
+                tone={nearbyTeam.filter((d) => d.role === 'team').length > 0 ? 'found' : 'searching'}
+                status={
+                  nearbyTeam.filter((d) => d.role === 'team').length > 0
+                    ? `${nearbyTeam.filter((d) => d.role === 'team').length} device(s) waiting`
+                    : 'Waiting for connection…'
+                }
+                peers={nearbyTeam
+                  .filter((d) => d.role === 'team')
+                  .map((d) => ({
+                    id: d.deviceId,
+                    name: d.deviceName,
+                    platform: d.platform,
+                    detail: 'Waiting to join · tap to add',
+                  }))}
+                onPickPeer={(p) => {
+                  preassignJoinIdentity(p.id, { name: name.trim() || undefined, role });
+                  try {
+                    mobilePairingBeacon.advertiseInvitation({ id: invite.id, code: invite.code, businessId, role, expiresAt: invite.expiresAt });
+                  } catch { /* beacon unavailable */ }
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  showToast(`${name.trim() || p.name} joins as ${getRoleLabel(role)} as soon as they connect.`, 'success');
+                }}
+                emptyHint={t('business.ask_employee_code')}
+              />
               {wsSyncClient.isConnected ? (
                 <AppText variant="caption" weight="medium" align="center" style={{ color: '#2ecc71', marginTop: 6 }}>
                   {t('business.invite_published')}
@@ -885,6 +942,23 @@ function InviteModal({ businessId, canAdd, activeCount, onClose, glass }: {
                   <AppText variant="caption" weight="bold" style={{ color: glass.fg }}>
                     {t('business.device_limit_reached', { count: String(activeCount) })}
                   </AppText>
+                </View>
+              )}
+              {nearbyTeam.length > 0 && (
+                <View style={{ marginTop: 6 }}>
+                  <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: glass.muted }}>
+                    Nearby devices waiting to join ({nearbyTeam.length})
+                  </AppText>
+                  {nearbyTeam.map((d, i) => (
+                    <View key={`${d.deviceName}-${i}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, borderBottomWidth: i < nearbyTeam.length - 1 ? 1 : 0, borderBottomColor: glass.border }}>
+                      {d.platform === 'desktop'
+                        ? <Building2 size={15} color={glass.accent} />
+                        : <Smartphone size={15} color={glass.accent} />}
+                      <AppText variant="body" weight="bold" style={{ color: glass.fg }} numberOfLines={1}>
+                        {d.role === 'team' ? 'Team' : 'Owner'} · {d.deviceName}
+                      </AppText>
+                    </View>
+                  ))}
                 </View>
               )}
               <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: glass.muted, marginTop: 6 }}>{t('business.employee_name')}</AppText>
@@ -919,9 +993,35 @@ function JoinRequestsSection({ businessId, people, glass }: { businessId: string
   const [requests, setRequests] = useState<any[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [configuring, setConfiguring] = useState<{ request: any } | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!wsSyncClient.isConnected) return;
+    // When this phone IS the hub (no WS connection to another hub), read the
+    // join requests staged locally by our own TCP join channel.
+    if (!wsSyncClient.isConnected) {
+      try {
+        const db = getDB();
+        const rows = db.getAllSync(
+          `SELECT * FROM device_requests WHERE business_id = ?
+           ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, created_at DESC LIMIT 100`,
+          [businessId],
+        ) as any[];
+        setRequests(rows.filter((r) => r.status === 'pending').map((r) => ({
+          requestId: r.id,
+          businessId: r.business_id,
+          code: r.code,
+          joinerDeviceId: r.joiner_device_id,
+          joinerName: r.joiner_name,
+          joinerModel: r.joiner_model,
+          joinerUser: r.joiner_user,
+          role: r.role,
+          platform: r.platform,
+          status: r.status,
+        })));
+        setLoaded(true);
+      } catch { /* device_requests may not exist yet */ }
+      return;
+    }
     try {
       const list = await wsSyncClient.listDeviceJoinRequests(businessId);
       setRequests(Array.isArray(list) ? list.filter((r) => r.status === 'pending') : []);
@@ -938,16 +1038,57 @@ function JoinRequestsSection({ businessId, people, glass }: { businessId: string
     return () => clearInterval(timer);
   }, [businessId, refresh]);
 
-  const decide = async (re: any, approve: boolean, roleOverride?: string) => {
+  const decide = async (re: any, approve: boolean, cfg?: { role?: string; name?: string; avatar?: string | null; permissions?: Record<string, unknown> }) => {
     setRefreshing(true);
     try {
+      const assignedName = cfg?.name?.trim() || re.joinerUser || re.joinerName || t('business.new_member');
+      const finalRole = cfg?.role || re.role || 'cashier';
       if (approve && wsSyncClient.isConnected) {
-        wsSyncClient.decideDeviceJoinRequest({ requestId: re.requestId, businessId, joinerDeviceId: re.joinerDeviceId, decision: 'approved', decidedBy: people.find((p) => p.isOwner)?.id || '' }).catch(() => {});
+        wsSyncClient.decideDeviceJoinRequest({ requestId: re.requestId, businessId, joinerDeviceId: re.joinerDeviceId, decision: 'approved', decidedBy: people.find((p) => p.isOwner)?.id || '', assignedName, assignedAvatar: cfg?.avatar ?? null, assignedRole: finalRole, assignedPermissions: cfg?.permissions }).catch(() => {});
       }
-      // Mirror on this owner device: create the employee + an active device.
+      // When this phone IS the hub, record the decision locally so the joiner's
+      // STATUS poll (over TCP) sees it, the assigned identity, and receives the
+      // pairing credential.
+      if (!wsSyncClient.isConnected) {
+        try {
+          const db = getDB();
+          const sets: string[] = ['status = ?', 'decided_at = ?'];
+          const vals: any[] = [approve ? 'approved' : 'rejected', new Date().toISOString()];
+          if (approve) {
+            if (assignedName) { sets.push('assigned_name = ?'); vals.push(assignedName); }
+            if (cfg?.avatar) { sets.push('assigned_avatar = ?'); vals.push(cfg.avatar); }
+            if (cfg?.permissions) { sets.push('assigned_permissions = ?'); vals.push(JSON.stringify(cfg.permissions)); }
+            if (finalRole) { sets.push('role = ?'); vals.push(finalRole); }
+          }
+          vals.push(re.requestId);
+          try {
+            db.runSync(`UPDATE device_requests SET ${sets.join(', ')} WHERE id = ?`, vals);
+          } catch {
+            db.runSync('ALTER TABLE device_requests ADD COLUMN assigned_name TEXT');
+            db.runSync('ALTER TABLE device_requests ADD COLUMN assigned_avatar TEXT');
+            db.runSync('ALTER TABLE device_requests ADD COLUMN assigned_permissions TEXT');
+            db.runSync(`UPDATE device_requests SET ${sets.join(', ')} WHERE id = ?`, vals);
+          }
+          if (approve) {
+            try { db.runSync("UPDATE invitations SET status = 'used' WHERE code = ?", [re.code]); } catch { /* best-effort */ }
+          }
+        } catch { /* best-effort */ }
+      }
+      // Mirror on this owner device: create the employee + an active device
+      // with the assigned identity.
       if (approve) {
-        const finalRole = roleOverride || re.role || 'cashier';
-        const person = addUser({ businessId, name: re.joinerUser || re.joinerName || t('business.new_member'), role: finalRole });
+        const person = addUser({ businessId, name: assignedName, role: finalRole });
+        if (cfg?.avatar || cfg?.permissions) {
+          try {
+            const db = getDB();
+            const sets: string[] = [];
+            const vals: any[] = [];
+            if (cfg.avatar) { sets.push('avatar = ?'); vals.push(cfg.avatar); }
+            if (cfg.permissions) { sets.push('permissions = ?'); vals.push(JSON.stringify(cfg.permissions)); }
+            if (sets.length) { sets.push('updated_at = ?'); vals.push(new Date().toISOString()); vals.push(person.id);
+              db.runSync(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`, vals); }
+          } catch { /* best-effort */ }
+        }
         // Use the REAL joiner device id so the hub-side roster row created at
         // submit and this local mirror coalesce on the same identity.
         addDevice({ businessId, name: re.joinerName || t('business.new_device'), platform: re.platform === 'desktop' ? 'desktop' : 'mobile', userId: person.id, role: finalRole }, re.joinerDeviceId ?? '');
@@ -961,27 +1102,10 @@ function JoinRequestsSection({ businessId, people, glass }: { businessId: string
 
   /** Spec §4 approval: role selector (Owner/Cashier/Custom) → Approve & Sync. */
   const decideWithRoleLocal = (re: any) => {
-    Alert.alert(
-      `New team member — ${re.joinerUser || re.joinerName || 'Unknown'}`,
-      `${re.joinerName || 'A device'} (${re.platform === 'desktop' ? 'Desktop' : 'Mobile'}) wants to join. Choose their role — initial data sync begins on approval.`,
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        { text: '👑 Owner', onPress: () => decide(re, true, 'owner') },
-        { text: 'Cashier', onPress: () => decide(re, true, 'cashier') },
-        {
-          text: 'Custom…',
-          onPress: () =>
-            Alert.prompt(
-              'Custom role',
-              'manager, inventory, accountant, reports, warehouse…',
-              [
-                { text: t('common.cancel'), style: 'cancel' },
-                { text: 'Approve & Sync', onPress: (v?: string) => v && v.trim() && decide(re, true, v.trim().toLowerCase()) },
-              ],
-            ),
-        },
-      ],
-    );
+    // Full member-configuration flow: assign the member a name, profile
+    // picture, role (Owner/Cashier/Custom) and — for Custom — the exact
+    // permissions before confirming the invitation.
+    setConfiguring({ request: re });
   };
 
   if (!loaded && wsSyncClient.isConnected) return null;
@@ -1009,6 +1133,19 @@ function JoinRequestsSection({ businessId, people, glass }: { businessId: string
           </View>
         </View>
       ))}
+      {configuring && (
+        <MemberApprovalModal
+          request={configuring.request}
+          glass={glass}
+          onClose={() => setConfiguring(null)}
+          onConfirm={async (cfg) => {
+            const re = configuring.request;
+            setConfiguring(null);
+            await decide(re, true, cfg);
+            refresh();
+          }}
+        />
+      )}
     </View>
   );
 }

@@ -20,6 +20,7 @@ import { getMobileSyncPort } from './mobileSyncServer';
 
 let zeroconf: any | null = null;
 let isPublishing = false;
+let warnedUnavailable = false;
 
 function getCurrentBusinessId(): string | null {
   try {
@@ -50,7 +51,10 @@ export function publishMobileHub(): void {
 
   try {
     if (!ZeroconfCtor) {
-      console.warn('[mDNS] Cannot publish mobile hub: react-native-zeroconf unavailable');
+      if (!warnedUnavailable) {
+        warnedUnavailable = true;
+        console.warn('[mDNS] Cannot publish mobile hub: react-native-zeroconf unavailable (native module missing — rebuild the dev client with `npx expo run:android`)');
+      }
       return;
     }
     zeroconf = new ZeroconfCtor();

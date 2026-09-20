@@ -9,20 +9,23 @@ import {
   View,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, CheckCircle2, Radar, ShieldAlert, Smartphone, Store } from 'lucide-react-native';
+import { ArrowLeft, CheckCircle2, ShieldAlert } from 'lucide-react-native';
 import { useSettings } from '@/context/SettingsContext';
 import { useToast } from '@/context/ToastContext';
 import { AppText } from '@/components/ui';
+import { RadarPulse } from '@/components/RadarPulse';
 import { getGlass } from './glass-theme';
 import { wsSyncClient } from '@/services/wsSyncClient';
 import { validateInviteCode, submitJoinRequest, restoreBusinessFromJoin, resolveJoinDeviceId } from '@/services/invitationService';
+import { directResolveInvite, directSubmitJoin, directJoinStatus, desktopHttpResolveInvite, isHubReachable } from '@/services/directJoinClient';
+import { mobilePairingBeacon, getThisDeviceName } from '@/services/mobilePairingBeacon';
+import { mdnsDiscovery } from '@/services/mdnsDiscovery';
 import { getThisDeviceId } from '@/services/businessService';
 import { getHubUrl, setHubToken } from '@/services/syncService';
 import { acceptPairing, lookupPairingInvite, pairingStatus, type PairingStatus } from '@/services/pairingService';
 import { fetchMyMemberships } from '@/services/api';
 import { ensureRemoteBusinessSeeded } from '@/services/businessService';
 import { setJoinResumeDone } from '@/services/postAuthRouter';
-import { mobilePairingBeacon } from '@/services/mobilePairingBeacon';
 
 type Stage = 'idle' | 'resolved' | 'sent';
 
@@ -43,34 +46,71 @@ export default function JoinExistingScreen() {
     role?: string;
     name?: string;
     source?: 'lan' | 'cloud';
-    kind?: 'join' | 'shg';
+    kind?: 'join' | 'shg' | 'direct';
   } | null>(null);
   const [cloudInvitationId, setCloudInvitationId] = useState<string | null>(null);
   const [decision, setDecision] = useState<{ status: string; role?: string; joinerUser?: string; name?: string } | null>(null);
   const [checking, setChecking] = useState(false);
   // Bluetooth-style discovery: nearby owners broadcasting pairing beacons.
-  const [nearby, setNearby] = useState<Array<{ businessId: string; businessName: string; code: string; ownerPlatform?: string; ownerName?: string }>>([]);
-  const [scanning, setScanning] = useState(false);
+  const [nearby, setNearby] = useState<Array<{ businessId: string; businessName: string; code: string; role?: string; ownerPlatform?: string; ownerName?: string }>>([]);
+  // Join Mode is a waiting/radar screen: no code entry. 'connecting' while a
+  // discovered business is being resolved + requested, 'notfound' after the
+  // search window elapses with nothing on the network.
+  const [joinPhase, setJoinPhase] = useState<'searching' | 'connecting' | 'notfound'>('searching');
+  const [selfName] = useState(getThisDeviceName());
+  const resolvedRef = useRef<typeof resolved>(null);
+  const autoTriedRef = useRef<Set<string>>(new Set());
+  const connectingRef = useRef(false);
 
-  const scanNearby = () => {
-    setScanning(true);
+  // Auto-discovery: entering Joining Mode makes this device both search for
+  // nearby owners AND become visible to them (mutual discoverability), and
+  // keeps a live discovery list refreshed without pressing any button.
+  useEffect(() => {
     try {
       mobilePairingBeacon.startBrowsing();
-      const owners = mobilePairingBeacon.getNearbyOwners().map(({ beacon }) => ({
-        businessId: beacon.businessId,
-        businessName: beacon.businessName,
-        code: beacon.code,
-        ownerPlatform: beacon.owner?.platform,
-        ownerName: beacon.owner?.deviceName,
-      }));
-      setNearby(owners);
-    } catch { setNearby([]); }
-    finally { setTimeout(() => setScanning(false), 800); }
+      mobilePairingBeacon.setDiscoverable(true, 'Shega', 'team');
+    } catch { /* native mDNS unavailable — manual code entry still works */ }
+    const sub = mobilePairingBeacon.onFound(() => {
+      try {
+        setNearby(mobilePairingBeacon.getNearbyOwners().map(({ beacon }) => ({
+          businessId: beacon.businessId,
+          businessName: beacon.businessName,
+          code: beacon.code,
+          role: beacon.role,
+          ownerPlatform: beacon.owner?.platform,
+          ownerName: beacon.owner?.deviceName,
+        })));
+      } catch { /* ignore */ }
+    });
+    return () => {
+      sub();
+      try { mobilePairingBeacon.setDiscoverable(false); } catch { /* ignore */ }
+    };
+  }, []);
+
+  /** Resolve a discovered invite and send the join request — no typing. */
+  const connectWithCode = async (rawCode: string) => {
+    if (connectingRef.current) return;
+    connectingRef.current = true;
+    setJoinPhase('connecting');
+    try {
+      setCode(rawCode.toUpperCase());
+      await resolve(rawCode);
+      const info = resolvedRef.current;
+      if (info) await submit(info);
+      else setJoinPhase('searching');
+    } finally {
+      connectingRef.current = false;
+    }
   };
 
   const pickNearby = (b: { businessName: string; code: string }) => {
-    setCode(b.code.toUpperCase());
-    void resolve(b.code); // pass the code directly — state update is async
+    if (!b.code) {
+      // Discovery-only beacon: the device is visible but has no open invite.
+      showToast(`${b.businessName} has not opened an invite yet — ask them to tap "Add team member".`, 'info');
+      return;
+    }
+    void connectWithCode(b.code);
   };
 
   const params = useLocalSearchParams<{ resume?: string }>();
@@ -176,6 +216,7 @@ export default function JoinExistingScreen() {
 
   const resolve = async (overrideCode?: string) => {
     const trimmed = (overrideCode ?? code).trim();
+    resolvedRef.current = null;
     if (!trimmed) { showToast('Enter the invitation code', 'error'); return; }
 
     // 1) LAN hub is the fastest path when it is on the same network.
@@ -183,7 +224,7 @@ export default function JoinExistingScreen() {
     //    live in user_invites, not invitations — so a failed join resolve on an
     //    SHG-… code falls through to the dedicated user-invite query below.
     const isShg = /^SHG-/i.test(trimmed);
-    let inviteInfo: { businessId: string; code: string; businessName?: string; role?: string; name?: string; source?: 'lan' | 'cloud'; kind?: 'join' | 'shg' } | null = null;
+    let inviteInfo: { businessId: string; code: string; businessName?: string; role?: string; name?: string; source?: 'lan' | 'cloud'; kind?: 'join' | 'shg' | 'direct' } | null = null;
     if (wsSyncClient.isConnected) {
       try {
         const res = await wsSyncClient.resolveInvitation(trimmed);
@@ -222,8 +263,71 @@ export default function JoinExistingScreen() {
         } catch { /* fall through to the generic not-found */ }
       }
     }
-    // 2) Cloud: the 6-digit manual code resolves against the backend, so a
-    //    joining device works anywhere — not only on the owner's LAN.
+    // 2) Direct hub reach (no pairing yet): probe the nearby beacons/discovered
+    //    hubs and the mobile POS hub for the code — this is how a joiner finds an
+    //    owner who just created the business on their phone, with no cloud at all.
+    if (!inviteInfo) {
+      const targets: Array<{ host: string; port: number }> = [];
+      try {
+        for (const { beacon, host, addresses } of mobilePairingBeacon.getNearbyOwners() as any[]) {
+          if (beacon.code?.toUpperCase() === trimmed.toUpperCase()) {
+            const h = host || addresses?.[0];
+            if (h) targets.push({ host: h, port: 5759 });
+          }
+        }
+      } catch { /* beacon module unavailable */ }
+      try {
+        for (const hub of mdnsDiscovery.getDiscoveredHubs()) {
+          const h = hub.addresses?.[0] || hub.host;
+          if (h) targets.push({ host: h, port: hub.port || 5759 });
+        }
+      } catch { /* discovery unavailable */ }
+      for (const target of targets) {
+        try {
+          if (!(await isHubReachable(target))) continue;
+          const inv = await directResolveInvite(target, trimmed);
+          if (inv) {
+            inviteInfo = {
+              businessId: inv.businessId,
+              code: inv.code,
+              businessName: inv.businessName ?? undefined,
+              role: inv.role ?? undefined,
+              name: inv.name ?? undefined,
+              source: 'lan',
+              kind: 'direct',
+            };
+            (inviteInfo as any).directTarget = target;
+            break;
+          }
+        } catch { /* try the next target */ }
+      }
+      // Desktop hub HTTP fallback (joiner finds a desktop owner without WS).
+      if (!inviteInfo) {
+        try {
+          const { getDiscoveredServices } = require('@/services/mdnsDiscovery') as any;
+          void getDiscoveredServices; // desktop hubs come through mdnsDiscovery below
+        } catch { /* ignore */ }
+        for (const hub of mdnsDiscovery.getDiscoveredHubs()) {
+          const h = hub.addresses?.[0] || hub.host;
+          if (!h) continue;
+          const baseUrl = `http://${h}:5757`;
+          const inv = await desktopHttpResolveInvite(baseUrl, trimmed);
+          if (inv) {
+            inviteInfo = {
+              businessId: inv.businessId,
+              code: inv.code ?? trimmed,
+              businessName: inv.businessName ?? undefined,
+              role: inv.role ?? undefined,
+              name: inv.name ?? undefined,
+              source: 'lan',
+              kind: 'direct',
+            };
+            (inviteInfo as any).directTarget = { host: h, port: 5757, http: true };
+            break;
+          }
+        }
+      }
+    }
     if (!inviteInfo) {
       const local = validateInviteCode(trimmed);
       if (local) {
@@ -253,25 +357,27 @@ export default function JoinExistingScreen() {
       return;
     }
     setResolved(inviteInfo);
+    resolvedRef.current = inviteInfo;
     setStage('resolved');
   };
 
-  const submit = async () => {
-    if (!resolved) return;
-    const personName = (name.trim() || resolved.name || 'New Member').trim();
+  const submit = async (override?: typeof resolved) => {
+    const invite = override ?? resolved;
+    if (!invite) return;
+    const personName = (name.trim() || invite.name || 'New Member').trim();
     try {
-      if (resolved.source === 'cloud') {
+      if (invite.source === 'cloud') {
         // Cloud path: accept directly against the backend. The device + membership
         // become pending; the owner approves from their BusinessManagement screen.
         const acceptRes = await acceptPairing({
-          code: resolved.code,
+          code: invite.code,
           deviceName: `My ${Platform.OS}`,
           platform: 'mobile',
         });
         if (acceptRes.status === 'active') {
           await seedJoinedBusiness(personName);
-          setDecision({ status: 'approved', role: resolved.role, joinerUser: personName });
-          router.replace({ pathname: '/initial-sync', params: { business: resolved.businessName || 'Your Business', role: resolved.role || 'cashier', device: 'This Device' } } as any);
+          setDecision({ status: 'approved', role: invite.role, joinerUser: personName });
+          router.replace({ pathname: '/initial-sync', params: { business: invite.businessName || 'Your Business', role: invite.role || 'cashier', device: 'This Device' } } as any);
         } else {
           setCloudInvitationId(acceptRes.invitation_id);
           setStage('sent');
@@ -279,21 +385,48 @@ export default function JoinExistingScreen() {
         }
         return;
       }
-      if (resolved.kind === 'shg') {
+      if (invite.kind === 'direct') {
+        // Direct hub path: submit straight over TCP/HTTP to the owner's hub.
+        const target = (invite as any).directTarget;
+        if (!target) { showToast('Lost the connection — searching again.', 'error'); return; }
+        const payload = {
+          businessId: invite.businessId,
+          code: invite.code,
+          joinerDeviceId: resolveJoinDeviceId(),
+          joinerName: 'My Device',
+          joinerModel: Platform.OS,
+          joinerUser: personName,
+          role: invite.role ?? 'cashier',
+          platform: 'mobile',
+        };
+        if (target.http) {
+          const res = await fetch(`http://${target.host}:5757/sync/join/submit`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || 'Join request rejected by the hub');
+        } else {
+          await directSubmitJoin(target, payload);
+        }
+        setStage('sent');
+        showToast('Request sent. Waiting for the owner to approve.', 'success');
+        return;
+      }
+      if (invite.kind === 'shg') {
         // Desktop user-invite: claim it with our name + persistent device id;
         // the owner approves from Teams on the desktop.
-        await wsSyncClient.claimHubInvite(resolved.code, personName, resolveJoinDeviceId());
+        await wsSyncClient.claimHubInvite(invite.code, personName, resolveJoinDeviceId());
         setStage('sent');
         showToast('Request sent. Waiting for the owner to approve.', 'success');
         return;
       }
       await submitJoinRequest({
-        businessId: resolved.businessId,
-        code: resolved.code,
+        businessId: invite.businessId,
+        code: invite.code,
         joinerName: 'My Device',
         joinerModel: Platform.OS,
         joinerUser: personName,
-        role: resolved.role ?? 'cashier',
+        role: invite.role ?? 'cashier',
         platform: 'mobile',
       });
       setStage('sent');
@@ -302,6 +435,27 @@ export default function JoinExistingScreen() {
       showToast(e?.message || 'Could not send request', 'error');
     }
   };
+
+  // Auto-connect: the first discovered business with an open invite is joined
+  // with no further input. Each code is attempted once so failures don't loop.
+  useEffect(() => {
+    if (stage !== 'idle') return;
+    const withInvite = nearby.find((n) => !!n.code && !autoTriedRef.current.has(n.code));
+    if (!withInvite) return;
+    autoTriedRef.current.add(withInvite.code);
+    void connectWithCode(withInvite.code);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nearby, stage]);
+
+  // Search window: say so (and keep retrying) instead of a silent radar.
+  useEffect(() => {
+    if (stage !== 'idle' && stage !== 'resolved') return;
+    const timer = setTimeout(() => {
+      setJoinPhase((p) => (p === 'connecting' ? p : 'notfound'));
+    }, 30_000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage]);
 
   const seedJoinedBusiness = async (personName: string) => {
     // Post-approval adoption: the account's memberships now include the joined
@@ -347,6 +501,45 @@ export default function JoinExistingScreen() {
       // Cloud path: poll the backend pairing record for terminal state.
       if (resolved.source === 'cloud' && cloudInvitationId) {
         await applyStatus(await pairingStatus(cloudInvitationId));
+        return;
+      }
+      // Direct hub path: poll the owner's hub over TCP/HTTP until decided.
+      if (resolved.kind === 'direct') {
+        const target = (resolved as any).directTarget;
+        if (!target) { if (!quiet) showToast('Lost the hub connection — rejoin and try again.', 'error'); return; }
+        const deviceId = resolveJoinDeviceId();
+        const payload = target.http
+          ? await (async () => {
+              const res = await fetch(`http://${target.host}:5757/sync/join/status`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: resolved.code, joinerDeviceId: deviceId }),
+              });
+              if (!res.ok) throw new Error('Could not reach the hub');
+              return await res.json();
+            })()
+          : await directJoinStatus(target, resolved.code, deviceId);
+        const rec = payload?.record;
+        if (!rec || rec.status === 'pending') {
+          setDecision({ status: 'pending' });
+          if (!quiet) showToast('Still waiting for the owner to approve.', 'info');
+        } else if (rec.status === 'rejected') {
+          setDecision({ status: 'rejected' });
+          if (!quiet) showToast('Request declined.', 'info');
+        } else if (rec.status === 'approved') {
+          if (doneRef.current) return;
+          await reconnectWithGrantedToken(payload?.pairingToken, deviceId);
+          const restored = restoreBusinessFromJoin({
+            businessId: resolved.businessId,
+            name: resolved.businessName ?? 'My Business',
+            joinerUser: (name.trim() || resolved.name || 'New Member').trim(),
+            role: rec.role || resolved.role || 'cashier',
+            joinerName: rec.joinerName || 'My Device',
+          });
+          doneRef.current = true;
+          setDecision({ status: 'approved' });
+          showToast(`You're in! Welcome to ${restored.name}.`, 'success');
+          router.replace({ pathname: '/initial-sync', params: { business: restored.name || 'Your Business', role: rec.role || resolved.role || 'cashier', device: 'This Device' } } as any);
+        }
         return;
       }
       // Desktop user-invite (SHG-…): poll the hub's invite record. No human
@@ -397,7 +590,12 @@ export default function JoinExistingScreen() {
         const restored = restoreBusinessFromJoin({
           businessId: resolved.businessId,
           name: resolved.businessName ?? 'My Business',
-          joinerUser: (name.trim() || resolved.name || 'New Member').trim(),
+          // The owner's assigned identity (name/avatar/permissions) wins over
+          // whatever the joiner typed during the request.
+          joinerUser: (rec.assignedName || name.trim() || resolved.name || 'New Member').trim(),
+          assignedName: rec.assignedName ?? null,
+          assignedAvatar: rec.assignedAvatar ?? null,
+          assignedPermissions: rec.assignedPermissions ?? null,
           role: rec.role || resolved.role || 'cashier',
           joinerName: rec.joinerName || 'My Device',
         });
@@ -423,57 +621,59 @@ export default function JoinExistingScreen() {
           </TouchableOpacity>
 
           <View style={styles.header}>
-            <View style={[styles.iconCircle, { backgroundColor: G.glassCard, borderColor: G.glassBorder }]}>
-              <Store size={28} color={G.textGlassStrong} />
-            </View>
             <AppText variant="display" weight="bold" align="center" style={{ color: G.fg }}>Join Existing Business</AppText>
             <AppText variant="body" weight="medium" align="center" style={{ color: G.muted }}>
-              Enter the invitation code from your owner to join their business.
+              Stay on this screen — Shega finds your business automatically.
             </AppText>
           </View>
 
           {stage === 'idle' && (
             <View style={[styles.card, { backgroundColor: G.glassCard, borderColor: G.glassBorder }]}>
-              {/* Bluetooth-style discovery list — nearby owners first */}
-              <TouchableOpacity onPress={scanNearby} style={[styles.nearbyBtn, { borderColor: G.border }]}>
-                <Radar size={14} color={G.muted} />
-                <AppText variant="caption" weight="bold" style={{ color: G.muted, marginLeft: 6 }}>
-                  {scanning ? 'Scanning nearby…' : nearby.length > 0 ? `Nearby businesses (${nearby.length})` : 'Scan for nearby businesses'}
-                </AppText>
-              </TouchableOpacity>
-              {nearby.map((o) => (
-                <TouchableOpacity
-                  key={`${o.businessId}-${o.code}`}
-                  onPress={() => pickNearby(o)}
-                  style={[styles.nearbyRow, { backgroundColor: G.bg, borderColor: G.border }]}
-                >
-                  <View style={[styles.nearbyIcon, { backgroundColor: 'rgba(46,204,113,0.12)' }]}>
-                    {o.ownerPlatform === 'desktop' ? <Store size={15} color="#2ecc71" /> : <Smartphone size={15} color="#2ecc71" />}
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <AppText variant="body" weight="bold" style={{ color: G.fg }} numberOfLines={1}>{o.businessName}</AppText>
-                    <AppText variant="micro" weight="bold" style={{ color: G.muted }}>Nearby · tap to join</AppText>
-                  </View>
-                </TouchableOpacity>
-              ))}
-              <View style={styles.orRow}>
-                <View style={[styles.orLine, { backgroundColor: G.border }]} />
-                <AppText variant="micro" weight="bold" style={{ color: G.muted }}>or enter code</AppText>
-                <View style={[styles.orLine, { backgroundColor: G.border }]} />
-              </View>
-              <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, marginBottom: 8 }}>Invitation code</AppText>
-              <TextInput
-                style={[styles.input, { borderColor: G.border, color: G.fg, backgroundColor: G.bg }]}
-                placeholder="6-digit code (e.g. 482901)"
-                placeholderTextColor={G.muted}
-                value={code}
-                onChangeText={(t) => setCode(t.toUpperCase())}
-                autoCapitalize="characters"
-                autoCorrect={false}
+              <RadarPulse
+                glass={G}
+                deviceName={selfName}
+                tone={joinPhase === 'notfound' ? 'failed' : joinPhase === 'connecting' ? 'connecting' : 'searching'}
+                status={
+                  joinPhase === 'connecting'
+                    ? 'Connecting…'
+                    : joinPhase === 'notfound'
+                      ? 'No device found nearby'
+                      : 'Waiting for connection…'
+                }
+                peers={nearby.map((o) => ({
+                  id: `${o.businessId}-${o.code}`,
+                  name: o.businessName,
+                  platform: o.ownerPlatform,
+                  detail: `${o.role === 'team' ? 'Team' : 'Owner'} · ${o.ownerName || 'device'}${o.code ? ' · tap to join' : ' · waiting for owner'}`,
+                  disabled: !o.code,
+                }))}
+                onPickPeer={(p) => {
+                  const hit = nearby.find((o) => `${o.businessId}-${o.code}` === p.id);
+                  if (hit) pickNearby(hit);
+                }}
+                emptyHint="Keep this phone on the same Wi-Fi and open Add Team on the other device — it will appear here by itself."
               />
-              <TouchableOpacity onPress={() => resolve()} style={[styles.primaryBtn, { backgroundColor: G.fg }]}>
-                <AppText variant="body" weight="bold" style={{ color: G.bg }}>Continue</AppText>
-              </TouchableOpacity>
+
+              {/* Fallback, only once the automatic search has given up. */}
+              {joinPhase === 'notfound' && (
+                <View style={{ marginTop: 18 }}>
+                  <AppText variant="micro" weight="medium" align="center" style={{ color: G.muted, marginBottom: 10 }}>
+                    Still searching. You can enter an invitation code instead.
+                  </AppText>
+                  <TextInput
+                    style={[styles.input, { borderColor: G.border, color: G.fg, backgroundColor: G.bg, textAlign: 'center', letterSpacing: 2 }]}
+                    placeholder="INVITATION CODE"
+                    placeholderTextColor={G.muted}
+                    value={code}
+                    onChangeText={(t) => setCode(t.toUpperCase())}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                  />
+                  <TouchableOpacity onPress={() => void connectWithCode(code)} disabled={!code.trim()} style={[styles.primaryBtn, { backgroundColor: G.fg, opacity: code.trim() ? 1 : 0.5 }]}>
+                    <AppText variant="body" weight="bold" style={{ color: G.bg }}>Connect</AppText>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           )}
 
@@ -501,7 +701,7 @@ export default function JoinExistingScreen() {
                 value={name}
                 onChangeText={setName}
               />
-              <TouchableOpacity onPress={submit} style={[styles.primaryBtn, { backgroundColor: G.fg }]}>
+              <TouchableOpacity onPress={() => void submit()} style={[styles.primaryBtn, { backgroundColor: G.fg }]}>
                 <AppText variant="body" weight="bold" style={{ color: G.bg }}>Request to Join</AppText>
               </TouchableOpacity>
             </View>

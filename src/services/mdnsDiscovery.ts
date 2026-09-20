@@ -28,6 +28,7 @@ class MobileMdnsDiscovery extends EventEmitter {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private zeroconf: any | null = null;
   private isScanning = false;
+  private warnedUnavailable = false;
   private discoveredHubs = new Map<string, DiscoveredHub>();
 
   constructor() {
@@ -38,7 +39,10 @@ class MobileMdnsDiscovery extends EventEmitter {
     if (this.isScanning) return;
 
     if (!Zeroconf) {
-      console.warn('[mDNS] react-native-zeroconf unavailable (native module missing)');
+      if (!this.warnedUnavailable) {
+        this.warnedUnavailable = true;
+        console.warn('[mDNS] react-native-zeroconf unavailable (native module missing — rebuild the dev client with `npx expo run:android`)');
+      }
       this.isScanning = true;
       return;
     }

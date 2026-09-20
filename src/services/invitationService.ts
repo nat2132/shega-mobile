@@ -235,6 +235,11 @@ export function restoreBusinessFromJoin(info: {
   joinerUser: string;
   role: string;
   joinerName?: string;
+  /** Owner-assigned identity: overrides the joiner's self-entered name. */
+  assignedName?: string | null;
+  assignedAvatar?: string | null;
+  /** PermissionSet override chosen by the owner for a Custom role. */
+  assignedPermissions?: Record<string, unknown> | null;
 }): Business {
   const db = getDB();
   try {
@@ -254,6 +259,26 @@ export function restoreBusinessFromJoin(info: {
     [info.businessId, info.name.trim(), isFirst ? 1 : 0, code, info.businessId, now]
   );
   const person = addUser({ businessId: info.businessId, name: info.joinerUser.trim() || 'Member', role: info.role || 'cashier' });
+  // Apply the owner-assigned identity: display name, profile picture and —
+  // for Custom roles — the exact permission set the owner picked.
+  try {
+    const finalName = (info.assignedName || '').trim();
+    if (finalName || info.assignedAvatar !== undefined) {
+      const db2 = getDB();
+      const sets: string[] = [];
+      const vals: any[] = [];
+      if (finalName) { sets.push('name = ?'); vals.push(finalName); }
+      if (info.assignedAvatar) { sets.push('avatar = ?'); vals.push(info.assignedAvatar); }
+      if (info.assignedPermissions && typeof info.assignedPermissions === 'object') {
+        sets.push('permissions = ?'); vals.push(JSON.stringify(info.assignedPermissions));
+      }
+      if (sets.length) {
+        sets.push('updated_at = ?'); vals.push(new Date().toISOString());
+        vals.push(person.id);
+        db2.runSync(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`, vals);
+      }
+    }
+  } catch { /* best-effort identity application */ }
   const deviceId = getThisDeviceId() ?? localId('dev');
   addDevice({
     businessId: info.businessId,

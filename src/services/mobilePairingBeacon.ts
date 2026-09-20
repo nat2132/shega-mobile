@@ -15,9 +15,10 @@
  * credentials or business data — and expire with the invite.
  */
 
-import { NativeModules } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
 import {
   type PairingBeacon,
+  type BeaconRole,
   encodePairingBeacon,
   decodePairingBeacon,
   isBeaconLive,
@@ -31,9 +32,24 @@ const ZeroconfCtor: any = ZeroconfMod?.default ?? ZeroconfMod?.Zeroconf;
 // "Cannot read property 'registerService' of null", so gate on the native
 // module up front instead of only catching at publish time.
 const RNZeroconfNative = NativeModules?.RNZeroconf ?? null;
+/** Warn only once per session — publish attempts repeat and would spam. */
+let warnedZeroconfMissing = false;
 import { getDB } from '../database/db';
 import { getDeviceId } from './syncService';
 import { getMobileSyncPort } from './mobileSyncServer';
+
+/** Real device name for beacons/discovery lists ("Abebe's iPhone" style). */
+export function getThisDeviceName(): string {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const Device = require('expo-device');
+    const os = Platform.OS === 'ios' ? 'iPhone' : 'Android';
+    const owner = Device?.deviceName || Device?.modelName;
+    return owner ? `${os} — ${owner}`.slice(0, 48) : os;
+  } catch {
+    return Platform.OS === 'ios' ? 'iPhone' : 'Android';
+  }
+}
 
 const PAIR_SERVICE_TYPE = 'shega-pair';
 
@@ -54,6 +70,7 @@ class MobilePairingBeaconService {
   private seen = new Map<string, DiscoveredBeacon>();
   private browsing = false;
   private listeners = new Set<Listener>();
+  private rescanTimer: ReturnType<typeof setInterval> | null = null;
 
   private ensureZeroconf(): any | null {
     if (this.zeroconf) return this.zeroconf;
@@ -76,10 +93,13 @@ class MobilePairingBeaconService {
   publishBeacon(beacon: PairingBeacon): void {
     this.stopPublishing();
     if (!this.isSupported()) {
-      // Native module not linked: beacons can't be advertised. This is NOT an
-      // error for the pairing flow — the QR code + manual code still work, and
-      // the LAN hub publish (wsSyncClient.publishInvitation) is separate.
-      console.warn('[pair-beacon] zeroconf native module unavailable — beacon not published (QR/manual pairing still works).');
+      // Native module not linked (Expo Go / stale dev build): beacons can't be
+      // advertised. This is NOT an error for the pairing flow — the QR code +
+      // manual code still work, and the LAN hub publish is separate.
+      if (!warnedZeroconfMissing) {
+        warnedZeroconfMissing = true;
+        console.warn('[pair-beacon] zeroconf native module unavailable — beacon not published (QR/manual pairing still works). Run `npx expo run:android` to link the native module.');
+      }
       return;
     }
     const zc = this.ensureZeroconf();
@@ -147,24 +167,65 @@ class MobilePairingBeaconService {
       businessName: biz?.name ?? 'Shega Business',
       owner: {
         deviceId: getDeviceId(),
-        deviceName: 'Shega Mobile',
+        deviceName: getThisDeviceName(),
         platform: 'mobile',
       },
       code: invite.code,
+      role: 'owner',
       expiresAt: invite.expiresAt ?? new Date(Date.now() + 10 * 60_000).toISOString(),
       suggestedRole: (invite.role ?? 'cashier') as any,
     };
     this.publishBeacon(beacon);
   }
 
-  // ── Joiner side: browse nearby owners ───────────────────────────────────
+  /**
+   * Discovery mode: when true, this device stays visible/searchable even
+   * without an open invite ("Add Team" onboarding / joining mode). While in
+   * discovery mode an empty-code beacon is broadcast so other devices can see
+   * the device name — joiners learn the device exists; actual joining still
+   * requires a live invite code.
+   */
+  setDiscoverable(on: boolean, businessName = 'Shega', role: BeaconRole = 'owner'): void {
+    if (on) {
+      if (this.published) return; // a live invite beacon is already stronger
+      const db = getDB();
+      const biz = db.getFirstSync(
+        'SELECT uuid, name FROM businesses WHERE is_deleted = 0 ORDER BY (is_default = 1) DESC, created_at LIMIT 1',
+      ) as any;
+      const beacon: PairingBeacon = {
+        v: 1,
+        businessId: biz?.uuid ?? 'discovery',
+        businessName: biz?.name ?? businessName,
+        owner: {
+          deviceId: getDeviceId(),
+          deviceName: getThisDeviceName(),
+          platform: 'mobile' as const,
+        },
+        // Discovery-only beacons carry no invite code: they cannot be joined.
+        code: '',
+        role,
+        expiresAt: new Date(Date.now() + 12 * 3600_000).toISOString(),
+        suggestedRole: 'cashier' as any,
+      };
+      this.publishBeacon(beacon);
+    } else if (this.published && this.published.code === '') {
+      // Only stop if the current beacon is a discovery-only one — never kill
+      // a live invite beacon.
+      this.stopPublishing();
+    }
+  }
+
+  // ── Joiner side: browse nearby owners ─────────────────────────────────
 
   startBrowsing(): void {
     if (this.browsing) return;
     if (!this.isSupported()) {
       // Native mDNS not linked: skip discovery silently; the 6-digit code
       // entry path on the join screen still works.
-      console.warn('[pair-beacon] zeroconf native module unavailable — discovery skipped (manual code entry still works).');
+      if (!warnedZeroconfMissing) {
+        warnedZeroconfMissing = true;
+        console.warn('[pair-beacon] zeroconf native module unavailable — discovery skipped (manual code entry still works). Run `npx expo run:android` to link the native module.');
+      }
       this.browsing = false;
       return;
     }
@@ -197,11 +258,21 @@ class MobilePairingBeaconService {
     });
     try { zc.scan(PAIR_SERVICE_TYPE, 'tcp'); } catch (e: any) { console.warn('[pair-beacon] scan failed:', e?.message); }
     this.browsing = true;
+    // Periodic re-scan: devices that enter discovery mode after we started
+    // browsing must appear (mDNS caches can miss late advertisers), and stale
+    // entries get re-checked. Also auto-start our own discovery beacon so the
+    // device is mutually visible on both sides.
+    if (this.rescanTimer) clearInterval(this.rescanTimer);
+    this.rescanTimer = setInterval(() => {
+      if (!this.browsing) return;
+      try { zc.scan(PAIR_SERVICE_TYPE, 'tcp'); } catch { /* best-effort */ }
+    }, 8000);
     console.log('[pair-beacon] browsing for nearby pairing beacons…');
   }
 
   stopBrowsing(): void {
     try { this.zeroconf?.stop(); } catch { /* best-effort */ }
+    if (this.rescanTimer) { clearInterval(this.rescanTimer); this.rescanTimer = null; }
     this.browsing = false;
     this.seen.clear();
   }

@@ -13,10 +13,9 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import {
-  MonitorSmartphone, Smartphone, Monitor, Plus, QrCode, Keyboard,
+  MonitorSmartphone, Smartphone, Monitor, Plus,
   ShieldOff, Pencil, Check, X, ChevronLeft, RefreshCw, Clock, ChevronRight,
 } from 'lucide-react-native';
-import QRCode from 'react-native-qrcode-svg';
 import { AppText, AppButton } from '@/components/ui';
 import { useSettings } from '@/context/SettingsContext';
 import { useToast } from '@/context/ToastContext';
@@ -26,7 +25,10 @@ import { companionService } from '@/services/companionService';
 import { wsSyncClient } from '@/services/wsSyncClient';
 import { getActiveBusiness } from '@/services/businessService';
 import { generateInvitation } from '@/services/invitationService';
-import { mobilePairingBeacon } from '@/services/mobilePairingBeacon';
+import { mobilePairingBeacon, getThisDeviceName } from '@/services/mobilePairingBeacon';
+import { preassignJoinIdentity } from '@/services/mobileSyncServer';
+import { RadarPulse } from '@/components/RadarPulse';
+import MemberApprovalModal, { type MemberApprovalConfig } from '@/components/MemberApprovalModal';
 
 const STATE_DOT: Record<string, string> = {
   synced: '#2ECC71',
@@ -216,7 +218,7 @@ export function ConnectedDevicesScreen({ onBack }: { onBack: () => void }) {
         )}
 
         <AppButton
-          label="Connect New Device"
+          label="Add Team / Device"
           variant="primary"
           fullWidth
           leftIcon={<Plus size={17} color={G.bg} />}
@@ -313,7 +315,14 @@ export function ConnectedDevicesScreen({ onBack }: { onBack: () => void }) {
   );
 }
 
-/** Pairing card: generate QR / enter code. Uses the offline-first local invitation. */
+/**
+ * Pairing card — discovery radar, no QR and no pairing code.
+ *
+ * Opens the business's invitation as a live beacon, then shows every nearby
+ * device that is waiting to join ("Team"). Selecting one opens the member
+ * setup, and the request is approved with the assigned identity the moment
+ * that device connects.
+ */
 function PairCard({ businessName, businessId, counts, onClose, G }: {
   businessName: string;
   businessId: string;
@@ -321,14 +330,13 @@ function PairCard({ businessName, businessId, counts, onClose, G }: {
   onClose: () => void;
   G: any;
 }) {
-  const [invite, setInvite] = useState<{ qr_uri: string; code: string; id: string } | null>(null);
-  const [mode, setMode] = useState<'qr' | 'code'>('qr');
-  const [manual, setManual] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [invite, setInvite] = useState<{ code: string; id: string; expiresAt?: string } | null>(null);
+  const [peers, setPeers] = useState<Array<{ id: string; name: string; platform?: string }>>([]);
+  const [setupFor, setSetupFor] = useState<{ deviceId: string; name: string } | null>(null);
+  const [selfName] = useState(getThisDeviceName());
   const { showToast } = useToast();
 
   const generate = async () => {
-    setBusy(true);
     try {
       // Offline-first: generate the invitation locally (no cloud dependency),
       // then advertise a pairing beacon so nearby devices discover us.
@@ -337,77 +345,91 @@ function PairCard({ businessName, businessId, counts, onClose, G }: {
       if (wsSyncClient.isConnected) {
         wsSyncClient.publishInvitation({ id: inv.id, businessId, code: inv.code, role: 'cashier', platform: 'mobile', expiresAt: inv.expiresAt }).catch(() => {});
       }
-      setInvite({ qr_uri: inv.qrUri || '', code: inv.code, id: inv.id });
+      setInvite({ code: inv.code, id: inv.id, expiresAt: inv.expiresAt });
     } catch (e: any) {
-      showToast(e?.message || 'Could not generate a pairing code.', 'error');
-    } finally {
-      setBusy(false);
+      showToast(e?.message || 'Could not start discovery.', 'error');
     }
   };
 
   React.useEffect(() => { void generate(); }, []);
 
-  const submitCode = () => {
-    if (manual.trim().length < 4) return;
-    showToast('Connecting… the other device must approve this request.', 'info');
-    // The LAN hub handles code-based pairing; results appear in Connected Devices.
-    setTimeout(() => { onClose(); }, 1500);
+  // Live discovery of devices waiting to join — refreshed without a button.
+  React.useEffect(() => {
+    const refresh = () => {
+      try {
+        const list = mobilePairingBeacon
+          .getNearbyOwners()
+          .filter(({ beacon }: any) => beacon.role === 'team')
+          .map(({ beacon }: any) => ({
+            id: beacon.owner?.deviceId || beacon.businessId,
+            name: beacon.owner?.deviceName || 'Nearby device',
+            platform: beacon.owner?.platform,
+          }));
+        setPeers(list);
+      } catch { setPeers([]); }
+    };
+    refresh();
+    const t = setInterval(refresh, 3000);
+    return () => clearInterval(t);
+  }, []);
+
+  const confirmMember = async (cfg: MemberApprovalConfig) => {
+    const target = setupFor;
+    if (!target) return;
+    // One confirmation: the request from this device is approved with the
+    // assigned identity the instant it arrives.
+    preassignJoinIdentity(target.deviceId, {
+      name: cfg.name,
+      avatar: cfg.avatar,
+      role: cfg.role,
+      permissions: cfg.permissions,
+    });
+    if (invite) {
+      mobilePairingBeacon.advertiseInvitation({ id: invite.id, code: invite.code, businessId, role: cfg.role, expiresAt: invite.expiresAt });
+      if (wsSyncClient.isConnected) {
+        wsSyncClient.publishInvitation({ id: invite.id, businessId, code: invite.code, role: cfg.role, platform: 'mobile', expiresAt: invite.expiresAt }).catch(() => {});
+      }
+    }
+    showToast(`${cfg.name} joins as ${cfg.role} as soon as their device connects.`, 'success');
+    setSetupFor(null);
   };
 
   return (
     <TouchableOpacity activeOpacity={1} style={[styles.detailCard, { backgroundColor: G.bgCard }]}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-        <AppText variant="body" weight="bold" style={{ color: G.fg, flex: 1 }}>Connect New Device</AppText>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+        <AppText variant="body" weight="bold" style={{ color: G.fg, flex: 1 }}>Add Team / Device</AppText>
         <TouchableOpacity onPress={onClose}><X size={16} color={G.muted} /></TouchableOpacity>
       </View>
 
-      <View style={{ flexDirection: 'row', backgroundColor: G.bg, borderRadius: 10, padding: 3, marginBottom: 14 }}>
-        {(['qr', 'code'] as const).map((m) => (
-          <TouchableOpacity
-            key={m}
-            onPress={() => setMode(m)}
-            style={{ flex: 1, paddingVertical: 7, borderRadius: 8, backgroundColor: mode === m ? G.bgCard : 'transparent', alignItems: 'center' }}
-          >
-            <AppText variant="caption" weight="bold" style={{ color: mode === m ? G.fg : G.muted }}>
-              {m === 'qr' ? 'Scan QR Code' : 'Enter Pairing Code'}
-            </AppText>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {mode === 'qr' ? (
-        <View style={{ alignItems: 'center' }}>
-          <View style={[styles.qrFrame, { backgroundColor: '#fff' }]}>
-            {invite?.qr_uri ? <QRCode value={invite.qr_uri} size={170} /> : <QrCode size={48} color="#ccc" />}
-          </View>
-          {invite && (
-            <View style={[styles.codeChip, { backgroundColor: G.accentGlass, borderColor: G.border, marginTop: 10 }]}>
-              <AppText variant="body" weight="bold" style={{ color: G.fg, letterSpacing: 2 }}>{invite.code}</AppText>
-            </View>
-          )}
-          <AppText variant="micro" weight="medium" style={{ color: G.muted, textAlign: 'center', marginTop: 10 }}>
-            The other device scans this to request joining <AppText weight="bold" style={{ color: G.fg }}>{businessName}</AppText>. You approve, then data syncs directly.
-          </AppText>
-        </View>
-      ) : (
-        <View>
-          <TextInput
-            value={manual}
-            onChangeText={(v) => setManual(v.toUpperCase())}
-            placeholder="e.g. ABC123"
-            placeholderTextColor={G.muted}
-            maxLength={8}
-            style={[styles.renameInput, { borderColor: G.border, color: G.fg, textAlign: 'center', fontSize: 18, fontWeight: '700', letterSpacing: 4 }]}
-            autoFocus
-          />
-          <AppButton label="Connect" variant="primary" fullWidth onPress={submitCode} style={{ marginTop: 12 }} />
-        </View>
-      )}
+      <RadarPulse
+        glass={G}
+        compact
+        deviceName={selfName}
+        tone={peers.length > 0 ? 'found' : 'searching'}
+        status={peers.length > 0 ? `${peers.length} device${peers.length === 1 ? '' : 's'} found` : 'Searching for nearby devices…'}
+        peers={peers.map((p) => ({
+          id: p.id,
+          name: p.name,
+          platform: p.platform,
+          detail: `Waiting to join · tap to set up`,
+        }))}
+        onPickPeer={(p) => setSetupFor({ deviceId: p.id, name: p.name })}
+        emptyHint={`Ask your teammate to open Shega → Join a Business. Devices on this Wi-Fi appear here for ${businessName}.`}
+      />
 
       {Object.keys(counts).length > 0 && (
-        <AppText variant="micro" weight="medium" style={{ color: G.muted, textAlign: 'center', marginTop: 12 }}>
+        <AppText variant="micro" weight="medium" style={{ color: G.muted, textAlign: 'center', marginTop: 14 }}>
           After approval: {Object.entries(counts).slice(0, 3).map(([k, v]) => `${k} ${v}`).join(' · ')} will sync to the new device.
         </AppText>
+      )}
+
+      {setupFor && (
+        <MemberApprovalModal
+          glass={G}
+          request={{ joinerUser: setupFor.name, joinerName: setupFor.name, platform: 'mobile' }}
+          onClose={() => setSetupFor(null)}
+          onConfirm={(cfg) => void confirmMember(cfg)}
+        />
       )}
     </TouchableOpacity>
   );
