@@ -20,6 +20,7 @@ import { getDB } from '../database/db';
 import { getDeviceId, currentOutboxSeq, pruneOutboxEchoes } from './syncService';
 import { validateInviteCode } from './invitationService';
 import { bumpDataVersion } from './dataVersion';
+import { getThisDeviceName } from './deviceIdentity';
 import * as Crypto from 'expo-crypto';
 
 export const MOBILE_SYNC_PORT = 5759;
@@ -276,6 +277,10 @@ function handleMessage(client: TcpClient, data: string): void {
       sendTo(client.socket, { type: 'HEARTBEAT_ACK', timestamp: Date.now() });
       break;
 
+    case 'DEVICE_HELLO':
+      handleDeviceHello(client, msg);
+      break;
+
     case 'PAIR_REQUEST':
       handlePairRequest(client, msg);
       break;
@@ -528,6 +533,50 @@ function handleInviteResolve(client: TcpClient, msg: any): void {
         expiresAt: inv.expires_at,
         businessName: biz?.name ?? null,
       },
+    },
+  });
+}
+
+/**
+ * Identity probe used by LAN sweeps (desktop + mobile).
+ *
+ * It answers with WHO this device is — never business data, never tokens — so
+ * two devices can find each other by knocking on the sync port even when mDNS
+ * multicast is blocked by the network. This is what makes discovery work on
+ * Windows-firewalled or AP-isolated Wi-Fi.
+ */
+function handleDeviceHello(client: TcpClient, msg: any): void {
+  let businessName: string | null = null;
+  let businessId: string | null = null;
+  let inviteCode: string | null = null;
+  try {
+    const db = getDB();
+    const biz = db.getFirstSync(
+      'SELECT uuid, name FROM businesses WHERE is_deleted = 0 ORDER BY (is_default = 1) DESC, created_at LIMIT 1',
+    ) as any;
+    businessName = biz?.name ?? null;
+    businessId = biz?.uuid ?? null;
+  } catch { /* brand-new install has no business yet */ }
+  // An open invitation rides along so a joiner on a network with multicast
+  // blocked can still join. Same trust level as the mDNS beacon: short-lived,
+  // LAN-scoped, and still requiring the owner's approval.
+  try {
+    const row = getDB().getFirstSync(
+      "SELECT code FROM invitations WHERE status = 'open' ORDER BY created_at DESC LIMIT 1",
+    ) as any;
+    inviteCode = row?.code ? String(row.code) : null;
+  } catch { /* no open invite */ }
+  sendTo(client.socket, {
+    type: 'DEVICE_HELLO_ACK',
+    requestId: msg.requestId,
+    payload: {
+      deviceId: getDeviceId(),
+      deviceName: getThisDeviceName(),
+      platform: 'mobile',
+      port: MOBILE_SYNC_PORT,
+      businessId,
+      businessName,
+      inviteCode,
     },
   });
 }

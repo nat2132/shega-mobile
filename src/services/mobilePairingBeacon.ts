@@ -37,19 +37,12 @@ let warnedZeroconfMissing = false;
 import { getDB } from '../database/db';
 import { getDeviceId } from './syncService';
 import { getMobileSyncPort } from './mobileSyncServer';
+import { getThisDeviceName } from './deviceIdentity';
+import { sweepLanAsBeacons } from './lanSweep';
 
-/** Real device name for beacons/discovery lists ("Abebe's iPhone" style). */
-export function getThisDeviceName(): string {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const Device = require('expo-device');
-    const os = Platform.OS === 'ios' ? 'iPhone' : 'Android';
-    const owner = Device?.deviceName || Device?.modelName;
-    return owner ? `${os} — ${owner}`.slice(0, 48) : os;
-  } catch {
-    return Platform.OS === 'ios' ? 'iPhone' : 'Android';
-  }
-}
+// The device-name helper is shared with the LAN sync server; re-exported here
+// so existing importers keep working unchanged.
+export { getThisDeviceName } from './deviceIdentity';
 
 const PAIR_SERVICE_TYPE = 'shega-pair';
 
@@ -68,9 +61,12 @@ class MobilePairingBeaconService {
   /** mDNS service name of the beacon we're publishing (needed to unpublish). */
   private publishedName: string | null = null;
   private seen = new Map<string, DiscoveredBeacon>();
+  /** LAN-sweep results (no invite code) — merged into the discovery list. */
+  private lanSeen = new Map<string, DiscoveredBeacon>();
   private browsing = false;
   private listeners = new Set<Listener>();
   private rescanTimer: ReturnType<typeof setInterval> | null = null;
+  private lanTimer: ReturnType<typeof setInterval> | null = null;
 
   private ensureZeroconf(): any | null {
     if (this.zeroconf) return this.zeroconf;
@@ -219,12 +215,16 @@ class MobilePairingBeaconService {
 
   startBrowsing(): void {
     if (this.browsing) return;
+    // LAN sweep runs regardless of mDNS: it is the discovery path that keeps
+    // working when multicast is blocked (Windows Firewall, AP isolation, or a
+    // missing multicast permission). This is the "same Wi-Fi but they can't
+    // find each other" fix.
+    this.startLanSweep();
     if (!this.isSupported()) {
-      // Native mDNS not linked: skip discovery silently; the 6-digit code
-      // entry path on the join screen still works.
+      // mDNS native module not linked — the sweep above still finds devices.
       if (!warnedZeroconfMissing) {
         warnedZeroconfMissing = true;
-        console.warn('[pair-beacon] zeroconf native module unavailable — discovery skipped (manual code entry still works). Run `npx expo run:android` to link the native module.');
+        console.warn('[pair-beacon] zeroconf native module unavailable — using LAN sweep discovery instead. Run `npx expo run:android` to re-link native modules.');
       }
       this.browsing = false;
       return;
@@ -273,19 +273,65 @@ class MobilePairingBeaconService {
   stopBrowsing(): void {
     try { this.zeroconf?.stop(); } catch { /* best-effort */ }
     if (this.rescanTimer) { clearInterval(this.rescanTimer); this.rescanTimer = null; }
+    if (this.lanTimer) { clearInterval(this.lanTimer); this.lanTimer = null; }
     this.browsing = false;
     this.seen.clear();
+    this.lanSeen.clear();
+  }
+
+  /**
+   * LAN sweep loop: knock on the desktop (5757) and mobile (5759) sync ports
+   * across our /24. Results land in `lanSeen` and are surfaced through
+   * `getNearbyOwners()` exactly like mDNS hits, so every discovery screen gets
+   * them for free.
+   */
+  private startLanSweep(): void {
+    if (this.lanTimer) return;
+    const run = async () => {
+      try {
+        const hits = await sweepLanAsBeacons();
+        this.lanSeen.clear();
+        for (const hit of hits) {
+          // mDNS always wins: it carries a live invite code.
+          if (this.seen.has(hit.beacon.owner.deviceId)) continue;
+          this.lanSeen.set(hit.beacon.owner.deviceId, {
+            beacon: hit.beacon as PairingBeacon,
+            host: hit.host,
+            addresses: [hit.host],
+            discoveredAt: Date.now(),
+          });
+        }
+        this.listeners.forEach((fn) => {
+          for (const entry of this.lanSeen.values()) fn(entry);
+        });
+      } catch { /* sweep is best-effort */ }
+    };
+    void run();
+    // Sweeps are cheap-but-not-free: 20s keeps the list fresh without burning
+    // battery on a phone sitting on a discovery screen.
+    this.lanTimer = setInterval(() => { void run(); }, 20_000);
   }
 
   isBrowsingActive(): boolean {
     return this.browsing;
   }
 
-  /** Snapshot for the discovery list — expired beacons filtered out. */
+  /**
+   * Snapshot for the discovery list — expired beacons filtered out. Merges
+   * mDNS beacons (which carry an invite code) with LAN-sweep hits (which prove
+   * presence only), mDNS taking precedence for the same device.
+   */
   getNearbyOwners(): Array<{ beacon: PairingBeacon; host: string }> {
     const out: Array<{ beacon: PairingBeacon; host: string }> = [];
+    const included = new Set<string>();
     for (const [deviceId, entry] of this.seen) {
       if (!isBeaconLive(entry.beacon)) { this.seen.delete(deviceId); continue; }
+      out.push({ beacon: entry.beacon, host: entry.host });
+      included.add(deviceId);
+    }
+    for (const [deviceId, entry] of this.lanSeen) {
+      if (included.has(deviceId)) continue;
+      if (!isBeaconLive(entry.beacon)) { this.lanSeen.delete(deviceId); continue; }
       out.push({ beacon: entry.beacon, host: entry.host });
     }
     return out;
