@@ -13,6 +13,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Home, Store, Warehouse, Settings as SettingsIcon } from 'lucide-react-native';
 import { useSettings } from '@/context/SettingsContext';
+import { useBusinessAuth } from '@/hooks/useBusinessAuth';
 import { AppText } from '@/components/ui';
 import { addScrollVisibilityListener, forceScrollVisibility } from '@/utils/scroll-visibility';
 
@@ -117,13 +118,20 @@ const TabBarItem: React.FC<TabBarItemProps> = ({
 
 export const CustomTabBar = (props: BottomTabBarProps) => {
   const { colors } = useSettings();
+  const auth = useBusinessAuth();
+  const isCashier = auth.role === 'cashier' || (!auth.can('products.edit') && !auth.can('inventory.adjust') && !auth.can('reports.viewAll'));
   const layoutsRef = useRef<Record<number, { x: number; w: number }>>({});
   const pillReadyRef = useRef(false);
   const activeIndexRef = useRef(props.state.index);
 
-  const routes = props.state.routes.filter(
-    (r) => !['summary', 'orders', 'suppliers'].includes(r.name),
-  );
+  const routes = props.state.routes.filter((r) => {
+    const { options } = props.descriptors[r.key] || {};
+    if (options?.href === null) return false;
+    if (isCashier && !r.name.includes('sales') && !r.name.includes('settings')) {
+      return false;
+    }
+    return !['summary', 'orders', 'suppliers'].includes(r.name);
+  });
 
   const pillX = useSharedValue(0);
   const pillW = useSharedValue(0);

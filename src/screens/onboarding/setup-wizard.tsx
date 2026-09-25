@@ -16,7 +16,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
@@ -35,15 +35,16 @@ import { mobilePairingBeacon, getThisDeviceName } from '@/services/mobilePairing
 import { AppText } from '@/components/ui';
 import { useSettings } from '@/context/SettingsContext';
 import { useAuth } from '@/context/AuthContext';
+import { useAccount } from '@/context/AccountContext';
 import {
   addLocation, createBusiness, getBusinesses, getLocations,
-  getOwnerOfBusiness, setBusinessLogo, setCurrentUserId, setUserPin,
-  getThisDeviceId,
+  getOwnerOfBusiness, setBusinessLogo, setCurrentUserId,
+  setUserAvatar, getThisDeviceId,
 } from '@/services/businessService';
-import { storePinHash } from '@/services/crypto';
 import { isBiometricsAvailable, setBiometricsEnabled } from '@/services/biometrics';
 import { saveSaleTaxConfig } from '@/services/taxService';
 import { getDB, insertItem, setFeatureFlag } from '@/database/db';
+import StartupSplashScreen from './startup-splash';
 
 type Stage =
   | 'welcome' | 'name' | 'type' | 'location' | 'owner' | 'calendar'
@@ -91,6 +92,17 @@ const markDone = (key: string) => { SecureStore.setItemAsync(key, 'true').catch(
 export default function SetupWizardScreen() {
   const { colors, calendarType, setCalendarType } = useSettings();
   const { authenticate } = useAuth();
+  const { user: accountUser } = useAccount();
+  // When account creation ran FIRST (fresh-install flow), the wizard receives
+  // `from=register` and pre-fills the owner identity from the signed-up
+  // account, skipping its own welcome/choose-path stage.
+  const { from: wizardFrom } = useLocalSearchParams<{ from?: string }>();
+  const cameFromSignup = wizardFrom === 'register' || !!accountUser;
+  // Latest value readable inside the async resume effect without re-running it.
+  const cameFromSignupRef = useRef(cameFromSignup);
+  cameFromSignupRef.current = cameFromSignup;
+  const accountUserRef = useRef(accountUser);
+  accountUserRef.current = accountUser;
   const G = useMemo(() => ({
     bg: colors.background, fg: colors.text, muted: colors.textSecondary,
     card: colors.card, border: colors.border, accent: colors.primary,
@@ -105,9 +117,11 @@ export default function SetupWizardScreen() {
   const [city, setCity] = useState('');
   const [address, setAddress] = useState('');
   const [ownerName, setOwnerName] = useState('');
-  const [phone, setPhone] = useState('');
+  const [ownerAvatar, setOwnerAvatar] = useState<string | null>(null);
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  // NOTE: no password/PIN here on purpose — signup only collects identity.
+  // The login PIN is set on its own dedicated step after setup completes
+  // (see the post-setup `create-pin` hand-off).
   const [useBiometrics, setUseBiometrics] = useState(false);
   const [biometricsAvailable, setBiometricsAvailable] = useState(false);
   const [productName, setProductName] = useState('');
@@ -132,6 +146,11 @@ export default function SetupWizardScreen() {
   const [error, setError] = useState('');
   const [productsAdded, setProductsAdded] = useState(0);
   const [bizId, setBizId] = useState<string | null>(null);
+  // Setup hand-off: after "Start Using Shega" we show the branded
+  // "setting up your Shega" splash while the final writes land, then enter the
+  // app. `finishDone` flips when that work has completed.
+  const [finishing, setFinishing] = useState(false);
+  const [finishDone, setFinishDone] = useState(false);
   const doneRef = useRef(false);
 
   /** Idempotent progress persistence — interrupted setup resumes where it left off. */
@@ -140,7 +159,7 @@ export default function SetupWizardScreen() {
     const snapshot = {
       stage: nextStage,
       businessName, logoUri, businessType, businessTypeCustom, country, city, address,
-      ownerName, phone, email,
+      ownerName, ownerAvatar, email,
       useBiometrics,
       productName, productPrice, productQty, productUnit,
       taxMode, taxRate, warehouses, warehouseList, payments, receipts,
@@ -224,7 +243,7 @@ export default function SetupWizardScreen() {
             if (typeof s.city === 'string') setCity(s.city);
             if (typeof s.address === 'string') setAddress(s.address);
             if (typeof s.ownerName === 'string') setOwnerName(s.ownerName);
-            if (typeof s.phone === 'string') setPhone(s.phone);
+            if (typeof s.ownerAvatar === 'string' && s.ownerAvatar) setOwnerAvatar(s.ownerAvatar);
             if (typeof s.email === 'string') setEmail(s.email);
             if (typeof s.useBiometrics === 'boolean') setUseBiometrics(s.useBiometrics);
             if (typeof s.productName === 'string') setProductName(s.productName);
@@ -241,6 +260,17 @@ export default function SetupWizardScreen() {
             if (typeof s.bizId === 'string' && s.bizId) setBizId(s.bizId);
           }
         } catch { /* corrupted state — start fresh */ }
+      } else if (!raw && !cancelled && cameFromSignupRef.current) {
+        // Account was created before the wizard (signup-first onboarding):
+        // pre-fill the owner identity from the signed-up account and skip the
+        // welcome/choose-path stage entirely.
+        const u = accountUserRef.current;
+        if (u) {
+          if (u.name) setOwnerName(u.name);
+          if (u.email) setEmail(u.email);
+          if (u.business_name && !businessName) setBusinessName(u.business_name);
+        }
+        setStage('name');
       }
     })();
     isBiometricsAvailable().then(setBiometricsAvailable).catch(() => {});
@@ -267,7 +297,6 @@ export default function SetupWizardScreen() {
         {
           name: businessName.trim(),
           ownerName: ownerName.trim(),
-          phone: phone.trim() || undefined,
           email: email.trim() || undefined,
         },
         getThisDeviceId() ?? `dev-${Date.now().toString(36)}`,
@@ -276,6 +305,7 @@ export default function SetupWizardScreen() {
       // Owner identity must be known before any owner-only writes (e.g. logo).
       const owner = getOwnerOfBusiness(biz.id);
       if (owner) setCurrentUserId(owner.id);
+      if (ownerAvatar) setUserAvatar(ownerAvatar);
       markDone('setup_business_created');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       return biz.id;
@@ -307,6 +337,33 @@ export default function SetupWizardScreen() {
         : await ImagePicker.launchImageLibraryAsync(options as any);
       if (result.canceled || !result.assets?.length) return;
       setLogoUri(result.assets[0].uri);
+      setError('');
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {
+      setError('Could not access the photo.');
+    }
+  };
+
+  const pickAvatar = async (mode: 'camera' | 'library') => {
+    try {
+      if (mode === 'camera') {
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (!perm.granted) { setError('Camera permission is needed to take a photo.'); return; }
+      } else {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) { setError('Photo access is needed to choose a profile picture.'); return; }
+      }
+      const options = {
+        mediaTypes: ['images'] as const,
+        allowsEditing: true,
+        aspect: [1, 1] as [number, number],
+        quality: 0.6,
+      };
+      const result = mode === 'camera'
+        ? await ImagePicker.launchCameraAsync(options as any)
+        : await ImagePicker.launchImageLibraryAsync(options as any);
+      if (result.canceled || !result.assets?.length) return;
+      setOwnerAvatar(result.assets[0].uri);
       setError('');
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch {
@@ -362,12 +419,14 @@ export default function SetupWizardScreen() {
   const finish = async () => {
     if (doneRef.current) return;
     doneRef.current = true;
+    setFinishing(true);
     const id = bizId;
     const locationText = [address.trim(), city.trim(), country.trim()].filter(Boolean).join(', ');
 
     // Business profile: logo + location address (rides the sync outbox).
     if (id) {
       if (logoUri) setBusinessLogo(id, logoUri);
+      if (ownerAvatar) setUserAvatar(ownerAvatar);
       if (locationText) {
         try {
           const db = getDB();
@@ -375,15 +434,21 @@ export default function SetupWizardScreen() {
             'UPDATE businesses SET address = ?, updated_at = ?, row_version = row_version + 1, is_synced = 0 WHERE id = ?',
             [locationText, new Date().toISOString(), id]
           );
-          if (getLocations(id).length === 0) {
-            addLocation(id, 'Main Location', locationText);
-          }
-          // Multiple locations configured during onboarding (step 7: Yes).
-          for (const w of warehouseList) {
-            try { addLocation(id, w.name, [w.city, 'Ethiopia'].filter(Boolean).join(', ')); } catch { /* best-effort */ }
-          }
         } catch { /* best-effort */ }
       }
+
+      // Locations/warehouses configured during onboarding (step 7: Yes) are
+      // saved even when the business address step was left blank — previously
+      // they were skipped entirely in that case, so the warehouses silently
+      // never persisted.
+      try {
+        if (locationText && getLocations(id).length === 0) {
+          addLocation(id, 'Main Location', locationText);
+        }
+        for (const w of warehouseList) {
+          try { addLocation(id, w.name, [w.city, 'Ethiopia'].filter(Boolean).join(', ')); } catch { /* best-effort */ }
+        }
+      } catch { /* best-effort */ }
     }
 
     // Preferences that determine which features appear after onboarding.
@@ -400,16 +465,25 @@ export default function SetupWizardScreen() {
     SecureStore.setItemAsync('shega_payments_mode', payments).catch(() => {});
     SecureStore.setItemAsync('shega_receipts_enabled', receipts ? 'true' : 'false').catch(() => {});
     if (businessType) SecureStore.setItemAsync('shega_business_type', businessType).catch(() => {});
-    if (password.trim() && id) {
-      const owner = getOwnerOfBusiness(id);
-      if (owner) setUserPin(owner.id, password.trim());
-      try { await storePinHash(password.trim()); } catch { /* device PIN is best-effort */ }
-    }
+    // The login PIN is no longer captured here — it gets its own dedicated
+    // step right after this splash (route: /create-pin?from=onboarding).
     SecureStore.deleteItemAsync(WIZARD_STATE_KEY).catch(() => {});
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    authenticate();
-    router.replace('/(tabs)/dashboard' as any);
+    // Keep the "setting up your Shega" splash up; its onNext hands off to the
+    // dashboard so setup always visibly completes before the app opens.
+    setFinishDone(true);
   };
+
+  /**
+   * Hand-off from the setup splash: signup/business setup is complete, so the
+   * next thing the user sees is the DEDICATED PIN Setup step (not part of the
+   * signup form). After the PIN is created and confirmed there, they enter the
+   * app. Skipping is allowed — user-signin offers first-time PIN setup then.
+   */
+  const enterApp = useCallback(() => {
+    authenticate();
+    router.replace('/create-pin?from=onboarding' as any);
+  }, [authenticate]);
 
   const PrimaryButton = useCallback(({ label, onPress, icon, disabled }: { label: string; onPress: () => void; icon?: React.ReactNode; disabled?: boolean }) => (
     <TouchableOpacity
@@ -481,6 +555,13 @@ export default function SetupWizardScreen() {
   const taxLabel = taxMode === 'None' ? 'No tax' : `${taxMode} ${taxRate || '15'}%`;
   const warehouseLabel = warehouses === true ? 'Yes' : warehouses === false ? 'No' : '—';
 
+  // Setup hand-off: a branded "setting up your Shega" screen shown after
+  // "Start Using Shega" while the final writes settle, so the user never lands
+  // on a half-configured dashboard.
+  if (finishing) {
+    return <StartupSplashScreen loading={!finishDone} loadingLabelKey="startup.setup" onNext={enterApp} />;
+  }
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: G.bg }]} edges={['top', 'bottom']}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -496,16 +577,20 @@ export default function SetupWizardScreen() {
                 Welcome to Shega
               </AppText>
               <AppText variant="body" weight="medium" align="center" style={{ color: G.muted, marginTop: 10 }}>
-                Your simple, powerful business management system. Let's get you selling in a few minutes.
+                Your simple, powerful business management system. Let’s get you selling in a few minutes.
               </AppText>
               <View style={{ marginTop: 32 }}>
                 <PrimaryButton label="Create a New Business" onPress={() => go('name')} icon={<ArrowRight size={17} color={G.bg} />} />
-                <View style={{ marginTop: 12 }}>
-                  <GhostButton label="Join an Existing Business" onPress={() => router.replace('/join-existing' as any)} />
-                </View>
-                <View style={{ marginTop: 12 }}>
-                  <GhostButton label="Already have an account? Sign in" onPress={() => router.replace('/user-signin' as any)} />
-                </View>
+                {!cameFromSignup && (
+                  <>
+                    <View style={{ marginTop: 12 }}>
+                      <GhostButton label="Join an Existing Business" onPress={() => router.replace('/join-existing' as any)} />
+                    </View>
+                    <View style={{ marginTop: 12 }}>
+                      <GhostButton label="Already have an account? Sign in" onPress={() => router.replace('/user-signin' as any)} />
+                    </View>
+                  </>
+                )}
               </View>
             </Animated.View>
           )}
@@ -652,18 +737,48 @@ export default function SetupWizardScreen() {
                 Owner account
               </AppText>
               <AppText variant="body" weight="medium" align="center" style={{ color: G.muted, marginTop: 10 }}>
-                You'll be the Owner with full access.
+                You&apos;ll be the Owner with full access.
               </AppText>
-              <View style={{ marginTop: 20 }}>
+
+              <View style={{ alignItems: 'center', marginTop: 18 }}>
+                <View style={[styles.logoPreview, { backgroundColor: G.card, borderColor: G.border }]}>
+                  {ownerAvatar ? (
+                    <Image source={{ uri: ownerAvatar }} style={styles.logoImage} />
+                  ) : (
+                    <User size={34} color={G.muted} />
+                  )}
+                </View>
+                <AppText variant="caption" weight="medium" style={{ color: G.muted, marginTop: 8 }}>
+                  Optional profile picture
+                </AppText>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+                  <TouchableOpacity
+                    onPress={() => { Haptics.selectionAsync(); pickAvatar('camera'); }}
+                    style={[styles.logoBtn, { backgroundColor: G.card, borderColor: G.border }]}
+                  >
+                    <Camera size={15} color={G.fg} />
+                    <AppText variant="caption" weight="bold" style={{ color: G.fg, marginLeft: 5 }}>Take photo</AppText>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => { Haptics.selectionAsync(); pickAvatar('library'); }}
+                    style={[styles.logoBtn, { backgroundColor: G.card, borderColor: G.border }]}
+                  >
+                    <ImagePlus size={15} color={G.fg} />
+                    <AppText variant="caption" weight="bold" style={{ color: G.fg, marginLeft: 5 }}>Choose image</AppText>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => { Haptics.selectionAsync(); setOwnerAvatar(null); }}
+                    style={[styles.logoBtn, { backgroundColor: G.card, borderColor: G.border }]}
+                  >
+                    <AppText variant="caption" weight="bold" style={{ color: G.muted }}>Remove</AppText>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={{ marginTop: 16 }}>
                 <Input placeholder="Your name (e.g. Abebe Kebede)" value={ownerName} onChange={setOwnerName} />
                 <View style={{ marginTop: 10 }}>
                   <Input placeholder="Email" value={email} onChange={setEmail} keyboard="email-address" />
-                </View>
-                <View style={{ marginTop: 10 }}>
-                  <Input placeholder="Password (min 4 characters)" value={password} onChange={setPassword} secure />
-                </View>
-                <View style={{ marginTop: 10 }}>
-                  <Input placeholder="Phone number (optional)" value={phone} onChange={setPhone} keyboard="phone-pad" />
                 </View>
                 {biometricsAvailable && (
                   <View style={{ marginTop: 12 }}>
@@ -682,7 +797,7 @@ export default function SetupWizardScreen() {
                 <PrimaryButton
                   label="Create Business"
                   onPress={() => {
-                    if (!ownerName.trim() || !password.trim()) { setError('Enter your name and a password'); return; }
+                    if (!ownerName.trim()) { setError('Enter your name to continue'); return; }
                     createNow().then((id) => id && go('calendar'));
                   }}
                   icon={<Check size={17} color={G.bg} />}
@@ -856,17 +971,16 @@ export default function SetupWizardScreen() {
                         </TouchableOpacity>
                       </View>
                     ))}
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      <View style={{ flex: 1 }}>
-                        <Input placeholder="Location name (e.g. Bole Branch)" value={whName} onChange={setWhName} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Input placeholder="City (optional)" value={whCity} onChange={setWhCity} />
-                      </View>
+                    {/* Stacked, full-width fields — side-by-side inputs
+                        clipped their placeholders on narrow screens. A
+                        warehouse only needs a name and a location. */}
+                    <View style={{ gap: 8 }}>
+                      <Input placeholder="Warehouse name (e.g. Bole Branch)" value={whName} onChange={setWhName} />
+                      <Input placeholder="Location (e.g. Bole, Addis Ababa)" value={whCity} onChange={setWhCity} />
                     </View>
                     <View style={{ marginTop: 10 }}>
                       <GhostButton
-                        label={whName.trim() ? '+ Add this location' : 'Enter a location name above'}
+                        label={whName.trim() ? '+ Add this warehouse' : 'Enter a warehouse name above'}
                         onPress={() => {
                           if (!whName.trim()) return;
                           setWarehouseList((l) => [...l, { name: whName.trim(), city: whCity.trim() }]);
@@ -1025,14 +1139,11 @@ export default function SetupWizardScreen() {
                   ['Location', locationText, 'location'],
                   ['Owner', ownerName || '—', 'owner'],
                   ['Email', email || '—', 'owner'],
-                  ['Currency', 'ETB', 'calendar'],
                   ['Date system', calendarType === 'ethiopian' ? 'Ethiopian Calendar' : 'Gregorian Calendar', 'calendar'],
-                  ['Products', `${productsAdded} added`, 'product'],
                   ['Tax', taxLabel, 'tax'],
                   ['Warehouses', warehouseLabel, 'warehouse'],
                   ['Payments', PAYMENT_OPTIONS.find((p) => p.id === payments)?.label ?? '—', 'payments'],
                   ['Receipts', receipts ? 'Yes' : 'No', 'payments'],
-                  ['Customers', 'Add later', 'payments'],
                 ] as [string, string, Stage][]).map(([k, v, target]) => (
                   <TouchableOpacity
                     key={k}
@@ -1080,8 +1191,9 @@ export default function SetupWizardScreen() {
                 mobilePairingBeacon.advertiseInvitation({ id: inv.id, code: inv.code, businessId: bizId, role: cfg.role, expiresAt: inv.expiresAt });
               } catch { /* best-effort */ }
               wsSyncClient.publishInvitation({ id: inv.id, businessId: bizId, code: inv.code, role: cfg.role, platform: target.platform, expiresAt: inv.expiresAt }).catch(() => {});
-              // Persist the assigned identity on a device_requests row so the
-              // joiner's STATUS poll (and the roster mirror) adopt it.
+              // Persist the assigned role on a device_requests row so the
+              // joiner's STATUS poll (and the roster mirror) adopt it. The
+              // member sets their own name/avatar after approval.
               try {
                 const db = getDB();
                 db.runSync(
@@ -1089,18 +1201,10 @@ export default function SetupWizardScreen() {
                      (id, business_id, code, joiner_device_id, joiner_name, joiner_model, joiner_user, role, platform, status, created_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
                   [`cfg-${inv.id}`, bizId, inv.code, target.deviceId, target.deviceName,
-                   target.platform, cfg.name, cfg.role, target.platform, new Date().toISOString()],
+                   target.platform, target.deviceName || 'Team Member', cfg.role, target.platform, new Date().toISOString()],
                 );
-                try {
-                  db.runSync('UPDATE device_requests SET assigned_name = ?, assigned_avatar = ?, assigned_permissions = ? WHERE id = ?',
-                    [cfg.name, cfg.avatar, cfg.permissions ? JSON.stringify(cfg.permissions) : null, `cfg-${inv.id}`]);
-                } catch {
-                  db.runSync('ALTER TABLE device_requests ADD COLUMN assigned_name TEXT');
-                  db.runSync('ALTER TABLE device_requests ADD COLUMN assigned_avatar TEXT');
-                  db.runSync('ALTER TABLE device_requests ADD COLUMN assigned_permissions TEXT');
-                  db.runSync('UPDATE device_requests SET assigned_name = ?, assigned_avatar = ?, assigned_permissions = ? WHERE id = ?',
-                    [cfg.name, cfg.avatar, cfg.permissions ? JSON.stringify(cfg.permissions) : null, `cfg-${inv.id}`]);
-                }
+                db.runSync('UPDATE device_requests SET assigned_permissions = ? WHERE id = ?',
+                  [cfg.permissions ? JSON.stringify(cfg.permissions) : null, `cfg-${inv.id}`]);
               } catch { /* best-effort */ }
               setTeamInvite(inv);
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

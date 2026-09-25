@@ -5,7 +5,7 @@ import { factoryResetDatabase } from '@/database/db';
 import { useSubscription } from '@/context/SubscriptionContext';
 import * as Haptics from 'expo-haptics';
 import * as SecureStore from 'expo-secure-store';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -30,6 +30,9 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { getSettingsGlass } from './glass-settings';
+import { useFocusEffect } from 'expo-router';
+import { getActiveBusiness, getBusinessLogo, getCurrentUserId, getUser } from '@/services/businessService';
+import { useDataChangedRefresh } from '@/hooks/useDataChangedRefresh';
 
 import {
   AlertTriangle,
@@ -48,6 +51,7 @@ import {
   RefreshCw,
   Shield,
   Sliders,
+  Store,
   Trash2,
   Truck,
   Users,
@@ -368,6 +372,31 @@ const SettingsScreen = () => {
   const themeTransition = useSharedValue(0);
   const [transitionAccent, setTransitionAccent] = useState('#FFFFFF');
 
+  // Profile banner reads the signed-in user (not the demo defaults in
+  // userProfile) so it shows the actual person + business on this device.
+  const [profileUser, setProfileUser] = useState<{ name?: string; avatar?: string } | null>(null);
+  const [activeBizName, setActiveBizName] = useState<string | null>(null);
+  const [activeBizLogo, setActiveBizLogo] = useState<string | null>(null);
+
+  const loadProfile = useCallback(() => {
+    try {
+      const uid = getCurrentUserId();
+      const u = uid ? getUser(uid) : undefined;
+      setProfileUser(u ? { name: u.name, avatar: u.avatar ?? '' } : null);
+    } catch { setProfileUser(null); }
+    try {
+      const biz = getActiveBusiness();
+      setActiveBizName(biz?.name ?? null);
+      setActiveBizLogo(biz ? getBusinessLogo(biz.id) : null);
+    } catch {
+      setActiveBizName(null);
+      setActiveBizLogo(null);
+    }
+  }, []);
+
+  useFocusEffect(loadProfile);
+  useDataChangedRefresh(loadProfile);
+
   const animatedOverlayStyle = useAnimatedStyle(() => ({
     opacity: themeTransition.value,
     transform: [
@@ -462,29 +491,51 @@ const SettingsScreen = () => {
           <BusinessSwitcher />
         </View>
 
-        {/* Elite Profile Banner */}
+        {/* Profile & Business Banner */}
         <Animated.View entering={FadeInDown.duration(600)} style={styles.bannerSection}>
           <TouchableOpacity 
             activeOpacity={0.9} 
             onPress={cashierMode ? undefined : () => handleOpenSub(setShowProfile)}
             disabled={cashierMode}
-            style={[styles.profileBanner, { backgroundColor: G.bgCard, borderColor: G.border }]}
+            style={[styles.profileBanner, { backgroundColor: G.bgCard, borderColor: G.border, padding: 18 }]}
           >
-            <View style={styles.bannerAvatarBox}>
-              <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={styles.bannerAvatar} />
-              <View style={[styles.badgeOverlay, { backgroundColor: G.fg }]}>
-                <BadgeCheck size={16} color={G.bg} fill={G.bg} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, width: '100%' }}>
+              {/* Business Logo Box */}
+              <View style={[styles.bannerAvatarBox, { width: 56, height: 56, borderRadius: 16, backgroundColor: colors.primary + '18' }]}>
+                {activeBizLogo ? (
+                  <Image source={{ uri: activeBizLogo }} style={{ width: 56, height: 56, borderRadius: 16 }} resizeMode="cover" />
+                ) : (
+                  <Store size={28} color={colors.primary} />
+                )}
+                <View style={[styles.badgeOverlay, { backgroundColor: G.fg }]}>
+                  <BadgeCheck size={14} color={G.bg} fill={G.bg} />
+                </View>
               </View>
-            </View>
-            <View style={styles.bannerInfo}>
-              <AppText variant="title" weight="bold" style={[styles.bannerName, { color: G.fg }]} numberOfLines={2}>{userProfile.name}</AppText>
-              <AppText variant="body-sm" weight="medium" style={[styles.bannerBusiness, { color: G.muted }]} numberOfLines={1}>{userProfile.businessName}</AppText>
-              {!cashierMode && (
-              <View style={[styles.profileLinkBtn, { backgroundColor: G.accentGlass }]}>
-                <AppText variant="caption" weight="bold" style={[styles.profileLinkText, { color: G.fg }]} numberOfLines={1}>{t('profile.edit')}</AppText>
-                <ArrowUpRight size={14} color={G.fg} />
+
+              <View style={[styles.bannerInfo, { flex: 1 }]}>
+                <AppText variant="title" weight="bold" style={[styles.bannerName, { color: G.fg }]} numberOfLines={1}>
+                  {activeBizName?.trim() || userProfile.businessName || 'Shega Business'}
+                </AppText>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                  <Image
+                    source={profileUser?.avatar ? { uri: profileUser.avatar } : (userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0])}
+                    style={{ width: 18, height: 18, borderRadius: 9 }}
+                  />
+                  <AppText variant="caption" weight="semibold" style={{ color: G.muted }} numberOfLines={1}>
+                    {profileUser?.name?.trim() || userProfile.name || 'Team Member'}
+                  </AppText>
+                </View>
+
+                {!cashierMode && (
+                  <View style={[styles.profileLinkBtn, { backgroundColor: G.accentGlass, marginTop: 6 }]}>
+                    <AppText variant="caption" weight="bold" style={[styles.profileLinkText, { color: G.fg }]} numberOfLines={1}>
+                      {t('profile.edit')}
+                    </AppText>
+                    <ArrowUpRight size={14} color={G.fg} />
+                  </View>
+                )}
               </View>
-              )}
             </View>
           </TouchableOpacity>
         </Animated.View>

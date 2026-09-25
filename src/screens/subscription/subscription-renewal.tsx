@@ -62,7 +62,14 @@ const SubscriptionRenewalScreen = () => {
               {t('subscription.plan')}
             </AppText>
             <AppText variant="body" weight="bold" style={{ color: G.text }}>
-              {subscription?.plan === 'premium' ? t('subscription.plan_premium') : t('subscription.plan_basic')}
+              {(() => {
+                const plan = (subscription?.plan || '').toLowerCase();
+                if (plan.includes('desktop') && plan.includes('mobile')) return t('subscription.plan_both');
+                if (plan.includes('premium')) return t('subscription.plan_both');
+                if (plan.includes('desktop')) return t('subscription.plan_desktop');
+                if (plan.includes('mobile') || plan.includes('basic')) return t('subscription.plan_mobile');
+                return subscription?.plan || t('common.na');
+              })()}
             </AppText>
           </View>
           <View style={styles.statusRow}>

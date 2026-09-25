@@ -50,8 +50,11 @@ export default function PaymentStatusScreen({ onContinue, onRenew, user }: Payme
   }, [load]);
 
   const status: string = subscription?.status || payment?.status || 'pending';
-  const approved = status === 'active' || status === 'approved';
-  const rejected = status === 'rejected';
+  const isActive = status === 'active' || status === 'approved';
+  const isTrial = status === 'trial';
+  const isRejected = status === 'payment_rejected' || status === 'rejected';
+  const isPending = status === 'pending_payment' || status === 'pending' || status === 'pending_verification';
+  const isExpired = status === 'expired';
 
   // Surface an in-app notification reflecting the current subscription status,
   // once per status (deduped via notification group keys).
@@ -61,11 +64,13 @@ export default function PaymentStatusScreen({ onContinue, onRenew, user }: Payme
     notifiedRef.current = key;
     try {
       notifyPaymentStatus({
-        status: key === 'active' || key === 'approved'
+        status: isActive
           ? 'approved'
-          : key === 'rejected'
-            ? 'rejected'
-            : 'pending',
+          : isTrial
+            ? 'approved'
+            : isRejected
+              ? 'rejected'
+              : 'pending',
         planName: subscription?.plan_name || subscription?.plan,
         reason: payment?.reason,
         expiresAt: subscription?.expires_at,
@@ -73,8 +78,26 @@ export default function PaymentStatusScreen({ onContinue, onRenew, user }: Payme
     } catch {}
   }, [subscription, payment]);
 
-  const badgeText = rejected ? 'Payment Rejected' : approved ? 'Subscription Active' : 'Pending Approval';
-  const badgeColor = rejected ? danger : approved ? success : warning;
+  const badgeText = isRejected
+    ? 'Payment Rejected'
+    : isActive
+      ? 'Subscription Active'
+      : isTrial
+        ? 'Free Trial Active'
+        : isExpired
+          ? 'Subscription Expired'
+          : isPending
+            ? 'Pending Approval'
+            : 'No Subscription';
+  const badgeColor = isRejected
+    ? danger
+    : isActive || isTrial
+      ? success
+      : isExpired
+        ? warning
+        : isPending
+          ? warning
+          : fgSecondary;
 
   const planDisplay = planName(subscription?.plan_name || payment?.plan_name || subscription?.plan);
   const transactionId = payment?.transaction_id || '—';
@@ -122,7 +145,7 @@ export default function PaymentStatusScreen({ onContinue, onRenew, user }: Payme
                 {badgeText}
               </AppText>
               <AppText variant="body" weight="medium" style={[styles.statusDesc, { color: fgSecondary }]}>
-                {pendingCopy(rejected, approved, payment?.reason)}
+                {pendingCopy(isRejected, isActive, isTrial, isExpired, isPending, payment?.reason)}
               </AppText>
             </View>
 
@@ -146,12 +169,12 @@ export default function PaymentStatusScreen({ onContinue, onRenew, user }: Payme
             ) : null}
 
             <TouchableOpacity
-              style={[styles.primaryBtn, { backgroundColor: approved ? success : fg }]}
-              onPress={approved ? onContinue : onRenew}
+              style={[styles.primaryBtn, { backgroundColor: isActive || isTrial ? success : fg }]}
+              onPress={isActive || isTrial ? onContinue : onRenew}
               activeOpacity={0.85}
             >
               <AppText variant="heading" weight="bold" style={{ color: bg }}>
-                {approved ? 'Continue to Shega' : 'Retry / Renew'}
+                {isActive || isTrial ? 'Continue to Shega' : 'Retry / Renew'}
               </AppText>
             </TouchableOpacity>
           </>
@@ -161,10 +184,20 @@ export default function PaymentStatusScreen({ onContinue, onRenew, user }: Payme
   );
 }
 
-function pendingCopy(rejected: boolean, approved: boolean, reason?: string): string {
+function pendingCopy(
+  rejected: boolean,
+  active: boolean,
+  trial: boolean,
+  expired: boolean,
+  pending: boolean,
+  reason?: string,
+): string {
   if (rejected) return reason ? `Payment rejected: ${reason}` : 'Your payment was rejected. Please try again.';
-  if (approved) return 'Your subscription is active. You now have full access to Shega.';
-  return 'Your payment is waiting for approval. This usually takes 1-24 hours.';
+  if (trial) return 'Your 7-day free trial is active.';
+  if (active) return 'Your subscription is active. You now have full access to Shega.';
+  if (expired) return 'Your subscription has expired. Renew to restore full access.';
+  if (pending) return 'Your payment is waiting for approval. This usually takes 1-24 hours.';
+  return 'You do not have an active subscription yet.';
 }
 
 function DetailRow({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
@@ -180,12 +213,17 @@ function DetailRow({ label, value, accent }: { label: string; value: string; acc
   );
 }
 
+/**
+ * Normalise a plan label to the canonical editions. Accepts the old restored
+ * wording too, so historical payment records never render as basic/premium.
+ */
 function planName(name: string | undefined): string {
   if (!name) return '—';
   const n = name.toLowerCase();
-  if (n.includes('premium') && n.includes('basic')) return name;
-  if (n.includes('premium')) return 'Premium';
-  if (n.includes('basic')) return 'Basic';
+  if (n.includes('desktop') && n.includes('mobile')) return 'Mobile + Desktop';
+  if (n.includes('premium')) return 'Mobile + Desktop';
+  if (n.includes('desktop')) return 'Desktop';
+  if (n.includes('mobile') || n.includes('basic')) return 'Mobile';
   return name;
 }
 

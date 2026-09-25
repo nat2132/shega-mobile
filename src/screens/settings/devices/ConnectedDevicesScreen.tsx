@@ -7,15 +7,16 @@
  * Works for Mobile ↔ Mobile and Mobile ↔ Desktop alike — no hub assumption.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Image, Modal, ScrollView, StyleSheet, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import {
-  MonitorSmartphone, Smartphone, Monitor, Plus,
-  ShieldOff, Pencil, Check, X, ChevronLeft, RefreshCw, Clock, ChevronRight,
+  MonitorSmartphone, Monitor, Plus,
+  ShieldOff, Pencil, Check, X, ChevronLeft, RefreshCw, Clock, ChevronRight, Copy,
 } from 'lucide-react-native';
+import QRCode from 'react-native-qrcode-svg';
 import { AppText, AppButton } from '@/components/ui';
 import { useSettings } from '@/context/SettingsContext';
 import { useToast } from '@/context/ToastContext';
@@ -26,9 +27,26 @@ import { wsSyncClient } from '@/services/wsSyncClient';
 import { getActiveBusiness } from '@/services/businessService';
 import { generateInvitation } from '@/services/invitationService';
 import { mobilePairingBeacon, getThisDeviceName } from '@/services/mobilePairingBeacon';
-import { preassignJoinIdentity } from '@/services/mobileSyncServer';
+import {
+  preassignJoinIdentity,
+  startMobileSyncServer,
+  stopMobileSyncServer,
+  isMobileSyncServerRunning,
+} from '@/services/mobileSyncServer';
+import { getDeviceId, getDeviceStatusList } from '@/services/syncService';
 import { RadarPulse } from '@/components/RadarPulse';
 import MemberApprovalModal, { type MemberApprovalConfig } from '@/components/MemberApprovalModal';
+
+const METHOD_LABEL: Record<string, string> = {
+  lan: 'Connected via LAN',
+  p2p: 'Peer-to-Peer',
+  relay: 'TURN relay',
+  cloud: 'Cloud',
+  offline: 'Offline',
+};
+
+type DeviceMethod = 'lan' | 'p2p' | 'relay' | 'cloud' | 'offline';
+type DeviceStatusT = 'connected' | 'connecting' | 'offline' | 'reconnecting';
 
 const STATE_DOT: Record<string, string> = {
   synced: '#2ECC71',
@@ -57,15 +75,25 @@ function lastSyncLabel(ts: number | null): string {
   return new Date(ts).toLocaleDateString();
 }
 
+function initials(name?: string | null): string {
+  if (!name) return '?';
+  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('') || '?';
+}
+
 interface DeviceRow {
   deviceId: string;
   deviceType: string;
   kind: string;
+  method?: DeviceMethod;
   online: boolean;
+  status?: DeviceStatusT;
   name?: string;
-  model?: string;
+  model?: string | null;
+  userName?: string | null;
+  role?: string | null;
   connectedAt: number;
   lastSyncAt: number | null;
+  lastSeenAt?: number | null;
 }
 
 export function ConnectedDevicesScreen({ onBack }: { onBack: () => void }) {
@@ -81,7 +109,59 @@ export function ConnectedDevicesScreen({ onBack }: { onBack: () => void }) {
   const businessName = getActiveBusiness()?.name || 'this business';
 
   const load = useCallback(() => {
-    setDevices(mobileP2pSync.getDevices() as DeviceRow[]);
+    // Live WebRTC peers + the synced roster (paired devices with presence,
+    // joined to the users table for name/role) — one merged list, so the owner
+    // sees every connected, offline and pending device with how it connects.
+    const live = (mobileP2pSync.getDevices() || []) as Array<any>;
+    const byId = new Map<string, DeviceRow>();
+    for (const p of live) {
+      const kind = p.kind || 'p2p-direct';
+      byId.set(p.deviceId, {
+        deviceId: p.deviceId,
+        deviceType: p.deviceType === 'desktop' ? 'desktop' : 'mobile',
+        kind,
+        method: kind === 'relay' ? 'relay' : kind === 'p2p-direct' ? 'p2p' : 'lan',
+        connectedAt: p.connectedAt || Date.now(),
+        lastSyncAt: p.lastSyncAt ?? null,
+        lastSeenAt: Date.now(),
+        online: true,
+        status: 'connected',
+      });
+    }
+    try {
+      const roster = getDeviceStatusList();
+      for (const d of roster) {
+        const existing = byId.get(d.device_id);
+        const isOnline = !!existing || d.is_self || d.status === 'online';
+        if (existing) {
+          byId.set(d.device_id, {
+            ...existing,
+            name: existing.name ?? d.name,
+            model: existing.model ?? d.model ?? null,
+            userName: d.userName ?? null,
+            role: d.role ?? null,
+          });
+        } else {
+          const seenTs = d.last_seen_at ? new Date(d.last_seen_at).getTime() : 0;
+          byId.set(d.device_id, {
+            deviceId: d.device_id,
+            deviceType: d.platform === 'desktop' ? 'desktop' : 'mobile',
+            kind: 'lan',
+            method: isOnline ? 'lan' : 'offline',
+            connectedAt: seenTs || 0,
+            lastSyncAt: d.last_sync_at ? new Date(d.last_sync_at).getTime() : null,
+            lastSeenAt: seenTs || null,
+            online: isOnline,
+            status: isOnline ? 'connected' : d.status === 'unknown' ? 'offline' : 'reconnecting',
+            name: d.name ?? d.device_id.slice(0, 8),
+            model: d.model ?? null,
+            userName: d.userName ?? null,
+            role: d.role ?? null,
+          });
+        }
+      }
+    } catch { /* roster unavailable yet */ }
+    setDevices([...byId.values()]);
     setCounts(mobileP2pSync.getRecordCounts());
   }, []);
 
@@ -120,26 +200,41 @@ export function ConnectedDevicesScreen({ onBack }: { onBack: () => void }) {
     load();
   };
 
-  const deviceState = (d: DeviceRow): string => (!d.online ? 'offline' : 'synced');
+  const deviceState = (d: DeviceRow): string => {
+    if (d.status === 'connecting') return 'syncing';
+    if (d.status === 'reconnecting') return 'waiting';
+    if (!d.online || d.status === 'offline') return 'offline';
+    return 'synced';
+  };
 
   const renderRow = (d: DeviceRow) => {
     const st = deviceState(d);
-    const Icon = d.deviceType === 'desktop' ? Monitor : Smartphone;
+    const who = d.userName;
+    const method = METHOD_LABEL[d.method ?? (d.online ? 'lan' : 'offline')] ?? 'Connected via LAN';
     return (
       <TouchableOpacity
         key={d.deviceId}
-        style={[styles.row, { backgroundColor: G.bgCard, borderColor: d.online ? G.border : G.border, opacity: d.online ? 1 : 0.65 }]}
+        style={[styles.row, { backgroundColor: G.bgCard, borderColor: G.border, opacity: d.online ? 1 : 0.65 }]}
         onPress={() => setDetail(d)}
       >
-        <View style={[styles.rowIcon, { backgroundColor: d.online ? G.accentGlass : G.mutedLight }]}>
-          <Icon size={17} color={d.online ? G.accent : G.muted} />
+        <View style={[styles.rowIcon, { backgroundColor: d.online ? (who ? G.accentGlass : G.accentGlass) : G.mutedLight }]}>
+          {who ? (
+            <AppText variant="body" weight="bold" style={{ color: d.online ? G.accent : G.muted, fontSize: 12 }}>
+              {initials(who)}
+            </AppText>
+          ) : (
+            <Monitor size={17} color={d.online ? G.accent : G.muted} />
+          )}
         </View>
         <View style={{ flex: 1 }}>
           <AppText variant="body" weight="bold" style={{ color: G.fg }} numberOfLines={1}>
             {d.name || (d.deviceType === 'desktop' ? 'Shega Desktop' : 'Shega Mobile')}
           </AppText>
           <AppText variant="caption" weight="medium" style={{ color: G.muted }} numberOfLines={1}>
-            {d.deviceType === 'desktop' ? 'Desktop' : 'Mobile'} · {d.online ? (d.kind === 'lan' ? 'LAN' : 'P2P') : `Last seen ${lastSyncLabel(d.connectedAt || null)}`}
+            {who ? `${who}${d.role ? ` · ${d.role}` : ''} — ` : ''}
+            <AppText variant="caption" weight="bold" style={{ color: d.online ? '#2ECC71' : G.muted }}>
+              {d.online ? method : `Last seen ${lastSyncLabel((d.lastSeenAt ?? d.connectedAt) || null)}`}
+            </AppText>
           </AppText>
         </View>
         <View style={styles.stateCol}>
@@ -257,8 +352,11 @@ export function ConnectedDevicesScreen({ onBack }: { onBack: () => void }) {
                 </View>
                 {[
                   ['Type', detail.deviceType === 'desktop' ? 'Desktop' : 'Mobile'],
+                  ['User', detail.userName || '—'],
+                  ['Role', detail.role || '—'],
                   ['Status', STATE_LABEL[deviceState(detail)]],
-                  ['Connection', detail.online ? (detail.kind === 'lan' ? 'LAN' : 'Direct P2P') : '—'],
+                  ['Connection', detail.online ? (METHOD_LABEL[detail.method ?? 'lan'] ?? 'Connected via LAN') : '—'],
+                  ['Last seen', lastSyncLabel((detail.lastSeenAt ?? detail.connectedAt) || null)],
                   ['Last sync', lastSyncLabel(detail.lastSyncAt)],
                   ['Device ID', detail.deviceId],
                 ].map(([k, v]) => (
@@ -296,7 +394,7 @@ export function ConnectedDevicesScreen({ onBack }: { onBack: () => void }) {
       <Modal visible={!!confirmUnpair} transparent animationType="fade" onRequestClose={() => setConfirmUnpair(null)}>
         <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setConfirmUnpair(null)}>
           <TouchableOpacity activeOpacity={1} style={[styles.sheet, { backgroundColor: G.bgCard, borderColor: G.border }]}>
-            <AppText variant="heading" weight="bold" style={{ color: G.fg }}>Unpair "{confirmUnpair?.name || confirmUnpair?.model || 'this device'}"?</AppText>
+            <AppText variant="heading" weight="bold" style={{ color: G.fg }}>Unpair &quot;{confirmUnpair?.name || confirmUnpair?.model || 'this device'}&quot;?</AppText>
             <AppText variant="caption" style={{ color: G.muted, marginTop: 8 }}>
               It will immediately stop syncing and lose access to {businessName}. Business data is kept on your remaining devices. The device must be paired and approved again before it can sync.
             </AppText>
@@ -316,12 +414,13 @@ export function ConnectedDevicesScreen({ onBack }: { onBack: () => void }) {
 }
 
 /**
- * Pairing card — discovery radar, no QR and no pairing code.
+ * Pairing card — invitation code + QR first, discovery radar second.
  *
- * Opens the business's invitation as a live beacon, then shows every nearby
- * device that is waiting to join ("Team"). Selecting one opens the member
- * setup, and the request is approved with the assigned identity the moment
- * that device connects.
+ * Opens the business's invitation as a live beacon, shows the invite code and
+ * its QR so a joiner can type or scan it (even when the network blocks mDNS /
+ * broadcast discovery), then lists every nearby device that is waiting to join
+ * ("Team"). Selecting one opens the member setup, and the request is approved
+ * with the assigned identity the moment that device connects.
  */
 function PairCard({ businessName, businessId, counts, onClose, G }: {
   businessName: string;
@@ -330,10 +429,12 @@ function PairCard({ businessName, businessId, counts, onClose, G }: {
   onClose: () => void;
   G: any;
 }) {
-  const [invite, setInvite] = useState<{ code: string; id: string; expiresAt?: string } | null>(null);
-  const [peers, setPeers] = useState<Array<{ id: string; name: string; platform?: string }>>([]);
+  const [invite, setInvite] = useState<{ code: string; id: string; qrUri: string; expiresAt: string } | null>(null);
+  const [peers, setPeers] = useState<Array<{ id: string; name: string; platform?: string; hasInvite?: boolean }>>([]);
   const [setupFor, setSetupFor] = useState<{ deviceId: string; name: string } | null>(null);
+  const [peerPhase, setPeerPhase] = useState<Record<string, 'idle' | 'approving' | 'waiting'>>({});
   const [selfName] = useState(getThisDeviceName());
+  const [now, setNow] = useState(Date.now());
   const { showToast } = useToast();
 
   const generate = async () => {
@@ -345,7 +446,7 @@ function PairCard({ businessName, businessId, counts, onClose, G }: {
       if (wsSyncClient.isConnected) {
         wsSyncClient.publishInvitation({ id: inv.id, businessId, code: inv.code, role: 'cashier', platform: 'mobile', expiresAt: inv.expiresAt }).catch(() => {});
       }
-      setInvite({ code: inv.code, id: inv.id, expiresAt: inv.expiresAt });
+      setInvite({ code: inv.code, id: inv.id, qrUri: inv.qrUri, expiresAt: inv.expiresAt });
     } catch (e: any) {
       showToast(e?.message || 'Could not start discovery.', 'error');
     }
@@ -353,17 +454,71 @@ function PairCard({ businessName, businessId, counts, onClose, G }: {
 
   React.useEffect(() => { void generate(); }, []);
 
-  // Live discovery of devices waiting to join — refreshed without a button.
+  // Keep the expiry countdown fresh without any extra polling machinery — the
+  // discovery refresh below already re-renders this card every few seconds.
+  React.useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 10_000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Discovery must be ACTIVE on the owner side too, not just publish-only.
+  // Without it the mDNS scan and the LAN sweep — which populate
+  // getNearbyOwners() — stay dormant, so nearby joiners never appear on the
+  // radar even though the joiner has been in Join Business the whole time.
+  // The owner also runs the 5759 join channel during pairing so a discovered
+  // joiner can resolve + submit the invite over TCP with no cloud dependency.
+  const ownServerRef = useRef(false);
+  React.useEffect(() => {
+    try {
+      mobilePairingBeacon.startBrowsing();
+      const bName = businessName || 'Shega';
+      mobilePairingBeacon.setDiscoverable(true, bName, 'owner');
+    } catch { /* native mDNS missing — LAN sweep still runs */ }
+    if (!isMobileSyncServerRunning()) {
+      ownServerRef.current = true;
+      void startMobileSyncServer();
+    }
+    return () => {
+      try { mobilePairingBeacon.stopBrowsing(); } catch { /* ignore */ }
+      try { mobilePairingBeacon.setDiscoverable(false); } catch { /* ignore */ }
+      if (ownServerRef.current) {
+        try { stopMobileSyncServer(); } catch { /* ignore */ }
+      }
+    };
+  }, [businessName]);
+
+  // Live discovery of devices that are visible on this network — refreshed
+  // without a button. The owner sees every nearby device that has turned itself
+  // discoverable (join-mode phones, other owner devices in pairing mode,
+  // desktops in join mode). Discovery is mutual: the moment THIS owner opens an
+  // invite for their business, those devices can see THIS device too.
+  //
+  // What makes a device joinable is not beacon.role (that is the device's own
+  // self-description and can say 'owner' even for a joiner's phone — because the
+  // phone is the owner of its own app session). What makes a join possible is:
+  //   1) the device is visible now (it is in discovery / join mode),
+  //   2) THIS owner has an open invite for their business, and
+  //   3) the owner selects the device and confirms the member setup.
+  //
+  // So we list every visible nearby device; when the owner taps one we open the
+  // member-approval modal and preconfigure the invite so the joiner lands on
+  // approval the instant their device connects. No code entry, no role flipping.
   React.useEffect(() => {
     const refresh = () => {
       try {
         const list = mobilePairingBeacon
           .getNearbyOwners()
-          .filter(({ beacon }: any) => beacon.role === 'team')
-          .map(({ beacon }: any) => ({
+          // The LAN sweep knocks on our own port too — never list this phone.
+          .filter(({ beacon }: any) => beacon?.owner?.deviceId && beacon.owner.deviceId !== getDeviceId())
+          // Every visible device is a potential team target for the owner.
+          // Do not gate on beacon.role — a joiner's phone reports 'owner' in
+          // its own discovery beacon (it is the owner of its own session).
+          .map(({ beacon, host }: any) => ({
             id: beacon.owner?.deviceId || beacon.businessId,
             name: beacon.owner?.deviceName || 'Nearby device',
             platform: beacon.owner?.platform,
+            hasInvite: !!beacon.code,
+            host,
           }));
         setPeers(list);
       } catch { setPeers([]); }
@@ -376,11 +531,12 @@ function PairCard({ businessName, businessId, counts, onClose, G }: {
   const confirmMember = async (cfg: MemberApprovalConfig) => {
     const target = setupFor;
     if (!target) return;
+    setPeerPhase((x) => ({ ...x, [target.deviceId]: 'approving' }));
     // One confirmation: the request from this device is approved with the
-    // assigned identity the instant it arrives.
+    // assigned ROLE the instant it arrives. The member sets their own name,
+    // profile picture and PIN after approval on their device.
     preassignJoinIdentity(target.deviceId, {
-      name: cfg.name,
-      avatar: cfg.avatar,
+      name: target.name || 'Team Member',
       role: cfg.role,
       permissions: cfg.permissions,
     });
@@ -390,9 +546,27 @@ function PairCard({ businessName, businessId, counts, onClose, G }: {
         wsSyncClient.publishInvitation({ id: invite.id, businessId, code: invite.code, role: cfg.role, platform: 'mobile', expiresAt: invite.expiresAt }).catch(() => {});
       }
     }
-    showToast(`${cfg.name} joins as ${cfg.role} as soon as their device connects.`, 'success');
+    showToast(`${target.name || 'Member'} joins as ${cfg.role} as soon as their device connects.`, 'success');
+    setPeerPhase((x) => ({ ...x, [target.deviceId]: 'waiting' }));
     setSetupFor(null);
   };
+
+  const peerDetail = (p: { id: string; name: string; platform?: string; hasInvite?: boolean }): string => {
+    switch (peerPhase[p.id]) {
+      case 'approving': return `Approving ${p.name}…`;
+      case 'waiting': return 'Approved — waiting for connection…';
+      default: return `${p.platform === 'desktop' ? 'Desktop' : 'Mobile'}${p.hasInvite ? ' · Ready to join' : ' · Listening'} · tap to set up`;
+    }
+  };
+
+  const phasePending = Object.values(peerPhase).some((s) => s === 'approving' || s === 'waiting');
+  const radarTone = (Object.values(peerPhase).some((s) => s === 'approving') ? 'connecting'
+    : Object.values(peerPhase).some((s) => s === 'waiting') ? 'connected'
+      : peers.length > 0 ? 'found' : 'searching') as any;
+  const radarStatus = (Object.values(peerPhase).some((s) => s === 'approving') ? 'Approving team member…'
+    : Object.values(peerPhase).some((s) => s === 'waiting') ? 'Approved — waiting for their device to connect'
+      : peers.length > 0 ? `${peers.length} device${peers.length === 1 ? '' : 's'} found`
+        : 'Searching for nearby devices…');
 
   return (
     <TouchableOpacity activeOpacity={1} style={[styles.detailCard, { backgroundColor: G.bgCard }]}>
@@ -401,17 +575,52 @@ function PairCard({ businessName, businessId, counts, onClose, G }: {
         <TouchableOpacity onPress={onClose}><X size={16} color={G.muted} /></TouchableOpacity>
       </View>
 
+      {invite && (
+        <View style={{ marginBottom: 16 }}>
+          <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, textAlign: 'center', marginBottom: 8 }}>
+            Invitation code — share it or scan the QR
+          </AppText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+            <View style={[styles.codeChip, { backgroundColor: G.bg, borderColor: G.border }]}>
+              <AppText variant="title" weight="bold" style={{ color: G.fg, letterSpacing: 5, fontSize: 20 }}>{invite.code}</AppText>
+            </View>
+            <TouchableOpacity
+              onPress={async () => {
+                try {
+                  const Clipboard = await import('expo-clipboard');
+                  await Clipboard.setStringAsync(invite.code);
+                  showToast('Code copied', 'success');
+                } catch { /* clipboard unavailable */ }
+              }}
+              style={[styles.copyBtn, { backgroundColor: G.accentGlass, borderColor: G.border }]}
+            >
+              <Copy size={16} color={G.fg} />
+            </TouchableOpacity>
+          </View>
+          <View style={{ alignItems: 'center', marginTop: 12 }}>
+            <View style={[styles.qrFrame, { backgroundColor: '#FFFFFF', borderColor: G.border }]}>
+              <QRCode value={invite.qrUri} size={168} />
+            </View>
+          </View>
+          <AppText variant="micro" weight="medium" style={{ color: G.muted, textAlign: 'center', marginTop: 8 }}>
+            On the other device: Join a Business → enter {invite.code} or scan this QR.
+            Valid {Math.max(0, Math.round((new Date(invite.expiresAt).getTime() - now) / 60000))} more min.
+          </AppText>
+        </View>
+      )}
+
       <RadarPulse
         glass={G}
         compact
         deviceName={selfName}
-        tone={peers.length > 0 ? 'found' : 'searching'}
-        status={peers.length > 0 ? `${peers.length} device${peers.length === 1 ? '' : 's'} found` : 'Searching for nearby devices…'}
+        tone={radarTone}
+        status={radarStatus}
         peers={peers.map((p) => ({
           id: p.id,
           name: p.name,
           platform: p.platform,
-          detail: `Waiting to join · tap to set up`,
+          detail: peerDetail(p),
+          disabled: peerPhase[p.id] === 'approving' || peerPhase[p.id] === 'waiting' || phasePending,
         }))}
         onPickPeer={(p) => setSetupFor({ deviceId: p.id, name: p.name })}
         emptyHint={`Ask your teammate to open Shega → Join a Business. Devices on this Wi-Fi appear here for ${businessName}.`}
@@ -469,6 +678,7 @@ const styles = StyleSheet.create({
   countTile: { width: '31%', borderRadius: 10, borderWidth: 1, padding: 8, alignItems: 'center' },
   qrFrame: { borderRadius: 16, padding: 12, alignItems: 'center', justifyContent: 'center', width: 194, height: 194 },
   codeChip: { borderRadius: 10, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 8 },
+  copyBtn: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', padding: 24 },
   sheet: { width: '100%', maxWidth: 360, borderRadius: 20, borderWidth: 1, padding: 20 },
 });

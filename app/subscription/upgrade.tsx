@@ -27,7 +27,7 @@ export default function PremiumUpgrade() {
   const { feature } = useLocalSearchParams<{ feature: string }>();
   const featureData = feature && feature in FEATURE_LABELS
     ? FEATURE_LABELS[feature as PremiumFeature]
-    : { name: 'Premium Feature', description: 'Unlock this premium feature with a subscription.', benefits: ['Access premium tools', 'Grow your business', 'Get insights'] };
+    : { name: 'Subscription Feature', description: 'Unlock this feature with a subscription.', benefits: ['Access advanced tools', 'Grow your business', 'Get insights'] };
   const featureKey = FEATURE_KEY_MAP[feature || ''] || '';
 
   return (

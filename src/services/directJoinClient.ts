@@ -81,16 +81,59 @@ export async function directResolveInvite(target: DirectJoinTarget, code: string
   return res?.payload?.invitation ?? null;
 }
 
-/** Submit a join request to a mobile hub. */
-export async function directSubmitJoin(target: DirectJoinTarget, payload: any): Promise<any> {
-  const res = await rpc(target, { type: 'DEVICE_JOIN_SUBMIT', payload });
-  return res?.payload ?? {};
+/** Read a mobile hub's identity and currently open invite over TCP. */
+export async function directDeviceHello(target: DirectJoinTarget): Promise<any | null> {
+  const res = await rpc(target, {
+    type: 'DEVICE_HELLO',
+    payload: {},
+  }, 5000);
+  const p = res?.payload ?? {};
+  return { ...p, handshake: p.handshake ?? extractHandshake(p) };
 }
 
-/** Poll a join request's status. Returns { record, pairingToken? }. */
-export async function directJoinStatus(target: DirectJoinTarget, code: string, joinerDeviceId: string): Promise<any> {
-  const res = await rpc(target, { type: 'DEVICE_JOIN_STATUS', payload: { code, joinerDeviceId } });
-  return res?.payload ?? {};
+/** Submit a join request to a mobile hub. */
+export async function directSubmitJoin(target: DirectJoinTarget, payload: any): Promise<any> {
+  console.log(`[pair] Submitting direct join request to ${target.host}:${target.port}...`);
+  const res = await rpc(target, { type: 'DEVICE_JOIN_SUBMIT', payload });
+  const p = res?.payload ?? {};
+  const handshake = p.handshake ?? extractHandshake(p);
+  console.log(`[pair] directSubmitJoin response from ${target.host}:${target.port}: status=${p.status || 'pending'}, handshake.ok=${!!handshake?.ok}`);
+  return { ...p, handshake };
+}
+
+/** Extract a handshake ack from a raw hub payload (best-effort fallback). */
+function extractHandshake(p: any): { ok?: boolean; hubDeviceId?: string; hubName?: string; hubPlatform?: string; hubPort?: number; businessId?: string | null; businessName?: string | null; status?: string | null; requestId?: string | null; at?: number } | undefined {
+  if (!p || typeof p !== 'object') return undefined;
+  if (p.handshake) return p.handshake;
+  return {
+    ok: true,
+    hubDeviceId: p.hubId ?? p.hubDeviceId ?? 'mobile',
+    hubName: p.hubName ?? p.deviceName ?? 'Shega Mobile',
+    hubPlatform: 'mobile',
+    hubPort: p.port ?? 5759,
+    businessId: p.businessId ?? null,
+    businessName: p.businessName ?? null,
+    status: p.status ?? null,
+    requestId: p.requestId ?? null,
+    at: Date.now(),
+  };
+}
+
+/** Poll a join request's status. Returns { record, pairingToken? }.
+ * The invite code is OPTIONAL: radar-tap admission (owner tapped the joiner on
+ * the radar — no invite code was ever typed) polls code-less, keyed purely by
+ * joinerDeviceId. Both the desktop HTTP hub and the mobile TCP hub accept an
+ * empty code and fall back to the joiner_device_id lookup.
+ */
+export async function directJoinStatus(target: DirectJoinTarget, code: string | null | undefined, joinerDeviceId: string): Promise<any> {
+  const res = await rpc(target, {
+    type: 'DEVICE_JOIN_STATUS',
+    payload: { ...(code ? { code } : {}), joinerDeviceId },
+  });
+  const p = res?.payload ?? {};
+  const handshake = p.handshake ?? extractHandshake(p);
+  console.log(`[pair] directJoinStatus target: ${target.host}:${target.port}, status: ${p?.record?.status || 'pending'}, handshake.ok: ${!!handshake?.ok}`);
+  return { ...p, handshake };
 }
 
 /**
@@ -106,14 +149,27 @@ export async function desktopHttpResolveInvite(baseUrl: string, code: string): P
     });
     if (!res.ok) return null;
     const data = await res.json();
-    return data?.invitation ?? (data?.code ? data : null);
+    const inv = data?.invitation ?? (data?.code ? data : null);
+    if (inv) console.log(`[pair] Resolved invite code on desktop HTTP hub ${baseUrl}`);
+    return inv;
   } catch {
     return null;
   }
 }
 
-/** True when the host looks reachable — used to prune unreachable targets. */
-export async function isHubReachable(target: DirectJoinTarget): Promise<boolean> {
-  try { await rpc(target, { type: 'HEARTBEAT', payload: {} }, 5000); return true; }
+/** True when the host looks reachable — used to prune unreachable targets. Supports both HTTP (5757) and TCP (5759). */
+export async function isHubReachable(target: DirectJoinTarget & { http?: boolean }): Promise<boolean> {
+  if (target.http || target.port === 5757) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 3000);
+      const res = await fetch(`http://${target.host}:${target.port}/sync/info`, { signal: controller.signal });
+      clearTimeout(timer);
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+  try { await rpc(target, { type: 'HEARTBEAT', payload: {} }, 3000); return true; }
   catch { return false; }
 }

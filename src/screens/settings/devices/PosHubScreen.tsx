@@ -9,13 +9,12 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView,
+  ActivityIndicator, Pressable, RefreshControl, ScrollView,
   StyleSheet, Switch, View,
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
 import QRCode from 'react-native-qrcode-svg';
 import {
-  CheckCircle2, Copy, Monitor, QrCode, RefreshCw, Smartphone, Wifi, WifiOff, X,
+  CheckCircle2, Copy, QrCode, RefreshCw, Smartphone, Wifi, WifiOff, X,
 } from 'lucide-react-native';
 import { AppText } from '@/components/ui';
 import { useSettings } from '@/context/SettingsContext';
@@ -86,18 +85,17 @@ export const PosHubScreen: React.FC<{ onClose: () => void }> = ({ onClose }) => 
   };
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={[styles.fill, { backgroundColor: G.bg }]}>
-        {/* Header */}
-        <View style={[styles.header, { backgroundColor: G.bgCard, borderColor: G.border }]}>
-          <Pressable onPress={onClose} hitSlop={12} style={styles.closeBtn}>
-            <X size={22} color={G.fg} />
-          </Pressable>
-          <AppText variant="title" weight="bold" style={{ color: G.fg, flex: 1, textAlign: 'center' }}>
-            POS Hub
-          </AppText>
-          <View style={{ width: 36 }} />
-        </View>
+    <View style={styles.fill}>
+      {/* Header */}
+      <View style={[styles.header, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+        <Pressable onPress={onClose} hitSlop={12} style={styles.closeBtn}>
+          <X size={22} color={G.fg} />
+        </Pressable>
+        <AppText variant="title" weight="bold" style={{ color: G.fg, flex: 1, textAlign: 'center' }}>
+          POS Hub
+        </AppText>
+        <View style={{ width: 36 }} />
+      </View>
 
         <ScrollView
           contentContainerStyle={styles.body}
@@ -203,8 +201,7 @@ export const PosHubScreen: React.FC<{ onClose: () => void }> = ({ onClose }) => 
             Devices paired here sync directly with this phone over your local network — no internet needed.
           </AppText>
         </ScrollView>
-      </View>
-    </Modal>
+    </View>
   );
 };
 

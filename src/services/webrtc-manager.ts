@@ -6,8 +6,9 @@
 
 import type { RTCSessionDescription } from 'react-native-webrtc';
 import {
-  DEFAULT_ICE_SERVERS,
+  buildRtcConfiguration,
   type ConnectionKind,
+  type RTCIceServerLike,
   type SignalMessage,
   type YjsPeerInfo,
 } from '@shega/shared';
@@ -32,6 +33,52 @@ try {
 }
 
 const rtcAvailable = rtcModule !== null;
+
+/**
+ * Gather TURN/ICE servers from Expo public env vars. In Expo only variables
+ * prefixed `EXPO_PUBLIC_` are inlined at build time; the SHEGA_* aliases are
+ * accepted for parity with desktop. Returns [] when unset — behavior then
+ * falls back to the STUN-only default.
+ */
+function readIceServersFromEnv(): RTCIceServerLike[] {
+  const out: RTCIceServerLike[] = [];
+  const rawJson = process.env.EXPO_PUBLIC_ICE_SERVERS || process.env.SHEGA_ICE_SERVERS;
+  if (rawJson) {
+    try {
+      const parsed = JSON.parse(rawJson) as RTCIceServerLike[];
+      if (Array.isArray(parsed)) {
+        for (const s of parsed) if (s && s.urls) out.push(s);
+      }
+    } catch { /* ignore malformed override */ }
+  }
+  const rawUrl = process.env.EXPO_PUBLIC_TURN_URL || process.env.SHEGA_TURN_URL;
+  if (rawUrl) {
+    const urls = rawUrl.split(',').map((u) => u.trim()).filter(Boolean);
+    if (urls.length) {
+      out.push({
+        urls: urls.length === 1 ? urls[0] : urls,
+        username: process.env.EXPO_PUBLIC_TURN_USERNAME || process.env.SHEGA_TURN_USERNAME || undefined,
+        credential: process.env.EXPO_PUBLIC_TURN_PASSWORD || process.env.SHEGA_TURN_PASSWORD || undefined,
+      });
+    }
+  }
+  return out;
+}
+
+const MOBILE_ICE_SERVERS = buildRtcConfiguration(readIceServersFromEnv());
+
+/** Redact credentials from a turn: URL so diagnostics never leak a secret. */
+function stripUrlCreds(url: string): string {
+  const m = /^(turn|turns):\/\/([^:]+):([^@]+)@(.+)$/.exec(url);
+  if (m) return `${m[1]}://***:***@${m[4]}`;
+  return url;
+}
+
+/** Extract ICE candidate type (`host`/`srflx`/`relay`) for diagnostics. */
+function iceCandidateType(candidate: string): string | null {
+  const m = / typ (\w+)/.exec(candidate || '');
+  return m ? m[1].toLowerCase() : null;
+}
 
 interface PeerSession {
   deviceId: string;
@@ -148,7 +195,7 @@ export class MobileWebRtcManager {
 
   private newSession(deviceId: string, deviceType: 'mobile' | 'desktop'): PeerSession {
     if (!rtcModule) throw new Error('WebRTC unavailable');
-    const pc = new rtcModule.RTCPeerConnection({ iceServers: DEFAULT_ICE_SERVERS as any });
+    const pc = new rtcModule.RTCPeerConnection({ iceServers: MOBILE_ICE_SERVERS as any });
     const session: PeerSession = {
       deviceId, deviceType, pc, dc: null,
       businessId: this.businessId, kind: 'p2p-direct', connectedAt: 0,
@@ -157,6 +204,8 @@ export class MobileWebRtcManager {
 
     (pc as any).addEventListener('icecandidate', (ev: any) => {
       if (ev.candidate) {
+        const typ = iceCandidateType(ev.candidate.candidate);
+        if (typ) this.emit('status', `peer ${deviceId}: ICE candidate ${typ}`);
         this.signalingSend?.(deviceId, {
           t: 'ice', from: this.myId, to: deviceId,
           candidate: ev.candidate.candidate,

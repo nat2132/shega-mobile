@@ -10,6 +10,8 @@ import {
   Modal,
   Pressable,
 } from "react-native";
+import { Image } from "expo-image";
+import { parseProductImages } from "@/utils/productImages";
 import Animated, {
   FadeInDown,
   Layout,
@@ -404,6 +406,87 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
               </View>
             </View>
           </Animated.View>
+
+          {/* Cart Line Items Preview Card */}
+          {safeCart.length > 0 && (
+            <Animated.View entering={FadeInDown.duration(400)} style={{ marginBottom: 16 }}>
+              <View style={[styles.intelligenceBlock, { backgroundColor: SALES_GLASS.bgCard, borderColor: SALES_GLASS.border }]}>
+                <View style={styles.blockHeader}>
+                  <ShoppingBag size={18} color={colors.primary} />
+                  <AppText variant="body" weight="bold" style={[styles.blockTitle, { color: SALES_GLASS.fg }]}>
+                    Cart Items ({safeCart.length})
+                  </AppText>
+                </View>
+
+                <View style={{ gap: 8, marginTop: 4 }}>
+                  {safeCart.map((item: any) => {
+                    const coverImg = parseProductImages(item.image).primary;
+                    const lineTotal = calcLineTotal(item);
+                    return (
+                      <View key={item.id} style={[styles.cartRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                        <View style={[styles.cartImgBox, { backgroundColor: colors.primary + '14' }]}>
+                          {coverImg ? (
+                            <Image source={{ uri: coverImg }} style={styles.cartImg} />
+                          ) : (
+                            <ShoppingBag size={16} color={colors.primary} />
+                          )}
+                        </View>
+
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <AppText variant="body-sm" weight="bold" style={{ color: SALES_GLASS.fg }} numberOfLines={1}>
+                            {item.name}
+                          </AppText>
+                          <AppText variant="micro" weight="medium" style={{ color: SALES_GLASS.fgSecondary }} numberOfLines={1}>
+                            ETB {getLinePrice(item).toFixed(2)} / {getLineUnitLabel(item) || 'pcs'}
+                          </AppText>
+                        </View>
+
+                        <View style={styles.qtyControlRow}>
+                          <TouchableOpacity
+                            onPress={() => {
+                              if (item.quantity > 1) {
+                                onUpdateItem?.(item.id, { quantity: item.quantity - 1 });
+                                Haptics.selectionAsync();
+                              } else {
+                                onRemoveItem?.(item.id);
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                              }
+                            }}
+                            style={[styles.qtyBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+                          >
+                            <AppText variant="body-sm" weight="bold" style={{ color: colors.text }}>-</AppText>
+                          </TouchableOpacity>
+
+                          <AppText variant="body-sm" weight="bold" style={{ color: colors.text, minWidth: 20, textAlign: 'center' }}>
+                            {item.quantity}
+                          </AppText>
+
+                          <TouchableOpacity
+                            onPress={() => {
+                              onUpdateItem?.(item.id, { quantity: (item.quantity || 1) + 1 });
+                              Haptics.selectionAsync();
+                            }}
+                            style={[styles.qtyBtn, { backgroundColor: colors.primary }]}
+                          >
+                            <AppText variant="body-sm" weight="bold" style={{ color: '#FFFFFF' }}>+</AppText>
+                          </TouchableOpacity>
+                        </View>
+
+                        <AppNumber
+                          value={lineTotal}
+                          size="body-sm"
+                          weight="bold"
+                          showCurrency
+                          color={colors.primary}
+                          style={{ marginLeft: 6 }}
+                        />
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            </Animated.View>
+          )}
 
           {/* Settlement Blocks */}
           <Animated.View
@@ -1300,6 +1383,39 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   blockTitle: { fontSize: 15, fontFamily: Fonts.bold },
+  cartRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  cartImgBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  cartImg: {
+    width: '100%',
+    height: '100%',
+  },
+  qtyControlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  qtyBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justify: 'center',
+  },
   toggleRow: { flexDirection: "row", gap: 10 },
   modalBtn: {
     flex: 1,

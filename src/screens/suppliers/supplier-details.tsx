@@ -17,6 +17,7 @@ import { useSettings } from '@/context/SettingsContext';
 import { useSubscription } from '@/context/SubscriptionContext';
 import { useDialog } from '@/context/DialogContext';
 import { useToast } from '@/context/ToastContext';
+import { useDataChangedRefresh } from '@/hooks/useDataChangedRefresh';
 import { getSuppliersGlass } from './glass-suppliers';
 import { Fonts } from '@/constants/theme';
 import {
@@ -128,6 +129,7 @@ export default function SupplierDetails({
   }, [supplierId]);
 
   useEffect(() => { load(); }, [load]);
+  useDataChangedRefresh(load);
 
   const handleSavePayment = async () => {
     if (isReadOnly) {

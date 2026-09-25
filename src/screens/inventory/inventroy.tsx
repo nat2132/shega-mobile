@@ -7,6 +7,7 @@ import { PROFILE_IMAGES, useSettings } from '@/context/SettingsContext';
 import { useSidebar } from '@/context/SidebarContext';
 import { useWarehouse } from '@/context/WarehouseContext';
 import { Image } from 'expo-image';
+import { parseProductImages } from '@/utils/productImages';
 import {
   getExpiringItems,
   getFilteredItems,
@@ -169,8 +170,8 @@ const InventoryLedgerItem = React.memo(({ item, onPress }: { item: ItemData, onP
       activeOpacity={0.7}
     >
       <View style={[styles.ledgerIconCircle, { backgroundColor: G.accentGlass }]}>
-        {item.image ? (
-          <Image source={{ uri: item.image }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
+        {parseProductImages(item.image).primary ? (
+          <Image source={{ uri: parseProductImages(item.image).primary! }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
         ) : (
           <Package size={22} color={isLow ? G.fg : G.muted} />
         )}

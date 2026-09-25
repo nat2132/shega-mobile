@@ -21,21 +21,20 @@ import Animated, {
 const { width } = Dimensions.get('window');
 
 interface CreatePinScreenProps {
-  onConfirm?: () => void;
+  /** Receives the confirmed PIN so callers can bind it to a user/business. */
+  onConfirm?: (pin: string) => void;
   onSkip?: () => void;
 }
 
 const WEAK_PINS = new Set([
-  '0123', '1234', '2345', '3456', '4567', '5678', '6789',
-  '4321', '8765',
-  '2468', '1357',
+  '012345', '123456', '234567', '345678', '456789',
+  '654321', '987654', '111111', '000000',
 ]);
 
 const validatePin = (pin: string, t: any): string | null => {
-  if (pin.length !== 4) return t('account.pin_length');
+  if (pin.length !== 6) return t('account.pin_length');
   if (WEAK_PINS.has(pin)) return t('account.pin_too_common');
-  if (/^(\d)\1{3}$/.test(pin)) return t('account.pin_repeating');
-  if (/^(\d)\1{2}(\d)\2$/.test(pin)) return t('account.pin_pattern');
+  if (/^(\d)\1{5}$/.test(pin)) return t('account.pin_repeating');
   return null;
 };
 
@@ -46,7 +45,7 @@ const CreatePinScreen: React.FC<CreatePinScreenProps> = ({ onConfirm, onSkip }) 
   const [confirmPin, setConfirmPin] = useState('');
   const [pinPhase, setPinPhase] = useState<'create' | 'confirm'>('create');
   const [pinError, setPinError] = useState<string | null>(null);
-  const pinLength = 4;
+  const pinLength = 6;
   const shakeOffset = useSharedValue(0);
   const shakeConfirmOffset = useSharedValue(0);
 
@@ -363,7 +362,7 @@ const CreatePinScreen: React.FC<CreatePinScreenProps> = ({ onConfirm, onSkip }) 
                   }
                   
                   await setPin(pin);
-                  onConfirm?.();
+                  onConfirm?.(pin);
                 }
               } catch {
                 shake('create');

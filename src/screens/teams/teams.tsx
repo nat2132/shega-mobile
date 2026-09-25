@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import {
   Alert,
   Image,
@@ -11,16 +11,21 @@ import {
   View,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import {
+  Camera,
   ChevronLeft,
   ChevronRight,
   Crown,
+  Mail,
+  Phone,
   Plus,
   Search,
   Shield,
   ShieldCheck,
+  User,
   UserPlus,
   Users as UsersIcon,
   X,
@@ -29,16 +34,20 @@ import {
 import { AppText } from '@/components/ui';
 import { Fonts, Spacing, BorderRadius } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
+import { useToast } from '@/context/ToastContext';
 import { useBusinessAuth } from '@/hooks/useBusinessAuth';
+import { useDataChangedRefresh } from '@/hooks/useDataChangedRefresh';
 import {
   addUser,
   effectivePermissions,
-  getCustomRoles,    getUsers,
-    getUser,
+  getCustomRoles,
+  getUsers,
+  getUser,
   removeUser,
   setUserActive,
   updateUserPermissions,
   updateUserRole,
+  updateUserMemberDetails,
 } from '@/services/businessService';
 import {
   BUILTIN_ROLES,
@@ -50,6 +59,18 @@ import {
 
 const BUILTIN_ROLE_KEYS = ['owner', 'manager', 'cashier', 'inventory', 'accountant', 'reports', 'warehouse'];
 const isBuiltinRole = (key: string): boolean => (BUILTIN_ROLE_KEYS as readonly string[]).includes(key);
+
+function timeAgo(dateOrTs?: string | number | null): string {
+  if (!dateOrTs) return 'Offline';
+  const ts = typeof dateOrTs === 'number' ? dateOrTs : Date.parse(String(dateOrTs));
+  if (!ts || isNaN(ts)) return 'Offline';
+  const diff = Date.now() - ts;
+  if (diff < 30_000) return 'Just now';
+  if (diff < 60_000) return '1 min ago';
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} min ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} h ago`;
+  return new Date(ts).toLocaleDateString();
+}
 
 /**
  * Teams — staff management for owners/managers.
@@ -69,6 +90,7 @@ type RoleOption = { key: string; label: string; isSystem: boolean };
 export default function TeamsScreen({ onClose }: Props) {
   const router = useRouter();
   const { colors, t } = useSettings();
+  const { showToast } = useToast();
   const auth = useBusinessAuth();
 
   const G = {
@@ -91,8 +113,13 @@ export default function TeamsScreen({ onClose }: Props) {
   const [search, setSearch] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<string | null>(null); // user id whose permissions sheet is open
+  const [deviceStatuses, setDeviceStatuses] = useState<any[]>([]);
+  const prevStatusesRef = React.useRef<Map<string, string>>(new Map());
 
-  const refreshKey = useState(0)[1];
+  const [refreshKey, setRefreshKey] = useState(0);
+  const triggerRefresh = useCallback(() => setRefreshKey((k) => k + 1), []);
+
+  useDataChangedRefresh(triggerRefresh);
 
   const people = useMemo(() => {
     if (!businessId) return [];
@@ -103,9 +130,50 @@ export default function TeamsScreen({ onClose }: Props) {
       (u) =>
         u.name.toLowerCase().includes(q) ||
         (u.phone ?? '').toLowerCase().includes(q) ||
-        (u.email ?? '').toLowerCase().includes(q),
+        (u.email ?? '').toLowerCase().includes(q) ||
+        (u.username ?? '').toLowerCase().includes(q),
     );
   }, [businessId, search, refreshKey]);
+
+  const pollPresence = React.useCallback(async () => {
+    try {
+      const { getDeviceStatusList } = require('@/services/syncService');
+      const list = getDeviceStatusList() || [];
+      setDeviceStatuses(list);
+
+      if (people.length > 0) {
+        for (const p of people) {
+          const dev = list.find(
+            (d: any) => d.user_id === p.id || d.user_name?.toLowerCase() === p.name.toLowerCase()
+          );
+          if (!dev) continue;
+          const currentStatus = dev.status === 'active' || dev.status === 'online' || dev.online
+            ? 'online'
+            : dev.status === 'connecting' || dev.status === 'reconnecting'
+              ? dev.status
+              : 'offline';
+
+          const prev = prevStatusesRef.current.get(p.id);
+          if (prev !== undefined && prev !== currentStatus) {
+            if (prev === 'offline' && currentStatus === 'online') {
+              showToast(`${p.name}'s device came online`, 'success');
+            } else if ((prev === 'connecting' || prev === 'reconnecting') && currentStatus === 'online') {
+              showToast(`${p.name}'s device reconnected`, 'success');
+            } else if (prev === 'online' && currentStatus === 'offline') {
+              showToast(`${p.name}'s device went offline`, 'info');
+            }
+          }
+          prevStatusesRef.current.set(p.id, currentStatus);
+        }
+      }
+    } catch { /* best effort */ }
+  }, [people, showToast]);
+
+  React.useEffect(() => {
+    pollPresence();
+    const timer = setInterval(pollPresence, 3000);
+    return () => clearInterval(timer);
+  }, [pollPresence]);
 
   const roleOptions = useMemo<RoleOption[]>(() => {
     const builtins = BUILTIN_ROLES.map((r) => ({
@@ -141,13 +209,6 @@ export default function TeamsScreen({ onClose }: Props) {
     return found.isSystem && isBuiltinRole(found.key) ? t(`teams.role_${found.key}`) : found.label;
   };
 
-  const roleAccent = (u: { isOwner: boolean; role: string }) => {
-    if (u.isOwner || u.role === 'owner') return G.warning;
-    if (u.role === 'manager') return G.accent;
-    if (u.role === 'cashier') return G.success;
-    return G.muted;
-  };
-
   const handleAddMember = () => {
     if (!canManage) return;
     setShowAdd(true);
@@ -159,7 +220,7 @@ export default function TeamsScreen({ onClose }: Props) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       try {
         setUserActive(userId, next);
-        refreshKey((k) => k + 1);
+        triggerRefresh();
       } catch (e: any) {
         Alert.alert(t('teams.error_status'), e?.message || t('teams.error_unknown'));
       }
@@ -189,12 +250,12 @@ export default function TeamsScreen({ onClose }: Props) {
       [
         { text: t('common.cancel'), style: 'cancel' },
         {
-          text: isOwner ? t('common.delete') : t('common.delete'),
+          text: t('common.delete'),
           style: 'destructive',
           onPress: () => {
             try {
               removeUser(userId);
-              refreshKey((k) => k + 1);
+              triggerRefresh();
             } catch (e: any) {
               Alert.alert(t('teams.error_remove'), e?.message || t('teams.error_unknown'));
             }
@@ -210,14 +271,13 @@ export default function TeamsScreen({ onClose }: Props) {
       Haptics.selectionAsync();
       try {
         updateUserRole(userId, roleKey);
-        refreshKey((k) => k + 1);
+        triggerRefresh();
       } catch (e: any) {
         Alert.alert(t('teams.error_role'), e?.message || t('teams.error_unknown'));
       }
     };
     const target = getUser(userId);
     const wasOwner = !!target?.isOwner || target?.role === 'owner';
-    // Ownership-sensitive: granting or revoking OWNER gets an explicit confirm.
     if (roleKey === 'owner' && !wasOwner) {
       Alert.alert(
         t('teams.grant_owner_title'),
@@ -245,67 +305,76 @@ export default function TeamsScreen({ onClose }: Props) {
 
   const handlePermissionChange = (
     userId: string,
-    permKey: string,
+    key: string,
     current: PermissionValue,
   ) => {
     if (!canAssignRoles) return;
     Haptics.selectionAsync();
-    const user = people.find((p) => p.id === userId);
-    if (!user) return;
-    const overrides = { ...(user.permissions ?? {}) };
-    if (current === true) overrides[permKey] = false;
-    else overrides[permKey] = true;
-    updateUserPermissions(userId, overrides);
-    refreshKey((k) => k + 1);
+    const next: PermissionValue = current === true ? false : true;
+    try {
+      updateUserPermissions(userId, { [key]: next });
+      triggerRefresh();
+    } catch (e: any) {
+      Alert.alert(t('teams.error_permission'), e?.message || t('teams.error_unknown'));
+    }
   };
 
-  const goBack = () => {
-    if (onClose) onClose();
-    else if (router.canGoBack()) router.back();
-  };
+  const editingUser = editing ? getUser(editing) : null;
 
   if (!canView) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: G.bg }]}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={onClose || (() => router.back())}
+            style={[styles.backBtn, { backgroundColor: G.card }]}
+          >
+            <ChevronLeft size={20} color={G.fg} />
+          </TouchableOpacity>
+          <AppText variant="title" weight="bold" style={{ color: G.fg }}>
+            {t('teams.title')}
+          </AppText>
+        </View>
         <View style={styles.noAccess}>
-          <Shield size={44} color={G.muted} />
+          <Shield size={48} color={G.muted} />
           <AppText variant="title" weight="bold" style={{ color: G.fg, marginTop: 12 }}>
             {t('teams.no_access_title')}
           </AppText>
-          <AppText variant="body-sm" weight="medium" style={{ color: G.muted, marginTop: 6, textAlign: 'center' }}>
-            {t('teams.no_access_sub')}
+          <AppText variant="body-sm" weight="medium" style={{ color: G.muted, textAlign: 'center', marginTop: 4 }}>
+            {t('teams.no_access_msg')}
           </AppText>
         </View>
       </SafeAreaView>
     );
   }
 
-  const activeCount = people.filter((p) => p.isActive).length;
-  const editingUser = editing ? people.find((p) => p.id === editing) : undefined;
-
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: G.bg }]} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: G.bg }]}>
+
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: G.border }]}>
-        <TouchableOpacity onPress={goBack} style={[styles.backBtn, { backgroundColor: G.card }]}>
-          <ChevronLeft size={22} color={G.fg} />
+        <TouchableOpacity
+          onPress={onClose || (() => router.back())}
+          style={[styles.backBtn, { backgroundColor: G.card }]}
+        >
+          <ChevronLeft size={20} color={G.fg} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <AppText variant="title" weight="bold" style={{ color: G.fg }} numberOfLines={1}>
+          <AppText variant="title" weight="bold" style={{ color: G.fg }}>
             {t('teams.title')}
           </AppText>
-          <AppText variant="caption" weight="medium" style={{ color: G.muted }} numberOfLines={1}>
-            {t('teams.subtitle', { active: String(activeCount), total: String(people.length) })}
+          <AppText variant="caption" weight="medium" style={{ color: G.muted }}>
+            {people.length} {t('teams.members_count')}
           </AppText>
         </View>
         {canManage && (
           <TouchableOpacity
-            onPress={handleAddMember}
             style={[styles.addBtn, { backgroundColor: G.accent }]}
+            onPress={handleAddMember}
           >
-            <UserPlus size={18} color="#FFFFFF" />
+            <UserPlus size={16} color="#FFFFFF" />
             <AppText variant="caption" weight="bold" style={{ color: '#FFFFFF' }}>
-              {t('teams.add')}
+              {t('teams.add_member')}
             </AppText>
           </TouchableOpacity>
         )}
@@ -314,14 +383,13 @@ export default function TeamsScreen({ onClose }: Props) {
       {/* Search */}
       <View style={styles.searchWrap}>
         <View style={[styles.searchBar, { backgroundColor: G.card, borderColor: G.border }]}>
-          <Search size={18} color={G.muted} />
+          <Search size={16} color={G.muted} />
           <TextInput
             style={[styles.searchInput, { color: G.fg }]}
             placeholder={t('teams.search_placeholder')}
             placeholderTextColor={G.muted}
             value={search}
             onChangeText={setSearch}
-            autoCapitalize="none"
           />
           {search.length > 0 && (
             <TouchableOpacity onPress={() => setSearch('')}>
@@ -331,23 +399,21 @@ export default function TeamsScreen({ onClose }: Props) {
         </View>
       </View>
 
-      {/* Members */}
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContent}
-      >
+      {/* List */}
+      <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
         {people.length === 0 ? (
           <View style={styles.empty}>
-            <UsersIcon size={40} color={G.muted} />
-            <AppText variant="body" weight="medium" style={{ color: G.muted, marginTop: 10 }}>
-              {t('teams.empty')}
+            <UsersIcon size={44} color={G.muted} />
+            <AppText variant="body" weight="semibold" style={{ color: G.muted, marginTop: 8 }}>
+              {search.trim() ? t('teams.no_members_found') : t('teams.no_members')}
             </AppText>
           </View>
         ) : (
           people.map((p) => {
             const perms = effectivePermissions(p);
             const granted = Object.values(perms).filter((v) => v === true).length;
-            const accent = roleAccent(p);
+            const accent = p.isOwner || p.role === 'owner' ? G.warning : G.accent;
+
             return (
               <TouchableOpacity
                 key={p.id}
@@ -377,21 +443,48 @@ export default function TeamsScreen({ onClose }: Props) {
                         {roleLabel(p.role)}
                       </AppText>
                     </View>
-                    <View
-                      style={[
-                        styles.badge,
-                        { backgroundColor: p.isActive ? G.success + '14' : G.error + '14' },
-                      ]}
-                    >
-                      <AppText
-                        variant="micro"
-                        weight="bold"
-                        style={{ color: p.isActive ? G.success : G.error }}
-                        numberOfLines={1}
-                      >
-                        {p.isActive ? t('teams.status_active') : t('teams.status_inactive')}
-                      </AppText>
-                    </View>
+
+                    {/* Real-time device presence badge */}
+                    {(() => {
+                      const dev = deviceStatuses.find(
+                        (d) => d.user_id === p.id || d.user_name?.toLowerCase() === p.name.toLowerCase()
+                      );
+                      const connState = !dev
+                        ? 'offline'
+                        : dev.status === 'active' || dev.status === 'online' || dev.online
+                          ? 'online'
+                          : dev.status === 'connecting'
+                            ? 'connecting'
+                            : dev.status === 'reconnecting'
+                              ? 'reconnecting'
+                              : 'offline';
+
+                      const presenceColor =
+                        connState === 'online'
+                          ? G.success
+                          : connState === 'connecting' || connState === 'reconnecting'
+                            ? G.warning
+                            : G.muted;
+
+                      const presenceText =
+                        connState === 'online'
+                          ? 'Online'
+                          : connState === 'connecting'
+                            ? 'Connecting…'
+                            : connState === 'reconnecting'
+                              ? 'Reconnecting…'
+                              : `Offline · ${timeAgo(dev?.last_seen_at)}`;
+
+                      return (
+                        <View style={[styles.badge, { backgroundColor: presenceColor + '14', borderColor: presenceColor + '30', borderWidth: 1 }]}>
+                          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: presenceColor, marginRight: 4 }} />
+                          <AppText variant="micro" weight="bold" style={{ color: presenceColor }} numberOfLines={1}>
+                            {presenceText}
+                          </AppText>
+                        </View>
+                      );
+                    })()}
+
                     <AppText variant="micro" weight="medium" style={{ color: G.muted }} numberOfLines={1}>
                       {granted} {t('teams.permissions_count')}
                     </AppText>
@@ -413,159 +506,26 @@ export default function TeamsScreen({ onClose }: Props) {
         onClose={() => setShowAdd(false)}
         onAdded={() => {
           setShowAdd(false);
-          refreshKey((k) => k + 1);
+          triggerRefresh();
         }}
       />
 
-      {/* Member permissions sheet */}
-      <Modal visible={!!editingUser} animationType="slide" transparent>
-        {editingUser && (
-          <View style={styles.sheetBackdrop}>
-            <View style={[styles.sheet, { backgroundColor: G.bg }]}>
-              <View style={[styles.sheetHandle, { backgroundColor: G.border }]} />
-              <View style={styles.sheetHeader}>
-                <View>
-                  <AppText variant="title" weight="bold" style={{ color: G.fg }} numberOfLines={1}>
-                    {editingUser.name}
-                  </AppText>
-                  <AppText variant="caption" weight="medium" style={{ color: G.muted }} numberOfLines={1}>
-                    {roleLabel(editingUser.role)}
-                  </AppText>
-                </View>
-                <TouchableOpacity onPress={() => setEditing(null)} style={[styles.backBtn, { backgroundColor: G.card }]}>
-                  <X size={18} color={G.fg} />
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-                {/* Role selector */}
-                {canAssignRoles && (
-                  <View style={styles.sectionBlock}>
-                    <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, letterSpacing: 1.2, marginBottom: 8 }}>
-                      {t('teams.role')}
-                    </AppText>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-                      {roleOptions.map((r) => {
-                        const active = editingUser.role === r.key;
-                        return (
-                          <TouchableOpacity
-                            key={r.key}
-                            onPress={() => handleRoleChange(editingUser.id, r.key)}
-                            style={[
-                              styles.roleChip,
-                              {
-                                backgroundColor: active ? G.accent : G.card,
-                                borderColor: active ? G.accent : G.border,
-                              },
-                            ]}
-                          >
-                            {r.key === 'owner' && <Crown size={13} color={active ? '#FFFFFF' : G.warning} />}
-                            <AppText variant="caption" weight="bold" style={{ color: active ? '#FFFFFF' : G.fg }}>
-                              {r.isSystem && isBuiltinRole(r.key) ? t(`teams.role_${r.key}`) : r.label}
-                            </AppText>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
-                )}
-
-                {/* Status — owners can be deactivated too (with service-side
-                    last-owner guard and explicit confirm). */}
-                {canManage && (
-                  <View style={[styles.statusRow, { backgroundColor: G.card, borderColor: G.border }]}>
-                    <View style={{ flex: 1 }}>
-                      <AppText variant="body" weight="bold" style={{ color: G.fg }}>
-                        {t('teams.status')}
-                      </AppText>
-                      <AppText variant="caption" weight="medium" style={{ color: G.muted }}>
-                        {t('teams.status_desc')}
-                      </AppText>
-                    </View>
-                    <Switch
-                      value={editingUser.isActive}
-                      onValueChange={(v) => handleToggleActive(editingUser.id, v)}
-                      trackColor={{ false: G.border, true: G.success + '60' }}
-                      thumbColor={editingUser.isActive ? G.success : G.muted}
-                    />
-                  </View>
-                )}
-
-                {/* Permissions grouped by scope */}
-                {canAssignRoles && (
-                  <View style={styles.sectionBlock}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                      <ShieldCheck size={16} color={G.accent} />
-                      <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, letterSpacing: 1.2 }}>
-                        {t('teams.permissions')}
-                      </AppText>
-                    </View>
-                    {(['sales', 'products', 'inventory', 'customers', 'payments', 'reports', 'team', 'devices', 'settings'] as PermissionScope[]).map((scope) => {
-                      const defs = PERMISSION_CATALOG.filter((d) => d.scope === scope);
-                      if (!defs.length) return null;
-                      const perms = effectivePermissions(editingUser);
-                      return (
-                        <View key={scope} style={[styles.scopeBlock, { borderColor: G.border }]}>
-                          <AppText variant="caption" weight="bold" style={{ color: G.fg, marginBottom: 6 }}>
-                            {t(`teams.scope_${scope}`)}
-                          </AppText>
-                          {defs.map((d) => {
-                            const val: PermissionValue = perms[d.key] ?? false;
-                            return (
-                              <View key={d.key} style={styles.permRow}>
-                                <View style={{ flex: 1, paddingRight: 10 }}>
-                                  <AppText variant="body-sm" weight="semibold" style={{ color: G.fg }} numberOfLines={1}>
-                                    {permLabel(d)}
-                                  </AppText>
-                                  <AppText variant="micro" weight="medium" style={{ color: G.muted }} numberOfLines={2}>
-                                    {val === 'approval'
-                                      ? t('teams.needs_approval')
-                                      : permDesc(d)}
-                                  </AppText>
-                                </View>
-                                {val === 'approval' ? (
-                                  <View style={[styles.badge, { backgroundColor: G.warning + '14' }]}>
-                                    <AppText variant="micro" weight="bold" style={{ color: G.warning }}>
-                                      {t('teams.approval_badge')}
-                                    </AppText>
-                                  </View>
-                                ) : (
-                                  <Switch
-                                    value={val === true}
-                                    onValueChange={() => handlePermissionChange(editingUser.id, d.key, val)}
-                                    trackColor={{ false: G.border, true: G.accent + '60' }}
-                                    thumbColor={val === true ? G.accent : G.muted}
-                                  />
-                                )}
-                              </View>
-                            );
-                          })}
-                        </View>
-                      );
-                    })}
-                  </View>
-                )}
-
-                {/* Remove */}
-                {/* Remove — allowed for owners too (explicit confirm inside). */}
-                {canManage && (
-                  <TouchableOpacity
-                    style={[styles.removeBtn, { borderColor: G.error }]}
-                    onPress={() => {
-                      setEditing(null);
-                      handleRemove(editingUser.id, editingUser.name);
-                    }}
-                  >
-                    <AppText variant="body-sm" weight="bold" style={{ color: G.error }}>
-                      {t('teams.remove')}
-                    </AppText>
-                  </TouchableOpacity>
-                )}
-              </ScrollView>
-            </View>
-          </View>
-        )}
-      </Modal>
+      {/* Edit member sheet */}
+      <EditMemberSheet
+        user={editingUser}
+        canManage={canManage}
+        canAssignRoles={canAssignRoles}
+        roleOptions={roleOptions}
+        onClose={() => setEditing(null)}
+        onUpdated={() => triggerRefresh()}
+        onRemove={handleRemove}
+        onRoleChange={handleRoleChange}
+        onToggleActive={handleToggleActive}
+        onPermissionChange={handlePermissionChange}
+        roleLabel={roleLabel}
+        permLabel={permLabel}
+        permDesc={permDesc}
+      />
     </SafeAreaView>
   );
 }
@@ -590,16 +550,91 @@ const AddMemberSheet: React.FC<{
   };
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
+  const [avatar, setAvatar] = useState<string | null>(null);
   const [role, setRole] = useState<string>('cashier');
+  const [error, setError] = useState('');
+
+  const handlePickAvatar = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Permission required', 'Photo library permission is required.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.5,
+        base64: true,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+        setAvatar(uri);
+      }
+    } catch { /* best effort */ }
+  };
 
   const submit = () => {
-    if (!businessId || !name.trim()) return;
-    addUser({ businessId, name: name.trim(), phone: phone.trim() || undefined, role });
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setName('');
-    setPhone('');
-    setRole('cashier');
-    onAdded();
+    setError('');
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim();
+    const trimmedPhone = phone.trim();
+    const trimmedUsername = username.trim();
+
+    if (!businessId) {
+      setError('Active business is required.');
+      return;
+    }
+    if (!trimmedName || trimmedName.length < 2) {
+      setError('Member name must be at least 2 characters.');
+      return;
+    }
+    if (trimmedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+    if (trimmedPhone && trimmedPhone.replace(/\D/g, '').length < 7) {
+      setError('Phone number must contain at least 7 digits.');
+      return;
+    }
+    if (trimmedUsername && trimmedUsername.length < 3) {
+      setError('Username must be at least 3 characters.');
+      return;
+    }
+    if (trimmedUsername) {
+      const existingUsers = getUsers(businessId);
+      if (existingUsers.some((u) => u.username?.toLowerCase() === trimmedUsername.toLowerCase())) {
+        setError('This username is already taken by another team member.');
+        return;
+      }
+    }
+
+    try {
+      addUser({
+        businessId,
+        name: trimmedName,
+        phone: trimmedPhone || undefined,
+        email: trimmedEmail || undefined,
+        username: trimmedUsername || undefined,
+        avatar: avatar || undefined,
+        role,
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setName('');
+      setPhone('');
+      setEmail('');
+      setUsername('');
+      setAvatar(null);
+      setError('');
+      setRole('cashier');
+      onAdded();
+    } catch (e: any) {
+      setError(e?.message || 'Failed to add member.');
+    }
   };
 
   return (
@@ -616,69 +651,442 @@ const AddMemberSheet: React.FC<{
             </TouchableOpacity>
           </View>
 
-          <View style={styles.formGroup}>
-            <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, letterSpacing: 1.2 }}>
-              {t('teams.name_label')}
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
+            {/* Avatar picker */}
+            <View style={{ alignItems: 'center', marginVertical: 12 }}>
+              <TouchableOpacity onPress={handlePickAvatar} activeOpacity={0.8} style={{ position: 'relative' }}>
+                <View style={[styles.avatarLarge, { backgroundColor: G.accent + '20' }]}>
+                  {avatar ? (
+                    <Image source={{ uri: avatar }} style={styles.avatarLarge} />
+                  ) : (
+                    <User size={36} color={G.accent} />
+                  )}
+                </View>
+                <View style={[styles.cameraBadge, { backgroundColor: G.accent }]}>
+                  <Camera size={14} color="#FFFFFF" />
+                </View>
+              </TouchableOpacity>
+              <AppText variant="micro" weight="medium" style={{ color: G.muted, marginTop: 6 }}>
+                Profile Photo (Optional)
+              </AppText>
+            </View>
+
+            <View style={styles.formGroup}>
+              <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, letterSpacing: 1.2 }}>
+                {t('teams.name_label')}
+              </AppText>
+              <TextInput
+                style={[styles.input, { color: G.fg, borderColor: G.border, backgroundColor: G.card }]}
+                placeholder={t('teams.name_placeholder')}
+                placeholderTextColor={G.muted}
+                value={name}
+                onChangeText={setName}
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, letterSpacing: 1.2 }}>
+                {t('common.phone')}
+              </AppText>
+              <TextInput
+                style={[styles.input, { color: G.fg, borderColor: G.border, backgroundColor: G.card }]}
+                placeholder={t('form.contact_placeholder')}
+                placeholderTextColor={G.muted}
+                value={phone}
+                onChangeText={setPhone}
+                keyboardType="phone-pad"
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, letterSpacing: 1.2 }}>
+                Email
+              </AppText>
+              <TextInput
+                style={[styles.input, { color: G.fg, borderColor: G.border, backgroundColor: G.card }]}
+                placeholder="email@example.com"
+                placeholderTextColor={G.muted}
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, letterSpacing: 1.2 }}>
+                Username (For sign-in)
+              </AppText>
+              <TextInput
+                style={[styles.input, { color: G.fg, borderColor: G.border, backgroundColor: G.card }]}
+                placeholder="username"
+                placeholderTextColor={G.muted}
+                value={username}
+                onChangeText={setUsername}
+                autoCapitalize="none"
+              />
+            </View>
+
+            <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, letterSpacing: 1.2, marginBottom: 8 }}>
+              {t('teams.role')}
             </AppText>
-            <TextInput
-              style={[styles.input, { color: G.fg, borderColor: G.border, backgroundColor: G.card }]}
-              placeholder={t('teams.name_placeholder')}
-              placeholderTextColor={G.muted}
-              value={name}
-              onChangeText={setName}
-            />
-          </View>
-          <View style={styles.formGroup}>
-            <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, letterSpacing: 1.2 }}>
-              {t('common.phone')}
-            </AppText>
-            <TextInput
-              style={[styles.input, { color: G.fg, borderColor: G.border, backgroundColor: G.card }]}
-              placeholder={t('form.contact_placeholder')}
-              placeholderTextColor={G.muted}
-              value={phone}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
-            />
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
+              {roleOptions.map((r) => {
+                const active = role === r.key;
+                return (
+                  <TouchableOpacity
+                    key={r.key}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setRole(r.key);
+                    }}
+                    style={[
+                      styles.roleChip,
+                      { backgroundColor: active ? G.accent : G.card, borderColor: active ? G.accent : G.border },
+                    ]}
+                  >
+                    {r.key === 'owner' && <Crown size={13} color={active ? '#FFFFFF' : colors.warning} />}
+                    <AppText variant="caption" weight="bold" style={{ color: active ? '#FFFFFF' : G.fg }}>
+                      {r.isSystem && isBuiltinRole(r.key) ? t(`teams.role_${r.key}`) : r.label}
+                    </AppText>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {error ? (
+              <AppText variant="caption" weight="bold" style={{ color: colors.error, marginBottom: 12, textAlign: 'center' }}>
+                {error}
+              </AppText>
+            ) : null}
+
+            <TouchableOpacity
+              style={[styles.submitBtn, { backgroundColor: G.accent, opacity: name.trim().length >= 2 ? 1 : 0.5 }]}
+              disabled={name.trim().length < 2}
+              onPress={submit}
+            >
+              <Plus size={18} color="#FFFFFF" />
+              <AppText variant="body" weight="bold" style={{ color: '#FFFFFF' }}>
+                {t('teams.add')}
+              </AppText>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+// ─── Edit member bottom sheet ─────────────────────────────────────────────
+
+const EditMemberSheet: React.FC<{
+  user: any;
+  canManage: boolean;
+  canAssignRoles: boolean;
+  roleOptions: RoleOption[];
+  onClose: () => void;
+  onUpdated: () => void;
+  onRemove: (userId: string, name: string) => void;
+  onRoleChange: (userId: string, roleKey: string) => void;
+  onToggleActive: (userId: string, next: boolean) => void;
+  onPermissionChange: (userId: string, key: string, current: PermissionValue) => void;
+  roleLabel: (key: string) => string;
+  permLabel: (d: any) => string;
+  permDesc: (d: any) => string;
+}> = ({
+  user,
+  canManage,
+  canAssignRoles,
+  roleOptions,
+  onClose,
+  onUpdated,
+  onRemove,
+  onRoleChange,
+  onToggleActive,
+  onPermissionChange,
+  roleLabel,
+  permLabel,
+  permDesc,
+}) => {
+  const { colors, t } = useSettings();
+  const { showToast } = useToast();
+  const G = {
+    bg: colors.background,
+    fg: colors.text,
+    muted: colors.textSecondary,
+    card: colors.card,
+    border: colors.border,
+    accent: colors.primary,
+    success: colors.success,
+    error: colors.error,
+    warning: colors.warning,
+  };
+
+  const [name, setName] = useState(user?.name ?? '');
+  const [phone, setPhone] = useState(user?.phone ?? '');
+  const [email, setEmail] = useState(user?.email ?? '');
+  const [username, setUsername] = useState(user?.username ?? '');
+  const [avatar, setAvatar] = useState<string | null>(user?.avatar ?? null);
+
+  useEffect(() => {
+    if (user) {
+      setName(user.name ?? '');
+      setPhone(user.phone ?? '');
+      setEmail(user.email ?? '');
+      setUsername(user.username ?? '');
+      setAvatar(user.avatar ?? null);
+    }
+  }, [user]);
+
+  if (!user) return null;
+
+  const handlePickAvatar = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Permission required', 'Photo library permission is required.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.5,
+        base64: true,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+        setAvatar(uri);
+        updateUserMemberDetails(user.id, { avatar: uri });
+        showToast('Profile photo updated', 'success');
+        onUpdated();
+      }
+    } catch { /* best effort */ }
+  };
+
+  const handleSaveDetails = () => {
+    if (!name.trim()) return;
+    updateUserMemberDetails(user.id, { name, phone, email, username, avatar });
+    showToast('Member details saved', 'success');
+    onUpdated();
+  };
+
+  return (
+    <Modal visible={!!user} animationType="slide" transparent>
+      <View style={styles.sheetBackdrop}>
+        <View style={[styles.sheet, { backgroundColor: G.bg }]}>
+          <View style={[styles.sheetHandle, { backgroundColor: G.border }]} />
+          <View style={styles.sheetHeader}>
+            <View style={{ flex: 1 }}>
+              <AppText variant="title" weight="bold" style={{ color: G.fg }} numberOfLines={1}>
+                {user.name}
+              </AppText>
+              <AppText variant="caption" weight="medium" style={{ color: G.muted }} numberOfLines={1}>
+                {roleLabel(user.role)}
+              </AppText>
+            </View>
+            <TouchableOpacity onPress={onClose} style={[styles.backBtn, { backgroundColor: G.card }]}>
+              <X size={18} color={G.fg} />
+            </TouchableOpacity>
           </View>
 
-          <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, letterSpacing: 1.2, marginBottom: 8 }}>
-            {t('teams.role')}
-          </AppText>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
-            {roleOptions.map((r) => {
-              const active = role === r.key;
-              return (
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+            {/* Avatar & Basic details */}
+            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+              <TouchableOpacity onPress={handlePickAvatar} activeOpacity={0.8} style={{ position: 'relative' }}>
+                <View style={[styles.avatarLarge, { backgroundColor: G.accent + '20' }]}>
+                  {avatar ? (
+                    <Image source={{ uri: avatar }} style={styles.avatarLarge} />
+                  ) : (
+                    <AppText variant="title" weight="bold" style={{ color: G.accent, fontSize: 28 }}>
+                      {name.slice(0, 1).toUpperCase()}
+                    </AppText>
+                  )}
+                </View>
+                <View style={[styles.cameraBadge, { backgroundColor: G.accent }]}>
+                  <Camera size={14} color="#FFFFFF" />
+                </View>
+              </TouchableOpacity>
+              <AppText variant="micro" weight="medium" style={{ color: G.muted, marginTop: 6 }}>
+                Tap to change photo
+              </AppText>
+            </View>
+
+            {canManage && (
+              <View style={[styles.scopeBlock, { borderColor: G.border, marginBottom: 16 }]}>
+                <AppText variant="caption" weight="bold" style={{ color: G.fg, marginBottom: 8 }}>
+                  Member Information
+                </AppText>
+                <View style={styles.formGroup}>
+                  <AppText variant="micro" weight="bold" style={{ color: G.muted }}>Name</AppText>
+                  <TextInput
+                    style={[styles.input, { color: G.fg, borderColor: G.border, backgroundColor: G.card }]}
+                    value={name}
+                    onChangeText={setName}
+                  />
+                </View>
+                <View style={styles.formGroup}>
+                  <AppText variant="micro" weight="bold" style={{ color: G.muted }}>Phone</AppText>
+                  <TextInput
+                    style={[styles.input, { color: G.fg, borderColor: G.border, backgroundColor: G.card }]}
+                    value={phone}
+                    onChangeText={setPhone}
+                    keyboardType="phone-pad"
+                  />
+                </View>
+                <View style={styles.formGroup}>
+                  <AppText variant="micro" weight="bold" style={{ color: G.muted }}>Email</AppText>
+                  <TextInput
+                    style={[styles.input, { color: G.fg, borderColor: G.border, backgroundColor: G.card }]}
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
+                </View>
+                <View style={styles.formGroup}>
+                  <AppText variant="micro" weight="bold" style={{ color: G.muted }}>Username</AppText>
+                  <TextInput
+                    style={[styles.input, { color: G.fg, borderColor: G.border, backgroundColor: G.card }]}
+                    value={username}
+                    onChangeText={setUsername}
+                    autoCapitalize="none"
+                  />
+                </View>
                 <TouchableOpacity
-                  key={r.key}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setRole(r.key);
-                  }}
-                  style={[
-                    styles.roleChip,
-                    { backgroundColor: active ? G.accent : G.card, borderColor: active ? G.accent : G.border },
-                  ]}
+                  style={[styles.saveDetailsBtn, { backgroundColor: G.accent }]}
+                  onPress={handleSaveDetails}
                 >
-                  {r.key === 'owner' && <Crown size={13} color={active ? '#FFFFFF' : colors.warning} />}
-                  <AppText variant="caption" weight="bold" style={{ color: active ? '#FFFFFF' : G.fg }}>
-                    {r.isSystem && isBuiltinRole(r.key) ? t(`teams.role_${r.key}`) : r.label}
+                  <AppText variant="body-sm" weight="bold" style={{ color: '#FFFFFF' }}>
+                    Save Profile Details
                   </AppText>
                 </TouchableOpacity>
-              );
-            })}
-          </View>
+              </View>
+            )}
 
-          <TouchableOpacity
-            style={[styles.submitBtn, { backgroundColor: G.accent, opacity: name.trim() ? 1 : 0.5 }]}
-            disabled={!name.trim()}
-            onPress={submit}
-          >
-            <Plus size={18} color="#FFFFFF" />
-            <AppText variant="body" weight="bold" style={{ color: '#FFFFFF' }}>
-              {t('teams.add')}
-            </AppText>
-          </TouchableOpacity>
+            {/* Role selector */}
+            {canAssignRoles && (
+              <View style={styles.sectionBlock}>
+                <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, letterSpacing: 1.2, marginBottom: 8 }}>
+                  {t('teams.role')}
+                </AppText>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                  {roleOptions.map((r) => {
+                    const active = user.role === r.key;
+                    return (
+                      <TouchableOpacity
+                        key={r.key}
+                        onPress={() => onRoleChange(user.id, r.key)}
+                        style={[
+                          styles.roleChip,
+                          {
+                            backgroundColor: active ? G.accent : G.card,
+                            borderColor: active ? G.accent : G.border,
+                          },
+                        ]}
+                      >
+                        {r.key === 'owner' && <Crown size={13} color={active ? '#FFFFFF' : G.warning} />}
+                        <AppText variant="caption" weight="bold" style={{ color: active ? '#FFFFFF' : G.fg }}>
+                          {r.isSystem && isBuiltinRole(r.key) ? t(`teams.role_${r.key}`) : r.label}
+                        </AppText>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* Status */}
+            {canManage && (
+              <View style={[styles.statusRow, { backgroundColor: G.card, borderColor: G.border }]}>
+                <View style={{ flex: 1 }}>
+                  <AppText variant="body" weight="bold" style={{ color: G.fg }}>
+                    {t('teams.status')}
+                  </AppText>
+                  <AppText variant="caption" weight="medium" style={{ color: G.muted }}>
+                    {t('teams.status_desc')}
+                  </AppText>
+                </View>
+                <Switch
+                  value={user.isActive}
+                  onValueChange={(v) => onToggleActive(user.id, v)}
+                  trackColor={{ false: G.border, true: G.success + '60' }}
+                  thumbColor={user.isActive ? G.success : G.muted}
+                />
+              </View>
+            )}
+
+            {/* Permissions grouped by scope */}
+            {canAssignRoles && (
+              <View style={styles.sectionBlock}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <ShieldCheck size={16} color={G.accent} />
+                  <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, letterSpacing: 1.2 }}>
+                    {t('teams.permissions')}
+                  </AppText>
+                </View>
+                {(['sales', 'products', 'inventory', 'customers', 'payments', 'reports', 'team', 'devices', 'settings'] as PermissionScope[]).map((scope) => {
+                  const defs = PERMISSION_CATALOG.filter((d) => d.scope === scope);
+                  if (!defs.length) return null;
+                  const perms = effectivePermissions(user);
+                  return (
+                    <View key={scope} style={[styles.scopeBlock, { borderColor: G.border }]}>
+                      <AppText variant="caption" weight="bold" style={{ color: G.fg, marginBottom: 6 }}>
+                        {t(`teams.scope_${scope}`)}
+                      </AppText>
+                      {defs.map((d) => {
+                        const val: PermissionValue = perms[d.key] ?? false;
+                        return (
+                          <View key={d.key} style={styles.permRow}>
+                            <View style={{ flex: 1, paddingRight: 10 }}>
+                              <AppText variant="body-sm" weight="semibold" style={{ color: G.fg }} numberOfLines={1}>
+                                {permLabel(d)}
+                              </AppText>
+                              <AppText variant="micro" weight="medium" style={{ color: G.muted }} numberOfLines={2}>
+                                {val === 'approval'
+                                  ? t('teams.needs_approval')
+                                  : permDesc(d)}
+                              </AppText>
+                            </View>
+                            {val === 'approval' ? (
+                              <View style={[styles.badge, { backgroundColor: G.warning + '14' }]}>
+                                <AppText variant="micro" weight="bold" style={{ color: G.warning }}>
+                                  {t('teams.approval_badge')}
+                                </AppText>
+                              </View>
+                            ) : (
+                              <Switch
+                                value={val === true}
+                                onValueChange={() => onPermissionChange(user.id, d.key, val)}
+                                trackColor={{ false: G.border, true: G.accent + '60' }}
+                                thumbColor={val === true ? G.accent : G.muted}
+                              />
+                            )}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
+            {/* Remove */}
+            {canManage && (
+              <TouchableOpacity
+                style={[styles.removeBtn, { borderColor: G.error }]}
+                onPress={() => {
+                  onClose();
+                  onRemove(user.id, user.name);
+                }}
+              >
+                <AppText variant="body-sm" weight="bold" style={{ color: G.error }}>
+                  {t('teams.remove')}
+                </AppText>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -740,6 +1148,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  avatarLarge: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cameraBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
   memberInfo: { flex: 1, gap: 4 },
   badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   badge: {
@@ -747,6 +1174,8 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 8,
     alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   sheetBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   sheet: {
@@ -775,18 +1204,8 @@ const styles = StyleSheet.create({
   permRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 7,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(128,128,128,0.15)',
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    borderWidth: 1,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    marginTop: Spacing.md,
+    justifyContent: 'space-between',
+    paddingVertical: 8,
   },
   roleChip: {
     flexDirection: 'row',
@@ -797,29 +1216,45 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
   },
-  formGroup: { marginBottom: 14 },
-  input: {
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
     borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 46,
-    fontFamily: Fonts.medium,
+    marginTop: Spacing.md,
+  },
+  formGroup: { marginBottom: 12 },
+  input: {
+    fontFamily: Fonts.regular,
     fontSize: 14,
-    marginTop: 6,
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: 12,
+    height: 44,
+    marginTop: 4,
   },
   submitBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    height: 50,
-    borderRadius: 16,
+    height: 48,
+    borderRadius: 24,
+    marginTop: 12,
+  },
+  saveDetailsBtn: {
+    paddingVertical: 10,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+    marginTop: 12,
   },
   removeBtn: {
-    alignItems: 'center',
     borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: BorderRadius.md,
     paddingVertical: 12,
-    marginTop: Spacing.lg,
+    alignItems: 'center',
+    marginTop: Spacing.xl,
   },
 });

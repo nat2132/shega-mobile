@@ -7,25 +7,53 @@ import { ScanBarcode, Camera, MonitorSmartphone, ShieldCheck, X, RefreshCw, Chec
 import BarcodeScannerView from '@/components/BarcodeScanner'; // default export = BarcodeScanner
 import { AppText, AppButton } from '@/components/ui';
 import { useSettings } from '@/context/SettingsContext';
+import { useToast } from '@/context/ToastContext';
 import { wsSyncClient } from '@/services/wsSyncClient';
 import { companionService } from '@/services/companionService';
+import { getCurrentUserId, getUser, effectivePermissions } from '@/services/businessService';
+
+/**
+ * Check if the active mobile user has permissions to respond to a desktop peripheral request.
+ *  - Sales scope: sales.create, sales.view, cashier, manager, owner
+ *  - Inventory scope: products.create, products.edit, inventory.manage, inventory, manager, owner
+ */
+function checkPeripheralPermission(scope: 'sales' | 'inventory'): { allowed: boolean; reason?: string } {
+  try {
+    const uid = getCurrentUserId();
+    if (!uid) return { allowed: false, reason: 'No active user account logged in on mobile device.' };
+    const user = getUser(uid);
+    if (!user) return { allowed: false, reason: 'Mobile user account not found.' };
+    if (user.isOwner || user.role === 'owner') return { allowed: true };
+    const perms = effectivePermissions(user);
+    if (scope === 'sales') {
+      const hasSales = perms['sales.create'] === true || perms['sales.view'] === true || user.role === 'cashier' || user.role === 'manager';
+      if (!hasSales) return { allowed: false, reason: 'Your mobile account lacks Sales permissions required for Desktop Barcode Scanner.' };
+      return { allowed: true };
+    } else {
+      const hasInventory = perms['products.create'] === true || perms['products.edit'] === true || perms['inventory.manage'] === true || user.role === 'inventory' || user.role === 'manager' || user.role === 'warehouse';
+      if (!hasInventory) return { allowed: false, reason: 'Your mobile account lacks Inventory permissions required for scanning barcodes / photos.' };
+      return { allowed: true };
+    }
+  } catch {
+    return { allowed: true }; // best effort fallback
+  }
+}
 
 /**
  * RemotePeripheralListener — mounts app-wide (inside the WS-connected shell).
  *
  * Flow (peripheral spec):
  *  1. Desktop sends SCAN_REQUEST / CAPTURE_REQUEST.
- *  2. A permission card asks the user to Allow or Cancel — the camera NEVER
- *     opens automatically on a desktop request.
- *  3. On Allow: scanner (stays open for the next barcode until cancelled)
- *     or camera with preview + Retake / Use Photo.
- *  4. Result streams back over the LAN socket. Companion mode is reported.
+ *  2. Permissions check validates active user role on mobile.
+ *  3. A permission card asks the user to Allow or Cancel — camera NEVER opens automatically.
+ *  4. On Allow: scanner (stays open for consecutive barcodes) or camera with preview + Retake / Use Photo.
+ *  5. Result streams back to Shega Desktop in real time over WS/TCP.
  */
 export function RemotePeripheralListener() {
   const { colors, t } = useSettings();
-  const [scanReq, setScanReq] = useState<{ requestId: string } | null>(null);
-  const [photoReq, setPhotoReq] = useState<{ requestId: string; mode: string } | null>(null);
-  // Explicit user approval stage — camera never opens before this.
+  const { showToast } = useToast();
+  const [scanReq, setScanReq] = useState<{ requestId: string; scope: 'sales' | 'inventory' } | null>(null);
+  const [photoReq, setPhotoReq] = useState<{ requestId: string; mode: string; scope: 'sales' | 'inventory' } | null>(null);
   const [pendingPermission, setPendingPermission] = useState<null | 'scan' | 'photo'>(null);
   const [activeSession, setActiveSession] = useState<{ kind: 'scan' | 'photo'; requestId: string } | null>(null);
   const [sending, setSending] = useState(false);
@@ -34,7 +62,7 @@ export function RemotePeripheralListener() {
   const [shotUri, setShotUri] = useState<string | null>(null);
   const offRef = useRef<Array<() => void>>([]);
 
-  // Keep companion state in sync with requests & the socket.
+  // Keep companion state in sync with requests & socket
   useEffect(() => {
     const offConn = wsSyncClient.onPeripheralEvent('connected', () => companionService.refreshConnection());
     const offDisc = wsSyncClient.onPeripheralEvent('disconnected', () => companionService.refreshConnection());
@@ -44,21 +72,36 @@ export function RemotePeripheralListener() {
   useEffect(() => {
     const offs = [
       wsSyncClient.onPeripheralEvent('peripheralScanRequest', (payload: any) => {
+        const scope = (payload?.scope as 'sales' | 'inventory') || 'sales';
+        const perm = checkPeripheralPermission(scope);
+        if (!perm.allowed) {
+          wsSyncClient.sendScanResult(payload.requestId, '', 'denied');
+          showToast(perm.reason || 'Permission denied', 'error');
+          return;
+        }
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         companionService.setMode('scanner');
         setPendingPermission('scan');
-        setScanReq({ requestId: payload.requestId });
+        setScanReq({ requestId: payload.requestId, scope });
       }),
       wsSyncClient.onPeripheralEvent('peripheralCaptureRequest', (payload: any) => {
+        const mode = payload?.mode || 'photo';
+        const scope = (payload?.scope as 'sales' | 'inventory') || (mode === 'photo' ? 'inventory' : 'sales');
+        const perm = checkPeripheralPermission(scope);
+        if (!perm.allowed) {
+          wsSyncClient.sendCaptureResult(payload.requestId, { mode, cancelled: true, text: perm.reason });
+          showToast(perm.reason || 'Permission denied', 'error');
+          return;
+        }
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        if (payload.mode === 'photo') {
+        if (mode === 'photo') {
           companionService.setMode('camera');
           setPendingPermission('photo');
-          setPhotoReq({ requestId: payload.requestId, mode: 'photo' });
+          setPhotoReq({ requestId: payload.requestId, mode: 'photo', scope });
         } else {
           companionService.setMode('scanner');
           setPendingPermission('scan');
-          setScanReq({ requestId: payload.requestId });
+          setScanReq({ requestId: payload.requestId, scope });
         }
       }),
       wsSyncClient.onPeripheralEvent('peripheralCancel', (payload: any) => {
@@ -71,15 +114,15 @@ export function RemotePeripheralListener() {
       }),
     ];
     offRef.current = offs;
-    // Announce ourselves whenever the socket is live.
+
     if (wsSyncClient.isConnected) {
       Promise.resolve(wsSyncClient.registerAsPeripheral()).catch(() => {});
     }
     companionService.refreshConnection();
     return () => offs.forEach((off) => off?.());
-  }, []);
+  }, [showToast]);
 
-  const cancelAll = useCallback((kind: 'scan' | 'photo', requestId?: string) => {
+  const cancelAll = useCallback((kind: 'scan' | 'photo') => {
     if (kind === 'scan') {
       if (scanReq) wsSyncClient.sendScanResult(scanReq.requestId, '', 'cancelled');
       setScanReq(null);
@@ -93,15 +136,13 @@ export function RemotePeripheralListener() {
     companionService.setMode('idle');
   }, [scanReq, photoReq]);
 
-  // ---------- Scanner session (stays open for the next barcode) ----------
+  // ---------- Scanner session (stays open for consecutive barcodes) ----------
   const handleScan = useCallback(
     (result: { barcode: string; type?: string }) => {
       if (!scanReq) return;
       setLastScan(result.barcode);
       wsSyncClient.sendScanResult(scanReq.requestId, result.barcode, result.type);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      // Keep scanning — desktop decides when the request ends (per spec,
-      // "keep the scanner ready for the next barcode unless finished").
     },
     [scanReq],
   );
@@ -114,12 +155,20 @@ export function RemotePeripheralListener() {
       cancelAll('photo');
       return;
     }
-    const shot = await ImagePicker.launchCameraAsync({ quality: 0.7, base64: false, exif: false });
-    if (shot.canceled || !shot.assets?.[0]?.uri) {
+    const shot = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      quality: 0.5,
+      allowsEditing: true,
+      aspect: [1, 1],
+      base64: true,
+    });
+    if (shot.canceled || !shot.assets?.[0]) {
       cancelAll('photo');
       return;
     }
-    setShotUri(shot.assets[0].uri);
+    const asset = shot.assets[0];
+    const dataUrl = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+    setShotUri(dataUrl);
   }, [photoReq, cancelAll]);
 
   const retake = useCallback(() => setShotUri(null), []);
@@ -128,28 +177,20 @@ export function RemotePeripheralListener() {
     if (!photoReq || !shotUri) return;
     setSending(true);
     try {
-      // Read the file as base64 through the bundler-safe fetch path.
-      const resp = await fetch(shotUri);
-      const blob = await resp.blob();
-      const dataUrl: string = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result));
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-      wsSyncClient.sendCaptureResult(photoReq.requestId, { mode: 'photo', dataUrl });
+      wsSyncClient.sendCaptureResult(photoReq.requestId, { mode: 'photo', dataUrl: shotUri });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setSending(false);
       setPhotoReq(null);
       setShotUri(null);
       setActiveSession(null);
       companionService.setMode('idle');
+      showToast('Product photo sent to Shega Desktop', 'success');
     } catch {
       setSending(false);
       setSendError(true);
       setTimeout(() => setSendError(false), 2500);
     }
-  }, [photoReq, shotUri]);
+  }, [photoReq, shotUri, showToast]);
 
   const G = colors as any;
 
@@ -288,64 +329,65 @@ export function RemotePeripheralListener() {
 const styles = StyleSheet.create({
   remoteBanner: {
     position: 'absolute',
-    top: 70,
-    alignSelf: 'center',
+    top: 50,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    gap: 10,
   },
   lastScanChip: {
     position: 'absolute',
-    bottom: 120,
+    bottom: 100,
     alignSelf: 'center',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 20,
   },
   stopBtn: {
     position: 'absolute',
-    bottom: 48,
+    bottom: 40,
     alignSelf: 'center',
+    backgroundColor: '#E74C3C',
+    borderRadius: 24,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    paddingHorizontal: 22,
-    paddingVertical: 12,
-    borderRadius: 999,
+    gap: 8,
   },
   photoBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
-    padding: 32,
+    alignItems: 'center',
+    padding: 24,
   },
   photoCard: {
     width: '100%',
-    maxWidth: 360,
-    borderRadius: 22,
-    padding: 24,
+    maxWidth: 380,
+    borderRadius: 20,
+    padding: 20,
+    alignItems: 'center',
   },
   permIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 18,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    alignSelf: 'center',
   },
   preview: {
-    width: '100%',
-    height: 220,
-    borderRadius: 14,
-    backgroundColor: '#000',
+    width: 260,
+    height: 260,
+    borderRadius: 16,
+    marginBottom: 8,
   },
 });

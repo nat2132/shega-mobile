@@ -123,8 +123,32 @@ export async function issuePairingInvite(input: {
   return request<PairingInviteIssued>('/api/sync/pairing/invite/', { method: 'POST', body, auth: true });
 }
 
-/** Employee (unauthenticated): preview an invitation before accepting. Code or token. */
+/** Employee (unauthenticated): preview an invitation before accepting. Code or token with LAN-first fallback. */
 export async function lookupPairingInvite(input: { token?: string; code?: string }): Promise<PairingLookup> {
+  const codeStr = input.code || input.token;
+  if (codeStr) {
+    try {
+      const { mdnsDiscovery } = require('./mdnsDiscovery');
+      const { desktopHttpResolveInvite, directResolveInvite } = require('./directJoinClient');
+      const hubs = mdnsDiscovery.getDiscoveredHubs();
+      for (const h of hubs) {
+        const url = `http://${h.addresses?.[0] || h.host}:${h.port || 5757}`;
+        const localRes = await desktopHttpResolveInvite(url, codeStr);
+        if (localRes) {
+          return {
+            business_id: localRes.businessId || localRes.business_id || '',
+            business_name: localRes.businessName || localRes.business_name || 'Shega Business',
+            employee_name: localRes.name || localRes.employee_name || null,
+            role: localRes.role || 'cashier',
+            register: localRes.register || null,
+            location: localRes.location || null,
+            expires_at: localRes.expiresAt || localRes.expires_at || new Date(Date.now() + 3600000).toISOString(),
+          };
+        }
+      }
+    } catch { /* LAN probe silent pass -> fallback to Cloud */ }
+  }
+
   const body = input.token ? { token: input.token } : { code: input.code };
   return request<PairingLookup>('/api/sync/pairing/lookup/', { method: 'POST', body });
 }

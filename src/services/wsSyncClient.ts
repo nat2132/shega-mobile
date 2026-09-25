@@ -2,8 +2,8 @@ import { EventEmitter } from 'events';
 import { Platform } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import { getDB } from '../database/db';
-import { applyChange, APPLY_ORDER, CORE_BUSINESS_SCOPED_ENTITIES, resolveLocalBusinessId } from './syncService';
-import { DEVICE_JOIN_MSG, PERIPHERAL_MSG } from '@shega/shared';
+import { applyChange, APPLY_ORDER, CORE_BUSINESS_SCOPED_ENTITIES, resolveLocalBusinessId, persistPeerDevice } from './syncService';
+import { DEVICE_JOIN_MSG, PERIPHERAL_MSG, changeChecksum } from '@shega/shared';
 
 // Simple logger (defined before first use)
 const logger = {
@@ -16,6 +16,7 @@ export interface WsMessage {
   type: string;
   payload?: any;
   requestId?: string;
+  timestamp?: number;
 }
 
 export interface SyncResult {
@@ -36,18 +37,43 @@ export interface WsSyncClientConfig {
 type SyncEventMap = {
   connected: [];
   disconnected: [Error | null];
+  syncStarted: [];
   syncCompleted: [SyncResult];
   conflict: [any];
   error: [Error];
   heartbeat: [number];
 };
 
+function sanitizePayload(obj: any): any {
+  if (obj === null || obj === undefined) return null;
+  if (typeof obj === 'bigint') return Number(obj);
+  if (typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(sanitizePayload);
+
+  const clean: Record<string, any> = {};
+  for (const k of Object.keys(obj)) {
+    const val = obj[k];
+    if (val === undefined) continue;
+    if (typeof val === 'bigint') {
+      clean[k] = Number(val);
+    } else if (val instanceof Date) {
+      clean[k] = val.toISOString();
+    } else if (typeof val === 'object' && val !== null) {
+      clean[k] = sanitizePayload(val);
+    } else {
+      clean[k] = val;
+    }
+  }
+  return clean;
+}
+
 export class WsSyncClient extends EventEmitter {
   private ws: any = null;
   private config: WsSyncClientConfig | null = null;
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 10;
   private reconnectDelay = 2000;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private cappingAttempts = 0;
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
   private pendingRequests = new Map<string, { resolve: (value: any) => void; reject: (reason: any) => void; timeout: ReturnType<typeof setTimeout> }>();
   private requestCounter = 0;
@@ -56,33 +82,87 @@ export class WsSyncClient extends EventEmitter {
   private isSyncing = false;
   private messageQueue: any[] = [];
 
+  /** Max one reconnect per 30s while offline — satisfies (3.4.2) graceful decay. */
+  private readonly MAX_RECONNECT_DELAY_MS = 30_000;
+
   constructor() {
     super();
   }
 
   async connect(config: WsSyncClientConfig): Promise<void> {
-    if (this._isConnected) return;
+    if (this._isConnected || this.config) {
+      // A config already exists (a reconnect timer is armed or a socket is up);
+      // this call is a *kick* from connectivity restore — reconnect immediately.
+      this.retryNow();
+      return;
+    }
 
     this.config = config;
     this.reconnectAttempts = 0;
+    try {
+      await this.openSocket();
+    } catch (e: any) {
+      logger.info('[WS] Initial connect notice:', e?.message || 'closed');
+    }
+  }
+
+  /**
+   * Open a fresh socket to the configured hub. Capped exponential backoff grows
+   * across failures and only resets once the connection succeeds (onopen), so
+   * recovery is instant when the hub returns (attempts reset) yet never hammers
+   * an unreachable hub faster than every ~30s (3.4.1/3.4.2).
+   */
+  private async openSocket(): Promise<void> {
+    if (!this.config) throw new Error('Not configured');
+    const config = this.config;
 
     return new Promise((resolve, reject) => {
       const wsUrl = config.hubUrl.replace('http://', 'ws://').replace('https://', 'wss://') + '/sync';
       logger.info(`[WS] Connecting to ${wsUrl}`);
 
       try {
-        // Dynamic import for react-native-websocket
-        const WS = require('react-native-websocket').WebSocket;
+        const WS =
+          (typeof require === 'function' ? (require('react-native-websocket') as any)?.WebSocket : undefined) ??
+          (globalThis as any).WebSocket;
+        if (!WS) {
+          const err = new Error('[WS] No WebSocket implementation available.');
+          logger.warn(err.message);
+          reject(err);
+          return;
+        }
+
+        // Fast 1500ms timeout for LAN socket connection
+        let connTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+          if (this.ws && !this._isConnected) {
+            logger.warn(`[WS] Connection timeout after 1500ms for ${wsUrl}`);
+            try { this.ws.close(); } catch {}
+            reject(new Error('WS connection timeout'));
+          }
+        }, 1500);
+
         this.ws = new WS(wsUrl);
         this.ws.binaryType = 'arraybuffer';
 
-        this.ws.onopen = () => {
+        this.ws.onopen = async () => {
+          if (connTimer) { clearTimeout(connTimer); connTimer = null; }
           logger.info('[WS] Connected to hub');
           this._isConnected = true;
           this.reconnectAttempts = 0;
           this.startHeartbeat();
           this.processQueue();
-          this.sendPairRequest().then(resolve).catch(reject);
+
+          const token = await this.getEffectiveToken();
+          if (token) {
+            this.sendPairRequest().then(resolve).catch((e) => {
+              logger.warn('[WS] PAIR failed on open socket:', e?.message);
+              try { this.ws?.close(); } catch { /* onclose still fires */ }
+              reject(e);
+            });
+          } else {
+            logger.info('[WS] Connected as unpaired joiner (awaiting owner approval)');
+            this.emit('connected');
+            resolve();
+          }
         };
 
         this.ws.onmessage = (event: any) => {
@@ -98,12 +178,14 @@ export class WsSyncClient extends EventEmitter {
         };
 
         this.ws.onclose = (event: any) => {
+          if (connTimer) { clearTimeout(connTimer); connTimer = null; }
           logger.warn(`[WS] Disconnected: ${event.code} ${event.reason}`);
           this.handleDisconnect(event.code === 1000 ? null : new Error(`Connection closed: ${event.code}`));
         };
 
         this.ws.onerror = (error: any) => {
-          logger.error('[WS] Error:', error);
+          if (connTimer) { clearTimeout(connTimer); connTimer = null; }
+          logger.info('[WS] Notice:', error?.message || 'socket closed');
           reject(error);
         };
       } catch (e) {
@@ -112,14 +194,44 @@ export class WsSyncClient extends EventEmitter {
     });
   }
 
+  /** Immediately (re)connect now instead of waiting for the next timer. */
+  retryNow(): void {
+    if (this._isConnected) return;
+    if (!this.config) return;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.reconnectAttempts = 0;
+    this.openSocket().catch((e) => logger.warn('[WS] retryNow connect failed:', e?.message));
+  }
+
+  private async getEffectiveToken(): Promise<string> {
+    let token = this.config?.hubToken ?? '';
+    if (!token.trim()) {
+      try {
+        const asyncStorage = require('@react-native-async-storage/async-storage');
+        const storage = asyncStorage.default ?? asyncStorage;
+        const raw = await storage.getItem('shega:rejoinBundle');
+        const bundle = raw ? JSON.parse(raw) : null;
+        if (bundle?.pairingToken) {
+          token = bundle.pairingToken;
+        }
+      } catch { /* no bundle */ }
+    }
+    return token.trim();
+  }
+
   private async sendPairRequest(): Promise<void> {
     if (!this.config) throw new Error('Not configured');
+    const token = await this.getEffectiveToken();
+    if (!token) return;
 
     await this.sendRequest('PAIR_REQUEST', {
       device_id: this.config.deviceId,
       name: 'Shega Mobile',
       platform: 'mobile',
-      token: this.config.hubToken,
+      token,
     });
   }
 
@@ -131,14 +243,56 @@ export class WsSyncClient extends EventEmitter {
         break;
 
       case 'HEARTBEAT_ACK':
+        // The hub acknowledges our heartbeat. Purely informational: no state
+        // change, no echo (an ACK never re-triggers a push), so just measure
+        // round-trip latency for the connection-health gauge.
+        this.emit('heartbeatAck', Date.now() - (msg.timestamp ?? 0));
         break;
 
       case 'PAIR_RESPONSE':
         if (msg.payload?.success) {
           logger.info('[WS] Paired with hub');
           this.lastServerSeq = msg.payload?.serverSeq || 0;
+          // Persist the rejoin bundle (pairing token + last server seq) so a
+          // reopened app can re-dial the hub by token instead of requiring a
+          // fresh radar tap + admin re-approve. The hub's approve-by-code path
+          // (p2p:approve, pairingToken filter) accepts this token directly.
+          try {
+            const saved = {
+              hubUrl: this.config?.hubUrl || '',
+              // The token we just authenticated WITH is the hub's pairing
+              // token (handlePairRequest compares it to getPairingToken()) —
+              // PAIR_RESPONSE never echoes it, so read it from our config.
+              pairingToken: String(this.config?.hubToken || '').trim().toUpperCase(),
+              serverSeq: this.lastServerSeq,
+            };
+            const asyncStorage = require('@react-native-async-storage/async-storage');
+            const storage = asyncStorage.default ?? asyncStorage;
+            // handleMessage is sync — fire-and-forget the write.
+            storage.setItem('shega:rejoinBundle', JSON.stringify(saved))
+              .catch((e: unknown) => console.warn('[WS] Failed to save rejoin bundle:', e));
+            logger.info('[WS] Saved rejoin bundle for token-based re-dial');
+          } catch (e) {
+            console.warn('[WS] Failed to save rejoin bundle:', e);
+          }
+          // Persist the hub as a peer device so it appears in Connected Devices
+          // and we can reconnect to it after app restarts.
+          try {
+            const hubUrl = this.config?.hubUrl || '';
+            const hubDeviceId = hubUrl.match(/\/([a-f0-9-]+)$/)?.[1] || 'desktop-hub';
+            persistPeerDevice({
+              deviceId: hubDeviceId,
+              name: 'Shega Desktop Hub',
+              platform: 'desktop',
+              businessId: resolveLocalBusinessId() ?? undefined,
+            });
+          } catch (e) {
+            console.warn('[WS] Failed to persist hub device:', e);
+          }
           this.emit('connected');
           this.flushPendingInvitePublishes().catch(() => {});
+          // Trigger immediate sync on connection to exchange pending outbox/remote changes
+          this.syncNow().catch(() => {});
         } else {
           this.emit('error', new Error(msg.payload?.message || 'Pairing failed'));
         }
@@ -151,7 +305,10 @@ export class WsSyncClient extends EventEmitter {
           pulled: 0,
           conflicts: msg.payload?.conflicts || 0,
         });
-        this.lastServerSeq = msg.payload?.serverSeq || this.lastServerSeq;
+        // Do NOT advance lastServerSeq here — the serverSeq in SYNC_ACK is the
+        // hub's max outbox seq AFTER applying our push. Advancing would skip
+        // the subsequent SYNC_PULL (since=lastServerSeq would be the new max).
+        // The SYNC_CHANGES response (or next pull) will advance the cursor correctly.
         this.resolvePending(msg.requestId, msg.payload);
         break;
 
@@ -170,13 +327,17 @@ export class WsSyncClient extends EventEmitter {
         // Live push from the hub: some other device just pushed data. Pull it
         // now rather than waiting for the timer. Consumers subscribe to
         // 'dataChanged' to refresh UI.
-        this.lastServerSeq = typeof msg.payload?.serverSeq === 'number' ? Math.max(this.lastServerSeq, msg.payload.serverSeq) : this.lastServerSeq;
+        // Do NOT advance lastServerSeq here — the SYNC_CHANGES response will
+        // update it to the correct lastSeq after we apply the new changes.
+        // Advancing before the pull would skip exactly the changes that were
+        // just announced (since snapshotSince returns seq > since).
         this.emit('dataChanged', msg.payload);
         this.syncNow().catch(() => {});
         break;
 
       case DEVICE_JOIN_MSG.ACK:
       case DEVICE_JOIN_MSG.RESPONSE:
+        this.emit('joinDecision', msg.payload);
         this.resolvePending(msg.requestId, msg.payload);
         break;
 
@@ -221,9 +382,16 @@ export class WsSyncClient extends EventEmitter {
         break;
 
       case 'ERROR':
-        logger.error('[WS] Server error:', msg.payload);
+        if (msg.payload?.code === 'NOT_PAIRED' || msg.payload?.code === 'PAIR_FAILED') {
+          logger.info('[WS] Server response:', msg.payload?.message || msg.payload?.code);
+        } else {
+          logger.error('[WS] Server error:', msg.payload);
+        }
         this.emit('error', new Error(`${msg.payload?.code}: ${msg.payload?.message}`));
         this.rejectPending(msg.requestId, new Error(msg.payload?.message));
+        if (!msg.requestId && (msg.payload?.code === 'PAIR_FAILED' || msg.payload?.code === 'NOT_PAIRED')) {
+          try { this.ws?.close(); } catch { /* onclose still fires */ }
+        }
         break;
 
       default:
@@ -266,8 +434,7 @@ export class WsSyncClient extends EventEmitter {
   }
 
   private async computeChecksum(change: { entity: string; entity_uuid: string; op: string; payload: Record<string, any> }): Promise<string> {
-    const canonical = `${change.entity}|${change.entity_uuid}|${change.op}|${JSON.stringify(change.payload)}`;
-    return Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, canonical);
+    return changeChecksum(change);
   }
 
   private async getDeviceId(): Promise<string> {
@@ -293,6 +460,11 @@ export class WsSyncClient extends EventEmitter {
   async decideDeviceJoinRequest(payload: any): Promise<any> {
     if (!this._isConnected) throw new Error('Not connected to hub');
     return this.sendRequest(DEVICE_JOIN_MSG.DECIDE, payload);
+  }
+
+  onJoinDecision(fn: (payload: any) => void): () => void {
+    this.on('joinDecision', fn);
+    return () => this.off('joinDecision', fn);
   }
 
   async publishInvitation(payload: any): Promise<any> {
@@ -454,7 +626,14 @@ export class WsSyncClient extends EventEmitter {
       return { pushed: 0, pulled: 0, conflicts: 0 };
     }
 
+    const token = await this.getEffectiveToken();
+    if (!token) {
+      return { pushed: 0, pulled: 0, conflicts: 0 };
+    }
+
     this.isSyncing = true;
+    // Lifecycle notification hook: UI can show "sync started" when this fires.
+    try { this.emit('syncStarted', {}); } catch { /* never break sync */ }
     let totalPushed = 0;
     let totalPulled = 0;
     let totalConflicts = 0;
@@ -546,7 +725,9 @@ export class WsSyncClient extends EventEmitter {
     if (pending) {
       clearTimeout(pending.timeout);
       this.pendingRequests.delete(requestId);
-      pending.resolve(payload);
+      // Flatten the handshake ack onto the resolved payload so callers that
+      // track a pairing session see the connection acknowledged immediately.
+      pending.resolve({ ...payload, handshake: payload.handshake });
     }
   }
 
@@ -562,7 +743,12 @@ export class WsSyncClient extends EventEmitter {
 
   private send(msg: any): void {
     if (this.ws && this.ws.readyState === 1) {
-      this.ws.send(JSON.stringify(msg));
+      try {
+        const sanitized = sanitizePayload(msg);
+        this.ws.send(JSON.stringify(sanitized));
+      } catch (e: any) {
+        logger.warn('[WS] Failed to serialize message:', e?.message);
+      }
     } else {
       this.messageQueue.push(msg);
     }
@@ -592,11 +778,14 @@ export class WsSyncClient extends EventEmitter {
 
     this.emit('disconnected', error);
 
-    if (this.reconnectAttempts < this.maxReconnectAttempts) {
-      const delay = Math.min(this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts), 30000);
-      this.reconnectAttempts++;
-      setTimeout(() => this.connect(this.config!), delay);
-    }
+    const delay = Math.min(this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts), this.MAX_RECONNECT_DELAY_MS);
+    this.reconnectAttempts++;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      if (!this.config) return;
+      this.openSocket().catch((e) => logger.warn('[WS] reconnect failed:', e?.message));
+    }, delay);
   }
 
   async disconnect(): Promise<void> {
@@ -604,10 +793,15 @@ export class WsSyncClient extends EventEmitter {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
     }
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     if (this.ws) {
       this.ws.close();
       this.ws = null;
     }
+    this.config = null;
     this._isConnected = false;
   }
 
@@ -633,6 +827,11 @@ export const wsSyncClient = new (class extends EventEmitter {
 
   async syncNow() {
     return this.instance?.syncNow() ?? { pushed: 0, pulled: 0, conflicts: 0 };
+  }
+
+  /** Force an immediate reconnect attempt (network restore / app resume). */
+  retryNow() {
+    this.instance?.retryNow();
   }
 
   async submitDeviceJoinRequest(payload: any) {

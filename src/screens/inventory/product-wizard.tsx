@@ -21,8 +21,10 @@ import {
 } from '@/database/db';
 import { useFormDrafts } from '@/hooks/useFormDrafts';
 import { usePermissions } from '@/hooks/usePermissions';
+import { requestImagePermission, openAppSettings } from '@/services/imagePermission';
 import { Draft } from '@/services/draftService';
-import { playBad, playNice } from '@/services/soundService';
+import { ProductImageGallery } from '@/components/ProductImageGallery';
+import { parseProductImages, serializeProductImages } from '@/utils/productImages';
 import { formatDate } from '@/utils/date-utils';
 import {
   fmtMoney,
@@ -136,6 +138,8 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
 
   // -- create: photo & barcode ------------------------------------------------
   const [image, setImage] = useState<string | null>(null);
+  const [productImages, setProductImages] = useState<string[]>([]);
+  const [primaryImageIdx, setPrimaryImageIdx] = useState<number>(0);
   const [barcodeMode, setBarcodeMode] = useState<'external' | 'shega' | 'none'>('none');
   const [barcodeInput, setBarcodeInput] = useState('');
   const [generatedCode, setGeneratedCode] = useState('');
@@ -500,11 +504,43 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
     else goHome();
   }, [mode, step, goHome]);
 
-  const takePhoto = useCallback(async () => {
+  /**
+   * Recover from a denied photo/camera permission: offer an immediate retry, or
+   * a shortcut into the OS settings when the prompt can no longer be shown.
+   * Resolves true when the caller should retry the action.
+   */
+  const reclaimImagePermission = useCallback(
+    async (kind: 'camera' | 'library', canAskAgain: boolean): Promise<boolean> => {
+      const message = kind === 'camera' ? t('permission.camera_message') : t('permission.library_message');
+      if (canAskAgain) {
+        return dialog.confirm({
+          title: t('permission.required'),
+          message,
+          confirmText: t('common.try_again'),
+          cancelText: t('common.cancel'),
+          iconType: 'warning',
+        });
+      }
+      const openSettings = await dialog.confirm({
+        title: t('permission.required'),
+        message,
+        confirmText: t('common.open_settings'),
+        cancelText: t('common.cancel'),
+        iconType: 'warning',
+      });
+      if (openSettings) openAppSettings();
+      return false;
+    },
+    [dialog, t],
+  );
+
+  const takePhoto = useCallback(async (attempt = 0): Promise<void> => {
     try {
-      const perm = await ImagePicker.requestCameraPermissionsAsync();
-      if (!perm.granted) {
-        await dialog.alert({ title: t('permission.required'), message: t('permission.library_message'), iconType: 'warning' });
+      const { granted, canAskAgain } = await requestImagePermission('camera');
+      if (!granted) {
+        if (attempt < 2 && (await reclaimImagePermission('camera', canAskAgain))) {
+          await takePhoto(attempt + 1);
+        }
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
@@ -521,13 +557,15 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
     } catch (e) {
       console.error('Take product photo error:', e);
     }
-  }, [dialog, t]);
+  }, [reclaimImagePermission]);
 
-  const pickFromLibrary = useCallback(async () => {
+  const pickFromLibrary = useCallback(async (attempt = 0): Promise<void> => {
     try {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) {
-        await dialog.alert({ title: t('permission.required'), message: t('permission.library_message'), iconType: 'warning' });
+      const { granted, canAskAgain } = await requestImagePermission('library');
+      if (!granted) {
+        if (attempt < 2 && (await reclaimImagePermission('library', canAskAgain))) {
+          await pickFromLibrary(attempt + 1);
+        }
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -544,7 +582,7 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
     } catch (e) {
       console.error('Pick product photo error:', e);
     }
-  }, [dialog, t]);
+  }, [reclaimImagePermission]);
 
   const createNewCategory = useCallback(async () => {
     const name = newCategory.trim();
@@ -655,7 +693,7 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
         allowSellByPackUnit: false,
         barcode: finalBarcode,
         sku: finalSku,
-        image: image || null,
+        image: serializeProductImages(productImages, primaryImageIdx),
         taxType: getActiveTaxType()?.name || 'VAT',
         taxTreatment: 'exclusive',
         wholesaleSellingPrice: wholesaleRaw || null,
@@ -1169,39 +1207,24 @@ export const ProductWizard = ({ onSuccess, onClose, onViewProduct }: ProductWiza
         {t('wizard.photo_barcode')}
       </AppText>
 
-      {/* Photo */}
-      <View style={styles.inputNode}>
-        <View style={styles.nodeHeader}>
-          <Camera size={14} color={G.fgSecondary} />
-          <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.nodeLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('inventory.product_photo')}</AppText>
-        </View>
-        <View style={[styles.photoRow, { borderColor: G.border }]}>
-          {image ? (
-            <View style={styles.photoPreviewWrap}>
-              <Image source={{ uri: image }} style={styles.photoPreview} contentFit="cover" transition={150} />
-              <TouchableOpacity style={styles.photoRemove} onPress={() => setImage(null)} activeOpacity={0.8}>
-                <Trash2 size={14} color="#fff" />
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={[styles.photoPlaceholder, { backgroundColor: G.bgCard, borderColor: G.border }]}>
-              <ImageIcon size={22} color={G.fgSecondary} />
-            </View>
-          )}
-          <View style={{ flex: 1, gap: 8 }}>
-            <TouchableOpacity style={[styles.photoBtn, { backgroundColor: colors.primary }]} onPress={takePhoto} activeOpacity={0.85}>
-              <Camera size={15} color="#fff" style={{ marginRight: 6 }} />
-              <AppText variant="body-sm" weight="bold" style={{ color: '#fff' }} numberOfLines={1}>
-                {image ? (t('inventory.retake')) : (t('inventory.take_photo'))}
-              </AppText>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.photoBtn, { backgroundColor: G.bgCard, borderWidth: 1, borderColor: G.border }]} onPress={pickFromLibrary} activeOpacity={0.85}>
-              <ImageIcon size={15} color={G.fg} style={{ marginRight: 6 }} />
-              <AppText variant="body-sm" weight="bold" style={{ color: G.fg }} numberOfLines={1}>{t('inventory.gallery')}</AppText>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
+      {/* Photos (up to 5 images) */}
+      <ProductImageGallery
+        images={productImages}
+        primaryIndex={primaryImageIdx}
+        isEditing={true}
+        onImagesChange={(imgs, pIdx) => {
+          setProductImages(imgs);
+          setPrimaryImageIdx(pIdx);
+        }}
+        colors={{
+          primary: colors.primary,
+          border: G.border,
+          card: G.bgCard,
+          text: G.fg,
+          textSecondary: G.fgSecondary,
+          warning: colors.warning,
+        }}
+      />
 
       {/* Barcode */}
       <View style={styles.inputNode}>

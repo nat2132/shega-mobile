@@ -924,7 +924,7 @@ export const initDB = () => {
   database.execSync(`
     CREATE TABLE IF NOT EXISTS subscriptions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      plan TEXT NOT NULL DEFAULT 'basic',
+      plan TEXT NOT NULL DEFAULT 'both',
       status TEXT NOT NULL DEFAULT 'trial',
       trialStartedAt TEXT,
       trialEndsAt TEXT,
@@ -1576,9 +1576,11 @@ export const initDB = () => {
   // Migration: pin employees to a register/location (existing installs).
   addColumnIfMissing('users', 'assigned_register_id', 'TEXT');
   addColumnIfMissing('users', 'assigned_location_id', 'TEXT');
-  // Shared sign-in identity (username+PIN) and Teams profile photo.
+  // Shared sign-in identity (username+PIN), recovery code, and Teams profile photo.
   addColumnIfMissing('users', 'username', 'TEXT');
   addColumnIfMissing('users', 'avatar', 'TEXT');
+  addColumnIfMissing('users', 'recovery_hash', 'TEXT');
+  addColumnIfMissing('users', 'recovery_salt', 'TEXT');
   // Business profile image (owner-managed, syncs to desktop `businesses.logo`).
   addColumnIfMissing('businesses', 'logo', 'TEXT');
   addColumnIfMissing('businesses', 'phone', 'TEXT');
@@ -1771,6 +1773,18 @@ export const initDB = () => {
       console.warn(`Multi-business column (${tbl}): `, e?.message);
     }
   }
+  // Canonical plan vocabulary. Older builds stored the retired 'basic' /
+  // 'premium' words; fold those rows into the editions (Mobile /
+  // Mobile + Desktop) so nothing in the app still reads a retired plan value.
+  // `subscriptions` is a synced table, so this is a value rewrite, not a
+  // schema change — a peer on an older build still syncs cleanly.
+  try {
+    database.execSync("UPDATE subscriptions SET plan = 'mobile' WHERE plan = 'basic'");
+    database.execSync("UPDATE subscriptions SET plan = 'both' WHERE plan = 'premium'");
+    database.execSync("UPDATE subscription_payments SET plan = 'mobile' WHERE plan = 'basic'");
+    database.execSync("UPDATE subscription_payments SET plan = 'both' WHERE plan = 'premium'");
+  } catch { /* tables may not exist on a very old db — best effort */ }
+
   // Initialize default trial subscription if none exists
   const subCount = database.getFirstSync<{ count: number }>('SELECT COUNT(*) as count FROM subscriptions');
   if (subCount && subCount.count === 0) {
@@ -1778,7 +1792,7 @@ export const initDB = () => {
     const trialEnd = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
     database.execSync(`
       INSERT INTO subscriptions (plan, status, trialStartedAt, trialEndsAt, startedAt, expiresAt)
-      VALUES ('premium', 'trial', datetime('now'), datetime('now', '+7 days'), datetime('now'), datetime('now', '+7 days'))
+      VALUES ('both', 'trial', datetime('now'), datetime('now', '+7 days'), datetime('now'), datetime('now', '+7 days'))
     `);
     console.log('Default trial subscription created.');
   }
@@ -7410,12 +7424,12 @@ export const enablePremiumForTesting = (): boolean => {
   try {
     const database = getDB();
     const result = database.runSync(
-      `UPDATE subscriptions SET plan = 'premium', status = 'active', expiresAt = NULL, trialEndsAt = NULL, updatedAt = datetime('now') WHERE id = (SELECT id FROM subscriptions LIMIT 1)`
+      `UPDATE subscriptions SET plan = 'both', status = 'active', expiresAt = NULL, trialEndsAt = NULL, updatedAt = datetime('now') WHERE id = (SELECT id FROM subscriptions LIMIT 1)`
     );
     if (result.changes === 0) {
-      database.runSync(`INSERT INTO subscriptions (plan, status) VALUES ('premium', 'active')`);
+      database.runSync(`INSERT INTO subscriptions (plan, status) VALUES ('both', 'active')`);
     }
-    console.log('Subscription set to premium/active for testing');
+    console.log('Subscription set to full access for testing');
     return true;
   } catch (error) {
     console.error('Enable premium error:', error);
@@ -7440,8 +7454,8 @@ export const approveSubscription = (): boolean => {
   }
 };
 
-// Starts (or restarts) the local 7-day free trial. Grants a 7-day premium
-// trial locally. Safe to call at any time â€” it resets an expired/cancelled
+// Starts (or restarts) the local 7-day free trial. Grants 7 days of full
+// access locally. Safe to call at any time — it resets an expired/cancelled
 // subscription back to a fresh trial.
 export const startFreeTrial = (): boolean => {
   try {
@@ -7451,13 +7465,13 @@ export const startFreeTrial = (): boolean => {
     trialEnd.setDate(trialEnd.getDate() + 7);
     if (sub) {
       database.runSync(
-        "UPDATE subscriptions SET plan = 'premium', status = 'trial', trialStartedAt = datetime('now'), trialEndsAt = ?, startedAt = datetime('now'), expiresAt = ?, durationMonths = 0, price = NULL, updatedAt = datetime('now') WHERE id = ?",
+        "UPDATE subscriptions SET plan = COALESCE(NULLIF(plan, ''), 'both'), status = 'trial', trialStartedAt = datetime('now'), trialEndsAt = ?, startedAt = datetime('now'), expiresAt = ?, durationMonths = 0, price = NULL, updatedAt = datetime('now') WHERE id = ?",
         [trialEnd.toISOString(), trialEnd.toISOString(), sub.id]
       );
       logAudit(sub.id, 'trial_started', sub.status, 'trial');
     } else {
       database.runSync(
-        "INSERT INTO subscriptions (plan, status, trialStartedAt, trialEndsAt, startedAt, expiresAt, durationMonths) VALUES ('premium', 'trial', datetime('now'), ?, datetime('now'), ?, 0)",
+        "INSERT INTO subscriptions (plan, status, trialStartedAt, trialEndsAt, startedAt, expiresAt, durationMonths) VALUES ('both', 'trial', datetime('now'), ?, datetime('now'), ?, 0)",
         [trialEnd.toISOString(), trialEnd.toISOString()]
       );
     }
@@ -7468,40 +7482,138 @@ export const startFreeTrial = (): boolean => {
   }
 };
 
-// Reconciles the local (offline) subscription row with an active subscription
-// confirmed by the backend (admin-approved payment -> license). This unlocks
-// the premium gate on-device without relying on the legacy local-only payment
-// flow. Only ever upgrades the local state; never locks a paying user offline.
+// Reconciles the local (offline) subscription row with a subscription confirmed
+// by the backend (admin-approved payment -> license, or an active trial started
+// on the server via /api/subscription/trial). This unlocks the premium gate
+// on-device without relying on the legacy local-only payment flow. Only ever
+// upgrades or locks the local state in line with the server's status; 'none'
+// is left untouched so offline trial/seed state keeps working.
 export const syncServerSubscription = (params: {
   plan: string | null;
   status: string;
   expiresAt: string | null;
 }): boolean => {
   try {
-    if (!params || params.status !== 'active') return false;
+    if (!params) return false;
+    const status = (params.status || '').toLowerCase();
+    if (status !== 'active' && status !== 'trial') return false;
     const database = getDB();
     const sub = getSubscription();
     if (!sub) return false;
-    const localPlan =
-      params.plan && params.plan.toLowerCase().includes('premium') ? 'premium' : 'basic';
-    database.runSync(
-      `UPDATE subscriptions
-       SET plan = ?, status = 'active', expiresAt = ?,
-           startedAt = COALESCE(startedAt, datetime('now')),
-           updatedAt = datetime('now')
-       WHERE id = ?`,
-      [localPlan, params.expiresAt, sub.id]
-    );
+    // A server-confirmed subscription (any paid plan or a backend trial) always
+    // grants full access locally. The plan's name carries the EDITION —
+    // "Mobile" / "Desktop" / "Mobile + Desktop" — which is what we cache.
+    const localPlan = normalizePlanEdition(params.plan);
+    if (status === 'trial') {
+      database.runSync(
+        `UPDATE subscriptions
+         SET plan = ?, status = 'trial',
+             trialStartedAt = datetime('now'),
+             trialEndsAt = COALESCE(?, trialEndsAt),
+             startedAt = COALESCE(startedAt, datetime('now')),
+             expiresAt = ?,
+             durationMonths = 0, price = NULL,
+             updatedAt = datetime('now')
+         WHERE id = ?`,
+        [localPlan, params.expiresAt, params.expiresAt, sub.id]
+      );
+    } else {
+      database.runSync(
+        `UPDATE subscriptions
+         SET plan = ?, status = 'active', expiresAt = ?,
+             startedAt = COALESCE(startedAt, datetime('now')),
+             updatedAt = datetime('now')
+         WHERE id = ?`,
+        [localPlan, params.expiresAt, sub.id]
+      );
+    }
     database.runSync(
       `UPDATE subscription_payments
        SET status = 'verified', verifiedAt = datetime('now')
        WHERE subscriptionId = ? AND status = 'pending_verification'`,
       [sub.id]
     );
-    logAudit(sub.id, 'synced_from_server', sub.status, 'active');
+    logAudit(sub.id, 'synced_from_server', sub.status, status);
     return true;
   } catch (error) {
     console.error('Sync server subscription error:', error);
+    return false;
+  }
+};
+
+// Moves the local subscription into the pending-verification (awaiting admin
+// approval) state. Features stay locked and writes stay read-only.
+export const markSubscriptionPending = (): boolean => {
+  try {
+    const database = getDB();
+    const sub = getSubscription();
+    if (!sub) return false;
+    database.runSync(
+      "UPDATE subscriptions SET status = 'pending_verification', updatedAt = datetime('now') WHERE id = ?",
+      [sub.id]
+    );
+    logAudit(sub.id, 'payment_pending', sub.status, 'pending_verification');
+    return true;
+  } catch (error) {
+    console.error('Mark subscription pending error:', error);
+    return false;
+  }
+};
+
+/**
+ * Single entry point for reconciling the local subscription row against the
+ * backend's canonical status contract:
+ *   trial / active               -> full access locally
+ *   pending_payment              -> view-only (awaiting approval)
+ *   payment_rejected / rejected  -> view-only until resubmission
+ *   expired                      -> view-only
+ *   none / unknown               -> leave local state untouched
+ */
+/**
+ * Canonical plan edition for a backend plan name. The retired basic/premium
+ * wording is folded in so a historical record can never render as one of them.
+ *
+ *   "Mobile"           → mobile
+ *   "Desktop"          → desktop
+ *   "Mobile + Desktop" → both
+ */
+export const normalizePlanEdition = (name: string | null | undefined): string => {
+  const value = String(name ?? '').toLowerCase();
+  if (value.includes('desktop') && value.includes('mobile')) return 'both';
+  if (value.includes('premium')) return 'both';
+  if (value.includes('desktop')) return 'desktop';
+  if (value.includes('mobile') || value.includes('basic')) return 'mobile';
+  return 'both';
+};
+
+export const applyServerSubscriptionStatus = (params: {
+  status: string;
+  plan?: string | null;
+  planName?: string | null;
+  expiresAt?: string | null;
+}): boolean => {
+  try {
+    const status = (params.status || '').toLowerCase();
+    if (status === 'active' || status === 'trial') {
+      return syncServerSubscription({
+        plan: params.planName || params.plan || null,
+        status,
+        expiresAt: params.expiresAt || null,
+      });
+    }
+    if (status === 'pending' || status === 'pending_payment' || status === 'pending_verification') {
+      return markSubscriptionPending();
+    }
+    if (status === 'rejected' || status === 'payment_rejected') {
+      return rejectSubscription();
+    }
+    if (status === 'expired') {
+      return expireSubscription();
+    }
+    // 'none' and anything unknown: keep local (offline-first) state.
+    return false;
+  } catch (error) {
+    console.error('Apply server subscription status error:', error);
     return false;
   }
 };
@@ -7545,8 +7657,10 @@ export const expireSubscription = (): boolean => {
     const database = getDB();
     const sub = getSubscription();
     if (!sub) return false;
+    // Only the STATUS changes — the edition the business purchased stays on the
+    // row so the dashboard can keep naming the plan.
     database.runSync(
-      "UPDATE subscriptions SET status = 'expired', plan = 'basic', updatedAt = datetime('now') WHERE id = ?",
+      "UPDATE subscriptions SET status = 'expired', updatedAt = datetime('now') WHERE id = ?",
       [sub.id]
     );
     logAudit(sub.id, 'expired', sub.status, 'expired');
@@ -7675,22 +7789,22 @@ export const checkAndExpireSubscription = (): SubscriptionData | null => {
       const trialEnd = new Date(sub.trialEndsAt);
       if (new Date() > trialEnd) {
         database.runSync(
-          "UPDATE subscriptions SET status = 'expired', plan = 'basic', updatedAt = datetime('now') WHERE id = ?",
+          "UPDATE subscriptions SET status = 'expired', updatedAt = datetime('now') WHERE id = ?",
           [sub.id]
         );
         logAudit(sub.id, 'trial_ended', 'trial', 'expired');
-        return { ...sub, status: 'expired', plan: 'basic' };
+        return { ...sub, status: 'expired' };
       }
     }
     if (sub.status === 'active' && sub.expiresAt) {
       const expiry = new Date(sub.expiresAt);
       if (new Date() > expiry) {
         database.runSync(
-          "UPDATE subscriptions SET status = 'expired', plan = 'basic', updatedAt = datetime('now') WHERE id = ?",
+          "UPDATE subscriptions SET status = 'expired', updatedAt = datetime('now') WHERE id = ?",
           [sub.id]
         );
         logAudit(sub.id, 'subscription_expired', 'active', 'expired');
-        return { ...sub, status: 'expired', plan: 'basic' };
+        return { ...sub, status: 'expired' };
       }
     }
     return sub;
@@ -7729,7 +7843,9 @@ export const isPremiumFeatureUnlocked = (feature: string): boolean => {
     if (!sub) return false;
     if (sub.status === 'trial') return true;
     if (sub.status !== 'active') return false;
-    return sub.plan === 'premium' || sub.plan === 'subscription';
+    // Plans differ by edition, not by capability: an active subscription
+    // unlocks every feature.
+    return true;
   } catch (error) {
     console.error('Is premium feature unlocked error:', error);
     return false;

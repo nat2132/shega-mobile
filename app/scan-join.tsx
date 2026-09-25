@@ -38,6 +38,18 @@ const parseHubInvite = (raw: string): string | null => {
   return null;
 };
 
+/**
+ * Owner-side invitation QR (`shega://join?b=...&c=XXX-XXX-XXX` from the mobile
+ * Add Team / Device card, or a bare invitation code). Resolves into the
+ * standard join flow with the code prefilled — no manual typing.
+ */
+const extractInviteCode = (raw: string): string | null => {
+  const text = raw.trim();
+  const codeParam = /[?&]c=([A-Z0-9-]+)/i.exec(text);
+  const candidate = codeParam ? decodeURIComponent(codeParam[1]) : text;
+  return /^[A-Z0-9]{3}-[A-Z0-9]{3}-[A-Z0-9]{3}$/i.test(candidate) ? candidate.toUpperCase() : null;
+};
+
 export default function ScanJoinScreen() {
   const { colors, t } = useSettings();
   const G = getGlass(colors);
@@ -64,6 +76,14 @@ export default function ScanJoinScreen() {
 
   const handleToken = async (raw: string) => {
     if (!scanning && stage === 'scan') return;
+
+    // Owner's mobile invitation QR / bare invitation code → standard join flow.
+    const inviteCode = extractInviteCode(raw);
+    if (inviteCode) {
+      setScanning(false);
+      router.replace({ pathname: '/join-existing', params: { code: inviteCode } } as any);
+      return;
+    }
 
     // Desktop user invite? (LAN hub claim + poll; falls back to cloud lookup off-LAN)
     const hubInviteCode = parseHubInvite(raw);

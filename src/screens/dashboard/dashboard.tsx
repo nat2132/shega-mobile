@@ -67,6 +67,8 @@ import { PROFILE_IMAGES, useDashboardVisibility, useSettings } from '@/context/S
 import { useSidebar } from '@/context/SidebarContext';
 import { useWarehouse } from '@/context/WarehouseContext';
 import { getActivityFeed, getDashboardStats, getDebtCustomers, getInventoryStats, getLowStockItems, getOnCreditItems, getQuickProducts, getRecentItems, getSaleWithItemsById, ItemData } from '@/database/db';
+import { getCurrentUserId, getUser } from '@/services/businessService';
+import type { User } from '@shega/shared';
 import { useBusinessAssistant } from '@/hooks/useBusinessAssistant';
 import { useBusinessHealthScore } from '@/hooks/useBusinessHealthScore';
 import { useDataChangedRefresh } from '@/hooks/useDataChangedRefresh';
@@ -200,6 +202,16 @@ SparklineChart.displayName = 'SparklineChart';
     const { showToast } = useToast();
     const dialog = useDialog();
     const [isPrivate, setIsPrivate] = useState(false);
+
+    // The signed-in user drives the header identity — never a stale profile
+    // default. Falls back to settings_profile only when no user row exists.
+    const [profileUser, setProfileUser] = useState<User | null>(null);
+    const resolveProfileUser = useCallback((): User | null => {
+      const id = getCurrentUserId();
+      if (!id) return null;
+      const u = getUser(id);
+      return u && u.isActive ? u : null;
+    }, []);
     const [activeModal, setActiveModal] = useState<string | null>(null);
     const [showSalesRecord, setShowSalesRecord] = useState(false);
     const [showTour, setShowTour] = useState(false);
@@ -419,8 +431,9 @@ SparklineChart.displayName = 'SparklineChart';
 
   useFocusEffect(
     useCallback(() => {
+      setProfileUser(resolveProfileUser());
       loadDashboardData();
-    }, [loadDashboardData])
+    }, [loadDashboardData, resolveProfileUser])
   );
 
   const onRefresh = React.useCallback(async () => {
@@ -669,7 +682,7 @@ SparklineChart.displayName = 'SparklineChart';
                     return t('dashboard.greeting_evening');
                   })()}
                 </AppText>
-                <AppText variant="heading-lg" weight="bold" style={styles.businessNameHeading} numberOfLines={2}>{userProfile.name}</AppText>
+                <AppText variant="heading-lg" weight="bold" style={styles.businessNameHeading} numberOfLines={2}>{profileUser?.name?.trim() || userProfile.name}</AppText>
                 <AppText variant="body-sm" weight="medium" style={styles.dateLabel} numberOfLines={1}>
                   {formatDate(new Date(), calendarType, language)}
                 </AppText>
@@ -692,7 +705,7 @@ SparklineChart.displayName = 'SparklineChart';
                     style={styles.headerAvatarWrap}
                   >
                     <View style={styles.headerAvatarGlow}>
-                      <Image source={userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0]} style={styles.headerAvatar} />
+                      <Image source={profileUser?.avatar ? { uri: profileUser.avatar } : (userProfile.avatarUri ? { uri: userProfile.avatarUri } : PROFILE_IMAGES[userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0])} style={styles.headerAvatar} />
                     </View>
                     <View style={[styles.onlineIndicator, { backgroundColor: colors.text, borderColor: colors.background }]} />
                   </TouchableOpacity>
@@ -806,7 +819,7 @@ SparklineChart.displayName = 'SparklineChart';
           {isFresh && (
             <Animated.View entering={FadeInDown.springify().damping(18).stiffness(120)} style={styles.ctaCard}>
               <AppText variant="title" weight="bold" style={styles.ctaTitle}>
-                Let's get selling
+                Let&apos;s get selling
               </AppText>
               <AppText variant="body" weight="medium" style={{ color: G.muted, marginBottom: 6 }}>
                 Two quick steps to start using Shega.

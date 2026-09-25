@@ -152,7 +152,8 @@ export async function submitJoinRequest(input: {
     const db = getDB();
     db.runSync('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)',
       ['pending_join_device_id', deviceId]);
-  } catch { /* best-effort; the status poll falls back to getThisDeviceId() */ }
+  } catch { /* best-effort */ }
+
   const payload = {
     businessId: input.businessId,
     code: input.code,
@@ -163,12 +164,85 @@ export async function submitJoinRequest(input: {
     role: input.role,
     platform: input.platform ?? 'mobile',
   };
+
+  let relayed = false;
+  let requestId: string | undefined = undefined;
+
+  // 1. Try WebSocket if connected
   if (wsSyncClient.isConnected) {
-    const ack = await wsSyncClient.submitDeviceJoinRequest(payload);
-    return { requestId: ack?.requestId, relayed: true };
+    try {
+      const ack = await wsSyncClient.submitDeviceJoinRequest(payload);
+      if (ack?.requestId) {
+        requestId = ack.requestId;
+        relayed = true;
+      }
+    } catch { /* proceed */ }
   }
-  await stageLocalJoin(payload);
-  return { relayed: false };
+
+  // 2. Broadcast/Send via HTTP / TCP to all discovered nearby hubs
+  const { mobilePairingBeacon } = require('./mobilePairingBeacon');
+  const nearby = mobilePairingBeacon.getNearbyOwners();
+
+  for (const hub of nearby) {
+    if (!hub.host) continue;
+    try {
+      const isDesktop = hub.beacon?.owner?.platform === 'desktop';
+      if (isDesktop) {
+        // Connect WebSocket for real-time push
+        try {
+          void wsSyncClient.connect({
+            hubUrl: `http://${hub.host}:5758`,
+            deviceId,
+          });
+        } catch { /* best-effort */ }
+
+        // HTTP submit
+        const res = await fetch(`http://${hub.host}:5757/sync/join/submit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          requestId = data?.requestId || requestId;
+          relayed = true;
+        }
+      } else {
+        const { directSubmitJoin } = require('./directJoinClient');
+        const ack = await directSubmitJoin({ host: hub.host, port: 5759 }, payload);
+        if (ack?.requestId) {
+          requestId = ack.requestId;
+          relayed = true;
+        }
+      }
+    } catch { /* try next hub */ }
+  }
+
+  // 3. Fallback gateway probes (192.168.43.1, 172.20.10.1, 192.168.137.1)
+  if (!relayed) {
+    const gateways = ['192.168.43.1', '172.20.10.1', '192.168.137.1', '192.168.1.1', '192.168.0.1'];
+    for (const gw of gateways) {
+      try {
+        const res = await fetch(`http://${gw}:5757/sync/join/submit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          requestId = data?.requestId || requestId;
+          relayed = true;
+          break;
+        }
+      } catch { /* proceed */ }
+    }
+  }
+
+  if (!relayed) {
+    await stageLocalJoin(payload);
+  }
+
+  return { requestId, relayed };
 }
 
 /** Local fallback queue (delivered to the hub on next connect). */

@@ -7,9 +7,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { playBad, playNice } from '@/services/soundService';
 import { getActiveTaxType } from '@/services/taxService';
 import * as Haptics from 'expo-haptics';
-import { Image } from 'expo-image';
-import * as ImagePicker from 'expo-image-picker';
-import { Barcode as BarcodeIcon, Camera, Check, Image as ImageIcon, Package, ShieldCheck, Trash2, X } from 'lucide-react-native';
+import { Barcode as BarcodeIcon, Check, Package, ShieldCheck, X } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Modal,
@@ -20,6 +18,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { ProductImageGallery } from './ProductImageGallery';
+import { serializeProductImages } from '@/utils/productImages';
 import Animated, { FadeInDown, FadeOut } from 'react-native-reanimated';
 import { getSalesGlass } from '@/screens/sales/glass-sales';
 
@@ -61,7 +61,8 @@ const RegisterProductModal: React.FC<RegisterProductModalProps> = ({
   const [purchasePrice, setPurchasePrice] = useState('');
   const [price, setPrice] = useState('');
   const [stockQty, setStockQty] = useState('0');
-  const [image, setImage] = useState<string | null>(null);
+  const [productImages, setProductImages] = useState<string[]>([]);
+  const [primaryIdx, setPrimaryIdx] = useState<number>(0);
   const [hasBarcode, setHasBarcode] = useState<boolean>(true);
   const [generatedCode, setGeneratedCode] = useState<string>('');
   const [useGeneratedAsBarcode, setUseGeneratedAsBarcode] = useState<boolean>(true);
@@ -78,7 +79,8 @@ const RegisterProductModal: React.FC<RegisterProductModalProps> = ({
       setPurchasePrice('');
       setPrice('');
       setStockQty('0');
-      setImage(null);
+      setProductImages([]);
+      setPrimaryIdx(0);
       setCategoryId(null);
       setShowCategoryPicker(false);
       setNewCategory('');
@@ -110,51 +112,8 @@ const RegisterProductModal: React.FC<RegisterProductModalProps> = ({
     }
   }, [visible, canManageCatalog, dialog, t, onClose]);
 
-  const takePhoto = useCallback(async () => {
-    try {
-      const perm = await ImagePicker.requestCameraPermissionsAsync();
-      if (!perm.granted) {
-        await dialog.alert({ title: t('permission.required'), message: t('permission.library_message'), iconType: 'warning' });
-        return;
-      }
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ['images'],
-        quality: 0.5,
-        base64: true,
-        allowsEditing: true,
-        aspect: [4, 3],
-      });
-      if (!result.canceled && result.assets?.[0]) {
-        const asset = result.assets[0];
-        setImage(asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri);
-      }
-    } catch (e) {
-      console.error('Take product photo error:', e);
-    }
-  }, [dialog, t]);
-
-  const pickFromLibrary = useCallback(async () => {
-    try {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) {
-        await dialog.alert({ title: t('permission.required'), message: t('permission.library_message'), iconType: 'warning' });
-        return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        quality: 0.5,
-        base64: true,
-        allowsEditing: true,
-        aspect: [4, 3],
-      });
-      if (!result.canceled && result.assets?.[0]) {
-        const asset = result.assets[0];
-        setImage(asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri);
-      }
-    } catch (e) {
-      console.error('Pick product photo error:', e);
-    }
-  }, [dialog, t]);
+  // Product photos are added/removed through ProductImageGallery, which owns the
+  // camera/library pickers and the 5-image cap.
 
   const toggleCategory = useCallback((id: number | null) => {
     setCategoryId(id);
@@ -207,6 +166,8 @@ const RegisterProductModal: React.FC<RegisterProductModalProps> = ({
       const finalBarcode = hasBarcode ? (barcode || null) : useGeneratedAsBarcode ? generatedCode : null;
       const finalSku = barcode || generatedCode || null;
 
+      const finalImage = serializeProductImages(productImages, primaryIdx);
+
       const itemId = await insertItem({
         name: cleanName,
         categoryId: finalCategoryId,
@@ -224,7 +185,7 @@ const RegisterProductModal: React.FC<RegisterProductModalProps> = ({
         allowSellByPackUnit: false,
         barcode: finalBarcode,
         sku: finalSku,
-        image: image || null,
+        image: finalImage,
         taxType: getActiveTaxType()?.name || 'VAT',
         isCredit: false,
         warehouseId: null,
@@ -246,7 +207,7 @@ const RegisterProductModal: React.FC<RegisterProductModalProps> = ({
         categoryId: finalCategoryId,
         barcode: finalBarcode,
         sku: finalSku,
-        image: image || null,
+        image: finalImage,
         taxType: getActiveTaxType()?.name || 'VAT',
         baseSellingPrice: cleanPrice,
         packSellingPrice: cleanPrice,
@@ -267,7 +228,7 @@ const RegisterProductModal: React.FC<RegisterProductModalProps> = ({
     } finally {
       setSaving(false);
     }
-  }, [name, unit, purchasePrice, price, stockQty, image, hasBarcode, generatedCode, useGeneratedAsBarcode, categoryId, showCategoryPicker, newCategory, barcode, dialog, t, onSaved, onClose]);
+  }, [name, unit, purchasePrice, price, stockQty, productImages, primaryIdx, hasBarcode, generatedCode, useGeneratedAsBarcode, categoryId, showCategoryPicker, newCategory, barcode, dialog, t, onSaved, onClose]);
 
   const selectedCat = categories.find((c) => c.id === categoryId);
 
@@ -325,40 +286,24 @@ const RegisterProductModal: React.FC<RegisterProductModalProps> = ({
               </View>
             )}
 
-            {/* Product photo */}
-            <View style={styles.field}>
-              <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.fieldLabel, { color: SALES_GLASS.fgSecondary }]} numberOfLines={1}>
-                {t('inventory.product_photo') || 'Product Photo (optional)'}
-              </AppText>
-              <View style={[styles.photoRow, { borderColor: SALES_GLASS.border }]}>
-                {image ? (
-                  <View style={styles.photoPreviewWrap}>
-                    <Image source={{ uri: image }} style={styles.photoPreview} contentFit="cover" transition={150} />
-                    <TouchableOpacity style={[styles.photoRemove, { backgroundColor: 'rgba(0,0,0,0.6)' }]} onPress={() => setImage(null)} activeOpacity={0.8}>
-                      <Trash2 size={14} color="#fff" />
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <View style={[styles.photoPlaceholder, { backgroundColor: SALES_GLASS.bg, borderColor: SALES_GLASS.border }]}>
-                    <ImageIcon size={22} color={SALES_GLASS.fgSecondary} />
-                  </View>
-                )}
-                <View style={{ flex: 1, gap: 8 }}>
-                  <TouchableOpacity style={[styles.photoBtn, { backgroundColor: colors.primary }]} onPress={takePhoto} activeOpacity={0.85}>
-                    <Camera size={15} color="#fff" style={{ marginRight: 6 }} />
-                    <AppText variant="body-sm" weight="bold" style={{ color: '#fff' }} numberOfLines={1}>
-                      {image ? (t('inventory.retake') || 'Retake') : (t('inventory.take_photo') || 'Take Photo')}
-                    </AppText>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.photoBtn, { backgroundColor: SALES_GLASS.bg, borderWidth: 1, borderColor: SALES_GLASS.border }]} onPress={pickFromLibrary} activeOpacity={0.85}>
-                    <ImageIcon size={15} color={SALES_GLASS.fg} style={{ marginRight: 6 }} />
-                    <AppText variant="body-sm" weight="bold" style={{ color: SALES_GLASS.fg }} numberOfLines={1}>
-                      {t('inventory.gallery') || 'Choose from Gallery'}
-                    </AppText>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
+            {/* Product photos (up to 5) */}
+            <ProductImageGallery
+              images={productImages}
+              primaryIndex={primaryIdx}
+              isEditing={true}
+              onImagesChange={(imgs, pIdx) => {
+                setProductImages(imgs);
+                setPrimaryIdx(pIdx);
+              }}
+              colors={{
+                primary: colors.primary,
+                border: SALES_GLASS.border,
+                card: SALES_GLASS.bg,
+                text: SALES_GLASS.fg,
+                textSecondary: SALES_GLASS.fgSecondary,
+                warning: colors.warning,
+              }}
+            />
 
             <Field label={t('form.official_name') || 'Product Name'} required>
               <TextInput

@@ -29,18 +29,21 @@ interface SubscriptionPlansProps {
 const SubscriptionPlansScreen: React.FC<SubscriptionPlansProps> = ({ plans, onSelectPlan, onBack, onStartTrial }) => {
   const { colors, t } = useSettings();
 
-  // Exactly three subscriptions: 7-day free trial, 1 month, 3 months.
-  // Prefer the Premium tier when it exists (this screen is the upgrade path),
-  // falling back to whichever plans the backend returned.
-  const paidPlans = (plans ?? []).filter((p) => /premium/i.test(p.name));
-  const pool = paidPlans.length > 0 ? paidPlans : (plans ?? []);
-  const month1 = pool.find((p) => p.duration_months === 1);
-  const month3 = pool.find((p) => p.duration_months === 3);
+  // Every backend plan is offered by name (Mobile / Desktop / Mobile + Desktop),
+  // prefixed with the 7-day free trial. The server is the source of truth for
+  // plan ids, prices and device/business caps.
+  const pool = plans ?? [];
 
   const OPTIONS = [
     { key: 'trial', title: t('subscription.free_trial'), sub: t('subscription.free_trial_desc'), onPress: onStartTrial, url: Gift, accent: true },
-    ...(month1 ? [{ key: 'm1', title: t('subscription.month_1'), sub: formatPrice(month1.price) + ' ' + t('subscription.etb'), onPress: () => onSelectPlan(month1), url: null, accent: false }] : []),
-    ...(month3 ? [{ key: 'm3', title: t('subscription.months_3'), sub: formatPrice(month3.price) + ' ' + t('subscription.etb'), onPress: () => onSelectPlan(month3), url: null, accent: false }] : []),
+    ...(pool.map((p, idx) => ({
+      key: `plan-${p.id}-${idx}`,
+      title: p.display_name || p.name,
+      sub: formatPrice(p.price) + ' ' + t('subscription.etb'),
+      onPress: () => onSelectPlan(p),
+      url: null,
+      accent: false,
+    }))),
   ];
 
   return (
@@ -56,7 +59,7 @@ const SubscriptionPlansScreen: React.FC<SubscriptionPlansProps> = ({ plans, onSe
 
         <Animated.View entering={FadeInDown.delay(100).duration(600)} style={styles.titleSection}>
           <AppText variant="display" weight="black" align="center" style={{ color: colors.text, marginBottom: 8 }}>
-            {t('subscription.plan_premium')}
+            {t('subscription.available_plans')}
           </AppText>
           <AppText variant="body-lg" weight="medium" align="center" style={{ color: colors.textSecondary }}>
             {t('subscription.unlock_power')}

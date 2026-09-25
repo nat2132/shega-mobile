@@ -1,4 +1,5 @@
 import { getCategories, getContacts, getItems, insertAdjustment, insertCategory, insertContact, insertItem, insertSale, getDB } from '@/database/db';
+import { notifyLocalDataChanged } from '@/services/syncService';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 
@@ -706,18 +707,23 @@ export async function executeImport(
   data: any[],
   moduleKey: string
 ): Promise<ImportResult> {
+  let result: ImportResult;
   switch (moduleKey) {
-    case 'items': return importItems(data);
-    case 'sales': return importSales(data);
-    case 'categories': return importCategories(data);
-    case 'contacts': return importContacts(data);
-    case 'adjustments': return importAdjustments(data);
-    case 'warehouses': return importWarehouses(data);
-    case 'debt_payments': return importDebtPayments(data);
-    case 'returns': return importReturns(data);
+    case 'items': result = await importItems(data); break;
+    case 'sales': result = importSales(data); break;
+    case 'categories': result = importCategories(data); break;
+    case 'contacts': result = importContacts(data); break;
+    case 'adjustments': result = importAdjustments(data); break;
+    case 'warehouses': result = importWarehouses(data); break;
+    case 'debt_payments': result = importDebtPayments(data); break;
+    case 'returns': result = importReturns(data); break;
     default:
       return { success: false, imported: 0, skipped: 0, errors: [`Unknown module: ${moduleKey}`] };
   }
+  if (result.imported > 0) {
+    try { notifyLocalDataChanged(); } catch {}
+  }
+  return result;
 }
 
 export function importContacts(data: any[]): ImportResult {

@@ -35,9 +35,30 @@ export default function Index() {
           } catch {
             fromFirstRun = true;
           }
-          // Route straight to the setup wizard whose welcome stage offers
-          // Create / Join / Sign in — no separate welcome screen.
-          target = fromFirstRun ? '/language-select' : '/setup-wizard';
+          // A completed local setup is marked in SecureStore (setup_wizard_done
+          // / user_setupComplete) and/or has created a business in the local DB.
+          // Skip the wizard and go straight to the business sign-in gate; on a
+          // genuinely fresh install (or an interrupted setup) fall through to
+          // the language picker / setup wizard as before.
+          let onboardingDone = false;
+          try {
+            const { getBusinesses: getLocalBusinesses } = await import('../src/services/businessService');
+            onboardingDone =
+              (await SecureStore.getItemAsync('setup_wizard_done')) === 'true' ||
+              (await SecureStore.getItemAsync('user_setupComplete')) === 'true' ||
+              getLocalBusinesses().length > 0;
+          } catch {
+            onboardingDone = false;
+          }
+          if (onboardingDone) {
+            target = '/user-signin';
+          } else {
+            // Signup-first onboarding: fresh installs pick a language, then
+            // create their account BEFORE the business setup wizard. Only an
+            // interrupted earlier run (no language yet, but not first-run)
+            // re-enters the wizard directly.
+            target = fromFirstRun ? '/language-select' : '/register';
+          }
         } else {
           // 2. Resume a mid-join pairing request BEFORE the sign-in/subscription
           // gates: the pairing request lives on the backend, so after a restart

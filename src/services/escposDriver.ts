@@ -45,7 +45,7 @@ export class TcpTransportMobile extends EventEmitter implements PrinterTransport
       throw new Error('TCP transport requires host and port');
     }
 
-    const TcpSocket = require('react-native-tcp-socket').TcpSocket;
+    const TcpSocket = require('react-native-tcp-socket');
     
     return new Promise((resolve, reject) => {
       this.socket = TcpSocket.createConnection(

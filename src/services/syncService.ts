@@ -1,46 +1,15 @@
 ﻿import * as Crypto from 'expo-crypto';
+import { changeChecksum, SHARED_SYNC_ENTITIES } from '@shega/shared';
 import { getDB } from '../database/db';
 import { bumpDataVersion } from './dataVersion';
 
 // Phase 3 offline-first sync client. Talks to the Shega Desktop hub
 // (HTTP JSON on port 5757) using the same payload format the hub expects.
 
-export const SYNC_ENTITIES = [
-  'businesses',
-  'categories',
-  'items',
-  'item_packs',
-  'sales',
-  'debt_payments',
-  'adjustments',
-  'returns',
-  'customers',
-  'locations',
-  'registers',
-  'business_roles',
-  'users',
-  'devices',
-  'stock_movements',
-  'audit_logs',
-  'suppliers',
-  'orders',
-  'order_items',
-  'order_history',
-  'shipments',
-  'shipment_items',
-  'shipment_history',
-  'employee_roles',
-  'employees',
-  'employee_accounts',
-  'attendance',
-  'employee_performance',
-  'subscriptions',
-  'subscription_payments',
-  'subscription_renewals',
-  'scheduled_reminders',
-  'notifications',
-  'contacts'
-] as const;
+// Authoritative relay entity list — single source of truth in @shega/shared
+// (sync/protocol.ts). Every device syncs against the same list so entities
+// can never drift between the mobile outbox and the desktop hub.
+export const SYNC_ENTITIES = SHARED_SYNC_ENTITIES;
 
 type SyncEntity = (typeof SYNC_ENTITIES)[number];
 
@@ -81,7 +50,7 @@ export interface SyncStatus {
 }
 
 // Â§24 Sync Center â€” unified synchronization status & diagnostics
-export type SyncTransport = 'lan' | 'offline';
+export type SyncTransport = 'lan' | 'cloud' | 'offline';
 export type SyncHealth = 'synced' | 'pending' | 'syncing' | 'error' | 'offline';
 
 export interface PendingChange {
@@ -101,8 +70,14 @@ export interface DeviceStatus {
   name: string;
   status: 'online' | 'offline' | 'unknown';
   last_seen_at: string | null;
+  last_sync_at: string | null;
   transport: SyncTransport;
   is_self: boolean;
+  model?: string | null;
+  platform?: 'mobile' | 'desktop' | null;
+  userId?: string | null;
+  role?: string | null;
+  userName?: string | null;
 }
 
 export interface SyncHistoryEntry {
@@ -185,6 +160,40 @@ export function setHubToken(token: string): void {
   db.runSync('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)', ['sync_hub_token', token.trim().toUpperCase()]);
 }
 
+/**
+ * Persist a paired hub/peer device in the local devices table.
+ * Called after successful pairing so the device appears in Connected Devices
+ * and can be used for auto-reconnect.
+ */
+export function persistPeerDevice(device: {
+  deviceId: string;
+  name?: string;
+  platform?: 'mobile' | 'desktop';
+  businessId?: string;
+  model?: string;
+}): void {
+  const db = getDB();
+  const bizId = device.businessId ?? resolveLocalBusinessId();
+  if (!bizId) {
+    console.warn('[sync] Cannot persist peer device: no active business');
+    return;
+  }
+  const now = new Date().toISOString();
+  const existing = db.getFirstSync('SELECT id FROM devices WHERE id = ? AND is_deleted = 0', [device.deviceId]) as any;
+  if (existing) {
+    db.runSync(
+      `UPDATE devices SET name = ?, platform = ?, status = 'active', model = ?, last_seen_at = ?, updated_at = ? WHERE id = ?`,
+      [device.name ?? device.deviceId.slice(0, 8), device.platform ?? 'desktop', device.model ?? null, now, now, device.deviceId]
+    );
+  } else {
+    db.runSync(
+      `INSERT INTO devices (id, business_id, user_id, name, model, platform, register_id, role, status, is_primary, created_at, updated_at, last_seen_at)
+       VALUES (?, ?, NULL, ?, ?, ?, NULL, NULL, 'active', 0, ?, ?, ?)`,
+      [device.deviceId, bizId, device.name ?? device.deviceId.slice(0, 8), device.model ?? null, device.platform ?? 'desktop', now, now, now]
+    );
+  }
+}
+
 export function getSyncStatus(): SyncStatus {
   const db = getDB();
   const cursor = db.getFirstSync('SELECT hub_seq, last_sync_at FROM sync_cursor WHERE id = 1') as any;
@@ -247,10 +256,35 @@ const HISTORY_COLUMN_BRIDGE: Record<string, [string, string]> = {
 };
 
 function bridgeHistoryColumns(entity: string, payload: Record<string, any>): Record<string, any> {
+  let out = { ...payload };
+  if (entity === 'users') {
+    if (out.business_id == null && out.businessId != null) out.business_id = out.businessId;
+    if (out.businessId == null && out.business_id != null) out.businessId = out.business_id;
+
+    if (out.is_active == null && out.isActive != null) out.is_active = out.isActive ? 1 : 0;
+    if (out.isActive == null && out.is_active != null) out.isActive = out.is_active ? 1 : 0;
+
+    if (out.is_owner == null && out.isOwner != null) out.is_owner = out.isOwner ? 1 : 0;
+    if (out.isOwner == null && out.is_owner != null) out.isOwner = out.is_owner ? 1 : 0;
+
+    if (out.pin_hash == null && out.pinHash != null) out.pin_hash = out.pinHash;
+    if (out.pinHash == null && out.pin_hash != null) out.pinHash = out.pin_hash;
+
+    if (out.pin_salt == null && out.pinSalt != null) out.pin_salt = out.pinSalt;
+    if (out.pinSalt == null && out.pin_salt != null) out.pinSalt = out.pin_salt;
+
+    if (out.recovery_hash == null && out.recoveryHash != null) out.recovery_hash = out.recoveryHash;
+    if (out.recoveryHash == null && out.recovery_hash != null) out.recoveryHash = out.recovery_hash;
+
+    if (out.recovery_salt == null && out.recoverySalt != null) out.recovery_salt = out.recoverySalt;
+    if (out.recoverySalt == null && out.recovery_salt != null) out.recoverySalt = out.recovery_salt;
+
+    if (out.role_name == null && out.roleName != null) out.role_name = out.roleName;
+    if (out.roleName == null && out.role_name != null) out.roleName = out.role_name;
+  }
   const bridge = HISTORY_COLUMN_BRIDGE[entity];
-  if (!bridge) return payload;
+  if (!bridge) return out;
   const [mobileCol, desktopCol] = bridge;
-  const out = { ...payload };
   if (out[mobileCol] == null && out[desktopCol] != null) out[mobileCol] = out[desktopCol];
   if (out[desktopCol] == null && out[mobileCol] != null) out[desktopCol] = out[mobileCol];
   return out;
@@ -425,7 +459,10 @@ export function applyChange(change: HubChange, force = false): void {
     return;
   }
 
-    const existing = db.getFirstSync(`SELECT * FROM ${entity} WHERE uuid = ?`, [change.entity_uuid]) as any;
+    const existing = db.getFirstSync(
+      `SELECT * FROM ${entity} WHERE uuid = ? OR id = ?`,
+      [change.entity_uuid, change.entity_uuid]
+    ) as any;
   if (entity === 'audit_logs' && existing) {
     // Append-only: dedupe an already-applied audit event; never rewrite a hashed row.
     return;
@@ -442,10 +479,15 @@ export function applyChange(change: HubChange, force = false): void {
     if (CORE_BUSINESS_SCOPED_ENTITIES.includes(entity)) {
       // Legacy peers relay the desktop INTEGER id (or nothing); mobile stores
       // the business UUID, so replace legacy/missing values with the operating
-      // business. Unknown UUIDs pass through untouched (isolated, not visible).
+      // business. Also map unknown peer UUIDs to the local business so data
+      // becomes visible in the active business scope.
       const rawBiz = insertData.businessId;
       if (rawBiz == null || /^[0-9]+$/.test(String(rawBiz))) {
         insertData.businessId = resolveLocalBusinessId();
+      } else {
+        const db = getDB();
+        const exists = db.getFirstSync('SELECT 1 FROM businesses WHERE id = ? AND is_deleted = 0', [rawBiz]);
+        if (!exists) insertData.businessId = resolveLocalBusinessId();
       }
     }
     if (BUSINESS_SCOPED_ENTITIES.includes(entity) && insertData.business_id == null) {
@@ -502,7 +544,7 @@ export function applyChange(change: HubChange, force = false): void {
     }
     const cols = columnsOf(entity).filter((c) => c in insertData);
     const placeholders = cols.map(() => '?').join(', ');
-    db.runSync(`INSERT INTO ${entity} (${cols.join(', ')}) VALUES (${placeholders})`, cols.map((c) => insertData[c]));
+    db.runSync(`INSERT OR REPLACE INTO ${entity} (${cols.join(', ')}) VALUES (${placeholders})`, cols.map((c) => insertData[c]));
     const inserted = db.getFirstSync(`SELECT id FROM ${entity} WHERE uuid = ?`, [change.entity_uuid]) as any;
     recordRef(change.device_id ?? getDeviceId(), entity, { id: inserted?.id, uuid: change.entity_uuid });
     pruneOutboxEchoes(entity, change.entity_uuid, outboxPreSeq);
@@ -545,14 +587,6 @@ export function applyChange(change: HubChange, force = false): void {
   bumpDataVersion();
 }
 
-function canonicalChange(c: { entity: string; entity_uuid: string; op: string; payload: Record<string, any> }): string {
-  return `${c.entity}|${c.entity_uuid}|${c.op}|${JSON.stringify(c.payload)}`;
-}
-
-async function changeChecksum(c: { entity: string; entity_uuid: string; op: string; payload: Record<string, any> }): Promise<string> {
-  return Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, canonicalChange(c));
-}
-
 /**
  * Build hub-format changes from the local outbox. For INSERT/UPDATE the full
  * current row is read by row_id; for DELETE a minimal tombstone is sent.
@@ -585,7 +619,7 @@ async function buildChangesFromOutbox(): Promise<{ changes: HubChange[]; seqs: n
       }
     }
     const change: HubChange = { entity, entity_uuid: row.entity_uuid, op: row.op, payload };
-    change.checksum = await changeChecksum(change);
+    change.checksum = changeChecksum(change);
     change.client_seq = row.seq;
     changes.push(change);
     seqs.push(row.seq);
@@ -672,6 +706,17 @@ export async function syncNow(): Promise<{ pushed: number; pulled: number; confl
     new Date().toISOString()
   ]);
 
+  // Persist the hub as a peer device so it appears in Connected Devices
+  // and we have its info for auto-reconnect.
+  if (pulled?.hub) {
+    persistPeerDevice({
+      deviceId: pulled.hub,
+      name: 'Shega Desktop Hub',
+      platform: 'desktop',
+      businessId: resolveLocalBusinessId() ?? undefined,
+    });
+  }
+
   return { pushed, pulled: changesIn.length, conflicts };
 }
 
@@ -686,10 +731,20 @@ export async function pairDevice(): Promise<any> {
   const hubUrl = getHubUrl();
   if (!hubUrl) throw new Error('Hub URL not configured');
   const deviceId = getDeviceId();
-  return httpJson(`${hubUrl}/sync/pair`, {
+  const res = await httpJson(`${hubUrl}/sync/pair`, {
     method: 'POST',
     body: JSON.stringify({ device_id: deviceId, name: 'Shega Mobile', platform: 'mobile', token: getHubToken() })
   });
+  // Persist the hub as a peer device after successful pairing
+  if (res?.hubId) {
+    persistPeerDevice({
+      deviceId: res.hubId,
+      name: 'Shega Desktop Hub',
+      platform: 'desktop',
+      businessId: resolveLocalBusinessId() ?? undefined,
+    });
+  }
+  return res;
 }
 
 // ============================================================================
@@ -730,15 +785,18 @@ export async function getUnifiedSyncStatus(): Promise<UnifiedSyncStatus> {
   // Determine overall health
   let health: SyncHealth = 'synced';
   if (outboxCount > 0 || failedCount > 0) health = 'pending';
-  if (!lanStatus.hub) health = 'offline';
+  const { getStoredToken } = await import('./api');
+  const hasCloudAuth = !!(await getStoredToken());
+  if (!lanStatus.hub && !hasCloudAuth) health = 'offline';
 
-  // Determine active transport
-  const transport: SyncTransport = lanStatus.hub ? 'lan' : 'offline';
+  // Resolve the active transport from real capabilities: LAN hub first; else
+  // cloud when the app is authenticated (§5-style cloud fallback); else offline.
+  const transport: SyncTransport = lanStatus.hub ? 'lan' : hasCloudAuth ? 'cloud' : 'offline';
 
   // 7-state machine (connecting/syncing are driven by caller state)
   let status: SyncDetailStatus;
-  if (!lanStatus.hub) status = 'offline';
-  else if (!hubReachable) status = 'sync-failed';
+  if (!lanStatus.hub && !hasCloudAuth) status = 'offline';
+  else if (lanStatus.hub && !hubReachable) status = 'sync-failed';
   else if (outboxCount > 0 || pendingInbound > 0) status = 'changes-pending';
   else if (failedCount > 0) status = 'sync-failed';
   else status = lanStatus.lastSyncAt ? 'synced' : 'connected';
@@ -796,28 +854,39 @@ export function getDeviceStatusList(): DeviceStatus[] {
   // Get roster devices from local database. `id` is the canonical device
   // identity (this install's own device row id === sync_meta.device_id).
   const roster = db.getAllSync(
-    `SELECT d.id as device_id, d.name, d.last_seen_at, d.status
+    `SELECT d.id as device_id, d.name, d.model, d.platform, d.status, d.last_seen_at, d.last_sync_at,
+            d.user_id, d.role AS device_role, u.name AS user_name, u.role AS user_role
      FROM devices d
-     WHERE d.is_active = 1`
+     LEFT JOIN users u ON u.id = d.user_id
+     WHERE d.is_deleted = 0`
   ) as any[];
 
   // Add self if not in roster
   const hasSelf = roster.some(d => d.device_id === selfId);
   if (!hasSelf) {
-    roster.push({ device_id: selfId, name: 'This Device', last_seen_at: new Date().toISOString(), status: 'active' });
+    roster.push({ device_id: selfId, name: 'This Device', model: null, platform: 'mobile',
+      status: 'active', last_seen_at: new Date().toISOString(), last_sync_at: null,
+      user_id: null, user_name: null, user_role: null });
   }
 
   const now = Date.now();
   return roster.map(d => {
     const lastSeen = d.last_seen_at ? new Date(d.last_seen_at).getTime() : 0;
     const isOnline = lastSeen > 0 && (now - lastSeen) < 5 * 60 * 1000; // 5 min threshold
+    const rawStatus = String(d.status ?? 'unknown').toLowerCase();
     return {
       device_id: d.device_id,
       name: d.name ?? d.device_id.slice(0, 8),
-      status: isOnline ? 'online' : d.status === 'active' ? 'offline' : 'unknown',
+      status: isOnline ? 'online' : rawStatus === 'active' || rawStatus === 'online' ? 'offline' : 'unknown',
       last_seen_at: d.last_seen_at ?? null,
+      last_sync_at: d.last_sync_at ?? null,
       transport: 'lan' as SyncTransport, // Would need cloud roster sync for cloud devices
       is_self: d.device_id === selfId,
+      model: d.model ?? null,
+      platform: d.platform === 'desktop' ? 'desktop' : 'mobile',
+      userId: d.user_id ?? null,
+      role: d.user_role ?? d.device_role ?? null,
+      userName: d.user_name ?? null,
     };
   });
 }
@@ -872,3 +941,132 @@ export function recordSyncHistory(entry: {
     ]
   );
 }
+
+// ─── Cloud relay sync (§20) ──────────────────────────────────────────────────
+
+function getCloudCursor(): number {
+  const db = getDB();
+  const row = db.getFirstSync("SELECT value FROM app_settings WHERE key = 'cloud_cursor'") as any;
+  return Number(row?.value ?? 0);
+}
+
+function setCloudCursor(seq: number): void {
+  const db = getDB();
+  db.runSync("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('cloud_cursor', ?)", [String(seq)]);
+}
+
+export interface CloudSyncSummary {
+  pushed: number;
+  pulled: number;
+  applied: number;
+  conflicts: number;
+  cursor: number;
+  reason?: string;
+}
+
+/**
+ * One-shot cloud relay sync: push the local outbox to Django, then pull
+ * other-branch changes since the cloud cursor and apply them with the same
+ * LWW/checksum path used for LAN. Never throws — returns a structured summary
+ * (a `reason` field explains why nothing happened: not authenticated, offline,
+ * or the documented backend gap).
+ */
+export async function syncViaCloud(): Promise<CloudSyncSummary> {
+  const { isCloudSyncReachable, cloudPushChanges, cloudPullChanges } = await import('./api');
+  const reachable = await isCloudSyncReachable();
+  if (!reachable.reachable) {
+    return { pushed: 0, pulled: 0, applied: 0, conflicts: 0, cursor: getCloudCursor(), reason: reachable.reason ?? 'unreachable' };
+  }
+
+  const deviceId = getDeviceId();
+  let pushed = 0;
+  let conflicts = 0;
+  try {
+    const { changes, seqs } = await buildChangesFromOutbox();
+    if (changes.length > 0) {
+      const pushRes = await cloudPushChanges(deviceId, changes as any);
+      if (!pushRes.ok) {
+        return { pushed: 0, pulled: 0, applied: 0, conflicts: 0, cursor: getCloudCursor(), reason: pushRes.error || 'push_failed' };
+      }
+      pushed = changes.length;
+      // The cloud accepts in bulk; prune what the relay acknowledged. Retry
+      // safety comes from the per-change checksum, so over-pruning is avoided
+      // by only dropping the seqs we just sent when the relay reported ok.
+      const accepted = Number(pushRes.accepted ?? changes.length);
+      if (accepted > 0) {
+        const db = getDB();
+        const drop = seqs.slice(0, accepted);
+        if (drop.length) {
+          db.runSync('DELETE FROM sync_outbox WHERE seq IN (' + drop.map(() => '?').join(',') + ')', drop);
+        }
+      }
+    }
+
+    const since = getCloudCursor();
+    const pulledRes = await cloudPullChanges(deviceId, since);
+    if (!pulledRes.ok) {
+      return { pushed, pulled: 0, applied: 0, conflicts, cursor: since, reason: pulledRes.error || 'pull_failed' };
+    }
+    const changesIn = (pulledRes.changes ?? []) as HubChange[];
+    let applied = 0;
+    if (changesIn.length > 0) {
+      const sorted = changesIn.slice().sort((a, b) => {
+        const ia = APPLY_ORDER.indexOf(a.entity as SyncEntity);
+        const ib = APPLY_ORDER.indexOf(b.entity as SyncEntity);
+        return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+      });
+      for (const change of sorted) {
+        try {
+          applyChange(change);
+          applied += 1;
+        } catch (e: any) {
+          console.warn('[cloud] apply failed', change.entity, change.entity_uuid, e?.message);
+        }
+      }
+    }
+    const lastSeq = Number(pulledRes.lastSeq ?? since);
+    setCloudCursor(lastSeq);
+    return { pushed, pulled: changesIn.length, applied, conflicts, cursor: lastSeq };
+  } catch (e: any) {
+    return { pushed, pulled: 0, applied: 0, conflicts, cursor: getCloudCursor(), reason: String(e?.message ?? e) };
+  }
+}
+
+// ============================================================================
+// Automatic Real-Time Outbox Watcher
+// ============================================================================
+
+let lastWatchedOutboxSeq = 0;
+let outboxWatchTimer: ReturnType<typeof setInterval> | null = null;
+
+export function notifyLocalDataChanged(): void {
+  bumpDataVersion();
+  // Trigger immediate real-time sync when local mutations occur
+  import('./wsSyncClient').then(({ wsSyncClient }) => {
+    if (wsSyncClient.isConnected) {
+      wsSyncClient.syncNow().catch(() => {});
+    }
+  });
+  import('./peerSyncManager').then(({ triggerSync }) => {
+    triggerSync().catch(() => {});
+  });
+  import('./mobileSyncServer').then(({ broadcastServerOutbox }) => {
+    try { broadcastServerOutbox(); } catch {}
+  });
+}
+
+export function startOutboxWatcher(): void {
+  if (outboxWatchTimer) return;
+  lastWatchedOutboxSeq = currentOutboxSeq();
+  outboxWatchTimer = setInterval(() => {
+    const current = currentOutboxSeq();
+    if (current > lastWatchedOutboxSeq) {
+      lastWatchedOutboxSeq = current;
+      console.log(`[Sync] Local outbox advanced (seq: ${current}), triggering automatic real-time sync`);
+      notifyLocalDataChanged();
+    }
+  }, 500);
+}
+
+// Auto-start watcher on load
+try { startOutboxWatcher(); } catch {}

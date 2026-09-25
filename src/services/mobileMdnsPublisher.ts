@@ -7,20 +7,20 @@
  *
  * This uses the same `_shega-pos._tcp` service type as the Desktop hub,
  * with a `platform=mobile` TXT record to distinguish them.
+ *
+ * Publishing now goes through the app-wide mobileMdnsRegistry: Android's NSD
+ * manager allows exactly ONE live service registration per app, so the hub ad
+ * and the pairing beacon (`_shega-pair._tcp`) must share a single slot. The
+ * pairing beacon preempts this hub ad while a pairing screen is open, and the
+ * registry re-publishes the hub automatically when the beacon stops.
  */
 
-// The library ships untyped JS (publishService/unpublishAll exist at runtime);
-// type as any so the real API surface is usable.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const ZeroconfMod: any = require('react-native-zeroconf');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const ZeroconfCtor: any = ZeroconfMod?.default ?? ZeroconfMod?.Zeroconf;
+import { PROTOCOL_VERSION } from '@shega/shared';
 import { getDeviceId } from './syncService';
-import { getMobileSyncPort } from './mobileSyncServer';
+import { getMobilePairingToken, getMobileSyncPort } from './mobileSyncServer';
+import { mdnsRegistry } from './mobileMdnsRegistry';
 
-let zeroconf: any | null = null;
-let isPublishing = false;
-let warnedUnavailable = false;
+let warnedMissing = false;
 
 function getCurrentBusinessId(): string | null {
   try {
@@ -43,59 +43,49 @@ function getCurrentBusinessId(): string | null {
 }
 
 /**
- * Publish this mobile device as a sync hub on the local network.
+ * Request this mobile device be advertised as a sync hub on the local network.
  * Other devices (mobile or desktop) will discover it via mDNS.
+ *
+ * Returns nothing (fire-and-forget); the registry serializes with the pairing
+ * beacon and logs the outcome. `getDiscoveryDiagnostics()` in the registry
+ * reports the live state.
  */
 export function publishMobileHub(): void {
-  if (isPublishing) return;
-
-  try {
-    if (!ZeroconfCtor) {
-      if (!warnedUnavailable) {
-        warnedUnavailable = true;
-        console.warn('[mDNS] Cannot publish mobile hub: react-native-zeroconf unavailable (native module missing — rebuild the dev client with `npx expo run:android`)');
-      }
-      return;
+  if (!mdnsRegistry.nativePresent) {
+    if (!warnedMissing) {
+      warnedMissing = true;
+      console.warn('[mDNS] Cannot publish mobile hub: react-native-zeroconf unavailable (native module missing — rebuild the dev client with `npx expo run:android`)');
     }
-    zeroconf = new ZeroconfCtor();
-    const deviceId = getDeviceId();
-    const port = getMobileSyncPort();
-    const businessId = getCurrentBusinessId();
-
-    zeroconf.publishService({
-      name: `Shega Mobile Hub (${deviceId.slice(0, 8)})`,
-      type: 'shega-pos',
-      protocol: 'tcp',
-      port,
-      txt: {
-        device_id: deviceId,
-        schema_version: '21',
-        port: String(port),
-        platform: 'mobile',
-        business_id: businessId || '',
-        capabilities: 'lan,sync,mobile',
-      },
-    });
-
-    isPublishing = true;
-    console.log(`[mDNS] Publishing mobile hub service on port ${port}`);
-  } catch (e: any) {
-    console.warn('[mDNS] Failed to publish mobile hub:', e?.message);
+    return;
   }
+  const deviceId = getDeviceId();
+  const port = getMobileSyncPort();
+  const businessId = getCurrentBusinessId();
+  void mdnsRegistry.publish({
+    kind: 'hub',
+    serviceType: 'shega-pos',
+    name: `Shega Mobile Hub (${deviceId.slice(0, 8)})`,
+    port,
+    txt: {
+      device_id: deviceId,
+      schema_version: String(PROTOCOL_VERSION),
+      port: String(port),
+      pairing_token: getMobilePairingToken(),
+      platform: 'mobile',
+      business_id: businessId || '',
+      capabilities: 'lan,sync,mobile',
+    },
+  });
 }
 
 /**
- * Stop publishing the mobile hub service.
+ * Stop advertising the mobile hub service. If a pairing beacon is currently
+ * live, its slot is left untouched — only the "wanted hub" flag is cleared.
  */
 export function unpublishMobileHub(): void {
-  if (zeroconf) {
-    try { zeroconf.unpublishAll(); } catch {}
-    zeroconf = null;
-  }
-  isPublishing = false;
-  console.log('[mDNS] Stopped publishing mobile hub');
+  void mdnsRegistry.unregister('hub');
 }
 
 export function isMobileHubPublished(): boolean {
-  return isPublishing;
+  return mdnsRegistry.isActive('hub');
 }

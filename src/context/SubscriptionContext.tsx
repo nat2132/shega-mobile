@@ -11,9 +11,7 @@ import {
   getSubscriptionPayments,
   getSubscriptionRenewals,
   getSubscriptionAuditLog,
-  syncServerSubscription,
-  rejectSubscription,
-  expireSubscription,
+  applyServerSubscriptionStatus,
   SubscriptionData,
 } from '@/database/db';
 import { fetchSubscriptionStatus, isRateLimited } from '@/services/api';
@@ -171,26 +169,20 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, []);
 
   // Best-effort reconciliation with the backend. The local DB is the source of
-  // truth (offline-first), but once an admin approves a pending payment we want
-  // the premium gate to flip immediately. Failures (no network, 401, 429) are
-  // swallowed so the app keeps working offline using local state.
+  // truth (offline-first), but the backend mirrors its canonical status
+  // (trial / pending_payment / payment_rejected / active / expired / none) once
+  // a payment is approved or rejected so the premium gate flips immediately.
+  // Failures (no network, 401, 429) are swallowed so the app keeps working
+  // offline using local state.
   const syncWithServer = useCallback(async () => {
     try {
       const serverStatus = await fetchSubscriptionStatus();
-      const serverState = (serverStatus?.status || '').toLowerCase();
-
-      if (serverState === 'active') {
-        syncServerSubscription({
-          plan: serverStatus.plan_name || serverStatus.plan || null,
-          status: 'active',
-          expiresAt: serverStatus.expires_at || null,
-        });
-      } else if (serverState === 'rejected') {
-        rejectSubscription();
-      } else if (serverState === 'expired') {
-        expireSubscription();
-      }
-      // 'pending' / 'none' leave local state untouched here.
+      applyServerSubscriptionStatus({
+        status: serverStatus.status,
+        plan: serverStatus.plan || null,
+        planName: serverStatus.plan_name || null,
+        expiresAt: serverStatus.expires_at || null,
+      });
       await refresh();
     } catch (error: any) {
       // Swallow offline / 401 / 429: keep relying on the local cache. We do
@@ -249,24 +241,27 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return BASIC_FEATURES.includes(feature);
   }, []);
 
+  // Access is not tiered: the plans differ by EDITION (Mobile / Desktop /
+  // Mobile + Desktop), not by capability, so an active or trial subscription
+  // unlocks every feature. Only the not-yet-paid states lock anything.
+  const LOCKED_STATUSES = ['expired', 'cancelled', 'rejected', 'pending_verification', 'pending_payment', 'payment_rejected'];
+
   const isFeatureLocked = useCallback((feature: string) => {
     if (!PREMIUM_FEATURES.includes(feature as any)) return false;
     if (!subscription) return true;
-    if (subscription.status === 'expired') return true;
-    if (subscription.status === 'cancelled') return true;
-    if (subscription.status === 'rejected') return true;
-    if (subscription.status === 'pending_verification') return true;
-    return subscription.plan !== 'premium';
+    return LOCKED_STATUSES.includes(subscription.status || '');
   }, [subscription]);
 
   const refreshTrialDays = useCallback(async () => {
     setTrialDaysRemaining(getTrialDaysRemaining());
   }, []);
 
-  const isPremium = subscription?.status === 'active' && subscription?.plan === 'premium';
   const isTrial = subscription?.status === 'trial';
+  // View-only: waiting on approval, rejected, cancelled, or lapsed. Sales and
+  // edit actions stay locked until the subscription is restored.
+  const isReadOnly = LOCKED_STATUSES.includes(subscription?.status || '');
+  const isPremium = !isReadOnly && (subscription?.status === 'active' || isTrial);
   const isExpired = subscription?.status === 'expired';
-  const isReadOnly = ['expired', 'cancelled', 'rejected'].includes(subscription?.status || '');
 
   const daysUntilExpiry = (() => {
     if (!subscription?.expiresAt) return 0;

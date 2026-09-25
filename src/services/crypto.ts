@@ -37,7 +37,7 @@ export async function verifyPinHash(pin: string): Promise<boolean> {
 
     // Backward compatibility: pre-hash PIN stored as plain text
     const plainPin = await SecureStore.getItemAsync(PIN_FLAG_KEY);
-    if (plainPin && plainPin.length === 4 && /^\d{4}$/.test(plainPin) && plainPin === pin) {
+    if (plainPin && plainPin.length >= 4 && plainPin.length <= 6 && /^\d{4,6}$/.test(plainPin) && plainPin === pin) {
       await storePinHash(pin);
       return true;
     }
@@ -46,6 +46,15 @@ export async function verifyPinHash(pin: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** True when a modern salted PIN hash (salt + hash) exists in SecureStore. */
+export async function hasHashedPin(): Promise<boolean> {
+  const [salt, hash] = await Promise.all([
+    SecureStore.getItemAsync(PIN_SALT_KEY),
+    SecureStore.getItemAsync(PIN_HASH_KEY),
+  ]);
+  return !!salt && !!hash;
 }
 
 export async function hasPinHash(): Promise<boolean> {

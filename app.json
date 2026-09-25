@@ -76,6 +76,7 @@
       "eas": {
         "projectId": "3c2ed669-c717-450f-a697-692503f950de"
       },
+      "apiUrl": "https://8b70-196-188-178-187.ngrok-free.app",
 "update": {
         "githubOwner": "nat2132",
         "githubRepo": "shega-mobile",

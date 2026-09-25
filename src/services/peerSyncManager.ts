@@ -24,6 +24,7 @@ import {
   getUnifiedSyncStatus,
 } from './syncService';
 import { mdnsDiscovery, startMdnsDiscovery, stopMdnsDiscovery } from './mdnsDiscovery';
+import { mobilePairingBeacon } from './mobilePairingBeacon';
 import {
   startMobileSyncServer,
   stopMobileSyncServer,
@@ -61,17 +62,19 @@ export interface PeerSyncState {
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
-const LAN_SYNC_INTERVAL_MS = 30_000;   // 30s
-const DISCOVERY_INTERVAL_MS = 15_000;    // 15s
+const LAN_SYNC_INTERVAL_MS = 5_000;    // 5s for fast real-time sync
+const DISCOVERY_INTERVAL_MS = 10_000;   // 10s for peer discovery
 
 // ─── State ──────────────────────────────────────────────────────────────────
 
 let currentMode: SyncMode = 'offline';
-let lanTimer: NodeJS.Timeout | null = null;
-let discoveryTimer: NodeJS.Timeout | null = null;
+let lanTimer: ReturnType<typeof setInterval> | null = null;
+let discoveryTimer: ReturnType<typeof setInterval> | null = null;
 let isRunning = false;
 let lastError: string | null = null;
 let autoConnectSince: number | null = null;
+let lanSyncInFlight = false;
+const peerSyncCleanup: Array<() => void> = [];
 
 // ─── Mode detection ─────────────────────────────────────────────────────────
 
@@ -99,13 +102,16 @@ function detectMode(): SyncMode {
 // ─── Sync cycle ─────────────────────────────────────────────────────────────
 
 /**
- * Perform one LAN sync cycle.
+ * Perform one LAN sync cycle (single-flight: overlapping triggers — e.g. an
+ * interval tick plus a discovery 'up' event — coalesce instead of racing).
  * Push local changes, pull remote changes from any connected hub.
  */
 async function performLanSync(): Promise<{ pushed: number; pulled: number; conflicts: number } | null> {
   const hubUrl = getHubUrl();
   if (!hubUrl) return null;
+  if (lanSyncInFlight) return null;
 
+  lanSyncInFlight = true;
   try {
     const result = await lanSyncNow();
     lastError = null;
@@ -122,9 +128,9 @@ async function performLanSync(): Promise<{ pushed: number; pulled: number; confl
         console.log('[PeerSync] Retrying with refreshed pairing token');
         try {
           setHubToken(peer.pairingToken);
-          const result = await lanSyncNow();
+          const result2 = await lanSyncNow();
           lastError = null;
-          return result;
+          return result2;
         } catch (e2: any) {
           lastError = e2?.message;
           console.warn('[PeerSync] LAN sync retry failed:', e2?.message);
@@ -132,6 +138,8 @@ async function performLanSync(): Promise<{ pushed: number; pulled: number; confl
       }
     }
     return null;
+  } finally {
+    lanSyncInFlight = false;
   }
 }
 
@@ -142,22 +150,45 @@ async function performLanSync(): Promise<{ pushed: number; pulled: number; confl
  * Runs periodically to handle peers joining/leaving the network.
  */
 async function performDiscoveryCycle(): Promise<void> {
-  const peers = mdnsDiscovery.getDiscoveredHubs();
+  let peers = mdnsDiscovery.getDiscoveredHubs();
   const hubUrl = getHubUrl();
 
-  // Auto-connect: if we discovered a hub on the LAN and have no hub configured
-  // yet, adopt it (Shega Hub on desktop publishes itself over mDNS with a
-  // pairing token). This is what makes sync work without manual setup.
-  if (peers.length > 0 && !hubUrl) {
+  // mDNS-blocked fallback: the pairing-beacon radar's LAN sweep (raw TCP
+  // DEVICE_HELLO probes, no multicast) also finds desktop owners. Adopt the
+  // first desktop-platform hit as the hub endpoint when mDNS saw nothing.
+  if (peers.length === 0) {
+    try {
+      const swept = mobilePairingBeacon.getNearbyOwners()
+        .filter(({ beacon }) => beacon.owner?.platform === 'desktop' && !!beacon.owner?.deviceId);
+      for (const { beacon, host } of swept) {
+        if (!host) continue;
+        peers = [{
+          deviceId: beacon.owner!.deviceId,
+          name: beacon.owner?.deviceName || 'Desktop Hub',
+          host,
+          addresses: [host],
+          port: 5757,
+          pairingToken: (beacon as any).pairingToken,
+        } as any];
+        console.log(`[PeerSync] mDNS silent — adopting LAN-swept desktop hub at ${host}:5757`);
+        break;
+      }
+    } catch { /* radar not open or no sweep yet */ }
+  }
+
+  // Auto-connect / Auto-upgrade: if we discovered a hub on the LAN, adopt or update to the direct LAN endpoint
+  if (peers.length > 0) {
     const peer = peers[0];
     const peerUrl = `http://${peer.addresses?.[0] || peer.host}:${peer.port}`;
-    console.log(`[PeerSync] Auto-connecting to discovered hub: ${peerUrl}`);
-    try {
-      setHubUrl(peerUrl);
-      if (peer.pairingToken) setHubToken(peer.pairingToken);
-      autoConnectSince = Date.now();
-    } catch (e: any) {
-      console.warn('[PeerSync] Auto-connect failed:', e?.message);
+    if (!hubUrl || (hubUrl !== peerUrl && peer.pairingToken)) {
+      console.log(`[PeerSync] Auto-connecting / upgrading to discovered LAN hub: ${peerUrl}`);
+      try {
+        setHubUrl(peerUrl);
+        if (peer.pairingToken) setHubToken(peer.pairingToken);
+        autoConnectSince = Date.now();
+      } catch (e: any) {
+        console.warn('[PeerSync] Auto-connect / upgrade failed:', e?.message);
+      }
     }
   }
 
@@ -194,6 +225,30 @@ export async function startPeerSyncManager(): Promise<void> {
   } catch (e: any) {
     console.warn('[PeerSync] mDNS discovery unavailable:', e?.message);
   }
+
+  // Event-driven triggers: a hub appearing/disappearing on the LAN is the
+  // strongest reconnect signal (device cames back online / network restored /
+  // network switched). React to it immediately instead of waiting up to
+  // 15s (discovery poll) to pick the hub back up.
+  const onHubUp = (hub: { deviceId: string }) => {
+    console.log(`[PeerSync] Hub appeared: ${hub.deviceId}`);
+    performDiscoveryCycle()
+      .then(() => {
+        const mode = detectMode();
+        if (mode === 'client' || mode === 'both') return performLanSync();
+        return null;
+      })
+      .catch((e: any) => console.warn('[PeerSync] hub-up cycle failed:', e?.message));
+  };
+  const onHubDown = (hub: { deviceId: string }) => {
+    console.log(`[PeerSync] Hub went away: ${hub.deviceId}`);
+    // mark offline; next periodic cycle / re-discovery will recover
+    currentMode = detectMode();
+  };
+  mdnsDiscovery.on('up', onHubUp);
+  mdnsDiscovery.on('down', onHubDown);
+  peerSyncCleanup.push(() => mdnsDiscovery.off('up', onHubUp));
+  peerSyncCleanup.push(() => mdnsDiscovery.off('down', onHubDown));
 
   // Detect initial mode
   currentMode = detectMode();
@@ -232,6 +287,8 @@ export async function startPeerSyncManager(): Promise<void> {
 export function stopPeerSyncManager(): void {
   if (lanTimer) { clearInterval(lanTimer); lanTimer = null; }
   if (discoveryTimer) { clearInterval(discoveryTimer); discoveryTimer = null; }
+
+  peerSyncCleanup.splice(0).forEach((fn) => fn());
 
   stopMobileSyncServer();
   unpublishMobileHub();

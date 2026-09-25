@@ -24,16 +24,14 @@ import { getAuthGlass } from './glass-auth';
 const { width } = Dimensions.get('window');
 
 const WEAK_PINS = new Set([
-  '0123', '1234', '2345', '3456', '4567', '5678', '6789',
-  '4321', '8765',
-  '2468', '1357',
+  '012345', '123456', '234567', '345678', '456789',
+  '654321', '987654', '111111', '000000',
 ]);
 
 const validatePin = (pin: string): string | null => {
-  if (pin.length !== 4) return 'PIN must be exactly 4 digits';
+  if (pin.length !== 6) return 'PIN must be exactly 6 digits';
   if (WEAK_PINS.has(pin)) return 'This PIN is too common. Please choose a stronger one.';
-  if (/^(\d)\1{3}$/.test(pin)) return 'Repeating digits are not allowed.';
-  if (/^(\d)\1{2}(\d)\2$/.test(pin)) return 'Pattern is too predictable.';
+  if (/^(\d)\1{5}$/.test(pin)) return 'Repeating digits are not allowed.';
   return null;
 };
 
@@ -48,7 +46,7 @@ const ResetPinScreen: React.FC<ResetPinScreenProps> = ({ onComplete }) => {
   const [confirmPin, setConfirmPin] = useState('');
   const [phase, setPhase] = useState<'create' | 'confirm'>('create');
   const [error, setError] = useState<string | null>(null);
-  const pinLength = 4;
+  const pinLength = 6;
 
   const shakeCreate = useSharedValue(0);
   const shakeConfirm = useSharedValue(0);
@@ -120,7 +118,7 @@ const ResetPinScreen: React.FC<ResetPinScreenProps> = ({ onComplete }) => {
           </AppText>
           <AppText style={[styles.subtitle, { color: G.fgSecondary }]} variant="body" weight="medium" numberOfLines={3}>
             {phase === 'create'
-              ? 'Enter a new 4-digit PIN'
+              ? 'Enter a new 6-digit PIN'
               : 'Re-enter your new PIN to confirm'}
           </AppText>
         </View>

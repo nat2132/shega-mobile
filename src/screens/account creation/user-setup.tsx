@@ -698,7 +698,7 @@ const ProfileSetupScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete 
                     <AppText style={[styles.prefTitle, { color: G.fg }]} variant="title" weight="bold" numberOfLines={2}>Sales Tax</AppText>
                   </View>
                   <AppText style={[styles.prefSub, { color: G.fgSecondary }]} variant="caption" weight="medium" numberOfLines={2}>
-                    Applied automatically to every sale — you won't be asked at checkout.
+                    Applied automatically to every sale — you won’t be asked at checkout.
                   </AppText>
                   <View style={[styles.taxChipRow, { backgroundColor: G.bgCard, borderColor: G.border }]}>
                     {(['VAT', 'TOT', 'Other', 'None'] as const).map((type) => (

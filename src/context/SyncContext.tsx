@@ -6,6 +6,8 @@ import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { startPeerSyncManager, stopPeerSyncManager, getPeerSyncState, type PeerSyncState } from '@/services/peerSyncManager';
 import { mobileP2pSync } from '@/services/p2p-sync-manager';
 import { wsSyncClient } from '@/services/wsSyncClient';
+import { subscribeConnectivityStatus, refreshConnectivityStatus } from '@/services/connectivity';
+import { useToast } from '@/context/ToastContext';
 import { getActiveBusiness } from '@/services/businessService';
 
 interface SyncContextValue {
@@ -14,7 +16,7 @@ interface SyncContextValue {
   peerSyncState: PeerSyncState | null;
   busy: boolean;
   lastError: string | null;
-  lastResult: { pushed: number; pulled: number; conflicts: number; transport?: 'lan' | null } | null;
+  lastResult: { pushed: number; pulled: number; conflicts: number; transport?: 'lan' | 'cloud' | null } | null;
   enabled: boolean;
   setEnabled: (v: boolean) => void;
   runSync: () => Promise<boolean>;
@@ -48,6 +50,7 @@ function writeEnabled(v: boolean): void {
 }
 
 export function SyncProvider({ children }: { children: React.ReactNode }) {
+  const { showToast } = useToast();
   const [status, setStatus] = useState<SyncStatus>(getSyncStatus);
   const [unifiedStatus, setUnifiedStatus] = useState<UnifiedSyncStatus | null>(null);
   const [peerSyncState, setPeerSyncState] = useState<PeerSyncState | null>(null);
@@ -177,9 +180,16 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         if (res?.lan) {
           result = { ...res.lan, transport: 'lan' };
         } else if (!getHubUrl()) {
-          // No hub configured and discovery found none — surface a real error
-          // instead of a silent no-op.
-          err = new Error('No sync hub found. Check that the desktop app is running on the same network.');
+          // No hub configured and discovery found none — try the cloud relay
+          // (§5 fallback): push/pull via Django when the app is authenticated
+          // and has internet, so a LAN-less device still converges.
+          const { syncViaCloud } = await import('@/services/syncService');
+          const cloud = await syncViaCloud();
+          if (cloud.reason) {
+            err = new Error('No sync hub found. Check that the desktop app is running on the same network.');
+          } else {
+            result = { pushed: cloud.pushed, pulled: cloud.pulled + cloud.applied, conflicts: cloud.conflicts, transport: 'cloud' };
+          }
         }
       } catch (e) {
         err = e;
@@ -230,6 +240,46 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       runSync();
     }, 2500);
   }, [enabled, runSync]);
+
+  // Reconnect triggers (2.4/3.4): when connectivity returns (network restored,
+  // Wi-Fi⇄cellular switch, device_hub returned), kick every transport
+  // immediately instead of waiting for the next WS backoff tick or periodic
+  // cycle. The WS client's own capped backoff also retries on the 15s loop, so
+  // this is a *faster resume* path, not the only retry.
+  useEffect(() => {
+    let wasOnline: boolean | null = null;
+    const unsub = subscribeConnectivityStatus((s) => {
+      const nowOnline = s === 'online';
+      const nowOffline = s === 'offline';
+      if (wasOnline === true && nowOffline) {
+        showToast({
+          title: 'No Internet Connection',
+          message: 'This feature requires an internet connection. Please connect to the internet and try again.',
+          type: 'warning',
+        });
+      } else if (wasOnline === false && nowOnline) {
+        showToast({
+          title: 'Internet Connection Restored',
+          message: 'You are back online.',
+          type: 'success',
+        });
+        if (enabled && !running.current) {
+          console.log('[SyncContext] Connectivity restored — retrying every transport');
+          wsSyncClient.retryNow();
+          try { mobileP2pSync.announce(); } catch {}
+          runSync();
+          refreshUnifiedStatus();
+        }
+      }
+      if (s === 'online' || s === 'offline') {
+        wasOnline = nowOnline;
+      }
+    });
+    refreshConnectivityStatus().then((s) => {
+      wasOnline = s === 'online';
+    });
+    return unsub;
+  }, [enabled, runSync, refreshUnifiedStatus, showToast]);
 
   const setEnabled = useCallback((v: boolean) => {
     writeEnabled(v);
@@ -318,6 +368,41 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     wsSyncClient.on('connected', onConnected);
     wsSyncClient.on('syncCompleted', onConnected);
 
+    // ── Connection & sync lifecycle notifications ──
+    // The user should always know which device connected, when sync starts/
+    // finishes, and when the connection drops — without opening Sync Center.
+    let wasConnected = false;
+    const notifyConnected = () => {
+      if (wasConnected) return; // dedupe reconnect flaps within one effect run
+      wasConnected = true;
+      showToast('Connected to your business hub — syncing now.', 'success');
+    };
+    const notifyDisconnected = () => {
+      if (!wasConnected) return;
+      wasConnected = false;
+      showToast('Connection lost — syncing paused. Reconnecting automatically…', 'info');
+    };
+    let syncStartShown = false;
+    const notifySyncStart = () => {
+      syncStartShown = true;
+      showToast('Sync started…', 'info');
+    };
+    const notifySyncDone = (res: any) => {
+      if (!syncStartShown) return; // only announce a finish we announced a start for
+      syncStartShown = false;
+      const n = (res?.pushed ?? 0) + (res?.pulled ?? 0);
+      showToast(n > 0 ? `Sync completed — ${n} change${n === 1 ? '' : 's'} applied.` : 'Sync completed — everything is up to date.', 'success');
+    };
+    const notifySyncFailed = (err: any) => {
+      syncStartShown = false;
+      showToast(`Sync interrupted: ${String(err?.message || err || 'unknown error').slice(0, 80)}`, 'error');
+    };
+    wsSyncClient.on('connected', notifyConnected);
+    wsSyncClient.on('disconnected', notifyDisconnected);
+    wsSyncClient.on('syncStarted', notifySyncStart);
+    wsSyncClient.on('syncCompleted', notifySyncDone as any);
+    wsSyncClient.on('error', notifySyncFailed);
+
     wsSyncClient.connect({ hubUrl: wsHubUrl, hubToken: getHubToken(), deviceId: device.device_id })
       .catch((e) => console.warn('[SyncContext] WS connect failed:', e));
 
@@ -325,6 +410,11 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       wsSyncClient.off('dataChanged', onLive);
       wsSyncClient.off('connected', onConnected);
       wsSyncClient.off('syncCompleted', onConnected);
+      wsSyncClient.off('connected', notifyConnected);
+      wsSyncClient.off('disconnected', notifyDisconnected);
+      wsSyncClient.off('syncStarted', notifySyncStart);
+      wsSyncClient.off('syncCompleted', notifySyncDone as any);
+      wsSyncClient.off('error', notifySyncFailed);
       try { wsSyncClient.disconnect(); } catch {}
     };
   }, [enabled, hubUrlTick, refresh, refreshUnifiedStatus, runSync]);

@@ -14,7 +14,7 @@ import {
   SubscriptionStatusInfo,
   LicenseStatusInfo,
 } from '@/services/api';
-import { syncServerSubscription } from '@/database/db';
+import { applyServerSubscriptionStatus } from '@/database/db';
 import { assertInternetConnection, isOfflineError } from '@/services/connectivity';
 
 interface AccountContextState {
@@ -50,13 +50,15 @@ export const AccountProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       const sub = await fetchSubscriptionStatus();
       setSubscription(sub);
-      if (sub.status === 'active') {
-        syncServerSubscription({
-          plan: sub.plan_name || sub.plan || null,
-          status: sub.status,
-          expiresAt: sub.expires_at || null,
-        });
-      }
+      // Mirror the backend's canonical status (trial/pending_payment/
+      // payment_rejected/active/expired) into the local subscription row so
+      // the premium/read-only gates match the source of truth immediately.
+      applyServerSubscriptionStatus({
+        status: sub.status,
+        plan: sub.plan || null,
+        planName: sub.plan_name || null,
+        expiresAt: sub.expires_at || null,
+      });
     } catch (e) {
       console.error('[Account] Failed to fetch subscription status', e);
       setSubscription(null);

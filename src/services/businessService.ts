@@ -1,4 +1,5 @@
 import { getDB, getAppSetting } from '@/database/db';
+import { notifyLocalDataChanged } from './syncService';
 import {
   Business, User, Device, Register, Location, CustomRole,
   PermissionSet, BuiltinRoleKey, getBuiltinRole, DEFAULT_ROLE_SETS,
@@ -144,6 +145,62 @@ export function setActiveBusiness(businessId: string): void {
   db.runSync('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)', ['active_business_id', businessId]);
 }
 
+/** Update an existing business's metadata (name, logo, currency) and queue for sync. */
+export function updateBusiness(
+  businessId: string,
+  patch: {
+    name?: string;
+    logo?: string | null;
+    currency?: string;
+  }
+): Business {
+  const db = getDB();
+  const current = getBusiness(businessId);
+  if (!current) throw new Error('Business not found');
+
+  const name = patch.name?.trim() || current.name;
+  const now = new Date().toISOString();
+
+  db.runSync(
+    'UPDATE businesses SET name = ?, logo = COALESCE(?, logo), currency = COALESCE(?, currency), updated_at = ?, row_version = row_version + 1, is_synced = 0 WHERE id = ?',
+    [name, patch.logo ?? null, patch.currency ?? null, now, businessId]
+  );
+
+  notifyLocalDataChanged();
+  return getBusiness(businessId)!;
+}
+
+/** Soft-delete a business and switch to another business if it was active. */
+export function deleteBusiness(businessId: string): { ok: boolean; newActiveId?: string } {
+  const db = getDB();
+  const all = getBusinesses();
+  if (all.length <= 1) {
+    throw new Error('Cannot delete the only business. Create another business first.');
+  }
+
+  const target = getBusiness(businessId);
+  if (!target) throw new Error('Business not found.');
+
+  const now = new Date().toISOString();
+  db.runSync(
+    'UPDATE businesses SET is_deleted = 1, updated_at = ?, is_synced = 0, row_version = row_version + 1 WHERE id = ?',
+    [now, businessId]
+  );
+
+  let newActiveId: string | undefined = undefined;
+  const activeId = getAppSetting('active_business_id', null);
+  if (activeId === businessId) {
+    const remaining = getBusinesses();
+    if (remaining.length > 0) {
+      newActiveId = remaining[0].id;
+      setActiveBusiness(newActiveId);
+    }
+  }
+
+  notifyLocalDataChanged();
+  return { ok: true, newActiveId };
+}
+
 /**
  * Owner-only: set the business profile image (logo). The change rides the
  * normal sync outbox (businesses UPDATE trigger) so it reaches the desktop,
@@ -160,6 +217,7 @@ export function setBusinessLogo(businessId: string, logoUri: string | null): { o
     db.runSync('UPDATE businesses SET logo = ?, updated_at = ?, row_version = row_version + 1, is_synced = 0 WHERE id = ?', [
       logoUri, new Date().toISOString(), businessId,
     ]);
+    notifyLocalDataChanged();
     return { ok: true };
   } catch (e: any) {
     return { ok: false, error: e?.message || 'Could not save the business image.' };
@@ -361,7 +419,20 @@ export function ensureOwnerBusiness(businessName: string, ownerName: string): Bu
 
 export function getUsers(businessId: string): User[] {
   const db = getDB();
-  const rows = db.getAllSync('SELECT * FROM users WHERE business_id = ? AND is_deleted = 0 ORDER BY is_owner DESC, created_at', [businessId]);
+  let bizInt = String(businessId);
+  let bizUuid = String(businessId);
+  try {
+    const biz = db.getFirstSync('SELECT id, uuid FROM businesses WHERE uuid = ? OR CAST(id AS TEXT) = ? LIMIT 1', [businessId, businessId]) as any;
+    if (biz) {
+      bizInt = String(biz.id);
+      bizUuid = String(biz.uuid || biz.id);
+    }
+  } catch { /* ignore */ }
+
+  const rows = db.getAllSync(
+    'SELECT * FROM users WHERE (business_id = ? OR business_id = ? OR business_id = ?) AND is_deleted = 0 ORDER BY is_owner DESC, created_at',
+    [businessId, bizInt, bizUuid]
+  );
   return (rows as any[]).map(rowToUser);
 }
 
@@ -384,6 +455,7 @@ export interface AddUserInput {
   phone?: string;
   email?: string;
   username?: string;
+  avatar?: string;
   assignedRegisterId?: string;
   assignedLocationId?: string;
 }
@@ -394,13 +466,14 @@ export function addUser(input: AddUserInput, overrides?: Partial<Record<string, 
   const now = new Date().toISOString();
   const resolved = resolveRoleForBusiness(input.role, input.businessId);
   db.runSync(
-    `INSERT INTO users (id, business_id, name, phone, email, username, role, role_name, permissions, assigned_register_id, assigned_location_id, is_active, is_owner, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?)`,
+    `INSERT INTO users (id, business_id, name, phone, email, username, avatar, role, role_name, permissions, assigned_register_id, assigned_location_id, is_active, is_owner, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?)`,
     [userId, input.businessId, input.name.trim(), input.phone ?? null, input.email ?? null,
-     input.username ?? null,
+     input.username ?? null, input.avatar ?? null,
      input.role, resolved.name, JSON.stringify(resolved.permissions ?? {}),
      input.assignedRegisterId ?? null, input.assignedLocationId ?? null, now]
   );
+  notifyLocalDataChanged();
   return getUser(userId)!;
 }
 
@@ -414,6 +487,29 @@ export function updateUserAssignment(
     'UPDATE users SET assigned_register_id = ?, assigned_location_id = ?, updated_at = ? WHERE id = ?',
     [patch.registerId ?? null, patch.locationId ?? null, new Date().toISOString(), userId]
   );
+  notifyLocalDataChanged();
+}
+
+/** Update member user fields (name, phone, email, username, avatar). */
+export function updateUserMemberDetails(
+  userId: string,
+  patch: { name?: string; phone?: string; email?: string; username?: string; avatar?: string | null }
+): void {
+  const db = getDB();
+  const existing = getUser(userId);
+  if (!existing) return;
+  const name = patch.name !== undefined ? patch.name.trim() : existing.name;
+  const phone = patch.phone !== undefined ? patch.phone.trim() || null : (existing.phone ?? null);
+  const email = patch.email !== undefined ? patch.email.trim() || null : (existing.email ?? null);
+  const username = patch.username !== undefined ? patch.username.trim() || null : (existing.username ?? null);
+  const avatar = patch.avatar !== undefined ? patch.avatar : (existing.avatar ?? null);
+  const now = new Date().toISOString();
+
+  db.runSync(
+    'UPDATE users SET name = ?, phone = ?, email = ?, username = ?, avatar = ?, updated_at = ? WHERE id = ?',
+    [name, phone, email, username, avatar, now, userId]
+  );
+  notifyLocalDataChanged();
 }
 
 /** Persist the current user's profile image so activities can show it. */
@@ -423,6 +519,17 @@ export function setUserAvatar(avatarUri: string | null): void {
   const db = getDB();
   try {
     db.runSync('UPDATE users SET avatar = ?, updated_at = ? WHERE id = ?', [avatarUri, new Date().toISOString(), userId]);
+    notifyLocalDataChanged();
+  } catch {}
+}
+
+/** Persist a user's display name so activities and rosters show it. */
+export function setUserName(userId: string | null, name: string): void {
+  if (!userId) return;
+  const db = getDB();
+  try {
+    db.runSync('UPDATE users SET name = ?, updated_at = ? WHERE id = ?', [name.trim(), new Date().toISOString(), userId]);
+    notifyLocalDataChanged();
   } catch {}
 }
 
@@ -449,6 +556,7 @@ export function setUserUsername(userId: string, username: string | null): boolea
     if (duplicate) return false;
   }
   db.runSync('UPDATE users SET username = ?, updated_at = ? WHERE id = ?', [username ?? null, new Date().toISOString(), userId]);
+  notifyLocalDataChanged();
   return true;
 }
 
@@ -478,9 +586,6 @@ export function updateUserRole(userId: string, role: BuiltinRoleKey | string): v
   const db = getDB();
   const resolved = resolveRoleForBusiness(role, undefined);
   const permJson = resolved.permissions ? JSON.stringify(resolved.permissions) : null;
-  // Multi-owner model: granting the owner role makes the member an equal owner
-  // (is_owner = 1); revoking it removes the owner flag — but never demote the
-  // last active owner.
   const isOwnerRole = role === 'owner';
   const target = getUser(userId);
   if (target?.businessId && !isOwnerRole && !!target.isOwner) {
@@ -492,12 +597,14 @@ export function updateUserRole(userId: string, role: BuiltinRoleKey | string): v
     'UPDATE users SET role = ?, role_name = ?, is_owner = ?, permissions = COALESCE(?, permissions), updated_at = ? WHERE id = ?',
     [role, resolved.name, isOwnerRole ? 1 : 0, permJson, new Date().toISOString(), userId]
   );
+  notifyLocalDataChanged();
 }
 
 export function updateUserPermissions(userId: string, permissions: PermissionSet): void {
   const db = getDB();
   db.runSync('UPDATE users SET permissions = ?, updated_at = ? WHERE id = ?',
     [JSON.stringify(permissions), new Date().toISOString(), userId]);
+  notifyLocalDataChanged();
 }
 
 /**
@@ -521,7 +628,6 @@ function resolveRoleForBusiness(roleKey: string, businessId?: string): { name: s
 
 export function setUserActive(userId: string, active: boolean): void {
   const db = getDB();
-  // Never lock out the last active owner of a business.
   const target = getUser(userId);
   if (target?.businessId && !active && !!target.isOwner) {
     if (countActiveOwners(target.businessId, userId) === 0) {
@@ -529,15 +635,12 @@ export function setUserActive(userId: string, active: boolean): void {
     }
   }
   db.runSync('UPDATE users SET is_active = ?, updated_at = ? WHERE id = ?', [active ? 1 : 0, new Date().toISOString(), userId]);
+  notifyLocalDataChanged();
 }
 
 export function removeUser(userId: string): void {
-  // Preserve historical transactions; only deactivate the user's access and
-  // their devices (spec §31).
   const db = getDB();
   const target = getUser(userId);
-  // Ownership-sensitive: removing an owner (or any member while they are the
-  // last owner) requires explicit confirmation in the UI — enforced again here.
   if (target?.businessId && !!target.isOwner) {
     if (countActiveOwners(target.businessId, userId) === 0) {
       throw new Error('Cannot remove the last owner of this business. Promote another owner first.');
@@ -548,8 +651,9 @@ export function removeUser(userId: string): void {
     db.runSync('UPDATE users SET is_active = 0, updated_at = ? WHERE id = ?', [new Date().toISOString(), userId]);
     db.runSync('UPDATE devices SET user_id = NULL, status = ? WHERE user_id = ?', ['disabled', userId]);
     db.execSync('COMMIT');
+    notifyLocalDataChanged();
   } catch (e) {
-    db.execSync('ROLLBACK');
+    try { db.execSync('ROLLBACK'); } catch {}
     throw e;
   }
 }
@@ -576,10 +680,10 @@ export function transferOwnership(businessId: string, currentOwnerId: string, ne
   db.execSync('BEGIN');
   try {
     ensureOwner(newOwnerId);
-    db.runSync('UPDATE businesses SET owner_user_id = ?, updated_at = ? WHERE id = ?', [newOwnerId, new Date().toISOString(), businessId]);
     db.execSync('COMMIT');
+    notifyLocalDataChanged();
   } catch (e) {
-    db.execSync('ROLLBACK');
+    try { db.execSync('ROLLBACK'); } catch {}
     throw e;
   }
 }
@@ -916,6 +1020,21 @@ export function getUserPinHash(userId: string): string | null {
   if (!row?.pin_hash || !row?.pin_salt) return null;
   return `${row.pin_salt}:${row.pin_hash}`;
 }
+
+/**
+ * True when the user's stored PIN hash is the modern scrypt format
+ * (keyLen 64 → 128 hex chars, desktop-compatible). Modern PINs are always
+ * 6 digits. Legacy rows use the old mobile SHA-256 `salt:hash` (64 hex chars).
+ * Callers use this to avoid running an expensive scrypt mid-entry just to probe
+ * a legacy 4-digit PIN — scrypt blocks the JS thread and freezes the keypad.
+ */
+export function hasModernScryptPin(userId: string): boolean {
+  const stored = getUserPinHash(userId);
+  if (!stored) return false;
+  const [, expected] = stored.split(':');
+  return !!expected && expected.length === 128;
+}
+
 
 /** Verify a PIN against a specific user's stored hash. */
 export async function verifyUserPin(userId: string, pin: string): Promise<boolean> {

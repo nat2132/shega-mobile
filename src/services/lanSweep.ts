@@ -36,35 +36,89 @@ export interface LanSweepHit {
 
 const DESKTOP_HTTP_PORT = 5757;
 const MOBILE_PORT = 5759;
-const CONNECT_TIMEOUT_MS = 320;
+const CONNECT_TIMEOUT_MS = 250;
 const IDENTITY_TIMEOUT_MS = 800;
-const CONCURRENCY = 20;
-const CACHE_MS = 12_000;
+const CONCURRENCY = 128;
+const CACHE_MS = 2_000;
 const DISCOVERY_TTL_MS = 45_000;
 
 let cache: { at: number; items: LanSweepHit[] } = { at: 0, items: [] };
 let inflight: Promise<LanSweepHit[]> | null = null;
 
-/** This phone's IPv4 on the LAN, or null when the platform can't report it. */
+/** This phone's IPv4 on the LAN, or fallback subnets when the platform can't report it. */
 async function ownIPv4(): Promise<string | null> {
   try {
     const Network = require('expo-network');
     const ip = await Network?.getIpAddressAsync?.();
-    if (typeof ip === 'string' && /^\d+\.\d+\.\d+\.\d+$/.test(ip) && !ip.startsWith('127.')) return ip;
+    if (typeof ip === 'string' && /^\d+\.\d+\.\d+\.\d+$/.test(ip) && !ip.startsWith('127.') && ip !== '0.0.0.0') return ip;
   } catch { /* expo-network unavailable */ }
   return null;
 }
 
-function hostList(ip: string): string[] {
-  const parts = ip.split('.');
-  if (parts.length !== 4) return [];
-  const prefix = `${parts[0]}.${parts[1]}.${parts[2]}`;
-  const out: string[] = [];
-  for (let i = 1; i <= 254; i += 1) {
-    const host = `${prefix}.${i}`;
-    if (host !== ip) out.push(host);
+function hostList(ip: string | null): string[] {
+  const hosts = new Set<string>();
+
+  // PRIORITY 1: Hotspot & Router Gateways FIRST (< 15ms probe)
+  const priorityGateways = [
+    '192.168.43.1',  // Android Hotspot Gateway
+    '172.20.10.1',   // iOS Personal Hotspot Gateway
+    '192.168.137.1', // Windows Mobile Hotspot Gateway
+    '192.168.173.1', // Windows 11 Hotspot Gateway
+    '192.168.49.1',  // Wi-Fi Direct / P2P Gateway
+    '192.168.1.1',   // Standard Wi-Fi Router
+    '192.168.0.1',   // Standard Wi-Fi Router
+    '10.0.0.1',      // Generic Router
+    '192.168.2.1',   // macOS/Linux Sharing
+    '192.168.3.1',   // macOS/Linux Sharing
+  ];
+
+  if (ip && ip.split('.').length === 4) {
+    const parts = ip.split('.');
+    const prefix = `${parts[0]}.${parts[1]}.${parts[2]}`;
+    priorityGateways.unshift(`${prefix}.1`);
+    priorityGateways.unshift(`${prefix}.254`);
   }
-  return out;
+
+  for (const gw of priorityGateways) {
+    if (gw !== ip) hosts.add(gw);
+  }
+
+  const addSubnet = (prefix: string, skipIp?: string) => {
+    for (let i = 1; i <= 254; i += 1) {
+      const h = `${prefix}.${i}`;
+      if (h !== skipIp) hosts.add(h);
+    }
+  };
+
+  if (ip && ip.split('.').length === 4) {
+    const parts = ip.split('.');
+    const prefix = `${parts[0]}.${parts[1]}.${parts[2]}`;
+    addSubnet(prefix, ip);
+  }
+
+  // Mobile & Desktop Hotspot subnets
+  const hotspotSubnets = [
+    '192.168.43',  // Android Hotspot
+    '192.168.49',  // Android Wi-Fi Direct / P2P
+    '192.168.50',  // Android Hotspot variant
+    '192.168.100', // Android Hotspot variant
+    '192.168.225', // Android Hotspot variant
+    '172.20.10',   // iOS Personal Hotspot
+    '192.168.137', // Windows Mobile Hotspot
+    '192.168.173', // Windows 11 Mobile Hotspot variant
+    '192.168.2',   // macOS / Linux Internet Sharing
+    '192.168.3',   // macOS / Linux Internet Sharing
+    '10.0.0',      // Generic Hotspot / Router
+    '10.0.1',      // Generic Hotspot / Router
+    '192.168.1',
+    '192.168.0',
+  ];
+
+  for (const sub of hotspotSubnets) {
+    addSubnet(sub);
+  }
+
+  return [...hosts];
 }
 
 /** One-shot TCP exchange: connect, send, wait for the first matching line. */
@@ -114,15 +168,15 @@ function probe(
 }
 
 async function probeDesktop(host: string): Promise<LanSweepHit | null> {
-  const line = await probe(
-    host,
-    DESKTOP_HTTP_PORT,
-    (socket) => socket.write(`GET /sync/info HTTP/1.0\r\nHost: ${host}\r\nConnection: close\r\n\r\n`),
-    (l) => l.trim().startsWith('{'),
-  );
-  if (!line) return null;
   try {
-    const info = JSON.parse(line.trim());
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 1200);
+    const res = await fetch(`http://${host}:${DESKTOP_HTTP_PORT}/sync/info`, {
+      signal: controller.signal,
+    }).catch(() => null);
+    clearTimeout(timer);
+    if (!res || !res.ok) return null;
+    const info = await res.json().catch(() => null);
     if (!info?.hub) return null;
     return {
       deviceId: String(info.hub),
@@ -189,7 +243,6 @@ function toBeaconShape(hit: LanSweepHit) {
 
 async function runSweep(): Promise<LanSweepHit[]> {
   const ip = await ownIPv4();
-  if (!ip) return [];
   const hosts = hostList(ip);
   const out: LanSweepHit[] = [];
   for (let i = 0; i < hosts.length; i += CONCURRENCY) {
@@ -232,10 +285,26 @@ export async function sweepLanAsBeacons(): Promise<Array<{ beacon: any; host: st
   return hits.map(toBeaconShape);
 }
 
-/** True when this phone can even attempt a sweep (needs its own LAN address). */
+/** True when this phone can attempt a sweep. Always enabled to probe hotspot & Wi-Fi subnets. */
 export async function canSweepLan(): Promise<boolean> {
-  return !!(await ownIPv4());
+  return true;
 }
 
 export const LAN_SWEEP_SELF_NAME = getThisDeviceName();
 export const LAN_SWEEP_PLATFORM = Platform.OS;
+
+/**
+ * The LAN sweep is a presence probe only: it proves a device is on the LAN.
+ * When the swept device has no open invitation advertised, the JOINER still
+ * cannot join from that probe — so lanSweep carries invitCode: null and the
+ * discovery screens intentionally keep it out of the joinable list until the
+ * owner side has published an open invite (see setDiscoverable).
+ *
+ * Role tagging is informational. The swept device is a potential joiner/
+ * team target from the owner's perspective regardless of what beacon.role said.
+ * We tag it 'owner' here only because the beacon shape's `role` field is the
+ * device's self-declared party (owner of its own business, or joiner target).
+ * The owner-side radar re-tags by `beacon.role === 'team'` for display, and
+ * real join authorization comes from the invite code + the owner's approval,
+ * never from this field.
+ */

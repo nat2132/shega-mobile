@@ -1,7 +1,4 @@
-import {
-  File as ExpoFile,
-  Paths,
-} from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import Constants from 'expo-constants';
 import * as Sharing from 'expo-sharing';
 import { assertInternetConnection } from './connectivity';
@@ -58,10 +55,6 @@ function getExtra(): { githubOwner: string; githubRepo: string; includePrereleas
 }
 
 function parseVersion(tag: string): number[] {
-  // Normalize GitHub release tags that are sometimes uploaded as `v1.0.4` and
-  // sometimes as `v.1.0.5` (stray dot after the `v`). The old `^v` regex left
-  // `.1.0.5`, which parsed to `[0,1,0,5]` and made `1.0.4` look "newer" than
-  // `1.0.5` — silently hiding every update.
   const cleaned = tag.replace(/^v\.?/i, '').trim();
   return cleaned.split('.').map((n) => Number(n));
 }
@@ -149,51 +142,59 @@ export async function downloadApk(
   asset: GitHubAsset,
   onProgress: (progress: DownloadProgress) => void
 ): Promise<string> {
-  const dest = new ExpoFile(Paths.cache, asset.name);
-  log('Downloading to:', dest.uri);
+  const fileUri = `${FileSystem.cacheDirectory}${asset.name}`;
+  log('Downloading to:', fileUri);
 
   await assertInternetConnection();
 
-  const headers: Record<string, string> = {};
-  const { githubToken } = getExtra();
-  if (githubToken) {
-    headers.Authorization = `Bearer ${githubToken}`;
-  }
+  let lastTime = Date.now();
+  let lastBytes = 0;
 
-  const task = ExpoFile.createDownloadTask(
+  const downloadResumable = FileSystem.createDownloadResumable(
     asset.browser_download_url,
-    dest,
-    {
-      headers,
-      onProgress: (data: { bytesWritten: number; totalBytes: number }) => {
-        const totalBytes = data.totalBytes;
-        const bytesWritten = data.bytesWritten;
-        const percentage = totalBytes > 0 ? (bytesWritten / totalBytes) * 100 : 0;
-        onProgress({
-          bytesWritten,
-          totalBytes,
-          percentage,
-          speed: 0,
-          remainingMs: 0,
-        });
-      },
+    fileUri,
+    {},
+    (downloadProgress) => {
+      const bytesWritten = downloadProgress.totalBytesWritten;
+      const totalBytes = downloadProgress.totalBytesExpectedToWrite;
+      const now = Date.now();
+      const timeDiff = (now - lastTime) / 1000;
+
+      let speed = 0;
+      if (timeDiff >= 0.5) {
+        speed = (bytesWritten - lastBytes) / timeDiff;
+        lastTime = now;
+        lastBytes = bytesWritten;
+      }
+
+      const percentage = totalBytes > 0 ? (bytesWritten / totalBytes) * 100 : 0;
+      const remainingBytes = totalBytes - bytesWritten;
+      const remainingMs = speed > 0 ? (remainingBytes / speed) * 1000 : 0;
+
+      onProgress({
+        bytesWritten,
+        totalBytes,
+        percentage,
+        speed,
+        remainingMs,
+      });
     }
   );
 
-  const file = await task.downloadAsync();
-  if (!file) throw new Error('Download failed: no result returned');
-  log('Download complete:', file.uri);
-  return file.uri;
+  const result = await downloadResumable.downloadAsync();
+  if (!result || !result.uri) throw new Error('Download failed: no file returned');
+  log('Download complete:', result.uri);
+  return result.uri;
 }
 
 export async function verifyApk(uri: string): Promise<boolean> {
   try {
-    const file = new ExpoFile(uri);
-    if (!uri.endsWith('.apk')) {
-      log('File is not an APK');
+    const info = await FileSystem.getInfoAsync(uri);
+    if (!info.exists || uri.indexOf('.apk') === -1) {
+      log('File does not exist or is not an APK');
       return false;
     }
-    log('APK verified:', uri);
+    log('APK verified:', uri, 'size:', info.size);
     return true;
   } catch (err) {
     log('APK verification failed:', err);
@@ -226,16 +227,6 @@ async function storageSet(key: string, value: string): Promise<void> {
     const asyncStorage = require('@react-native-async-storage/async-storage');
     const s = asyncStorage.default ?? asyncStorage;
     await s.setItem(key, value);
-  } catch {
-    // silently fail
-  }
-}
-
-async function storageRemove(key: string): Promise<void> {
-  try {
-    const asyncStorage = require('@react-native-async-storage/async-storage');
-    const s = asyncStorage.default ?? asyncStorage;
-    await s.removeItem(key);
   } catch {
     // silently fail
   }

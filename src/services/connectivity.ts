@@ -18,6 +18,7 @@
 
 import { AppState } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import { mdnsRegistry } from './mobileMdnsRegistry';
 
 // Points app connectivity probes here. This is a standard reachability
 // endpoint (returns HTTP 204) that carries no app/business data and no secrets.
@@ -34,7 +35,7 @@ const ONLINE_TTL_MS = 120_000;
 const OFFLINE_TTL_MS = 30_000;
 
 export const OFFLINE_MESSAGE =
-  'Internet connection is required for this action. Please connect to the internet and try again.';
+  'This feature requires an internet connection. Please connect to the internet and try again.';
 
 let cache: { at: number; value: boolean } | null = null;
 let inflight: Promise<boolean> | null = null;
@@ -160,6 +161,12 @@ function setStatus(next: ConnectivityStatus) {
   if (next === status) return;
   status = next;
   listeners.forEach((l) => l(next));
+  if (next === 'online') {
+    // Connectivity restored — Android mDNS state can go stale across a network
+    // handover, so re-arm the shared registry (re-issue the browse and force a
+    // fresh registration of whatever is being advertised). Best-effort.
+    try { mdnsRegistry.reassert(); } catch { /* never block connectivity */ }
+  }
 }
 
 /** Re-probe connectivity (bypasses cache) and publish the resulting status. */
@@ -172,6 +179,10 @@ export async function refreshConnectivityStatus(): Promise<ConnectivityStatus> {
 
 export function getConnectivityStatus(): ConnectivityStatus {
   return status;
+}
+
+export function canSweepLan(): boolean {
+  return true;
 }
 
 export function subscribeConnectivityStatus(listener: (s: ConnectivityStatus) => void): () => void {

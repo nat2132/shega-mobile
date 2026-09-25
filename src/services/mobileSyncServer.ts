@@ -21,9 +21,44 @@ import { getDeviceId, currentOutboxSeq, pruneOutboxEchoes } from './syncService'
 import { validateInviteCode } from './invitationService';
 import { bumpDataVersion } from './dataVersion';
 import { getThisDeviceName } from './deviceIdentity';
+import { PROTOCOL_VERSION } from '@shega/shared';
+import { type PairingHandshakeAck } from '@shega/shared';
 import * as Crypto from 'expo-crypto';
 
 export const MOBILE_SYNC_PORT = 5759;
+
+// ─── Handshake-aware join responses ────────────────────────────────────────
+// The mobile hub mirrors the desktop path: join submit/status responses now
+// include a `handshake` field so the joiner's session tracker can mark the
+// connection established immediately instead of waiting for the owner's decision.
+
+function buildMobileHandshakeAck(rec: { requestId?: string | null; status?: string | null; business_id?: string | null } | null, joinerDeviceId?: string): PairingHandshakeAck {
+  const hubDeviceId = getDeviceId();
+  let businessId: string | null = null;
+  let businessName: string | null = null;
+  try {
+    if (rec?.business_id) businessId = String(rec.business_id);
+  } catch { /* cosmetic */ }
+  try {
+    if (businessId) {
+      const db = getDB();
+      const biz = db.getFirstSync('SELECT uuid, name FROM businesses WHERE uuid = ? OR id = ? LIMIT 1', [businessId, businessId]) as any;
+      businessName = biz?.name ?? null;
+    }
+  } catch { /* cosmetic */ }
+  return {
+    ok: true,
+    hubDeviceId,
+    hubName: getThisDeviceName(),
+    hubPlatform: 'mobile',
+    hubPort: MOBILE_SYNC_PORT,
+    businessId,
+    businessName,
+    status: (rec?.status ?? 'pending') as PairingHandshakeAck['status'],
+    requestId: rec?.requestId ?? null,
+    at: Date.now(),
+  };
+}
 
 interface TcpClient {
   socket: any;
@@ -31,11 +66,14 @@ interface TcpClient {
   paired: boolean;
   businessId: string | null;
   lastHeartbeat: number;
+  buffer?: string;
 }
+
+const joinWaiters = new Map<string, any>();
 
 // ─── Pairing token management ───────────────────────────────────────────────
 
-function getPairingToken(): string {
+export function getMobilePairingToken(): string {
   const db = getDB();
   const row = db.getFirstSync(
     "SELECT value FROM app_settings WHERE key = 'mobile_pairing_token'"
@@ -66,6 +104,30 @@ function getCurrentBusinessId(): string | null {
     "SELECT uuid FROM businesses WHERE is_deleted = 0 ORDER BY (is_default = 1) DESC, created_at LIMIT 1"
   ) as any;
   return fallback?.uuid ?? null;
+}
+
+/**
+ * Touch a device's last_seen_at (+ optional status flip) so Connected Devices
+ * shows live online/offline presence. Never blows away a 'pending' install
+ * unless an explicit status is requested, and never re-activates 'revoked'.
+ */
+function touchDevice(deviceId: string, opts: { status?: string } = {}): void {
+  const db = getDB();
+  const now = new Date().toISOString();
+  try {
+    if (opts.status) {
+      db.runSync(
+        `UPDATE devices SET last_seen_at = ?, status = CASE WHEN status = 'revoked' THEN status ELSE ? END, updated_at = ?
+         WHERE (id = ? OR uuid = ?) AND is_deleted = 0`,
+        [now, opts.status, now, deviceId, deviceId]
+      );
+    } else {
+      db.runSync(
+        "UPDATE devices SET last_seen_at = ?, updated_at = ? WHERE (id = ? OR uuid = ?) AND is_deleted = 0",
+        [now, now, deviceId, deviceId]
+      );
+    }
+  } catch { /* devices table may not exist yet */ }
 }
 
 // ─── Sync data helpers ──────────────────────────────────────────────────────
@@ -150,10 +212,16 @@ function snapshotSince(since: number): { changes: any[]; lastSeq: number; snapsh
     let payload: any = {};
     if (r.op === 'DELETE') {
       payload = { id: r.row_id ?? null, uuid: r.entity_uuid, deleted_at: new Date().toISOString() };
-    } else if (r.row_id != null) {
+    } else {
       try {
-        const row = db.getFirstSync(`SELECT * FROM ${r.entity} WHERE id = ?`, [r.row_id]) as any;
-        if (row) payload = row;
+        if (r.row_id != null) {
+          const row = db.getFirstSync(`SELECT * FROM ${r.entity} WHERE id = ?`, [r.row_id]) as any;
+          if (row) payload = row;
+        }
+        if (Object.keys(payload).length === 0 && r.entity_uuid) {
+          const rowByUuid = db.getFirstSync(`SELECT * FROM ${r.entity} WHERE uuid = ?`, [r.entity_uuid]) as any;
+          if (rowByUuid) payload = rowByUuid;
+        }
       } catch { /* table may not exist */ }
     }
     if (r.op !== 'DELETE' && Object.keys(payload).length === 0) continue;
@@ -313,8 +381,37 @@ function handleMessage(client: TcpClient, data: string): void {
       handleJoinDecide(client, msg);
       break;
 
+    case 'PERIPHERAL_REGISTER':
+    case 'PERIPHERAL_SCAN_REQUEST':
+    case 'PERIPHERAL_CAPTURE_REQUEST':
+    case 'PERIPHERAL_SCAN_RESULT':
+    case 'PERIPHERAL_CAPTURE_RESULT':
+    case 'PERIPHERAL_CANCEL':
+    case 'PERIPHERAL_ACK':
+    case 'PERIPHERAL_RESPONSE':
+    case 'PERIPHERAL_STATUS':
+      handlePeripheralMessage(client, msg);
+      break;
+
     default:
       sendError(client.socket, 'UNKNOWN_TYPE', `Unknown message type: ${msg.type}`);
+  }
+}
+
+function handlePeripheralMessage(senderClient: TcpClient, msg: any): void {
+  const targetDeviceId = msg.payload?.targetDeviceId;
+  if (targetDeviceId) {
+    for (const client of clients.values()) {
+      if (client.deviceId === targetDeviceId && client.socket) {
+        sendTo(client.socket, msg);
+        return;
+      }
+    }
+  }
+  for (const client of clients.values()) {
+    if (client.socket !== senderClient.socket && client.paired && client.socket) {
+      sendTo(client.socket, msg);
+    }
   }
 }
 
@@ -326,7 +423,7 @@ function handlePairRequest(client: TcpClient, msg: any): void {
   }
 
   // Verify pairing token — the token is REQUIRED (no more token-less pairing).
-  const hubToken = getPairingToken();
+  const hubToken = getMobilePairingToken();
   if (String(token ?? '').trim().toUpperCase() !== hubToken) {
     sendError(client.socket, 'PAIR_FAILED', token ? 'Invalid pairing token' : 'Pairing token required');
     return;
@@ -362,14 +459,15 @@ function handlePairRequest(client: TcpClient, msg: any): void {
   const db = getDB();
   db.runSync(
     `INSERT OR REPLACE INTO devices
-       (id, business_id, user_id, name, platform, status, is_active, uuid, created_at, updated_at)
-     VALUES (?, ?, NULL, ?, 'mobile', 'pending', 1, ?, ?, ?)`,
-    [device_id, bizId, name || device_id.slice(0, 8), device_id, new Date().toISOString(), new Date().toISOString()]
+       (id, business_id, user_id, name, platform, status, uuid, created_at, updated_at, last_seen_at)
+     VALUES (?, ?, NULL, ?, 'mobile', 'pending', ?, ?, ?, ?)`,
+    [device_id, bizId, name || device_id.slice(0, 8), device_id, new Date().toISOString(), new Date().toISOString(), new Date().toISOString()]
   );
 
   client.deviceId = device_id;
   client.paired = true;
   client.businessId = bizId;
+  touchDevice(device_id);
 
   sendTo(client.socket, {
     type: 'PAIR_RESPONSE',
@@ -377,11 +475,56 @@ function handlePairRequest(client: TcpClient, msg: any): void {
     payload: {
       success: true,
       hubId: getDeviceId(),
-      schemaVersion: 21,
+      schemaVersion: PROTOCOL_VERSION,
     },
   });
 
   console.log(`[MobileSync] Device paired: ${device_id} (${name || 'unknown'})`);
+}
+
+function broadcastChanges(originSocket: any, changes: Change[]): void {
+  if (!changes || !changes.length) return;
+  for (const client of clients.values()) {
+    if (client.socket === originSocket) continue;
+    if (client.paired && client.socket) {
+      sendTo(client.socket, {
+        type: 'SYNC_CHANGES',
+        payload: { changes, lastSeq: maxSeq() },
+      });
+    }
+  }
+}
+
+export function broadcastServerOutbox(): void {
+  if (!clients.size) return;
+  const db = getDB();
+  const outboxRows = db.getAllSync('SELECT * FROM sync_outbox ORDER BY seq ASC LIMIT 100') as any[];
+  if (!outboxRows.length) return;
+
+  const changes: any[] = [];
+  const devId = getDeviceId();
+  for (const r of outboxRows) {
+    let payload: any = {};
+    if (r.op === 'DELETE') {
+      payload = { id: r.row_id ?? null, uuid: r.entity_uuid, deleted_at: new Date().toISOString() };
+    } else if (r.row_id != null) {
+      const row = db.getFirstSync(`SELECT * FROM ${r.entity} WHERE id = ?`, [r.row_id]) as any;
+      if (row) payload = row;
+    }
+    if (r.op !== 'DELETE' && Object.keys(payload).length === 0) continue;
+    changes.push({ entity: r.entity, entity_uuid: r.entity_uuid, op: r.op, payload, device_id: payload.device_id ?? devId });
+  }
+
+  if (changes.length > 0) {
+    for (const client of clients.values()) {
+      if (client.paired && client.socket) {
+        sendTo(client.socket, {
+          type: 'SYNC_CHANGES',
+          payload: { changes, lastSeq: maxSeq() },
+        });
+      }
+    }
+  }
 }
 
 function handleSyncPush(client: TcpClient, msg: any): void {
@@ -402,6 +545,10 @@ function handleSyncPush(client: TcpClient, msg: any): void {
     requestId: msg.requestId,
     payload: { ...result, serverSeq: maxSeq() },
   });
+
+  if (changes.length > 0) {
+    broadcastChanges(client.socket, changes);
+  }
 }
 
 function handleSyncPull(client: TcpClient, msg: any): void {
@@ -440,6 +587,10 @@ function sendError(socket: any, code: string, message: string): void {
 // screen lists and decides them — all locally, all offline.
 
 const normalizeCode = (code: string) => String(code ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+// Predicate for the invite-code column used by the hub's device-request
+// lookups. Code is stored upper-cased/normalized via normalizeCode().
+const CODE_COND = "code = ?";
 
 /** Local `device_requests` rows for a business, newest decisions last. */
 function listLocalJoinRequests(businessId: string): any[] {
@@ -613,6 +764,7 @@ function handleJoinSubmit(client: TcpClient, msg: any): void {
   }
   client.paired = true; // joiners may poll status through this connection
   client.deviceId = p.joinerDeviceId;
+  joinWaiters.set(p.joinerDeviceId, client.socket);
   // Pre-configured in the owner's Add-Team radar: apply the assigned identity
   // and approve on arrival so the joiner lands straight in the business.
   const pre = preassignedJoins.get(p.joinerDeviceId);
@@ -629,37 +781,47 @@ function handleJoinSubmit(client: TcpClient, msg: any): void {
       try {
         const req = db.getFirstSync('SELECT * FROM device_requests WHERE id = ?', [requestId]) as any;
         db.runSync(
-          `INSERT OR REPLACE INTO devices (id, business_id, user_id, name, platform, status, is_active, uuid, created_at, updated_at)
-           VALUES (?, ?, NULL, ?, ?, 'active', 1, ?, ?, ?)`,
+          `INSERT OR REPLACE INTO devices (id, business_id, user_id, name, platform, status, uuid, created_at, updated_at, last_seen_at)
+           VALUES (?, ?, NULL, ?, ?, 'active', ?, ?, ?, ?)`,
           [p.joinerDeviceId, canonicalBizId, pre.name || p.joinerName || p.joinerDeviceId.slice(0, 8),
            p.platform === 'desktop' ? 'desktop' : 'mobile', p.joinerDeviceId,
-           new Date().toISOString(), new Date().toISOString()],
+           new Date().toISOString(), new Date().toISOString(), new Date().toISOString()],
         );
         void req;
       } catch { /* roster mirror is best-effort */ }
     } catch { /* fall back to the manual approval flow below */ }
-    sendTo(client.socket, { type: 'DEVICE_JOIN_ACK', requestId: msg.requestId, payload: { requestId, status: 'approved' } });
+    sendTo(client.socket, { type: 'DEVICE_JOIN_ACK', requestId: msg.requestId, payload: { requestId, status: 'approved', handshake: buildMobileHandshakeAck({ requestId, status: 'approved', business_id: canonicalBizId }) } });
     console.log(`[MobileSync] Device join auto-approved (pre-configured): ${p.joinerDeviceId}`);
     return;
   }
-  sendTo(client.socket, { type: 'DEVICE_JOIN_ACK', requestId: msg.requestId, payload: { requestId, status: 'pending' } });
+  sendTo(client.socket, { type: 'DEVICE_JOIN_ACK', requestId: msg.requestId, payload: { requestId, status: 'pending', handshake: buildMobileHandshakeAck({ requestId, status: 'pending', business_id: canonicalBizId }) } });
   console.log(`[MobileSync] Device join staged: ${p.joinerDeviceId} -> ${canonicalBizId}`);
 }
 
 function handleJoinStatus(client: TcpClient, msg: any): void {
   const { code, joinerDeviceId } = msg.payload || {};
-  if (!code || !joinerDeviceId) {
-    sendError(client.socket, 'DEVICE_JOIN_FAILED', 'code and joinerDeviceId required');
+  if (!joinerDeviceId) {
+    sendError(client.socket, 'DEVICE_JOIN_FAILED', 'joinerDeviceId required');
     return;
   }
+  joinWaiters.set(joinerDeviceId, client.socket);
   ensureJoinTables();
-  const n = normalizeCode(code);
   const db = getDB();
-  const row = db.getFirstSync(
-    `SELECT * FROM device_requests WHERE replace(replace(upper(coalesce(code,'')), '-', ''), ' ', '') = ?
-       AND joiner_device_id = ? ORDER BY created_at DESC LIMIT 1`,
-    [n, joinerDeviceId],
-  ) as any;
+  // Code-less admission lookup (radar-tap admission): the owner tapped the
+  // joiner on the radar and admitted by device id alone — there is no invite
+  // code the joiner typed, so the status poll keys purely on joiner_device_id.
+  const n = code ? normalizeCode(code) : null;
+  const row = (n
+    ? db.getFirstSync(
+        `SELECT * FROM device_requests WHERE ${CODE_COND} AND joiner_device_id = ?
+         ORDER BY created_at DESC LIMIT 1`,
+        [n, joinerDeviceId],
+      )
+    : db.getFirstSync(
+        `SELECT * FROM device_requests WHERE joiner_device_id = ?
+         ORDER BY created_at DESC LIMIT 1`,
+        [joinerDeviceId],
+      )) as any;
   const record = row ? {
     requestId: row.id, businessId: row.business_id, code: row.code,
     joinerDeviceId: row.joiner_device_id, joinerName: row.joiner_name,
@@ -673,7 +835,9 @@ function handleJoinStatus(client: TcpClient, msg: any): void {
   } : null;
   const payload: any = { record };
   // Approval grants the hub pairing credential in-band (same as desktop).
-  if (record && record.status === 'approved') payload.pairingToken = getPairingToken();
+  if (record && record.status === 'approved') payload.pairingToken = getMobilePairingToken();
+  // Explicit connection acknowledgement for the joiner's session tracker.
+  payload.handshake = buildMobileHandshakeAck(row);
   sendTo(client.socket, { type: 'DEVICE_JOIN_RESPONSE', requestId: msg.requestId, payload });
 }
 
@@ -720,39 +884,70 @@ function handleJoinDecide(client: TcpClient, msg: any): void {
     // Consume the invite + promote the device on this owner phone so both
     // sides' rosters agree. The joiner learns the outcome via STATUS polling.
     try { db.runSync("UPDATE invitations SET status = 'used' WHERE code = ?", [row.code]); } catch { /* best-effort */ }
+    const now = new Date().toISOString();
     try {
       db.runSync(
-        `INSERT OR REPLACE INTO devices (id, business_id, user_id, name, platform, status, is_active, uuid, created_at, updated_at)
-         VALUES (?, ?, NULL, ?, ?, 'active', 1, ?, ?, ?)`,
+        `INSERT OR REPLACE INTO devices (id, business_id, user_id, name, platform, status, uuid, created_at, updated_at, last_seen_at)
+         VALUES (?, ?, NULL, ?, ?, 'active', ?, ?, ?, ?)`,
         [row.joiner_device_id, row.business_id, row.joiner_name || row.joiner_device_id.slice(0, 8),
          row.platform === 'desktop' ? 'desktop' : 'mobile', row.joiner_device_id,
-         new Date().toISOString(), new Date().toISOString()],
+         now, now, now],
       );
     } catch { /* roster mirror is best-effort */ }
+    touchDevice(row.joiner_device_id);
   }
   const updated = db.getFirstSync('SELECT * FROM device_requests WHERE id = ?', [p.requestId]) as any;
+  const decisionPayload = {
+    record: {
+      requestId: updated.id,
+      businessId: updated.business_id,
+      code: updated.code,
+      joinerDeviceId: updated.joiner_device_id,
+      joinerName: updated.joiner_name,
+      joinerModel: updated.joiner_model,
+      joinerUser: updated.assigned_name || updated.joiner_user,
+      role: updated.role,
+      platform: updated.platform,
+      status: updated.status,
+      createdAt: updated.created_at,
+      decidedAt: updated.decided_at,
+      assignedName: updated.assigned_name ?? null,
+      assignedAvatar: updated.assigned_avatar ?? null,
+      assignedPermissions: updated.assigned_permissions ? safeParse(updated.assigned_permissions) : null,
+    },
+    pairingToken: p.decision === 'approved' ? getMobilePairingToken() : undefined,
+    handshake: buildMobileHandshakeAck(updated, row.joiner_device_id),
+  };
+
+  // 1. Send DECIDE response to Owner
   sendTo(client.socket, {
     type: 'DEVICE_JOIN_RESPONSE',
     requestId: msg.requestId,
-    payload: { record: { requestId: updated.id, businessId: updated.business_id, code: updated.code,
-      joinerDeviceId: updated.joiner_device_id, joinerName: updated.joiner_name,
-      joinerModel: updated.joiner_model, joinerUser: updated.assigned_name || updated.joiner_user,
-      role: updated.role, platform: updated.platform, status: updated.status,
-      createdAt: updated.created_at, decidedAt: updated.decided_at,
-      assignedName: updated.assigned_name ?? null,
-      assignedAvatar: updated.assigned_avatar ?? null,
-      assignedPermissions: updated.assigned_permissions ? safeParse(updated.assigned_permissions) : null } },
+    payload: decisionPayload,
   });
+
+  // 2. IMMEDIATELY PUSH decision to Joiner socket (if connected)
+  const joinerSocket = joinWaiters.get(row.joiner_device_id);
+  if (joinerSocket && joinerSocket !== client.socket) {
+    sendTo(joinerSocket, {
+      type: 'DEVICE_JOIN_RESPONSE',
+      payload: decisionPayload,
+    });
+    console.log(`[MobileSync] Pushed join decision '${p.decision}' directly to joiner socket: ${row.joiner_device_id}`);
+  }
+
   console.log(`[MobileSync] Device join ${p.decision}: ${row.joiner_device_id}`);
 }
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 
 export async function startMobileSyncServer(): Promise<boolean> {
+  // Already listening — stay on (keeps the module-level `server` consistent).
+  if (server) return true;
   // Try to use react-native-tcp-socket if available
   try {
-    const TcpServer = require('react-native-tcp-socket').TcpServer;
-    const server = TcpServer.createServer((socket: any) => {
+    const TcpServer = require('react-native-tcp-socket');
+    server = TcpServer.createServer((socket: any) => {
       const clientId = Crypto.randomUUID();
       const client: TcpClient = {
         socket,
@@ -764,31 +959,56 @@ export async function startMobileSyncServer(): Promise<boolean> {
       clients.set(clientId, client);
 
       socket.on('data', (data: any) => {
-        const text = data.toString('utf8');
-        // Handle multiple messages in one buffer (newline-delimited)
-        const messages = text.split('\n').filter(Boolean);
-        for (const msg of messages) {
-          handleMessage(client, msg);
+        const text = typeof data === 'string' ? data : data.toString('utf8');
+        client.buffer = (client.buffer || '') + text;
+        let idx: number;
+        while ((idx = client.buffer.indexOf('\n')) >= 0) {
+          const line = client.buffer.slice(0, idx).trim();
+          client.buffer = client.buffer.slice(idx + 1);
+          if (line) {
+            handleMessage(client, line);
+          }
         }
       });
 
       socket.on('close', () => {
+        const wasPaired = client.paired && client.deviceId;
         clients.delete(clientId);
+        if (wasPaired) touchDevice(client.deviceId, { status: 'offline' });
         console.log(`[MobileSync] Client disconnected: ${clientId}`);
       });
 
       socket.on('error', (err: any) => {
         console.warn(`[MobileSync] Client error: ${err.message}`);
+        const wasPaired = client.paired && client.deviceId;
         clients.delete(clientId);
+        if (wasPaired) touchDevice(client.deviceId, { status: 'offline' });
       });
 
       console.log(`[MobileSync] Client connected: ${clientId}`);
     });
 
-    server.listen(MOBILE_SYNC_PORT, '0.0.0.0');
-    console.log(`[MobileSync] Server listening on port ${MOBILE_SYNC_PORT}`);
+    await new Promise<void>((resolve, reject) => {
+      const onListening = () => {
+        server?.removeListener?.('error', onError);
+        resolve();
+      };
+      const onError = (error: any) => {
+        server?.removeListener?.('listening', onListening);
+        reject(error);
+      };
+      server.once?.('listening', onListening);
+      server.once?.('error', onError);
+      try {
+        server.listen(MOBILE_SYNC_PORT, '0.0.0.0');
+      } catch (error) {
+        onError(error);
+      }
+    });
+    console.log(`[Discovery] Mobile sync server started on 0.0.0.0:${MOBILE_SYNC_PORT}`);
     return true;
   } catch (e: any) {
+    server = null;
     console.warn('[MobileSync] TCP server not available:', e?.message);
     console.log('[MobileSync] Running in client-only mode (no LAN hosting)');
     return false;

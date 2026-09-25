@@ -37,17 +37,29 @@ import { router } from 'expo-router';
 import { AppText} from '@/components/ui';
 import { getSettingsGlass } from './glass-settings';
 import { useAccount } from '@/context/AccountContext';
-import { setUserAvatar } from '@/services/businessService';
+import { setUserAvatar, setUserName, getCurrentUserId, getUser, getActiveBusiness } from '@/services/businessService';
 import { SubscriptionStatusInfo } from '@/services/api';
 const EditProfileScreen = () => {
   const { userProfile, setUserProfile, t, colors } = useSettings();
   const { user: accountUser, subscription, isLoggedIn, logout } = useAccount();
   const G = getSettingsGlass(colors);
   const dialog = useDialog();
-  const [name, setName] = useState(userProfile.name);
-  const [businessName, setBusinessName] = useState(userProfile.businessName);
-  const [selectedAvatar, setSelectedAvatar] = useState(userProfile.avatarIndex);
-  const [customAvatarUri, setCustomAvatarUri] = useState<string | undefined>(userProfile.avatarUri);
+  const [name, setName] = useState(() => {
+    const uid = getCurrentUserId();
+    const u = uid ? getUser(uid) : undefined;
+    return u?.name?.trim() || userProfile.name;
+  });
+  const [businessName, setBusinessName] = useState(() => getActiveBusiness()?.name?.trim() || userProfile.businessName);
+  const [selectedAvatar, setSelectedAvatar] = useState(() => {
+    const uid = getCurrentUserId();
+    const u = uid ? getUser(uid) : undefined;
+    return u?.avatar ? -1 : (userProfile.avatarIndex >= 0 ? userProfile.avatarIndex : 0);
+  });
+  const [customAvatarUri, setCustomAvatarUri] = useState<string | undefined>(() => {
+    const uid = getCurrentUserId();
+    const u = uid ? getUser(uid) : undefined;
+    return u?.avatar || userProfile.avatarUri;
+  });
 
   const handleSave = async () => {
     setUserProfile({
@@ -57,6 +69,7 @@ const EditProfileScreen = () => {
       avatarUri: customAvatarUri,
     });
     // Persist to the users table so activity feeds across the app show it
+    setUserName(getCurrentUserId(), name);
     setUserAvatar(customAvatarUri ?? null);
     const ok = await dialog.confirm({
       title: t('common.success'),
@@ -86,11 +99,14 @@ const EditProfileScreen = () => {
       mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.7,
+      quality: 0.5,
+      base64: true,
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      setCustomAvatarUri(result.assets[0].uri);
+      const asset = result.assets[0];
+      const uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+      setCustomAvatarUri(uri);
       setSelectedAvatar(-1); // -1 indicates custom image is active
     }
   };
@@ -129,7 +145,7 @@ const EditProfileScreen = () => {
              <Camera size={16} color={G.bg} />
            </TouchableOpacity>
         </Animated.View>
-        <AppText variant="heading-lg" weight="bold" style={[styles.profileTitle, { color: G.fg }]} numberOfLines={2}>{userProfile.businessName || t('profile.elite_user')}</AppText>
+        <AppText variant="heading-lg" weight="bold" style={[styles.profileTitle, { color: G.fg }]} numberOfLines={2}>{businessName.trim() || name.trim() || t('profile.elite_user')}</AppText>
         <AppText variant="caption" weight="bold" style={[styles.profileSub, { color: G.fgSecondary }]} numberOfLines={1}>{t('profile.verified_identity')}</AppText>
       </View>
 
@@ -307,7 +323,7 @@ const EditProfileScreen = () => {
 
 function planLabel(s: SubscriptionStatusInfo | null, t: (k: string, p?: any) => string): string {
   if (!s || !s.status || s.status === 'none') return t('subscription.plan_none');
-  return s.plan_name || s.plan || t('subscription.plan_premium');
+  return s.plan_name || s.plan || t('subscription.plan_both');
 }
 
 function statusLabel(s: SubscriptionStatusInfo | null, t: (k: string, p?: any) => string): string {

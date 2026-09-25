@@ -65,7 +65,13 @@ export default function TabsLayout() {
       router.replace('/verify-pin');
       return;
     }
-  }, [isAuthenticated, navigationState?.key]);
+    if (cashierMode) {
+      const activeRouteName = navigationState?.routes?.[navigationState.index]?.name;
+      if (activeRouteName === 'dashboard' || activeRouteName === 'inventory' || activeRouteName === 'suppliers' || activeRouteName === 'summary') {
+        router.replace('/(tabs)/sales-hub');
+      }
+    }
+  }, [isAuthenticated, navigationState?.key, cashierMode]);
 
   useEffect(() => {
     if (!featureFlags.warehousesEnabled) {

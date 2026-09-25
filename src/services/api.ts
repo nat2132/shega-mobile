@@ -1,15 +1,19 @@
-// Central HTTP client + configuration for the Shega Django backend.
+// Central HTTP client + configuration for the Shega backend.
 //
-// NOTE: The backend base URL is intentionally a configurable placeholder.
-// Point API_BASE_URL at your deployed Django REST API (e.g.
-// https://api.yourdomain.com/api) before shipping.
+// The one backend serves Shega Mobile, Shega Desktop and Shega Admin, so an
+// account shares one subscription, one business id and one device allowance
+// across platforms. Its base URL is CONFIGURATION, never baked into call sites:
+//
+//   1. EXPO_PUBLIC_API_URL   (a `.env` file or the build environment)
+//   2. `extra.apiUrl` in app.json (the checked-in default for this build)
+//   3. the public testing endpoint below
+//
+// Point all three apps at the same value.
 
 import * as SecureStore from 'expo-secure-store';
+import type { ChangeEnvelope } from '@shega/shared';
 import { assertInternetConnection, isOfflineError, OfflineError, checkInternetConnection, OFFLINE_MESSAGE } from './connectivity';
 
-// Production base URL for the Shega Django backend deployed on Render.
-// Override via EXPO_PUBLIC_API_URL (e.g. for local development against a
-// local backend, set EXPO_PUBLIC_API_URL="http://10.0.2.2:8000").
 import Constants from 'expo-constants';
 
 const ENV_API_URL: string | undefined =
@@ -18,7 +22,7 @@ const ENV_API_URL: string | undefined =
 export const API_BASE_URL: string =
   process.env.EXPO_PUBLIC_API_URL ||
   ENV_API_URL ||
-  'https://shega-api-dah3.onrender.com';
+  'https://8b70-196-188-178-187.ngrok-free.app';
 
 const TOKEN_KEY = 'shega_access_token';
 const REFRESH_TOKEN_KEY = 'shega_refresh_token';
@@ -146,6 +150,9 @@ export interface Plan {
   duration_months: number;
   features?: string[];
   description?: string;
+  addon_mobile_price?: number;
+  addon_desktop_price?: number;
+  addon_business_price?: number;
 }
 
 export type PaymentStatus = 'pending' | 'approved' | 'rejected';
@@ -164,10 +171,48 @@ export interface PaymentInfo {
 export interface SubscriptionStatusInfo {
   plan?: string;
   plan_name?: string;
-  status: 'none' | 'pending' | 'active' | 'expired' | 'rejected';
+  status:
+    | 'none'
+    | 'trial'
+    | 'pending_payment'
+    | 'payment_rejected'
+    | 'pending'
+    | 'active'
+    | 'expired'
+    | 'rejected';
   expires_at?: string;
   started_at?: string;
   license_key?: string;
+  is_trial?: boolean;
+  days_remaining?: number;
+  trial_days_remaining?: number;
+  access?: 'full' | 'view_only';
+  devices?: {
+    mobile?: { allocated?: number; used?: number };
+    desktop?: { allocated?: number; used?: number };
+  };
+  businesses?: { allocated?: number; used?: number };
+  monthly?: {
+    base_price?: number;
+    additional_mobile_devices?: number;
+    additional_desktop_devices?: number;
+    additional_businesses?: number;
+    total?: number;
+  };
+  pending_payment?: {
+    payment_id?: number;
+    amount?: number;
+    payment_method?: string;
+    description?: string;
+    created_at?: string;
+  } | null;
+  last_payment?: {
+    payment_id?: number;
+    amount?: number;
+    status?: string;
+    reason?: string | null;
+    created_at?: string;
+  } | null;
 }
 
 export interface LicenseStatusInfo {
@@ -366,8 +411,12 @@ export const registerUser = (payload: {
   email: string;
   business_name: string;
   password: string;
+  password2?: string;
 }): Promise<{ token?: string; access?: string; refresh?: string; user?: AccountUser; id?: number; name?: string; email?: string; business_name?: string }> =>
-  request('/api/auth/register/', { method: 'POST', body: payload });
+  request('/api/auth/register/', {
+    method: 'POST',
+    body: { ...payload, password2: payload.password2 ?? payload.password },
+  });
 
 export const loginUser = (payload: {
   email: string;
@@ -421,8 +470,10 @@ export const fetchPlans = (): Promise<Plan[]> =>
 // ---------------------------------------------------------------------------
 
 export const createPayment = (payload: {
-  plan_id: number;
+  plan_id?: number;
   transaction_id: string;
+  payment_type?: 'subscription' | 'renewal' | 'additional_mobile_device' | 'additional_desktop_device' | 'additional_business';
+  quantity?: number;
 }): Promise<PaymentInfo> =>
   request<PaymentInfo>('/api/payments/create/', { method: 'POST', body: payload, auth: true });
 
@@ -445,6 +496,19 @@ export const fetchSubscriptionStatusCached = async (): Promise<SubscriptionStatu
   await writeStatusCache(SUB_STATUS_CACHE_KEY, fresh);
   return fresh;
 };
+
+/**
+ * Starts the 7-day free trial on the plan the user picks at signup. The
+ * backend creates the trial license (is_trial, caps from the plan) and is the
+ * source of truth; a second trial attempt is rejected with 409. Returns the
+ * same enriched payload as GET /api/subscription/status.
+ */
+export const startTrial = (payload: { plan_id: number }): Promise<SubscriptionStatusInfo> =>
+  request<SubscriptionStatusInfo>('/api/subscription/trial/', {
+    method: 'POST',
+    body: payload,
+    auth: true,
+  });
 
 // ---------------------------------------------------------------------------
 // License
@@ -473,7 +537,99 @@ export const verifyLicense = (payload: { license_key: string }): Promise<License
 // Device identity is sent in the body (push) / query (pull & status); the
 // backend derives the business tenant from the authenticated user and the
 // device from the identity — never from a client-supplied business id.
+//
+// Endpoints mirror the documented relay contract (`/api/sync/push`,
+// `/api/sync/pull`, `/api/sync/verify`). The Django backend for these is a
+// known gap (see SYNC_CONTRACT.md §7) — the client is contract-complete and
+// these functions return clean errors when the endpoint does not exist yet.
 // ---------------------------------------------------------------------------
+
+export interface CloudSyncPushResult {
+  ok: boolean;
+  accepted?: number;
+  last_remote_seq?: number;
+  error?: string;
+}
+
+/** Push a batch of ChangeEnvelopes to the relay. Empty changes are a no-op. */
+export async function cloudPushChanges(
+  deviceId: string,
+  changes: ChangeEnvelope[]
+): Promise<CloudSyncPushResult> {
+  if (!deviceId) return { ok: false, error: 'no_device_id' };
+  if (!changes.length) return { ok: true, accepted: 0, last_remote_seq: 0 };
+  try {
+    const res = await request<CloudSyncPushResult>('/api/sync/push', {
+      method: 'POST',
+      auth: true,
+      body: { device_id: deviceId, changes },
+    });
+    return res;
+  } catch (e) {
+    return { ok: false, error: apiErrorMessage(e) };
+  }
+}
+
+export interface CloudSyncPullResult {
+  ok: boolean;
+  changes?: ChangeEnvelope[];
+  lastSeq?: number;
+  forceResync?: boolean;
+  error?: string;
+}
+
+/** Pull other-branch changes newer than the given cloud cursor. */
+export async function cloudPullChanges(deviceId: string, since: number): Promise<CloudSyncPullResult> {
+  if (!deviceId) return { ok: false, error: 'no_device_id' };
+  try {
+    const qs = new URLSearchParams({ device: deviceId, since: String(since || 0) });
+    const res = await request<CloudSyncPullResult>(`/api/sync/pull?${qs.toString()}`, {
+      method: 'GET',
+      auth: true,
+    });
+    return res;
+  } catch (e) {
+    return { ok: false, error: apiErrorMessage(e) };
+  }
+}
+
+export interface CloudSyncVerifyResult {
+  ok: boolean;
+  tables?: Record<string, { count: number; checksum: string }>;
+  lastSeq?: number;
+  error?: string;
+}
+
+/** Drift check — relay-side per-table checksums to compare against local state. */
+export async function cloudVerify(deviceId: string): Promise<CloudSyncVerifyResult> {
+  if (!deviceId) return { ok: false, error: 'no_device_id' };
+  try {
+    const res = await request<CloudSyncVerifyResult>(`/api/sync/verify?device=${encodeURIComponent(deviceId)}`, {
+      method: 'GET',
+      auth: true,
+    });
+    return res;
+  } catch (e) {
+    return { ok: false, error: apiErrorMessage(e) };
+  }
+}
+
+/** Whether cloud sync is even possible right now: authenticated and online. */
+export async function isCloudSyncReachable(): Promise<{ reachable: boolean; reason?: string }> {
+  const token = await getStoredToken();
+  if (!token) return { reachable: false, reason: 'not_authenticated' };
+  try {
+    await assertInternetConnection({ force: true });
+    return { reachable: true };
+  } catch {
+    return { reachable: false, reason: 'offline' };
+  }
+}
+
+function apiErrorMessage(e: unknown): string {
+  const hint = handleApiError(e);
+  return hint.message;
+}
 
 // ---------------------------------------------------------------------------
 // Error handling helpers

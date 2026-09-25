@@ -10,6 +10,8 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import {
   Crown,
   Shield,
+  Smartphone,
+  Monitor,
   Check,
   X,
   Clock,
@@ -22,6 +24,7 @@ import {
   Star,
   ChevronRight,
   AlertTriangle,
+  Plus,
 } from 'lucide-react-native';
 import { useSettings } from '@/context/SettingsContext';
 import { useSubscription, PREMIUM_FEATURES, FEATURE_LABELS, PremiumFeature } from '@/context/SubscriptionContext';
@@ -33,7 +36,7 @@ import * as Haptics from 'expo-haptics';
 import { safeGoBack } from '@/services/navigation';
 import { fetchSubscriptionStatus } from '@/services/api';
 import { isOfflineError, OFFLINE_MESSAGE } from '@/services/connectivity';
-import { syncServerSubscription } from '@/database/db';
+import { applyServerSubscriptionStatus } from '@/database/db';
 import { useToast } from '@/context/ToastContext';
 
 const FEATURE_KEY_MAP: Record<string, string> = {
@@ -53,28 +56,40 @@ const FEATURE_KEY_MAP: Record<string, string> = {
   supplier_management: 'subscription.feature_supplier_management',
 };
 
-const PLANS = {
-  basic: {
-    nameKey: 'subscription.plan_basic',
-    icon: Shield,
+/**
+ * The canonical plan structure — an edition of Mobile / Desktop /
+ * Mobile + Desktop. Prices mirror the backend, which is the source of truth
+ * (4,500 · 7,500 · 10,000 ETB per month).
+ */
+const PLAN_EDITIONS = [
+  {
+    key: 'mobile' as const,
+    nameKey: 'subscription.plan_mobile',
+    icon: Smartphone,
     color: '#6366F1',
     gradient: ['#6366F1', '#4F46E5'] as const,
-    prices: [
-      { labelKey: 'subscription.month_1', months: 1, price: 1999 },
-      { labelKey: 'subscription.months_3', months: 3, price: 2499 },
-    ],
+    price: 4500,
+    featured: false,
   },
-  premium: {
-    nameKey: 'subscription.plan_premium',
+  {
+    key: 'desktop' as const,
+    nameKey: 'subscription.plan_desktop',
+    icon: Monitor,
+    color: '#0EA5E9',
+    gradient: ['#38BDF8', '#0284C7'] as const,
+    price: 7500,
+    featured: false,
+  },
+  {
+    key: 'both' as const,
+    nameKey: 'subscription.plan_both',
     icon: Crown,
     color: '#D4AF37',
     gradient: ['#F0D060', '#D4AF37', '#B8960C'] as const,
-    prices: [
-      { labelKey: 'subscription.month_1', months: 1, price: 2499 },
-      { labelKey: 'subscription.months_3', months: 3, price: 5499 },
-    ],
+    price: 10000,
+    featured: true,
   },
-};
+];
 
   const SubscriptionManageScreen: React.FC = () => {
   const { colors, t } = useSettings();
@@ -103,10 +118,11 @@ const PLANS = {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
       const sub = await fetchSubscriptionStatus();
-      if (sub.status === 'active') {
-        syncServerSubscription({
-          plan: sub.plan_name || sub.plan || null,
+      if (sub.status === 'active' || sub.status === 'trial') {
+        applyServerSubscriptionStatus({
           status: sub.status,
+          plan: sub.plan || null,
+          planName: sub.plan_name || null,
           expiresAt: sub.expires_at || null,
         });
         await refresh();
@@ -139,12 +155,26 @@ const PLANS = {
     expired: { labelKey: 'subscription.expired', color: colors.error },
     cancelled: { labelKey: 'subscription.cancelled', color: colors.textSecondary },
     rejected: { labelKey: 'subscription.rejected_status', color: colors.error },
+    payment_rejected: { labelKey: 'subscription.rejected_status', color: colors.error },
     renewing: { labelKey: 'subscription.renewing_status', color: colors.warning },
+    none: { labelKey: 'subscription.no_subscription', color: colors.textSecondary },
   };
 
   const status = subscription?.status || 'trial';
   const config = statusConfig[status] || { labelKey: status, color: colors.textSecondary };
-  const planName = subscription?.plan === 'premium' ? t('subscription.plan_premium') : t('subscription.plan_basic');
+  const rawPlan = subscription?.plan || '';
+  const normalizedPlan = rawPlan.toLowerCase();
+  const planName = normalizedPlan.includes('desktop') && normalizedPlan.includes('mobile')
+    ? t('subscription.plan_both')
+    : normalizedPlan.includes('premium')
+      ? t('subscription.plan_both')
+      : normalizedPlan.includes('desktop')
+        ? t('subscription.plan_desktop')
+        : normalizedPlan.includes('mobile') || normalizedPlan.includes('basic')
+          ? t('subscription.plan_mobile')
+          : rawPlan
+            ? rawPlan.replace(/\b\w/g, (c: string) => c.toUpperCase())
+            : t('common.na');
 
   const formatDate = (dateStr: string | null | undefined) => {
     if (!dateStr) return t('common.na');
@@ -184,7 +214,7 @@ const PLANS = {
           >
             <View style={styles.planHeader}>
               <View style={[styles.planIcon, { backgroundColor: isPremium || isTrial ? gold + '20' : '#6366F1' + '20' }]}>
-                {isPremium || isTrial ? <Crown size={24} color={gold} /> : <Shield size={24} color={PLANS.basic.color} />}
+                {isPremium || isTrial ? <Crown size={24} color={gold} /> : <Shield size={24} color={PLAN_EDITIONS[0].color} />}
               </View>
               <View style={{ flex: 1 }}>
                 <AppText variant="title" weight="bold" style={{ color: colors.text }}>
@@ -310,13 +340,31 @@ const PLANS = {
                    }}
                    activeOpacity={0.8}
                  >
-                   <RefreshCw size={18} color={gold} />
-                   <AppText variant="body" weight="bold" style={{ color: gold }}>
-                     {t('subscription.renew')}
-                   </AppText>
-                 </TouchableOpacity>
-               </Animated.View>
-             )}
+                    <RefreshCw size={18} color={gold} />
+                    <AppText variant="body" weight="bold" style={{ color: gold }}>
+                      {t('subscription.renew')}
+                    </AppText>
+                  </TouchableOpacity>
+                </Animated.View>
+              )}
+
+              {(isPremium || isTrial) && !isExpired && (
+                <Animated.View entering={FadeInDown.delay(250).duration(600)} style={styles.actionRow}>
+                  <TouchableOpacity
+                    style={[styles.renewButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      router.push('/subscription/addons');
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Plus size={18} color={gold} />
+                    <AppText variant="body" weight="bold" style={{ color: gold }}>
+                      {t('subscription.addons_manage')}
+                    </AppText>
+                  </TouchableOpacity>
+                </Animated.View>
+              )}
 
         {/* Pricing Cards */}
         {!isPremium && (
@@ -335,38 +383,35 @@ const PLANS = {
             {expandedSection === 'pricing' && (
               <View style={styles.pricingSection}>
                 <View style={styles.pricingRow}>
-                  {(['basic', 'premium'] as const).map((p) => {
-                    const pl = PLANS[p];
-                    const isP = p === 'premium';
+                  {PLAN_EDITIONS.map((plan) => {
+                    const Icon = plan.icon;
+                    const isP = plan.featured;
                     return (
-                      <View key={p} style={[styles.priceCard, { backgroundColor: colors.card, borderColor: isP ? gold : colors.border }]}>
+                      <View key={plan.key} style={[styles.priceCard, { backgroundColor: colors.card, borderColor: isP ? gold : colors.border }]}>
                         {isP && (
                           <View style={[styles.recommendedBadge, { backgroundColor: gold }]}>
                             <Star size={12} color="#FFF" />
                             <AppText variant="micro" weight="bold" style={{ color: '#FFF' }}>{t('subscription.popular')}</AppText>
                           </View>
                         )}
-                        <View style={[styles.priceCardIcon, { backgroundColor: isP ? gold + '20' : '#6366F1' + '20' }]}>
-                          {isP ? <Crown size={20} color={gold} /> : <Shield size={20} color={pl.color} />}
+                        <View style={[styles.priceCardIcon, { backgroundColor: (isP ? gold : plan.color) + '20' }]}>
+                          <Icon size={20} color={isP ? gold : plan.color} />
                         </View>
-                        <AppText variant="title-sm" weight="bold" style={{ color: colors.text }}>{t(pl.nameKey)}</AppText>
-                        {pl.prices.map((pr, idx) => (
-                          <TouchableOpacity
-                            key={idx}
-                            style={[styles.priceOption, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                            onPress={() => {
-                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                              router.push(`/subscription/payment?plan=${p}&durationMonths=${pr.months}&price=${pr.price}`);
-                            }}
-                          >
-                            <AppText variant="body-sm" weight="medium" style={{ color: colors.textSecondary }}>
-                              {t(pr.labelKey)}
-                            </AppText>
-                            <AppText variant="title" weight="black" style={{ color: colors.text }}>
-                              {pr.price.toLocaleString()} <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }}>{t('subscription.etb')}</AppText>
-                            </AppText>
-                          </TouchableOpacity>
-                        ))}
+                        <AppText variant="title-sm" weight="bold" style={{ color: colors.text }}>{t(plan.nameKey)}</AppText>
+                        <TouchableOpacity
+                          style={[styles.priceOption, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                          onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            router.push(`/subscription/payment?plan=${plan.key}&durationMonths=1&price=${plan.price}`);
+                          }}
+                        >
+                          <AppText variant="body-sm" weight="medium" style={{ color: colors.textSecondary }}>
+                            {t('subscription.month_1')}
+                          </AppText>
+                          <AppText variant="title" weight="black" style={{ color: colors.text }}>
+                            {plan.price.toLocaleString()} <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }}>{t('subscription.etb')}</AppText>
+                          </AppText>
+                        </TouchableOpacity>
                       </View>
                     );
                   })}
@@ -395,40 +440,49 @@ const PLANS = {
                 <AppText variant="caption" weight="bold" style={{ color: colors.textSecondary, flex: 1 }}>
                   {t('subscription.feature_label')}
                 </AppText>
-                <AppText variant="caption" weight="bold" style={{ color: PLANS.basic.color, width: 60, textAlign: 'center' }}>
-                  {t(PLANS.basic.nameKey)}
-                </AppText>
-                <AppText variant="caption" weight="bold" style={{ color: gold, width: 60, textAlign: 'center' }}>
-                  {t(PLANS.premium.nameKey)}
-                </AppText>
+                {PLAN_EDITIONS.map((plan) => (
+                  <AppText
+                    key={plan.key}
+                    variant="caption"
+                    weight="bold"
+                    style={{ color: plan.featured ? gold : plan.color, width: 48, textAlign: 'center' }}
+                  >
+                    {t(plan.nameKey)}
+                  </AppText>
+                ))}
               </View>
               <View style={styles.featureRow}>
                 <AppText variant="body-sm" weight="medium" style={{ color: colors.text, flex: 1 }}>{t('subscription.inventory_feature')}</AppText>
-                <Check size={16} color={colors.success} style={{ width: 60, alignSelf: 'center' }} />
-                <Check size={16} color={colors.success} style={{ width: 60, alignSelf: 'center' }} />
+                <Check size={16} color={colors.success} style={{ width: 48, alignSelf: 'center' }} />
+                <Check size={16} color={colors.success} style={{ width: 48, alignSelf: 'center' }} />
+                <Check size={16} color={colors.success} style={{ width: 48, alignSelf: 'center' }} />
               </View>
               <View style={styles.featureRow}>
                 <AppText variant="body-sm" weight="medium" style={{ color: colors.text, flex: 1 }}>{t('subscription.sales_feature')}</AppText>
-                <Check size={16} color={colors.success} style={{ width: 60, alignSelf: 'center' }} />
-                <Check size={16} color={colors.success} style={{ width: 60, alignSelf: 'center' }} />
+                <Check size={16} color={colors.success} style={{ width: 48, alignSelf: 'center' }} />
+                <Check size={16} color={colors.success} style={{ width: 48, alignSelf: 'center' }} />
+                <Check size={16} color={colors.success} style={{ width: 48, alignSelf: 'center' }} />
               </View>
               <View style={styles.featureRow}>
                 <AppText variant="body-sm" weight="medium" style={{ color: colors.text, flex: 1 }}>{t('subscription.contacts_feature')}</AppText>
-                <Check size={16} color={colors.success} style={{ width: 60, alignSelf: 'center' }} />
-                <Check size={16} color={colors.success} style={{ width: 60, alignSelf: 'center' }} />
+                <Check size={16} color={colors.success} style={{ width: 48, alignSelf: 'center' }} />
+                <Check size={16} color={colors.success} style={{ width: 48, alignSelf: 'center' }} />
+                <Check size={16} color={colors.success} style={{ width: 48, alignSelf: 'center' }} />
               </View>
               <View style={styles.featureRow}>
                 <AppText variant="body-sm" weight="medium" style={{ color: colors.text, flex: 1 }}>{t('subscription.stock_adjustments_feature')}</AppText>
-                <Check size={16} color={colors.success} style={{ width: 60, alignSelf: 'center' }} />
-                <Check size={16} color={colors.success} style={{ width: 60, alignSelf: 'center' }} />
+                <Check size={16} color={colors.success} style={{ width: 48, alignSelf: 'center' }} />
+                <Check size={16} color={colors.success} style={{ width: 48, alignSelf: 'center' }} />
+                <Check size={16} color={colors.success} style={{ width: 48, alignSelf: 'center' }} />
               </View>
               {PREMIUM_FEATURES.map((f) => (
                 <View key={f} style={styles.featureRow}>
                   <AppText variant="body-sm" weight="medium" style={{ color: colors.text, flex: 1 }}>
                     {t(FEATURE_KEY_MAP[f]) || FEATURE_LABELS[f as PremiumFeature]?.name || f}
                   </AppText>
-                  <X size={16} color={colors.error} style={{ width: 60, alignSelf: 'center' }} />
-                  <Check size={16} color={colors.success} style={{ width: 60, alignSelf: 'center' }} />
+                  <X size={16} color={colors.error} style={{ width: 48, alignSelf: 'center' }} />
+                  <Check size={16} color={colors.success} style={{ width: 48, alignSelf: 'center' }} />
+                  <Check size={16} color={colors.success} style={{ width: 48, alignSelf: 'center' }} />
                 </View>
               ))}
             </View>
@@ -665,6 +719,7 @@ const styles = StyleSheet.create({
   },
   pricingRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
   },
   priceCard: {

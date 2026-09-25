@@ -4,7 +4,7 @@ import LoginScreen from '../src/screens/account/login';
 export default function LoginRoute() {
   return (
     <LoginScreen
-      onCreateAccount={() => router.replace('/register' as any)}
+      onCreateAccount={() => router.replace('/register?from=onboarding' as any)}
       onSuccess={handlePostAuth}
     />
   );

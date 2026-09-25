@@ -10,7 +10,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
-import * as SecureStore from 'expo-secure-store';
 import { CheckCircle2, Loader2, PartyPopper, XCircle } from 'lucide-react-native';
 import { useSettings } from '@/context/SettingsContext';
 import { AppText } from '@/components/ui';
@@ -158,10 +157,9 @@ export default function InitialSyncScreen({ info }: { info: SetupReadyInfo }) {
           <TouchableOpacity
             style={[styles.primaryBtn, { backgroundColor: G.fg }]}
             onPress={() => {
-              // Joiners finish onboarding here — mark the setup wizard done so
-              // a later login isn't re-routed into the create-business wizard.
-              SecureStore.setItemAsync('setup_wizard_done', 'true').catch(() => {});
-              router.replace('/(tabs)/dashboard' as any);
+              // The approved joiner next sets their own photo + username + PIN
+              // (the owner gate) — dashboard entry happens on /join-setup.
+              router.replace({ pathname: '/join-setup', params: { role: info.role } } as any);
             }}
           >
             <AppText variant="body" weight="bold" style={{ color: G.bg }}>Go to Dashboard</AppText>
@@ -187,8 +185,7 @@ export default function InitialSyncScreen({ info }: { info: SetupReadyInfo }) {
           <TouchableOpacity
             style={[styles.primaryBtn, { backgroundColor: G.accentGlass, borderColor: G.border, borderWidth: 1, marginTop: 10 }]}
             onPress={() => {
-              SecureStore.setItemAsync('setup_wizard_done', 'true').catch(() => {});
-              router.replace('/(tabs)/dashboard' as any);
+              router.replace({ pathname: '/join-setup', params: { role: info.role } } as any);
             }}
           >
             <AppText variant="body" weight="bold" style={{ color: G.fg }}>Open Business Anyway</AppText>

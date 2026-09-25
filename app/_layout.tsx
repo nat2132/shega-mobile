@@ -127,6 +127,7 @@ function AppShell({ dbWarning }: { dbWarning?: string | null }) {
             <Stack.Screen name="subscription/status" options={{ animation: 'fade' }} />
             <Stack.Screen name="login" options={{ animation: 'fade' }} />
             <Stack.Screen name="register" options={{ animation: 'fade' }} />
+            <Stack.Screen name="business-center" options={{ animation: 'slide_from_right' }} />
           </Stack>
           <SidebarOverlay />
           <DeviceLockOverlay />

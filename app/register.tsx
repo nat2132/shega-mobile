@@ -1,14 +1,19 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import RegisterScreen from '../src/screens/account/register';
 import { safeBackOrFallback } from '../src/services/navigation';
 
 export default function RegisterRoute() {
+  const { from } = useLocalSearchParams<{ from?: string }>();
   return (
     <RegisterScreen
-      onBack={() => safeBackOrFallback('/setup-wizard')}
-      // Route new owners through the setup wizard, which asks whether they
-      // want to CREATE a business or JOIN an existing one — registration used
-      // to jump straight to subscription plans, skipping that choice.
+      // Back only makes sense when signup was reached from inside the wizard;
+      // in the signup-first flow there is no wizard behind us, so back exits
+      // safely to the start route instead.
+      onBack={() =>
+        from === 'onboarding'
+          ? safeBackOrFallback('/setup-wizard')
+          : router.replace('/' as never)
+      }
       onSuccess={handlePostRegister}
     />
   );
@@ -17,7 +22,8 @@ export default function RegisterRoute() {
 async function handlePostRegister() {
   const { resolveJoinResume } = await import('../src/services/postAuthRouter');
   const resumeRoute = await resolveJoinResume();
-  // A brand-new account has no businesses yet → the setup wizard's welcome
-  // stage offers Create business / Join existing / Scan QR.
-  router.replace((resumeRoute ?? '/setup-wizard') as never);
+  // Signup-first onboarding: account creation is the FIRST step, so a fresh
+  // account continues into the business setup wizard, which pre-fills the
+  // owner identity from the account and skips its welcome/choose-path stage.
+  router.replace((resumeRoute ?? '/setup-wizard?from=register') as never);
 }

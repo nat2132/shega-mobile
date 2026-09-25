@@ -1,9 +1,5 @@
 import { EventEmitter } from 'events';
-import { Platform } from 'react-native';
-// The library's CJS build exposes the class as exports.default; a named
-// ESM import resolves to undefined and `new` throws at runtime.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const Zeroconf: any = require('react-native-zeroconf').default;
+import { mdnsRegistry } from './mobileMdnsRegistry';
 
 export interface DiscoveredHub {
   deviceId: string;
@@ -24,12 +20,25 @@ type DiscoveryEventMap = {
   error: [Error];
 };
 
+/**
+ * Hub discovery (mobile side) for `_shega-pos._tcp`.
+ *
+ * All native NSD access is arbitrated by `mdnsRegistry`: Android allows ONE
+ * discovery listener per app, so this module requests the `shega-pos` browse
+ * (the app's default) and consumes events from the registry's single Zeroconf
+ * instance. The pairing radar may temporarily preempt the browse while it is
+ * open; the registry restores this one when the radar closes.
+ *
+ * mDNS is NOT the only discovery path — the pairing module also runs a TCP LAN
+ * sweep that works when multicast is blocked (Windows Firewall / AP isolation).
+ */
 class MobileMdnsDiscovery extends EventEmitter {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private zeroconf: any | null = null;
   private isScanning = false;
   private warnedUnavailable = false;
   private discoveredHubs = new Map<string, DiscoveredHub>();
+  /** Instance name → deviceId, so 'remove' events (name-only) can be matched. */
+  private nameToId = new Map<string, string>();
+  private unsubs: Array<() => void> = [];
 
   constructor() {
     super();
@@ -38,7 +47,7 @@ class MobileMdnsDiscovery extends EventEmitter {
   start(): void {
     if (this.isScanning) return;
 
-    if (!Zeroconf) {
+    if (!mdnsRegistry.nativePresent || !mdnsRegistry.getSnapshot().zcCreated) {
       if (!this.warnedUnavailable) {
         this.warnedUnavailable = true;
         console.warn('[mDNS] react-native-zeroconf unavailable (native module missing — rebuild the dev client with `npx expo run:android`)');
@@ -47,17 +56,21 @@ class MobileMdnsDiscovery extends EventEmitter {
       return;
     }
 
-    try {
-      this.zeroconf = new Zeroconf();
-    } catch (e: any) {
-      console.warn('[mDNS] Zeroconf unavailable:', e?.message);
-      this.zeroconf = null;
-      this.isScanning = true;
-      return;
-    }
-    this.zeroconf.on('resolved', (service: any) => {
-      const deviceId = service.txtRecord?.device_id;
+    this.attachListeners();
+    mdnsRegistry.browse('shega-pos');
+    this.isScanning = true;
+    console.log('[mDNS] Scanning for Shega POS hubs...');
+  }
+
+  private attachListeners(): void {
+    if (this.unsubs.length > 0) return;
+    this.unsubs.push(mdnsRegistry.on('resolved', (service: any) => {
+      const deviceId = service?.txtRecord?.device_id;
       if (!deviceId) return;
+      // Pairing beacons (`_shega-pair` and legacy shega-pos ads that carry a
+      // `beacon` payload) are NOT hubs — skip them here to keep this list clean.
+      if (service?.txtRecord?.beacon) return;
+      const svcName = service?.name || '';
 
       const hub: DiscoveredHub = {
         deviceId,
@@ -72,32 +85,32 @@ class MobileMdnsDiscovery extends EventEmitter {
         businessId: service.txtRecord?.business_id || undefined,
       };
 
+      if (svcName) this.nameToId.set(svcName, deviceId);
       this.discoveredHubs.set(deviceId, hub);
       console.log(`[mDNS] Discovered hub: ${deviceId} at ${service.host}:${service.port}`);
       this.emit('up', hub);
-    });
+    }));
 
-    this.zeroconf.on('remove', (service: any) => {
-      const deviceId = service.txtRecord?.device_id;
+    this.unsubs.push(mdnsRegistry.on('remove', (data: any) => {
+      // The library relays RNZeroconfServiceRemoved as a bare instance name;
+      // the registry normalizes it to { name } — accept both shapes.
+      const name: string = typeof data === 'string' ? data : data?.name;
+      if (!name) return;
+      const deviceId = this.nameToId.get(name);
       if (!deviceId) return;
-
+      this.nameToId.delete(name);
       const existing = this.discoveredHubs.get(deviceId);
       if (existing) {
         this.discoveredHubs.delete(deviceId);
         console.log(`[mDNS] Hub went down: ${deviceId}`);
         this.emit('down', existing);
       }
-    });
+    }));
 
-    this.zeroconf.on('error', (err: any) => {
+    this.unsubs.push(mdnsRegistry.on('error', (err: any) => {
       console.error('[mDNS] Zeroconf error:', err);
       this.emit('error', err as Error);
-    });
-
-    // Start scanning for _shega-pos._tcp.local.
-    this.zeroconf.scan('shega-pos', 'tcp');
-    this.isScanning = true;
-    console.log('[mDNS] Scanning for Shega POS hubs...');
+    }));
   }
 
   getDiscoveredHubs(): DiscoveredHub[] {
@@ -109,12 +122,13 @@ class MobileMdnsDiscovery extends EventEmitter {
   }
 
   stop(): void {
-    if (this.zeroconf) {
-      this.zeroconf.stop();
-      this.zeroconf = null;
+    for (const unsub of this.unsubs) {
+      try { unsub(); } catch { /* best-effort */ }
     }
+    this.unsubs = [];
     this.isScanning = false;
     this.discoveredHubs.clear();
+    this.nameToId.clear();
     console.log('[mDNS] Stopped scanning');
   }
 

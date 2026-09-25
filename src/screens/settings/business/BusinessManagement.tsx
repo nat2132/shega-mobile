@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet,
   TextInput, TouchableOpacity, View,
@@ -8,9 +8,8 @@ import * as Haptics from 'expo-haptics';
 import { AppText } from '@/components/ui';
 import { useSettings } from '@/context/SettingsContext';
 import { getSettingsGlass } from '../glass-settings';
-import {
-  useBusinessAuth,
-} from '@/hooks/useBusinessAuth';
+import { useBusinessAuth } from '@/hooks/useBusinessAuth';
+import { useDataChangedRefresh } from '@/hooks/useDataChangedRefresh';
 import {
   getUsers, getDevices, getRegisters, getLocations, getCustomRoles, getCustomRole,
   addUser, addDevice, addRegister, approveDevice,
@@ -311,16 +310,84 @@ function BusinessesPanel({ businesses, currentId, onSwitch, glass }: {
 
       {businesses.map((b) => {
         const active = b.id === currentId;
+        const handleLongPress = () => {
+          Alert.alert(
+            b.name,
+            'Manage this business',
+            [
+              { text: t('common.cancel'), style: 'cancel' },
+              {
+                text: 'Rename Business',
+                onPress: () => {
+                  Alert.prompt(
+                    'Rename Business',
+                    'Enter new business name:',
+                    [
+                      { text: t('common.cancel'), style: 'cancel' },
+                      {
+                        text: t('common.save'),
+                        onPress: (val?: string) => {
+                          if (val && val.trim()) {
+                            const { updateBusiness } = require('@/services/businessService');
+                            updateBusiness(b.id, { name: val.trim() });
+                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                          }
+                        },
+                      },
+                    ],
+                    'plain-text',
+                    b.name
+                  );
+                },
+              },
+              {
+                text: 'Delete Business',
+                style: 'destructive',
+                onPress: () => {
+                  Alert.alert(
+                    'Delete Business?',
+                    `Are you sure you want to delete "${b.name}"? This action soft-deletes the business and its local data.`,
+                    [
+                      { text: t('common.cancel'), style: 'cancel' },
+                      {
+                        text: t('common.delete'),
+                        style: 'destructive',
+                        onPress: () => {
+                          try {
+                            const { deleteBusiness } = require('@/services/businessService');
+                            const res = deleteBusiness(b.id);
+                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                            if (res.newActiveId) {
+                              onSwitch(res.newActiveId);
+                            }
+                          } catch (err: any) {
+                            Alert.alert('Cannot Delete', err?.message || 'Action failed.');
+                          }
+                        },
+                      },
+                    ]
+                  );
+                },
+              },
+            ]
+          );
+        };
+
         return (
-          <TouchableOpacity key={b.id} disabled={active} onPress={() => { Haptics.selectionAsync(); onSwitch(b.id); }}
-            style={[styles.listCard, { backgroundColor: glass.bgCard, borderColor: active ? glass.accent : glass.border }]}>
+          <TouchableOpacity
+            key={b.id}
+            disabled={active}
+            onPress={() => { Haptics.selectionAsync(); onSwitch(b.id); }}
+            onLongPress={handleLongPress}
+            style={[styles.listCard, { backgroundColor: glass.bgCard, borderColor: active ? glass.accent : glass.border }]}
+          >
             <View style={[styles.avatar, { backgroundColor: active ? glass.accentGlass : glass.accentGlass }]}>
               <Building2 size={18} color={glass.fg} />
             </View>
             <View style={{ flex: 1 }}>
               <AppText variant="body" weight="bold" style={{ color: glass.fg }}>{b.name}{b.is_default ? '  ★' : ''}</AppText>
               <AppText variant="caption" weight="medium" style={{ color: glass.muted }}>
-                {b.currency || 'ETB'}{active ? t('business.active_suffix') : ''}
+                {b.currency || 'ETB'}{active ? t('business.active_suffix') : ''} · Hold for options
               </AppText>
             </View>
             {active && <Check size={18} color={glass.accent} />}
@@ -898,19 +965,18 @@ function InviteModal({ businessId, canAdd, activeCount, onClose, glass }: {
                 glass={glass}
                 compact
                 deviceName={getThisDeviceName()}
-                tone={nearbyTeam.filter((d) => d.role === 'team').length > 0 ? 'found' : 'searching'}
+                tone={nearbyTeam.length > 0 ? 'found' : 'searching'}
                 status={
-                  nearbyTeam.filter((d) => d.role === 'team').length > 0
-                    ? `${nearbyTeam.filter((d) => d.role === 'team').length} device(s) waiting`
-                    : 'Waiting for connection…'
+                  nearbyTeam.length > 0
+                    ? `${nearbyTeam.length} device(s) found`
+                    : 'Searching for nearby devices…'
                 }
                 peers={nearbyTeam
-                  .filter((d) => d.role === 'team')
                   .map((d) => ({
                     id: d.deviceId,
                     name: d.deviceName,
                     platform: d.platform,
-                    detail: 'Waiting to join · tap to add',
+                    detail: d.role === 'team' ? 'Waiting to join · tap to add' : 'Visible · tap to add',
                   }))}
                 onPickPeer={(p) => {
                   preassignJoinIdentity(p.id, { name: name.trim() || undefined, role });
@@ -947,7 +1013,7 @@ function InviteModal({ businessId, canAdd, activeCount, onClose, glass }: {
               {nearbyTeam.length > 0 && (
                 <View style={{ marginTop: 6 }}>
                   <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: glass.muted }}>
-                    Nearby devices waiting to join ({nearbyTeam.length})
+                    Nearby devices ({nearbyTeam.length})
                   </AppText>
                   {nearbyTeam.map((d, i) => (
                     <View key={`${d.deviceName}-${i}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, borderBottomWidth: i < nearbyTeam.length - 1 ? 1 : 0, borderBottomColor: glass.border }}>
@@ -990,12 +1056,16 @@ function InviteModal({ businessId, canAdd, activeCount, onClose, glass }: {
 
 function JoinRequestsSection({ businessId, people, glass }: { businessId: string; people: any[]; glass: any }) {
   const { t } = useSettings();
+  const { showToast } = useToast();
   const [requests, setRequests] = useState<any[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [configuring, setConfiguring] = useState<{ request: any } | null>(null);
 
+  const seenRequestsRef = useRef<Set<string>>(new Set());
+
   const refresh = useCallback(async () => {
+    let pendingList: any[] = [];
     // When this phone IS the hub (no WS connection to another hub), read the
     // join requests staged locally by our own TCP join channel.
     if (!wsSyncClient.isConnected) {
@@ -1006,7 +1076,11 @@ function JoinRequestsSection({ businessId, people, glass }: { businessId: string
            ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, created_at DESC LIMIT 100`,
           [businessId],
         ) as any[];
-        setRequests(rows.filter((r) => r.status === 'pending').map((r) => ({
+        const activeDevs = new Set(
+          (db.getAllSync("SELECT id, uuid FROM devices WHERE status = 'active' AND is_deleted = 0") as any[])
+            .map((d) => d.id || d.uuid)
+        );
+        pendingList = rows.filter((r) => r.status === 'pending' && !activeDevs.has(r.joiner_device_id)).map((r) => ({
           requestId: r.id,
           businessId: r.business_id,
           code: r.code,
@@ -1017,19 +1091,37 @@ function JoinRequestsSection({ businessId, people, glass }: { businessId: string
           role: r.role,
           platform: r.platform,
           status: r.status,
-        })));
-        setLoaded(true);
+        }));
       } catch { /* device_requests may not exist yet */ }
-      return;
+    } else {
+      try {
+        const list = await wsSyncClient.listDeviceJoinRequests(businessId);
+        const db = getDB();
+        const activeDevs = new Set(
+          (db.getAllSync("SELECT id, uuid FROM devices WHERE status = 'active' AND is_deleted = 0") as any[])
+            .map((d) => d.id || d.uuid)
+        );
+        pendingList = Array.isArray(list) ? list.filter((r) => r.status === 'pending' && !activeDevs.has(r.joinerDeviceId)) : [];
+      } catch { /* not connected */ }
     }
-    try {
-      const list = await wsSyncClient.listDeviceJoinRequests(businessId);
-      setRequests(Array.isArray(list) ? list.filter((r) => r.status === 'pending') : []);
-      setLoaded(true);
-    } catch { /* not connected */ }
-  }, [businessId]);
+
+    // Toast notification when a new join request arrives
+    for (const r of pendingList) {
+      if (!seenRequestsRef.current.has(r.requestId)) {
+        if (seenRequestsRef.current.size > 0) {
+          showToast(`New join request from ${r.joinerUser || r.joinerName || 'a new member'}`, 'info');
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+        seenRequestsRef.current.add(r.requestId);
+      }
+    }
+
+    setRequests(pendingList);
+    setLoaded(true);
+  }, [businessId, showToast]);
 
   useEffect(() => { refresh(); }, [refresh]);
+  useDataChangedRefresh(refresh);
   // Real-time-ish: poll for incoming join requests so the owner sees the
   // request promptly, wherever they are in the app (spec §4 modal trigger).
   useEffect(() => {
@@ -1038,16 +1130,19 @@ function JoinRequestsSection({ businessId, people, glass }: { businessId: string
     return () => clearInterval(timer);
   }, [businessId, refresh]);
 
-  const decide = async (re: any, approve: boolean, cfg?: { role?: string; name?: string; avatar?: string | null; permissions?: Record<string, unknown> }) => {
+  const decide = async (re: any, approve: boolean, cfg?: { role?: string; permissions?: Record<string, unknown> }) => {
     setRefreshing(true);
     try {
-      const assignedName = cfg?.name?.trim() || re.joinerUser || re.joinerName || t('business.new_member');
+      // The owner assigns ONLY a role at this stage — the joiner sets their own
+      // name, profile picture and PIN on their device after approval. The
+      // roster mirror below keeps a placeholder name until then.
+      const assignedName = re.joinerUser || re.joinerName || t('business.new_member');
       const finalRole = cfg?.role || re.role || 'cashier';
       if (approve && wsSyncClient.isConnected) {
-        wsSyncClient.decideDeviceJoinRequest({ requestId: re.requestId, businessId, joinerDeviceId: re.joinerDeviceId, decision: 'approved', decidedBy: people.find((p) => p.isOwner)?.id || '', assignedName, assignedAvatar: cfg?.avatar ?? null, assignedRole: finalRole, assignedPermissions: cfg?.permissions }).catch(() => {});
+        wsSyncClient.decideDeviceJoinRequest({ requestId: re.requestId, businessId, joinerDeviceId: re.joinerDeviceId, decision: 'approved', decidedBy: people.find((p) => p.isOwner)?.id || '', assignedName, assignedRole: finalRole, assignedPermissions: cfg?.permissions }).catch(() => {});
       }
       // When this phone IS the hub, record the decision locally so the joiner's
-      // STATUS poll (over TCP) sees it, the assigned identity, and receives the
+      // STATUS poll (over TCP) sees it, the assigned role, and receives the
       // pairing credential.
       if (!wsSyncClient.isConnected) {
         try {
@@ -1055,8 +1150,6 @@ function JoinRequestsSection({ businessId, people, glass }: { businessId: string
           const sets: string[] = ['status = ?', 'decided_at = ?'];
           const vals: any[] = [approve ? 'approved' : 'rejected', new Date().toISOString()];
           if (approve) {
-            if (assignedName) { sets.push('assigned_name = ?'); vals.push(assignedName); }
-            if (cfg?.avatar) { sets.push('assigned_avatar = ?'); vals.push(cfg.avatar); }
             if (cfg?.permissions) { sets.push('assigned_permissions = ?'); vals.push(JSON.stringify(cfg.permissions)); }
             if (finalRole) { sets.push('role = ?'); vals.push(finalRole); }
           }
@@ -1075,18 +1168,15 @@ function JoinRequestsSection({ businessId, people, glass }: { businessId: string
         } catch { /* best-effort */ }
       }
       // Mirror on this owner device: create the employee + an active device
-      // with the assigned identity.
+      // with the assigned role. The joiner's own name/avatar/PIN arrive via
+      // roster sync once they finish their own setup.
       if (approve) {
         const person = addUser({ businessId, name: assignedName, role: finalRole });
-        if (cfg?.avatar || cfg?.permissions) {
+        if (cfg?.permissions) {
           try {
             const db = getDB();
-            const sets: string[] = [];
-            const vals: any[] = [];
-            if (cfg.avatar) { sets.push('avatar = ?'); vals.push(cfg.avatar); }
-            if (cfg.permissions) { sets.push('permissions = ?'); vals.push(JSON.stringify(cfg.permissions)); }
-            if (sets.length) { sets.push('updated_at = ?'); vals.push(new Date().toISOString()); vals.push(person.id);
-              db.runSync(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`, vals); }
+            db.runSync('UPDATE users SET permissions = ?, updated_at = ? WHERE id = ?',
+              [JSON.stringify(cfg.permissions), new Date().toISOString(), person.id]);
           } catch { /* best-effort */ }
         }
         // Use the REAL joiner device id so the hub-side roster row created at
@@ -1102,9 +1192,9 @@ function JoinRequestsSection({ businessId, people, glass }: { businessId: string
 
   /** Spec §4 approval: role selector (Owner/Cashier/Custom) → Approve & Sync. */
   const decideWithRoleLocal = (re: any) => {
-    // Full member-configuration flow: assign the member a name, profile
-    // picture, role (Owner/Cashier/Custom) and — for Custom — the exact
-    // permissions before confirming the invitation.
+    // Role-assignment flow: the owner picks the member's role (Owner/Cashier/
+    // Custom — for Custom, the exact permissions) before confirming. The member
+    // sets their own name, picture and PIN after approval.
     setConfiguring({ request: re });
   };
 

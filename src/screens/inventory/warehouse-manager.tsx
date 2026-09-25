@@ -2,6 +2,7 @@ import { Fonts } from '@/constants/theme';
 import { useDialog } from '@/context/DialogContext';
 import { useSubscription } from '@/context/SubscriptionContext';
 import { useSettings } from '@/context/SettingsContext';
+import { useDataChangedRefresh } from '@/hooks/useDataChangedRefresh';
 import { deleteWarehouse, getWarehouses, insertWarehouse, updateWarehouse } from '@/database/db';
 import { translateWarehouseName, translateWarehouseLocation } from '@/utils/warehouse-labels';
 import * as Haptics from 'expo-haptics';
@@ -51,6 +52,8 @@ const WarehouseManagerModal: React.FC<WarehouseManagerProps> = ({ visible, onClo
   useEffect(() => {
     if (visible) loadWarehouses();
   }, [visible]);
+
+  useDataChangedRefresh(loadWarehouses);
 
   const handleSave = async () => {
     if (isReadOnly) {

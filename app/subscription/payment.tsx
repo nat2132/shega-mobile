@@ -15,9 +15,9 @@ export default function SubscriptionPayment() {
     parseInt(params.planId || '0', 10),
   );
 
-  // The manage screen navigates here as ?plan=premium&durationMonths=1 instead
-  // of carrying a backend planId. Resolve it from the live /api/plans list so
-  // the correct tier (Basic vs Premium) + duration is submitted to the backend.
+  // The manage screen navigates here as ?plan=mobile|desktop|both&durationMonths=1
+  // instead of carrying a backend planId. Resolve it from the live /api/plans
+  // list so the correct edition + duration is submitted to the backend.
   useEffect(() => {
     const explicitPlanId = parseInt(params.planId || '', 10);
     if (explicitPlanId) {

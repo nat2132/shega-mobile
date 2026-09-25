@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Fonts } from '@/constants/theme';
 import {
   StyleSheet,
@@ -36,7 +36,8 @@ const VerifyPinScreen: React.FC<VerifyPinScreenProps> = ({ onSuccess }) => {
   const router = useRouter();
   const [pin, setPin] = useState('');
   const [bioEnabled, setBioEnabled] = useState(false);
-  const pinLength = 4;
+  const verifyingRef = useRef(false);
+  const pinLength = 6;
   const maxAttempts = 5;
 
   const shakeOffset = useSharedValue(0);
@@ -63,19 +64,24 @@ const VerifyPinScreen: React.FC<VerifyPinScreenProps> = ({ onSuccess }) => {
   }, [isLocked, lockoutRemaining, resetAttempts]);
 
   const handlePress = async (num: string) => {
-    if (isLocked) return;
+    if (isLocked || verifyingRef.current) return;
     if (pin.length < pinLength) {
       const newPin = pin + num;
       setPin(newPin);
-      
+
       if (newPin.length === pinLength) {
-        await verify(newPin);
+        verifyingRef.current = true;
+        try {
+          await verify(newPin);
+        } finally {
+          verifyingRef.current = false;
+        }
       }
     }
   };
 
   const handleDelete = () => {
-    if (isLocked) return;
+    if (isLocked || verifyingRef.current) return;
     setPin(pin.slice(0, -1));
   };
 

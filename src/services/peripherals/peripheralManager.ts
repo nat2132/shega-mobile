@@ -10,6 +10,13 @@ import { Platform } from 'react-native';
 import { getItemByBarcode } from '@/database/db';
 import { detectBarcodeFormat } from './barcodeFormat';
 import {
+  getPeripheralMockService,
+  USE_MOCK_PERIPHERALS,
+  type MockStatusSnapshot,
+  type ReceiptPayload,
+  type ScannedBarcode,
+} from '@shega/shared';
+import {
   buildCommandDiagnosticBytes,
   buildDrawerKickBytes,
   buildReceiptBytes,
@@ -75,7 +82,48 @@ class PeripheralManager {
   constructor() {
     this.devices = loadDevices();
     this.logs = loadDeviceLogs();
+    this.setupMockBridge();
   }
+
+  // --- Mock peripheral bridge (USE_MOCK_PERIPHERALS) --------------------------
+  // The shared SDK's mock scanners feed the SAME pipeline a hardware scanner
+  // would: any synthetic scan flows through handleScan() and is logged, looked
+  // up and broadcast to subscribers exactly like a real barcode read.
+
+  private setupMockBridge(): void {
+    if (!USE_MOCK_PERIPHERALS) return;
+    try {
+      const svc = getPeripheralMockService();
+      svc.subscribeScan((scan) => this.handleScan(scan.code, 'keyboard_hid'));
+    } catch {
+      // Mock bridge is best-effort; real peripherals still work without it.
+    }
+  }
+
+  /** Serial/COM mock scan — same result shape as a real scanner read. */
+  simulateSerialScan = async (code?: string): Promise<{ code: string; format: string; simulated: true }> => {
+    const scan: ScannedBarcode = await getPeripheralMockService().scan(code, 'serial');
+    this.handleScan(scan.code, 'keyboard_hid');
+    return { code: scan.code, format: detectBarcodeFormat(scan.code).format, simulated: true };
+  };
+
+  /** Mock ESC/POS print — decode happens in the shared driver, preview returned. */
+  simulatePrint = async (
+    payload?: Partial<ReceiptPayload>,
+  ): Promise<{ ok: true; jobId: string; byteLength: number; ascii: string; html: string; simulated: true }> => {
+    const job = await getPeripheralMockService().print(payload);
+    return {
+      ok: true,
+      simulated: true,
+      jobId: job.jobId,
+      byteLength: job.byteLength,
+      ascii: job.preview.ascii,
+      html: job.preview.html,
+    };
+  };
+
+  /** Live counters/probes for the mock world. */
+  mockPeripheralStatus = (): MockStatusSnapshot => getPeripheralMockService().status();
 
   // --- React store plumbing --------------------------------------------------
 

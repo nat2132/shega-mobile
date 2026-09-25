@@ -15,6 +15,7 @@ import {
   formatTime,
 } from "@/utils/date-utils";
 import { useFocusEffect } from "expo-router";
+import { useDataChangedRefresh } from "@/hooks/useDataChangedRefresh";
 import { ProductImageStack } from "@/components/ProductImageStack";
 import { useToast } from "@/context/ToastContext";
 import {
@@ -126,6 +127,8 @@ const SalesRecordScreen: React.FC<SalesRecordProps> = ({ onClose }) => {
       setEarliestDate(getEarliestRecordDate());
     }, [loadData]),
   );
+
+  useDataChangedRefresh(loadData);
 
   const getHeaderLabel = () => {
     const now = new Date();
