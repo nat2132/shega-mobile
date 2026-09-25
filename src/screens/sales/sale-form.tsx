@@ -68,6 +68,8 @@ const GlobalCheckout: React.FC<SaleFormProps> = ({
   cart,
   onFinish,
   onBack,
+  onUpdateItem,
+  onRemoveItem,
 }) => {
   const { colors, t, theme, featureFlags } = useSettings();
   const SALES_GLASS = useMemo(() => getSalesGlass(colors), [colors]);
@@ -1414,7 +1416,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     alignItems: 'center',
-    justify: 'center',
+    justifyContent: 'center',
   },
   toggleRow: { flexDirection: "row", gap: 10 },
   modalBtn: {

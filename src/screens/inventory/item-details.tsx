@@ -204,7 +204,7 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData; onClose?: () => 
                     placeholderTextColor={colors.textSecondary}
                   />
                 ) : (
-                  <AppText variant="title-lg" weight="bold" style={{ color: colors.text }} numberOfLines={2}>
+                  <AppText variant="title" weight="bold" style={{ color: colors.text }} numberOfLines={2}>
                     {editForm.name}
                   </AppText>
                 )}
@@ -276,7 +276,7 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData; onClose?: () => 
                     keyboardType="decimal-pad"
                   />
                 ) : (
-                  <AppText variant="title-lg" weight="bold" style={{ color: colors.primary }}>
+                  <AppText variant="title" weight="bold" style={{ color: colors.primary }}>
                     ETB {Number(editForm.baseSellingPrice || 0).toLocaleString()} <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }}>/ {editForm.baseUnit || 'pcs'}</AppText>
                   </AppText>
                 )}
@@ -295,7 +295,7 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData; onClose?: () => 
                     keyboardType="decimal-pad"
                   />
                 ) : (
-                  <AppText variant="title-lg" weight="bold" style={{ color: colors.text }}>
+                  <AppText variant="title" weight="bold" style={{ color: colors.text }}>
                     ETB {Number(editForm.basePurchasePrice || 0).toLocaleString()}
                   </AppText>
                 )}
@@ -528,10 +528,10 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData; onClose?: () => 
         {showExpiryPicker && (
           <CustomDatePicker
             visible={showExpiryPicker}
-            value={editForm.expiryDate ? new Date(editForm.expiryDate) : new Date()}
+            initialDate={editForm.expiryDate || undefined}
             onClose={() => setShowExpiryPicker(false)}
-            onChange={(d) => {
-              setEditForm((prev: any) => ({ ...prev, expiryDate: d.toISOString().split('T')[0] }));
+            onSelectDate={(isoDate) => {
+              setEditForm((prev: any) => ({ ...prev, expiryDate: isoDate }));
               setShowExpiryPicker(false);
             }}
           />
@@ -541,10 +541,7 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData; onClose?: () => 
         {showBarcodes && (
           <ManageBarcodesModal
             visible={showBarcodes}
-            itemId={item.id}
-            itemName={item.name}
-            sku={item.sku}
-            barcode={item.barcode}
+            item={item}
             onClose={() => setShowBarcodes(false)}
           />
         )}
@@ -570,7 +567,7 @@ const createStyles = (colors: any, G: any) =>
       borderRadius: 19,
       borderWidth: 1,
       alignItems: 'center',
-      justify: 'center',
+      justifyContent: 'center',
     },
     scrollContent: { padding: 16, gap: 16 },
     heroCard: {

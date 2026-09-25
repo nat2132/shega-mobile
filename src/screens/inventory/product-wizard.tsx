@@ -23,6 +23,7 @@ import { useFormDrafts } from '@/hooks/useFormDrafts';
 import { usePermissions } from '@/hooks/usePermissions';
 import { requestImagePermission, openAppSettings } from '@/services/imagePermission';
 import { Draft } from '@/services/draftService';
+import { playBad, playNice } from '@/services/soundService';
 import { ProductImageGallery } from '@/components/ProductImageGallery';
 import { parseProductImages, serializeProductImages } from '@/utils/productImages';
 import { formatDate } from '@/utils/date-utils';
