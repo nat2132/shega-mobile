@@ -19,25 +19,13 @@ export async function resolvePostAuthRoute(): Promise<string> {
   } catch { /* fall through to the normal gates */ }
   try {
     const sub = await fetchSubscriptionStatusCached();
-    if (sub.status === 'active' || sub.status === 'trial') {
-      try {
-        const lic = await fetchLicenseStatusCached();
-        if (lic.valid) {
-          return '/(tabs)/dashboard';
-        }
-        return '/subscription/status';
-      } catch {
-        return '/subscription/status';
-      }
+    if (sub.status === 'active' || sub.status === 'trial' || sub.status === 'pending' || sub.status === 'pending_payment' || sub.status === 'pending_verification') {
+      return '/(tabs)/dashboard';
     }
-    if (sub.status === 'pending' || sub.status === 'pending_payment') {
-      return '/subscription/status';
-    }
-    // 'none', 'payment_rejected', 'rejected', 'expired' → plan selection so the
-    // user can start a trial or resubmit their payment.
+    // 'none', 'payment_rejected', 'rejected', 'expired' → plan selection
     return '/subscription/plans';
   } catch {
-    return '/subscription/plans';
+    return '/(tabs)/dashboard';
   }
 }
 

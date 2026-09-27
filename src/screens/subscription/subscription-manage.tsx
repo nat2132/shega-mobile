@@ -1,43 +1,46 @@
-import React, { useState } from 'react';
+import { AppText } from '@/components/ui';
+import { useSettings } from '@/context/SettingsContext';
+import { FEATURE_LABELS, PREMIUM_FEATURES, PremiumFeature, useSubscription } from '@/context/SubscriptionContext';
+import { useToast } from '@/context/ToastContext';
+import { applyServerSubscriptionStatus } from '@/database/db';
+import { fetchPlans, fetchSubscriptionStatus, fetchCustomerPayments } from '@/services/api';
+import { isOfflineError, OFFLINE_MESSAGE } from '@/services/connectivity';
+import { safeGoBack } from '@/services/navigation';
+import { planEditionLabel } from '@/utils/plan-edition';
+import { parsePlanEdition } from '@shega/shared';
+import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import {
-  View,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Linking,
-} from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
-import {
+  AlertTriangle,
+  ArrowRight,
+  Calendar,
+  Check,
+  ChevronRight,
+  Clock,
+  CreditCard,
   Crown,
+  FileText,
+  HeadphonesIcon,
+  History,
+  Monitor,
+  Plus,
+  RefreshCw,
   Shield,
   Smartphone,
-  Monitor,
-  Check,
-  X,
-  Clock,
-  Calendar,
-  RefreshCw,
-  FileText,
-  History,
-  HeadphonesIcon,
-  ArrowRight,
   Star,
-  ChevronRight,
-  AlertTriangle,
-  Plus,
+  X,
 } from 'lucide-react-native';
-import { useSettings } from '@/context/SettingsContext';
-import { useSubscription, PREMIUM_FEATURES, FEATURE_LABELS, PremiumFeature } from '@/context/SubscriptionContext';
-import { AppText } from '@/components/ui';
-import { LinearGradient } from 'expo-linear-gradient';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Linking,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
-import { safeGoBack } from '@/services/navigation';
-import { fetchSubscriptionStatus } from '@/services/api';
-import { isOfflineError, OFFLINE_MESSAGE } from '@/services/connectivity';
-import { applyServerSubscriptionStatus } from '@/database/db';
-import { useToast } from '@/context/ToastContext';
 
 const FEATURE_KEY_MAP: Record<string, string> = {
   reports: 'subscription.feature_reports',
@@ -107,7 +110,67 @@ const PLAN_EDITIONS = [
   const router = useRouter();
   const { showToast } = useToast();
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
+  // Live prices by edition, so the Subscription section never shows a stale
+  // hardcoded figure. Falls back to the seeded literals if the API is offline.
+  const [livePrices, setLivePrices] = useState<Record<string, number>>({});
+  const [serverStatus, setServerStatus] = useState<any>(null);
+  const [remotePayments, setRemotePayments] = useState<any[]>([]);
   const gold = '#D4AF37';
+
+  const loadStatus = useCallback(async () => {
+    try {
+      const sub = await fetchSubscriptionStatus();
+      setServerStatus(sub);
+      try {
+        const pmts = await fetchCustomerPayments();
+        if (pmts && Array.isArray(pmts)) {
+          setRemotePayments(pmts);
+        }
+      } catch {}
+    } catch {
+      setServerStatus(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadStatus();
+  }, [loadStatus]);
+
+  const displayPayments = useMemo(() => {
+    if (remotePayments.length > 0) return remotePayments;
+    return payments;
+  }, [remotePayments, payments]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const plans = await fetchPlans();
+        if (cancelled || !plans?.length) return;
+        const map: Record<string, number> = {};
+        for (const p of plans) {
+          const edition = parsePlanEdition(p.edition ?? p.display_name ?? p.name);
+          if (edition) map[edition] = p.price;
+        }
+        if (!cancelled) setLivePrices(map);
+      } catch {
+        /* keep the seeded prices */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /**
+   * The combined Mobile + Desktop edition is the cross-platform upgrade, so it
+   * is offered here rather than at signup. It is hidden once the customer
+   * already holds it, since there is nothing left to add.
+   */
+  const currentEdition = parsePlanEdition(subscription?.plan);
+  const offerablePlans = PLAN_EDITIONS.filter(
+    (p) => !(p.key === 'both' && currentEdition === 'both'),
+  );
 
   const toggleSection = (section: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -163,18 +226,11 @@ const PLAN_EDITIONS = [
   const status = subscription?.status || 'trial';
   const config = statusConfig[status] || { labelKey: status, color: colors.textSecondary };
   const rawPlan = subscription?.plan || '';
-  const normalizedPlan = rawPlan.toLowerCase();
-  const planName = normalizedPlan.includes('desktop') && normalizedPlan.includes('mobile')
-    ? t('subscription.plan_both')
-    : normalizedPlan.includes('premium')
-      ? t('subscription.plan_both')
-      : normalizedPlan.includes('desktop')
-        ? t('subscription.plan_desktop')
-        : normalizedPlan.includes('mobile') || normalizedPlan.includes('basic')
-          ? t('subscription.plan_mobile')
-          : rawPlan
-            ? rawPlan.replace(/\b\w/g, (c: string) => c.toUpperCase())
-            : t('common.na');
+  const planName = planEditionLabel(
+    subscription,
+    t,
+    rawPlan ? rawPlan.replace(/\b\w/g, (c: string) => c.toUpperCase()) : t('common.na'),
+  );
 
   const formatDate = (dateStr: string | null | undefined) => {
     if (!dateStr) return t('common.na');
@@ -245,6 +301,31 @@ const PLAN_EDITIONS = [
                 <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }}>
                   {t('subscription.trial_ends', { date: formatDate(subscription?.trialEndsAt) })}
                 </AppText>
+
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: gold,
+                    borderRadius: 14,
+                    paddingVertical: 14,
+                    paddingHorizontal: 18,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    marginTop: 12,
+                  }}
+                  onPress={() => {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    router.push('/subscription/payment?plan_id=1&price=4500&from=manage');
+                  }}
+                  activeOpacity={0.9}
+                >
+                  <CreditCard size={18} color="#FFF" />
+                  <AppText variant="body" weight="bold" style={{ color: '#FFF' }}>
+                    Pay Now (4,500 ETB)
+                  </AppText>
+                  <ArrowRight size={16} color="#FFF" />
+                </TouchableOpacity>
               </View>
             )}
 
@@ -258,6 +339,48 @@ const PLAN_EDITIONS = [
             )}
           </LinearGradient>
         </Animated.View>
+
+        {/* Pending Payment Card */}
+        {serverStatus?.pending_payment && (
+          <Animated.View entering={FadeInDown.delay(120).duration(600)} style={[styles.planCard, { backgroundColor: colors.card, borderColor: colors.warning + '60', marginTop: 14 }]}>
+            <View style={{ padding: 18 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: colors.warning + '20', justifyContent: 'center', alignItems: 'center' }}>
+                  <Clock size={20} color={colors.warning} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <AppText variant="body" weight="bold" style={{ color: colors.warning }}>
+                    Pending Payment
+                  </AppText>
+                  <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }}>
+                    Awaiting Admin Verification
+                  </AppText>
+                </View>
+              </View>
+
+              <View style={{ backgroundColor: colors.surface, borderRadius: 12, padding: 12, gap: 6, borderWidth: 1, borderColor: colors.border }}>
+                {serverStatus.pending_payment.transaction_id && (
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }}>Transaction ID:</AppText>
+                    <AppText variant="body-sm" weight="bold" style={{ color: colors.text }}>{serverStatus.pending_payment.transaction_id}</AppText>
+                  </View>
+                )}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }}>Amount Submitted:</AppText>
+                  <AppText variant="body-sm" weight="bold" style={{ color: colors.primary }}>
+                    ETB {Number(serverStatus.pending_payment.amount || 4500).toLocaleString()}
+                  </AppText>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }}>Status:</AppText>
+                  <View style={{ backgroundColor: colors.warning + '20', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                    <AppText variant="micro" weight="bold" style={{ color: colors.warning }}>PENDING APPROVAL</AppText>
+                  </View>
+                </View>
+              </View>
+            </View>
+          </Animated.View>
+        )}
 
         {isExpired && (
                <Animated.View entering={FadeInDown.delay(100).duration(500)} style={[styles.expiredBanner, { borderColor: colors.error + '30' }]}>
@@ -383,9 +506,10 @@ const PLAN_EDITIONS = [
             {expandedSection === 'pricing' && (
               <View style={styles.pricingSection}>
                 <View style={styles.pricingRow}>
-                  {PLAN_EDITIONS.map((plan) => {
+                  {offerablePlans.map((plan) => {
                     const Icon = plan.icon;
                     const isP = plan.featured;
+                    const price = livePrices[plan.key] ?? plan.price;
                     return (
                       <View key={plan.key} style={[styles.priceCard, { backgroundColor: colors.card, borderColor: isP ? gold : colors.border }]}>
                         {isP && (
@@ -402,14 +526,14 @@ const PLAN_EDITIONS = [
                           style={[styles.priceOption, { backgroundColor: colors.surface, borderColor: colors.border }]}
                           onPress={() => {
                             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                            router.push(`/subscription/payment?plan=${plan.key}&durationMonths=1&price=${plan.price}`);
+                            router.push(`/subscription/payment?plan=${plan.key}&durationMonths=1&price=${price}&from=manage`);
                           }}
                         >
                           <AppText variant="body-sm" weight="medium" style={{ color: colors.textSecondary }}>
                             {t('subscription.month_1')}
                           </AppText>
                           <AppText variant="title" weight="black" style={{ color: colors.text }}>
-                            {plan.price.toLocaleString()} <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }}>{t('subscription.etb')}</AppText>
+                            {price.toLocaleString()} <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }}>{t('subscription.etb')}</AppText>
                           </AppText>
                         </TouchableOpacity>
                       </View>
@@ -504,7 +628,7 @@ const PLAN_EDITIONS = [
 
           {expandedSection === 'history' && (
             <View>
-              {payments.length === 0 ? (
+              {displayPayments.length === 0 ? (
                 <View style={[styles.emptyState, { backgroundColor: colors.card, borderColor: colors.border }]}>
                   <History size={24} color={colors.textSecondary} />
                   <AppText variant="body" weight="medium" style={{ color: colors.textSecondary }}>
@@ -512,29 +636,44 @@ const PLAN_EDITIONS = [
                   </AppText>
                 </View>
               ) : (
-                payments.map((payment, idx) => (
-                  <View key={idx} style={[styles.historyItem, { borderBottomColor: colors.border }]}>
-                    <View style={[styles.historyIcon, { backgroundColor: payment.status === 'verified' ? colors.success + '20' : colors.warning + '20' }]}>
-                      <FileText size={16} color={payment.status === 'verified' ? colors.success : colors.warning} />
+                displayPayments.map((payment, idx) => {
+                  const pName = payment.planName || payment.plan_name || payment.description || 'Subscription';
+                  const pTxn = payment.transactionId || payment.transaction_id || `TXN-${payment.id || idx}`;
+                  const pDate = payment.createdAt || payment.created_at;
+                  const pStatus = payment.status || 'pending';
+                  const isApproved = pStatus === 'approved' || pStatus === 'verified';
+                  const isPending = pStatus === 'pending' || pStatus === 'pending_verification';
+                  const isRejected = pStatus === 'rejected';
+
+                  const badgeColor = isApproved ? colors.success : isRejected ? colors.error : colors.warning;
+                  const statusText = isApproved ? 'APPROVED' : isRejected ? 'REJECTED' : 'PENDING APPROVAL';
+
+                  return (
+                    <View key={payment.id || idx} style={[styles.historyItem, { borderBottomColor: colors.border }]}>
+                      <View style={[styles.historyIcon, { backgroundColor: badgeColor + '20' }]}>
+                        <FileText size={16} color={badgeColor} />
+                      </View>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <AppText variant="body-sm" weight="semibold" style={{ color: colors.text }} numberOfLines={1}>
+                          {pName}
+                        </AppText>
+                        <AppText variant="micro" weight="medium" style={{ color: colors.textSecondary }} numberOfLines={1}>
+                          {pTxn} · {formatDate(pDate)}
+                        </AppText>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <AppText variant="body-sm" weight="bold" style={{ color: colors.text }}>
+                          ETB {Number(payment.amount || 0).toLocaleString()}
+                        </AppText>
+                        <View style={{ backgroundColor: badgeColor + '20', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, marginTop: 2 }}>
+                          <AppText variant="micro" weight="bold" style={{ color: badgeColor }}>
+                            {statusText}
+                          </AppText>
+                        </View>
+                      </View>
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <AppText variant="body-sm" weight="semibold" style={{ color: colors.text }}>
-                        {payment.planName}
-                      </AppText>
-                      <AppText variant="micro" weight="medium" style={{ color: colors.textSecondary }}>
-                        {payment.transactionId} · {formatDate(payment.createdAt)}
-                      </AppText>
-                    </View>
-                    <View>
-                      <AppText variant="body" weight="bold" style={{ color: colors.text }}>
-                        {payment.amount?.toLocaleString()} {t('subscription.etb')}
-                      </AppText>
-                      <AppText variant="micro" weight="medium" style={{ color: payment.status === 'pending_verification' ? colors.warning : colors.success, textAlign: 'right' }}>
-                        {payment.status === 'pending_verification' ? t('subscription.pending') : t('subscription.verified')}
-                      </AppText>
-                    </View>
-                  </View>
-                ))
+                  );
+                })
               )}
             </View>
           )}

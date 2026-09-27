@@ -22,7 +22,7 @@ const ENV_API_URL: string | undefined =
 export const API_BASE_URL: string =
   process.env.EXPO_PUBLIC_API_URL ||
   ENV_API_URL ||
-  'https://8b70-196-188-178-187.ngrok-free.app';
+  'https://f8bb-196-188-178-187.ngrok-free.app';
 
 const TOKEN_KEY = 'shega_access_token';
 const REFRESH_TOKEN_KEY = 'shega_refresh_token';
@@ -142,10 +142,21 @@ export interface AccountUser {
   business_name: string;
 }
 
+/**
+ * The canonical plan editions. A plan is an EDITION of the product — which
+ * platforms it unlocks — not a capability tier. The backend is the source of
+ * truth and sends this on both `/api/plans` and the subscription status
+ * payload, so clients never parse display names to work out a plan.
+ */
+export const PLAN_EDITIONS = ['mobile', 'desktop', 'both'] as const;
+export type PlanEdition = (typeof PLAN_EDITIONS)[number];
+
 export interface Plan {
   id: number;
   name: string;
   display_name: string;
+  /** Canonical edition: which platforms the plan unlocks (not a tier level). */
+  edition?: PlanEdition;
   price: number;
   duration_months: number;
   features?: string[];
@@ -171,12 +182,24 @@ export interface PaymentInfo {
 export interface SubscriptionStatusInfo {
   plan?: string;
   plan_name?: string;
+  /** Canonical edition from the backend — prefer this over parsing `plan`. */
+  edition?: PlanEdition | null;
+  /** Which app the account registered from. Drives the onboarding plan list. */
+  signup_platform?: 'mobile' | 'desktop' | null;
+  /**
+   * Backend canonical statuses are none | trial | pending_payment |
+   * payment_rejected | active | expired (see api/src/lib/subscription.ts).
+   * `pending`, `pending_verification` and `rejected` are legacy local
+   * SQLite statuses that older app versions (and cached status payloads) can
+   * still surface, so clients must keep tolerating them.
+   */
   status:
     | 'none'
     | 'trial'
     | 'pending_payment'
     | 'payment_rejected'
     | 'pending'
+    | 'pending_verification'
     | 'active'
     | 'expired'
     | 'rejected';
@@ -203,6 +226,7 @@ export interface SubscriptionStatusInfo {
     payment_id?: number;
     amount?: number;
     payment_method?: string;
+    transaction_id?: string;
     description?: string;
     created_at?: string;
   } | null;
@@ -406,16 +430,26 @@ function keyOf(obj: Record<string, unknown>, value: unknown): string {
 // Auth endpoints
 // ---------------------------------------------------------------------------
 
+/**
+ * `platform` tells the backend which app the customer is registering from, so
+ * onboarding offers the matching plan and the trial grants the matching
+ * edition. It is always sent from this client — the app knows it is Mobile.
+ */
 export const registerUser = (payload: {
   name: string;
   email: string;
   business_name: string;
   password: string;
   password2?: string;
+  platform?: 'mobile' | 'desktop';
 }): Promise<{ token?: string; access?: string; refresh?: string; user?: AccountUser; id?: number; name?: string; email?: string; business_name?: string }> =>
   request('/api/auth/register/', {
     method: 'POST',
-    body: { ...payload, password2: payload.password2 ?? payload.password },
+    body: {
+      ...payload,
+      password2: payload.password2 ?? payload.password,
+      platform: payload.platform ?? 'mobile',
+    },
   });
 
 export const loginUser = (payload: {
@@ -479,6 +513,9 @@ export const createPayment = (payload: {
 
 export const fetchMyPayment = (): Promise<PaymentInfo> =>
   request<PaymentInfo>('/api/payments/my-payment/', { auth: true });
+
+export const fetchCustomerPayments = (): Promise<PaymentInfo[]> =>
+  request<PaymentInfo[]>('/api/customers/payments/', { auth: true });
 
 // ---------------------------------------------------------------------------
 // Subscription

@@ -1,6 +1,8 @@
 import { Fonts } from '@/constants/theme';
 import { useAccount } from '@/context/AccountContext';
 import { AppText } from '@/components/ui';
+import { useToast } from '@/context/ToastContext';
+import { handleApiError } from '@/services/api';
 import { isOfflineError, OFFLINE_MESSAGE } from '@/services/connectivity';
 import { Image } from 'expo-image';
 import { Eye, EyeOff } from 'lucide-react-native';
@@ -46,6 +48,8 @@ export default function RegisterScreen({ onBack, onSuccess }: RegisterScreenProp
     return null;
   };
 
+  const { showToast } = useToast();
+
   const handleSubmit = async () => {
     if (loading) return;
     const validation = validate();
@@ -57,19 +61,17 @@ export default function RegisterScreen({ onBack, onSuccess }: RegisterScreenProp
     setError(null);
     setLoading(true);
     try {
-      const ok = await register({
+      await register({
         name: name.trim(),
         email: email.trim(),
         business_name: businessName.trim(),
         password,
       });
-      if (ok) {
-        onSuccess();
-      } else {
-        setError('Registration failed. The email may already be in use.');
-      }
-    } catch (e) {
-      setError(isOfflineError(e) ? OFFLINE_MESSAGE : e instanceof Error ? e.message : 'Unable to create your account. Try again.');
+      showToast({ title: 'Account Created', message: 'Account created successfully! Welcome to Shega.', type: 'success' });
+      onSuccess();
+    } catch (e: any) {
+      const handled = handleApiError(e);
+      setError(handled.message || (isOfflineError(e) ? OFFLINE_MESSAGE : 'Unable to create your account. Try again.'));
     } finally {
       setLoading(false);
     }

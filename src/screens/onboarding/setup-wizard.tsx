@@ -23,9 +23,10 @@ import * as ImagePicker from 'expo-image-picker';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import {
   ArrowRight, Building2, CalendarDays, Camera, Check, ChevronRight,
-  CreditCard, Fingerprint, ImagePlus, MapPin, Package,
+  CreditCard, Crown, Fingerprint, ImagePlus, MapPin, Package,
   Receipt, Store, User, Users, Warehouse,
 } from 'lucide-react-native';
+import { startTrial } from '@/services/api';
 import { wsSyncClient } from '@/services/wsSyncClient';
 import MemberApprovalModal from '@/components/MemberApprovalModal';
 import { RadarPulse } from '@/components/RadarPulse';
@@ -43,19 +44,15 @@ import {
 } from '@/services/businessService';
 import { isBiometricsAvailable, setBiometricsEnabled } from '@/services/biometrics';
 import { saveSaleTaxConfig } from '@/services/taxService';
-import { getDB, insertItem, setFeatureFlag } from '@/database/db';
+import { getDB, getSubscription, insertItem, setFeatureFlag } from '@/database/db';
 import StartupSplashScreen from './startup-splash';
 
 type Stage =
-  | 'welcome' | 'name' | 'type' | 'location' | 'owner' | 'calendar'
+  | 'welcome' | 'name' | 'type' | 'location' | 'owner' | 'subscription' | 'calendar'
   | 'product' | 'tax' | 'warehouse' | 'payments' | 'team' | 'review' | 'done';
 
-// Required flow order (per spec): business info → type → location → owner →
-// date system → sales tax → multiple locations → team setup. Optional stages
-// (product, payments) sit in the flow but can be skipped without breaking
-// the numbered progress indicator.
 const STAGE_ORDER: Stage[] = [
-  'welcome', 'name', 'type', 'location', 'owner', 'calendar',
+  'welcome', 'name', 'type', 'location', 'owner', 'subscription', 'calendar',
   'product', 'tax', 'warehouse', 'payments', 'team', 'review', 'done',
 ];
 
@@ -266,9 +263,11 @@ export default function SetupWizardScreen() {
         // welcome/choose-path stage entirely.
         const u = accountUserRef.current;
         if (u) {
-          if (u.name) setOwnerName(u.name);
+          const resolvedOwnerName = (u as any).name || (u as any).full_name || (u as any).first_name || '';
+          if (resolvedOwnerName) setOwnerName(resolvedOwnerName);
           if (u.email) setEmail(u.email);
-          if (u.business_name && !businessName) setBusinessName(u.business_name);
+          const resolvedBizName = (u as any).business_name || (u as any).businessName || '';
+          if (resolvedBizName) setBusinessName(resolvedBizName);
         }
         setStage('name');
       }
@@ -476,13 +475,25 @@ export default function SetupWizardScreen() {
 
   /**
    * Hand-off from the setup splash: signup/business setup is complete, so the
-   * next thing the user sees is the DEDICATED PIN Setup step (not part of the
-   * signup form). After the PIN is created and confirmed there, they enter the
-   * app. Skipping is allowed — user-signin offers first-time PIN setup then.
+   * next thing the user sees is the plan step — Mobile plan / 7-day trial only,
+   * since this is a Mobile signup. The combined Mobile + Desktop plan is not
+   * offered here; it stays an upgrade in the Subscription section. After the
+   * plan step comes the DEDICATED PIN Setup step, then the app.
+   *
+   * Someone who already has a usable licence (re-running setup, or returning
+   * from an earlier session) skips straight to PIN setup rather than being asked
+   * to subscribe again.
    */
   const enterApp = useCallback(() => {
     authenticate();
-    router.replace('/create-pin?from=onboarding' as any);
+    const local = getSubscription();
+    const hasAccess =
+      !!local &&
+      (local.status === 'trial' || local.status === 'active') &&
+      (!local.expiresAt || new Date(local.expiresAt).getTime() > Date.now());
+    router.replace(
+      (hasAccess ? '/create-pin?from=onboarding' : '/subscription/plans?scope=onboarding') as any,
+    );
   }, [authenticate]);
 
   const PrimaryButton = useCallback(({ label, onPress, icon, disabled }: { label: string; onPress: () => void; icon?: React.ReactNode; disabled?: boolean }) => (
@@ -798,7 +809,7 @@ export default function SetupWizardScreen() {
                   label="Create Business"
                   onPress={() => {
                     if (!ownerName.trim()) { setError('Enter your name to continue'); return; }
-                    createNow().then((id) => id && go('calendar'));
+                    createNow().then((id) => id && go('subscription'));
                   }}
                   icon={<Check size={17} color={G.bg} />}
                   disabled={saving}
@@ -808,6 +819,71 @@ export default function SetupWizardScreen() {
                 </View>
               </View>
               <StepBadge step={4} total={8} />
+            </Animated.View>
+          )}
+
+          {/* ── Subscription Choice Stage ── */}
+          {stage === 'subscription' && (
+            <Animated.View entering={FadeInDown.duration(350)} style={styles.stage}>
+              <View style={[styles.iconCircle, { backgroundColor: G.card, borderColor: G.border }]}>
+                <Crown size={26} color="#D4AF37" />
+              </View>
+              <AppText variant="display" weight="bold" align="center" style={{ color: G.fg }}>
+                Choose Subscription Mode
+              </AppText>
+              <AppText variant="body" weight="medium" align="center" style={{ color: G.muted, marginTop: 6 }}>
+                Select how you want to start your Mobile subscription.
+              </AppText>
+
+              {/* Plan Card */}
+              <View style={[styles.reviewCard, { backgroundColor: G.card, borderColor: '#D4AF37', marginTop: 18, padding: 18 }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                  <Crown size={22} color="#D4AF37" />
+                  <AppText variant="title" weight="bold" style={{ color: G.fg }}>
+                    Mobile — 4,500 ETB/month
+                  </AppText>
+                </View>
+                <AppText variant="caption" weight="medium" style={{ color: G.muted, lineHeight: 18 }}>
+                  Full Mobile POS, Live Inventory Ledger, Customer Debts, Supplier Tracking, Offline Mode & Cloud Sync.
+                </AppText>
+              </View>
+
+              <View style={{ marginTop: 20, gap: 12 }}>
+                <PrimaryButton
+                  label="Start 7-Day Free Trial"
+                  onPress={async () => {
+                    try {
+                      await startTrial({ plan_id: 1 });
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    } catch { /* best-effort trial start */ }
+                    go('calendar');
+                  }}
+                  icon={<ChevronRight size={17} color={G.bg} />}
+                />
+
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  style={{
+                    backgroundColor: '#D4AF37',
+                    borderRadius: 16,
+                    paddingVertical: 16,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'row',
+                    gap: 8,
+                  }}
+                  onPress={() => {
+                    router.push('/subscription/payment?plan_id=1&price=4500&from=onboarding');
+                  }}
+                >
+                  <CreditCard size={18} color="#FFFFFF" />
+                  <AppText variant="body" weight="bold" style={{ color: '#FFFFFF' }}>
+                    Pay Now (4,500 ETB)
+                  </AppText>
+                </TouchableOpacity>
+
+                <GhostButton label="Back" onPress={() => go('owner')} />
+              </View>
             </Animated.View>
           )}
 

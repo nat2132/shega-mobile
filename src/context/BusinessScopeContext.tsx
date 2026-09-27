@@ -15,8 +15,7 @@ import {
   setCurrentUserId,
   getUser,
   getCurrentUserId,
-  effectivePermissions,
-  getOwnerOfBusiness,
+  resolveMembershipForBusiness,
 } from '@/services/businessService';
 
 /**
@@ -72,11 +71,18 @@ export const BusinessScopeProvider: React.FC<{ children: React.ReactNode }> = ({
   const businesses = useMemo<BusinessSummary[]>(() => {
     void tick;
     try {
-      return getBusinesses().map((b) => ({
-        id: b.id,
-        name: (b as any).name ?? (b as any).businessName ?? b.id,
-        isDefault: (b as any).isDefault,
-      }));
+      return getBusinesses().map((b) => {
+        // Each business shows the account's OWN role in it — never another
+        // business's role borrowed through the active session.
+        const memberId = resolveMembershipForBusiness(b.id);
+        const role = memberId ? getUser(memberId)?.role : undefined;
+        return {
+          id: b.id,
+          name: (b as any).name ?? (b as any).businessName ?? b.id,
+          isDefault: (b as any).isDefault,
+          role,
+        };
+      });
     } catch {
       return [];
     }
@@ -94,16 +100,13 @@ export const BusinessScopeProvider: React.FC<{ children: React.ReactNode }> = ({
       if (next !== ALL_BUSINESSES) {
         const target = businesses.find((b) => b.id === next);
         if (!target) return;
+        // Resolve the account's OWN membership in the target business. If the
+        // account has no membership there we refuse the switch instead of
+        // inheriting the target business owner's identity and permissions.
+        const memberId = resolveMembershipForBusiness(next);
+        if (!memberId) return;
         setActiveBusiness(next);
-        // Keep the signed-in user coherent: if the current user is not a
-        // member of the target business, fall back to its owner so role and
-        // permission checks resolve inside the new business.
-        const uid = getCurrentUserId();
-        const user = uid ? getUser(uid) : undefined;
-        if (!user || user.businessId !== next) {
-          const owner = getOwnerOfBusiness(next);
-          setCurrentUserId(owner?.id ?? null);
-        }
+        setCurrentUserId(memberId);
       }
       setScope(next);
       refresh();
@@ -120,14 +123,12 @@ export const BusinessScopeProvider: React.FC<{ children: React.ReactNode }> = ({
   const roleIn = useCallback(
     (businessId?: string) => {
       void tick;
-      const uid = getCurrentUserId();
-      const user = uid ? getUser(uid) : undefined;
-      if (user && (!businessId || user.businessId === businessId)) return user.role;
-      if (businessId) {
-        const owner = getOwnerOfBusiness(businessId);
-        return owner?.role;
+      if (!businessId) {
+        const uid = getCurrentUserId();
+        return uid ? getUser(uid)?.role : undefined;
       }
-      return user?.role;
+      const memberId = resolveMembershipForBusiness(businessId);
+      return memberId ? getUser(memberId)?.role : undefined;
     },
     [tick],
   );

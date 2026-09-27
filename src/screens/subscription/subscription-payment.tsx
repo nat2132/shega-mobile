@@ -24,7 +24,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
-import { createPayment, handleApiError, isRateLimited } from '@/services/api';
+import { createPayment, fetchPlans, handleApiError, isRateLimited, Plan } from '@/services/api';
 import { isOfflineError, OFFLINE_MESSAGE } from '@/services/connectivity';
 
 interface SubscriptionPaymentProps {
@@ -45,8 +45,32 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [rateLimitedUntil, setRateLimitedUntil] = useState<number | null>(null);
 
+  /**
+   * The plan being paid for, resolved from the live catalogue so the customer
+   * confirms the same name and monthly price they were shown before tapping
+   * "Pay Now". The backend remains the source of truth — this is only ever a
+   * receipt of what it returns.
+   */
+  const [plan, setPlan] = useState<Plan | null>(null);
+
   const telebirrNumber = '+251925319901';
   const telebirrName = 'Aselefech';
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const plans = await fetchPlans();
+        if (cancelled) return;
+        setPlan(plans?.find((p) => Number(p.id) === Number(planId)) ?? null);
+      } catch {
+        /* the plan summary is optional; the payment still submits by id */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [planId]);
 
   // Auto-clear the rate-limited state once the server's retry window elapses.
   useEffect(() => {
@@ -76,8 +100,9 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setIsSubmitting(true);
     try {
+      const activePlanId = planId > 0 ? planId : 1;
       await createPayment({
-        plan_id: planId,
+        plan_id: activePlanId,
         transaction_id: transactionId.trim(),
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -122,6 +147,34 @@ const SubscriptionPaymentScreen: React.FC<SubscriptionPaymentProps> = ({
         style={{ flex: 1 }}
       >
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          {/* Confirm the plan and its monthly price before paying. */}
+          {plan ? (
+            <Animated.View entering={FadeInDown.delay(120).duration(600)} style={[styles.planSummary, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.planSummaryTop}>
+                <AppText variant="caption" weight="bold" style={{ color: colors.textSecondary }}>
+                  {t('subscription.selected_plan')}
+                </AppText>
+                <AppText variant="body-sm" weight="medium" style={{ color: colors.textSecondary }}>
+                  {t('subscription.monthly_price')}
+                </AppText>
+              </View>
+              <View style={styles.planSummaryRow}>
+                <AppText variant="heading" weight="bold" style={{ color: colors.text, flex: 1 }}>
+                  {plan.display_name || plan.name}
+                </AppText>
+                <AppText variant="title" weight="black" style={{ color: gold }}>
+                  {(plan.price ?? 0).toLocaleString()}{' '}
+                  <AppText variant="caption" weight="bold" style={{ color: colors.textSecondary }}>
+                    {t('subscription.etb')}
+                  </AppText>
+                </AppText>
+              </View>
+              <AppText variant="body-sm" weight="medium" style={{ color: colors.textSecondary }}>
+                / {t('subscription.month')}
+              </AppText>
+            </Animated.View>
+          ) : null}
+
           <Animated.View entering={FadeInDown.delay(200).duration(600)} style={[styles.instructionsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.instructionsHeader}>
               <Smartphone size={22} color={gold} />
@@ -271,6 +324,9 @@ const styles = StyleSheet.create({
   backButton: { padding: 8 },
   scrollContent: { paddingHorizontal: 24, paddingBottom: 100 },
   instructionsCard: { padding: 20, borderRadius: 20, borderWidth: 1, marginBottom: 24 },
+  planSummary: { padding: 20, borderRadius: 20, borderWidth: 1, marginBottom: 16 },
+  planSummaryTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  planSummaryRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   instructionsHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
   stepsList: { gap: 12 },
   step: { flexDirection: 'row', alignItems: 'center', gap: 12 },

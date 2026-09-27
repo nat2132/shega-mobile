@@ -1,4 +1,5 @@
 import { Fonts } from '@/constants/theme';
+import { useAccount } from '@/context/AccountContext';
 import { useDialog } from '@/context/DialogContext';
 import { PROFILE_IMAGES, useDashboardVisibility, useSettings } from '@/context/SettingsContext';
 import { factoryResetDatabase } from '@/database/db';
@@ -31,7 +32,10 @@ import Animated, {
 } from 'react-native-reanimated';
 import { getSettingsGlass } from './glass-settings';
 import { useFocusEffect } from 'expo-router';
-import { getActiveBusiness, getBusinessLogo, getCurrentUserId, getUser } from '@/services/businessService';
+import {
+  getActiveBusiness, getBusinessLogo, getCurrentUserId, getUser,
+  isEmailLikeBusinessName, isPlaceholderBusinessName,
+} from '@/services/businessService';
 import { useDataChangedRefresh } from '@/hooks/useDataChangedRefresh';
 
 import {
@@ -367,6 +371,7 @@ const ResetModal = ({
 
 const SettingsScreen = () => {
   const { theme, setTheme, userProfile, pin, colors, t, featureFlags, setFeatureFlag } = useSettings();
+  const accountUser = useAccount().user;
   const { dashboardVisibility, toggleDashboardSection } = useDashboardVisibility();
   const G = getSettingsGlass(colors);
   const themeTransition = useSharedValue(0);
@@ -386,13 +391,19 @@ const SettingsScreen = () => {
     } catch { setProfileUser(null); }
     try {
       const biz = getActiveBusiness();
-      setActiveBizName(biz?.name ?? null);
+      const rawName = (biz?.name || '').trim();
+      // Only mask a name that was never resolved (blank/placeholder/email).
+      // A real name is always shown, even if it contains an '@'.
+      const cleanBizName = isPlaceholderBusinessName(rawName) || isEmailLikeBusinessName(rawName)
+        ? ((accountUser?.business_name || '').trim() || 'Shega Business')
+        : rawName;
+      setActiveBizName(cleanBizName);
       setActiveBizLogo(biz ? getBusinessLogo(biz.id) : null);
     } catch {
       setActiveBizName(null);
       setActiveBizLogo(null);
     }
-  }, []);
+  }, [accountUser?.business_name]);
 
   useFocusEffect(loadProfile);
   useDataChangedRefresh(loadProfile);
@@ -514,7 +525,7 @@ const SettingsScreen = () => {
 
               <View style={[styles.bannerInfo, { flex: 1 }]}>
                 <AppText variant="title" weight="bold" style={[styles.bannerName, { color: G.fg }]} numberOfLines={1}>
-                  {activeBizName?.trim() || userProfile.businessName || 'Shega Business'}
+                  {activeBizName?.trim() || (accountUser?.business_name || '').trim() || userProfile.businessName || 'Shega Business'}
                 </AppText>
 
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>

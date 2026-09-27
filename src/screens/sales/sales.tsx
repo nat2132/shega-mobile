@@ -32,6 +32,7 @@ import { useNotifications } from "@/hooks/useNotifications";
 import { useAutoHideScroll } from "@/hooks/useAutoHideScroll";
 import { useDataChangedRefresh } from "@/hooks/useDataChangedRefresh";
 import { usePeripheralScan } from "@/hooks/usePeripherals";
+import { useWriteGuard } from "@/hooks/useWriteGuard";
 import { getPeripheralManager } from "@/services/peripherals/peripheralManager";
 import { playBad, playNice } from "@/services/soundService";
 import { recordSaleBatch } from "@/services/saleService";
@@ -126,6 +127,7 @@ const SalesDashboard = () => {
   const { userProfile, colors, calendarType, language, timeSystem, t, featureFlags } =
     useSettings();
   const { isReadOnly } = useSubscription();
+  const { guard } = useWriteGuard();
   const insets = useSafeAreaInsets();
   const SALES_GLASS = useMemo(() => getSalesGlass(colors), [colors]);
   const hideFABStyle = useAutoHideScroll();
@@ -733,6 +735,7 @@ const SalesDashboard = () => {
   };
 
   const handleFullPayment = async (customer: any) => {
+    if (!guard()) return;
     setPendingPaymentAction("full");
     setPaymentMethodModalVisible(true);
   };

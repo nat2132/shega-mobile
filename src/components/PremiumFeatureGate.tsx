@@ -20,7 +20,7 @@ const PremiumFeatureGate: React.FC<PremiumFeatureGateProps> = ({
   fallback,
 }) => {
   const { colors, theme, t } = useSettings();
-  const { isFeatureUnlocked, isBasicFeature, isExpired, isReadOnly } = useSubscription();
+  const { isFeatureUnlocked, isCoreFeature, isExpired, isReadOnly } = useSubscription();
   const router = useRouter();
   const gold = '#D4AF37';
 
@@ -28,7 +28,7 @@ const PremiumFeatureGate: React.FC<PremiumFeatureGateProps> = ({
     return <>{children}</>;
   }
 
-  if (isBasicFeature(feature)) {
+  if (isCoreFeature(feature)) {
     if (isReadOnly) {
       if (fallback) return <>{fallback}</>;
       return (
@@ -38,7 +38,7 @@ const PremiumFeatureGate: React.FC<PremiumFeatureGateProps> = ({
           </View>
           <View style={styles.textSection}>
             <AppText variant="body" weight="bold" style={{ color: colors.text }}>
-              {featureName || t('common.basic_feature')}
+              {featureName || t('common.core_feature')}
             </AppText>
             <AppText variant="caption" weight="medium" style={{ color: colors.textSecondary }}>
               {t('common.read_only_mode')}

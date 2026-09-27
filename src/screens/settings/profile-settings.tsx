@@ -32,6 +32,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Fonts } from '@/constants/theme';
 import { useSettings, PROFILE_IMAGES } from '@/context/SettingsContext';
 import { useDialog } from '@/context/DialogContext';
+import { useWriteGuard } from '@/hooks/useWriteGuard';
 
 import { router } from 'expo-router';
 import { AppText} from '@/components/ui';
@@ -44,6 +45,7 @@ const EditProfileScreen = () => {
   const { user: accountUser, subscription, isLoggedIn, logout } = useAccount();
   const G = getSettingsGlass(colors);
   const dialog = useDialog();
+  const { guard } = useWriteGuard();
   const [name, setName] = useState(() => {
     const uid = getCurrentUserId();
     const u = uid ? getUser(uid) : undefined;
@@ -62,6 +64,7 @@ const EditProfileScreen = () => {
   });
 
   const handleSave = async () => {
+    if (!guard()) return;
     setUserProfile({
       name,
       businessName,
@@ -293,7 +296,7 @@ const EditProfileScreen = () => {
                 </View>
               ) : null}
 
-              <TouchableOpacity onPress={() => router.replace('/subscription/plans')} style={styles.accountLink} activeOpacity={0.7}>
+              <TouchableOpacity onPress={() => router.push('/subscription/manage')} style={styles.accountLink} activeOpacity={0.7}>
                 <Crown size={18} color={colors.primary} />
                 <AppText variant="body" weight="bold" style={{ color: colors.primary, flex: 1 }}>{t('account.manage_plan')}</AppText>
                 <ChevronRight size={18} color={G.fgSecondary} />

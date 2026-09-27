@@ -22,6 +22,7 @@ import {
 } from 'lucide-react-native';
 import { Fonts } from '@/constants/theme';
 import { useSettings } from '@/context/SettingsContext';
+import { useWriteGuard } from '@/hooks/useWriteGuard';
 import { AppText } from '@/components/ui';
 import { getSettingsGlass } from './glass-settings';
 import MorVerificationInline from '@/components/tax/mor-verification';
@@ -58,6 +59,7 @@ const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 
 
 const TaxCenterScreen = () => {
   const { colors, t } = useSettings();
+  const { guard } = useWriteGuard();
   const G = getSettingsGlass(colors);
 
   const now = useMemo(() => new Date(), []);
@@ -120,6 +122,7 @@ const TaxCenterScreen = () => {
   };
 
   const saveTaxType = () => {
+    if (!guard()) return;
     const name = taxNameDraft.trim();
     const rate = parseFloat(taxRateDraft) || 0;
     if (!name || rate <= 0) return;
@@ -129,6 +132,7 @@ const TaxCenterScreen = () => {
   };
 
   const removeTaxTypeCfg = (id: string) => {
+    if (!guard()) return;
     removeTaxType(id);
     refresh();
   };
@@ -258,7 +262,7 @@ const TaxCenterScreen = () => {
             </TouchableOpacity>
             <Switch
               value={t.enabled}
-              onValueChange={(v) => { updateTaxType(t.id, { enabled: v }); refresh(); }}
+              onValueChange={(v) => { if (!guard()) return; updateTaxType(t.id, { enabled: v }); refresh(); }}
               trackColor={{ false: G.border, true: G.fg + '60' }}
               thumbColor={t.enabled ? G.fg : G.muted}
             />

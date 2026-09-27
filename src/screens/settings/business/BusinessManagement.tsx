@@ -11,13 +11,16 @@ import { getSettingsGlass } from '../glass-settings';
 import { useBusinessAuth } from '@/hooks/useBusinessAuth';
 import { useDataChangedRefresh } from '@/hooks/useDataChangedRefresh';
 import {
-  getUsers, getDevices, getRegisters, getLocations, getCustomRoles, getCustomRole,
+  getUsers, getDevices, getRegisters, getLocations, getCustomRole,
   addUser, addDevice, addRegister, approveDevice,
   setDeviceStatus, renameDevice, updateUserRole, replaceDevice,
   setUserActive, removeUser, transferOwnership, createCustomRole,
-  assignDeviceToUser, updateUserAssignment,
-  getBusinesses, getBusiness, setActiveBusiness, setCurrentUserId, getOwnerOfBusiness,
-  setBusinessLogo, getBusinessLogo,
+  updateCustomRole, deleteCustomRole, getRolesForBusiness,
+  assignDeviceToUser, updateUserAssignment, resetUserPermissions, updateUserPermissions,
+  getBusinesses, getBusiness, setActiveBusiness, setCurrentUserId,
+  setBusinessLogo, getBusinessLogo, resolveMembershipForBusiness, updateBusiness,
+  deleteBusiness, getThisDeviceId, getCurrentUserId, getUser, createBusiness,
+  effectivePermissions,
 } from '@/services/businessService';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'react-native';
@@ -25,17 +28,18 @@ import { useToast } from '@/context/ToastContext';
 import { setComplianceSetting } from '@/database/db';
 import { router } from 'expo-router';
 import {
-  BUILTIN_ROLES, BuiltinRoleKey, SURFACED_BUILTIN_ROLES, getBuiltinRole,
-  PERMISSION_CATALOG, SCOPE_LABELS, PermissionScope, PermissionValue,
+  BUILTIN_ROLES, BuiltinRoleKey, getBuiltinRole,
+  PERMISSION_CATALOG, SCOPE_LABELS, PermissionScope, PermissionValue, PermissionSet,
   Device,
 } from '@shega/shared';
 import {
   Users, Smartphone, Printer, KeyRound, ChevronRight,
   Plus, X, Crown, QrCode, ShieldCheck, ShieldX, Building2, Check, Link2,
+  Shield, SlidersHorizontal, Trash2,
 } from 'lucide-react-native';
 import {
-  generateInvitation, getInvitations, revokeInvitation,
-  canAddDevice, getActiveDeviceCount,
+  generateInvitation, revokeInvitation,
+  canAddDevice, getActiveDeviceCount, deviceLimitStatus,
 } from '@/services/invitationService';
 import { wsSyncClient } from '@/services/wsSyncClient';
 import { getDB } from '@/database/db';
@@ -60,7 +64,13 @@ export function BusinessManagement({ onClose }: Props) {
   const { t } = useSettings();
   const glass = useGlass();
   const auth = useBusinessAuth();
+  const { showToast } = useToast();
   const [tab, setTab] = useState<Tab>('overview');
+  const [tick, setTick] = useState(0);
+  const refresh = useCallback(() => setTick((k) => k + 1), []);
+  useDataChangedRefresh(refresh);
+
+  void tick;
   const businessId = auth.business?.id;
 
   const people = businessId ? getUsers(businessId) : [];
@@ -69,18 +79,38 @@ export function BusinessManagement({ onClose }: Props) {
   const locations = businessId ? getLocations(businessId) : [];
   const businesses = getBusinesses();
 
+  const can = auth.can;
+  const canManageRegistration = can('settings.manage') || auth.isOwner;
+
+  const tabs: { key: Tab; label: string; icon: any; show: boolean }[] = [
+    { key: 'overview', label: t('business.tab_overview'), icon: Building2, show: true },
+    { key: 'people', label: t('business.people'), icon: Users, show: can('team.view') },
+    { key: 'devices', label: t('business.devices'), icon: Smartphone, show: can('devices.view') || can('devices.manage') },
+    { key: 'registers', label: t('business.registers'), icon: Printer, show: can('registers.view') },
+    { key: 'permissions', label: t('business.permissions_roles'), icon: KeyRound, show: can('team.view') },
+    { key: 'businesses', label: t('business.businesses'), icon: Building2, show: businesses.length > 1 || auth.isOwner },
+    { key: 'ownership', label: t('business.transfer_ownership'), icon: Crown, show: auth.isOwner && can('ownership.transfer') },
+  ];
+  const visibleTabs = tabs.filter((x) => x.show);
+
+  /** Switch the whole device to another business this account actually belongs to. */
   const handleSwitchBusiness = (targetId: string) => {
-    const target = getBusiness(targetId);
-    if (!target || target.id === businessId) return;
-    const owner = getOwnerOfBusiness(target.id);
-    setActiveBusiness(target.id);
-    if (owner) {
-      setCurrentUserId(owner.id);
-      setComplianceSetting('user_role', owner.role || 'owner');
+    if (!targetId || targetId === businessId) return;
+    const memberId = resolveMembershipForBusiness(targetId);
+    if (!memberId) {
+      Alert.alert(t('business.not_a_member_title'), t('business.not_a_member_msg'));
+      return;
     }
-    Haptics.selectionAsync();
-    onClose();
-    router.replace('/(tabs)/dashboard');
+    setActiveBusiness(targetId);
+    setCurrentUserId(memberId);
+    setComplianceSetting('user_role', getUser(memberId)?.role || 'cashier');
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    const target = getBusiness(targetId);
+    if (target) {
+      showToast(t('business.switched_to', { name: target.name }), 'success');
+    }
+    setTab('overview');
+    refresh();
   };
 
   return (
@@ -88,60 +118,129 @@ export function BusinessManagement({ onClose }: Props) {
       <View style={[styles.header, { borderBottomColor: glass.border }]}>
         <View style={{ flex: 1 }}>
           <AppText variant="title" weight="bold" style={{ color: glass.fg }}>{t('business.title')}</AppText>
-          <AppText variant="caption" weight="medium" style={{ color: glass.muted }}>
-            {auth.business?.name}{auth.isOwner ? t('business.owner_suffix') : ''}
-          </AppText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+            <AppText variant="caption" weight="medium" style={{ color: glass.muted }} numberOfLines={1}>
+              {auth.business?.name || t('business.no_businesses')}
+            </AppText>
+            {!!auth.user && (
+              <View style={[styles.roleBadge, { backgroundColor: glass.accentGlass, borderColor: glass.border }]}>
+                {auth.isOwner && <Crown size={11} color={glass.fg} />}
+                <AppText variant="micro" weight="bold" style={{ color: glass.fg }}>
+                  {getRoleLabel(auth.user.role)}
+                </AppText>
+              </View>
+            )}
+          </View>
         </View>
+        {businesses.length > 1 && (
+          <TouchableOpacity
+            onPress={() => { Haptics.selectionAsync(); setTab('businesses'); }}
+            style={[styles.chipBtn, { backgroundColor: glass.bgCard, borderColor: glass.border }]}
+          >
+            <Building2 size={15} color={glass.fg} />
+            <AppText variant="caption" weight="bold" style={{ color: glass.fg }}>{businesses.length}</AppText>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity onPress={() => { Haptics.selectionAsync(); onClose(); }} style={[styles.closeBtn, { backgroundColor: glass.bgCard, borderColor: glass.border }]}>
           <X size={18} color={glass.fg} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-        {tab === 'overview' && (
+      <View style={[styles.tabBar, { borderBottomColor: glass.border }]}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingVertical: 10 }}>
+          {visibleTabs.map((tb) => {
+            const active = tab === tb.key;
+            return (
+              <TouchableOpacity
+                key={tb.key}
+                onPress={() => { Haptics.selectionAsync(); setTab(tb.key); }}
+                style={[styles.tabPill, {
+                  backgroundColor: active ? glass.fg : glass.bgCard,
+                  borderColor: active ? glass.fg : glass.border,
+                }]}
+              >
+                <tb.icon size={14} color={active ? glass.bg : glass.muted} />
+                <AppText variant="caption" weight="bold" style={{ color: active ? glass.bg : glass.fg }}>{tb.label}</AppText>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
+        {!businessId && <EmptyState icon={Building2} title={t('business.no_businesses')} text={t('business.no_business_hint')} />}
+
+        {!!businessId && tab === 'overview' && (
           <Overview
             businessName={auth.business?.name || ''}
             isOwner={auth.isOwner}
+            roleLabel={auth.user ? getRoleLabel(auth.user.role) : ''}
             peopleCount={people.length}
             deviceCount={devices.filter((d) => d.status === 'active').length}
+            pendingCount={devices.filter((d) => d.status === 'pending').length}
             registerCount={registers.length}
             businessCount={businesses.length}
             businessId={businessId ?? undefined}
+            canManageLogo={canManageRegistration}
             onNav={setTab}
           />
         )}
 
-        {tab === 'businesses' && (
-          <BusinessesPanel businesses={businesses} currentId={businessId} onSwitch={handleSwitchBusiness} glass={glass} />
+        {!!businessId && tab === 'businesses' && (
+          <BusinessesPanel
+            businesses={businesses}
+            currentId={businessId}
+            onSwitch={handleSwitchBusiness}
+            canCreate={canManageRegistration}
+            canDelete={can('ownership.deleteBusiness')}
+            glass={glass}
+          />
         )}
 
-        {tab === 'people' && (
-          <PeoplePanel businessId={businessId!} people={people} devices={devices} registers={registers} locations={locations} canManage={auth.can('team.manage')} glass={glass} />
+        {!!businessId && tab === 'people' && (
+          <PeoplePanel
+            businessId={businessId}
+            people={people}
+            devices={devices}
+            registers={registers}
+            locations={locations}
+            canManage={can('team.manage')}
+            canAssignRoles={can('team.assignRoles')}
+            glass={glass}
+          />
         )}
 
-        {tab === 'devices' && (
-          <DevicesPanel businessId={businessId!} devices={devices} people={people} canManage={auth.can('devices.manage')} glass={glass} />
+        {!!businessId && tab === 'devices' && (
+          <DevicesPanel
+            businessId={businessId}
+            devices={devices}
+            people={people}
+            canManage={can('devices.manage')}
+            glass={glass}
+          />
         )}
 
-        {tab === 'registers' && (
-          <RegistersPanel businessId={businessId!} registers={registers} locations={locations} canManage={auth.can('registers.manage')} glass={glass} />
+        {!!businessId && tab === 'registers' && (
+          <RegistersPanel businessId={businessId} registers={registers} locations={locations} canManage={can('registers.manage')} glass={glass} />
         )}
 
-        {tab === 'permissions' && (
-          <PermissionsPanel businessId={businessId!} canManage={auth.can('team.assignRoles')} glass={glass} />
+        {!!businessId && tab === 'permissions' && (
+          <PermissionsPanel businessId={businessId} canManage={can('team.assignRoles')} glass={glass} />
         )}
 
-        {tab === 'ownership' && (
-          <OwnershipPanel businessId={businessId!} canTransfer={auth.can('ownership.transfer')} glass={glass} />
+        {!!businessId && tab === 'ownership' && (
+          <OwnershipPanel businessId={businessId} canTransfer={can('ownership.transfer')} glass={glass} />
         )}
       </ScrollView>
     </View>
   );
 }
 
-function Overview({ businessName, isOwner, peopleCount, deviceCount, registerCount, businessCount, businessId, onNav }: {
-  businessName: string; isOwner: boolean; peopleCount: number; deviceCount: number; registerCount: number; businessCount: number;
+function Overview({ businessName, isOwner, roleLabel, peopleCount, deviceCount, pendingCount, registerCount, businessCount, businessId, canManageLogo, onNav }: {
+  businessName: string; isOwner: boolean; roleLabel: string; peopleCount: number; deviceCount: number; pendingCount: number;
+  registerCount: number; businessCount: number;
   businessId?: string;
+  canManageLogo: boolean;
   onNav: (t: Tab) => void;
 }) {
   const glass = useGlass();
@@ -178,17 +277,22 @@ function Overview({ businessName, isOwner, peopleCount, deviceCount, registerCou
     showToast(t('business.image_saved'), 'success');
   };
 
-  const cards: { tab: Tab; icon: any; title: string; count: number }[] = [
-    { tab: 'people', icon: Users, title: t('business.people'), count: peopleCount },
-    { tab: 'devices', icon: Smartphone, title: t('business.active_devices'), count: deviceCount },
-    { tab: 'registers', icon: Printer, title: t('business.registers'), count: registerCount },
-    { tab: 'businesses', icon: Building2, title: t('business.businesses'), count: businessCount },
+  const auth = useBusinessAuth();
+  const can = auth.can;
+
+  const cards: { tab: Tab; icon: any; title: string; count: number; show: boolean; hint?: string }[] = [
+    { tab: 'people', icon: Users, title: t('business.people'), count: peopleCount, show: can('team.view') },
+    { tab: 'devices', icon: Smartphone, title: t('business.active_devices'), count: deviceCount, show: can('devices.view') || can('devices.manage'), hint: pendingCount > 0 ? t('business.pending_devices', { count: String(pendingCount) }) : undefined },
+    { tab: 'registers', icon: Printer, title: t('business.registers'), count: registerCount, show: can('registers.view') },
+    { tab: 'businesses', icon: Building2, title: t('business.businesses'), count: businessCount, show: businessesVisible(businessCount, auth.isOwner) },
   ];
+  const visibleCards = cards.filter((c) => c.show);
+
   return (
     <View>
       <View style={[styles.ownerBanner, { backgroundColor: glass.bgCard, borderColor: glass.border }]}>
         <TouchableOpacity
-          disabled={!isOwner || savingLogo}
+          disabled={!canManageLogo || savingLogo}
           onPress={pickBusinessImage}
           style={{ alignItems: 'center' }}
         >
@@ -203,7 +307,7 @@ function Overview({ businessName, isOwner, peopleCount, deviceCount, registerCou
               <Crown size={36} color={glass.fg} />
             )}
           </View>
-          {isOwner && (
+          {canManageLogo && (
             <AppText variant="micro" weight="bold" style={{ color: glass.accent }}>
               {savingLogo ? t('business.saving') : logoUri ? t('business.tap_change_image') : t('business.tap_add_image')}
             </AppText>
@@ -212,59 +316,75 @@ function Overview({ businessName, isOwner, peopleCount, deviceCount, registerCou
         <AppText variant="body" weight="bold" style={{ color: glass.fg, marginTop: 6 }}>
           {businessName}
         </AppText>
-        <AppText variant="caption" weight="medium" style={{ color: glass.muted, textAlign: 'center', marginTop: 4 }}>
+        <View style={[styles.roleBadge, { backgroundColor: glass.accentGlass, borderColor: glass.border, marginTop: 6 }]}>
+          {isOwner && <Crown size={11} color={glass.fg} />}
+          <AppText variant="micro" weight="bold" style={{ color: glass.fg }}>
+            {t('business.your_role', { role: roleLabel || t('business.limited_access') })}
+          </AppText>
+        </View>
+        <AppText variant="caption" weight="medium" style={{ color: glass.muted, textAlign: 'center', marginTop: 6 }}>
           {isOwner ? t('business.owner_permissions') : t('business.limited_access')}
         </AppText>
       </View>
 
       <View style={styles.cardRow}>
-        {cards.map((c) => (
+        {visibleCards.map((c) => (
           <TouchableOpacity key={c.tab} onPress={() => { Haptics.selectionAsync(); onNav(c.tab); }}
             style={[styles.statCard, { backgroundColor: glass.bgCard, borderColor: glass.border }]}>
             <c.icon size={22} color={glass.fg} />
             <AppText variant="display" weight="bold" style={{ color: glass.fg, marginTop: 6 }}>{c.count}</AppText>
             <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: glass.muted }}>{c.title}</AppText>
+            {!!c.hint && (
+              <AppText variant="micro" weight="medium" style={{ color: glass.accent, marginTop: 2, textAlign: 'center' }} numberOfLines={2}>{c.hint}</AppText>
+            )}
           </TouchableOpacity>
         ))}
       </View>
 
       <View style={[styles.menuGroup, { backgroundColor: glass.bgCard, borderColor: glass.border }]}>
-        <MenuRow icon={Users} label={t('business.manage_people')} onPress={() => onNav('people')} />
-        <MenuRow icon={Smartphone} label={t('business.manage_devices')} onPress={() => onNav('devices')} />
-        <MenuRow icon={Printer} label={t('business.manage_registers')} onPress={() => onNav('registers')} />
-        <MenuRow icon={KeyRound} label={t('business.permissions_roles')} onPress={() => onNav('permissions')} last />
+        {can('team.manage') && <MenuRow icon={Users} label={t('business.manage_people')} onPress={() => onNav('people')} />}
+        {can('devices.manage') && <MenuRow icon={Smartphone} label={t('business.manage_devices')} onPress={() => onNav('devices')} />}
+        {can('registers.manage') && <MenuRow icon={Printer} label={t('business.manage_registers')} onPress={() => onNav('registers')} />}
+        {can('team.assignRoles') && <MenuRow icon={KeyRound} label={t('business.permissions_roles')} onPress={() => onNav('permissions')} last />}
       </View>
-      {isOwner && (
+      {!can('team.manage') && !can('devices.manage') && !can('registers.manage') && !can('team.assignRoles') && (
+        <AppText variant="caption" weight="medium" style={{ color: glass.muted, marginTop: 12, textAlign: 'center' }}>
+          {t('business.limited_access')}
+        </AppText>
+      )}
+      {isOwner && can('ownership.transfer') && (
         <MenuRow icon={Crown} label={t('business.transfer_ownership')} onPress={() => onNav('ownership')} />
       )}
     </View>
   );
 }
 
+function businessesVisible(count: number, isOwner: boolean) {
+  return count > 1 || isOwner;
+}
+
 // ---------- Multi-business switcher ----------
 
-function BusinessesPanel({ businesses, currentId, onSwitch, glass }: {
-  businesses: any[]; currentId?: string; onSwitch: (id: string) => void; glass: any;
+function BusinessesPanel({ businesses, currentId, onSwitch, canCreate, canDelete, glass }: {
+  businesses: any[]; currentId?: string; onSwitch: (id: string) => void; canCreate: boolean; canDelete: boolean; glass: any;
 }) {
   const { t } = useSettings();
+  const { showToast } = useToast();
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
 
   const createNewBusiness = () => {
     const name = newName.trim();
-    if (!name) return;
+    if (!name || !canCreate) return;
     try {
-      const { createBusiness, getThisDeviceId, getCurrentUserId, getUser, setCurrentUserId } = require('@/services/businessService');
-      const deviceId = getThisDeviceId() ?? undefined;
       const uid = getCurrentUserId();
       const me = uid ? getUser(uid) : undefined;
-      const biz = createBusiness({ name, ownerName: me?.name || name }, deviceId);
-      // Carry the same Shega account into the new business as its Owner —
-      // one user, separate per-business membership.
-      if (me) setCurrentUserId(me.id);
+      // New business => new owner membership for the same Shega account.
+      const biz = createBusiness({ name, ownerName: me?.name || name }, getThisDeviceId() || '');
       setCreating(false);
       setNewName('');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showToast(t('business.created_new', { name }), 'success');
       onSwitch(biz.id);
     } catch (e: any) {
       Alert.alert(t('common.error'), e?.message || 'Could not create the business');
@@ -276,7 +396,7 @@ function BusinessesPanel({ businesses, currentId, onSwitch, glass }: {
       <SectionHeader
         icon={Building2}
         title={t('business.businesses')}
-        actionLabel={t('business.new_business')}
+        actionLabel={canCreate ? t('business.new_business') : undefined}
         onAction={() => { setCreating(true); setNewName(''); }}
         glass={glass}
       />
@@ -284,7 +404,7 @@ function BusinessesPanel({ businesses, currentId, onSwitch, glass }: {
         {t('business.businesses_hint')}
       </AppText>
 
-      {creating && (
+      {creating && canCreate && (
         <View style={[styles.listCard, { backgroundColor: glass.bgCard, borderColor: glass.accent, marginBottom: 10 }]}>
           <TextInput
             style={[styles.input, { borderColor: glass.border, color: glass.fg, backgroundColor: glass.bg }]}
@@ -306,71 +426,71 @@ function BusinessesPanel({ businesses, currentId, onSwitch, glass }: {
         </View>
       )}
 
-      {businesses.length === 0 && !creating && <EmptyState text={t('business.no_businesses')} />}
+      {businesses.length === 0 && !creating && (
+        <EmptyState icon={Building2} title={t('business.no_businesses')} text={t('business.no_business_hint')} />
+      )}
 
       {businesses.map((b) => {
         const active = b.id === currentId;
+        const memberId = resolveMembershipForBusiness(b.id);
+        const role = memberId ? getUser(memberId)?.role : undefined;
+        const isMember = !!memberId;
         const handleLongPress = () => {
-          Alert.alert(
-            b.name,
-            'Manage this business',
-            [
-              { text: t('common.cancel'), style: 'cancel' },
-              {
-                text: 'Rename Business',
-                onPress: () => {
-                  Alert.prompt(
-                    'Rename Business',
-                    'Enter new business name:',
-                    [
-                      { text: t('common.cancel'), style: 'cancel' },
-                      {
-                        text: t('common.save'),
-                        onPress: (val?: string) => {
-                          if (val && val.trim()) {
-                            const { updateBusiness } = require('@/services/businessService');
-                            updateBusiness(b.id, { name: val.trim() });
-                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                          }
-                        },
+          if (!canDelete && !isMember) return;
+          const actions: { text: string; style?: 'destructive' | 'cancel' | 'default'; onPress?: () => void }[] = [];
+          if (canDelete) {
+            actions.push({
+              text: t('business.rename_business'),
+              onPress: () => {
+                Alert.prompt(
+                  t('business.rename_business'),
+                  t('business.new_business_name'),
+                  [
+                    { text: t('common.cancel'), style: 'cancel' },
+                    {
+                      text: t('common.save'),
+                      onPress: (val?: string) => {
+                        if (val && val.trim()) {
+                          updateBusiness(b.id, { name: val.trim() });
+                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                        }
                       },
-                    ],
-                    'plain-text',
-                    b.name
-                  );
-                },
+                    },
+                  ],
+                  'plain-text',
+                  b.name
+                );
               },
-              {
-                text: 'Delete Business',
-                style: 'destructive',
-                onPress: () => {
-                  Alert.alert(
-                    'Delete Business?',
-                    `Are you sure you want to delete "${b.name}"? This action soft-deletes the business and its local data.`,
-                    [
-                      { text: t('common.cancel'), style: 'cancel' },
-                      {
-                        text: t('common.delete'),
-                        style: 'destructive',
-                        onPress: () => {
-                          try {
-                            const { deleteBusiness } = require('@/services/businessService');
-                            const res = deleteBusiness(b.id);
-                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                            if (res.newActiveId) {
-                              onSwitch(res.newActiveId);
-                            }
-                          } catch (err: any) {
-                            Alert.alert('Cannot Delete', err?.message || 'Action failed.');
-                          }
-                        },
+            });
+            actions.push({
+              text: t('business.delete_business'),
+              style: 'destructive',
+              onPress: () => {
+                Alert.alert(
+                  t('business.delete_business_title'),
+                  t('business.delete_business_msg', { name: b.name }),
+                  [
+                    { text: t('common.cancel'), style: 'cancel' },
+                    {
+                      text: t('common.delete'),
+                      style: 'destructive',
+                      onPress: () => {
+                        try {
+                          const res = deleteBusiness(b.id);
+                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                          if (res.newActiveId) onSwitch(res.newActiveId);
+                        } catch (err: any) {
+                          Alert.alert(t('business.cannot_delete'), err?.message || t('common.error'));
+                        }
                       },
-                    ]
-                  );
-                },
+                    },
+                  ]
+                );
               },
-            ]
-          );
+            });
+          }
+          actions.push({ text: t('common.cancel'), style: 'cancel' });
+          Alert.alert(b.name, t('business.choose_action'), actions);
         };
 
         return (
@@ -379,21 +499,34 @@ function BusinessesPanel({ businesses, currentId, onSwitch, glass }: {
             disabled={active}
             onPress={() => { Haptics.selectionAsync(); onSwitch(b.id); }}
             onLongPress={handleLongPress}
-            style={[styles.listCard, { backgroundColor: glass.bgCard, borderColor: active ? glass.accent : glass.border }]}
+            style={[styles.listCard, {
+              backgroundColor: glass.bgCard,
+              borderColor: active ? glass.accent : glass.border,
+              opacity: isMember ? 1 : 0.6,
+            }]}
           >
-            <View style={[styles.avatar, { backgroundColor: active ? glass.accentGlass : glass.accentGlass }]}>
+            <View style={[styles.avatar, { backgroundColor: glass.accentGlass }]}>
               <Building2 size={18} color={glass.fg} />
             </View>
             <View style={{ flex: 1 }}>
-              <AppText variant="body" weight="bold" style={{ color: glass.fg }}>{b.name}{b.is_default ? '  ★' : ''}</AppText>
-              <AppText variant="caption" weight="medium" style={{ color: glass.muted }}>
-                {b.currency || 'ETB'}{active ? t('business.active_suffix') : ''} · Hold for options
+              <AppText variant="body" weight="bold" style={{ color: glass.fg }}>
+                {b.name}{b.isDefault ? '  ★' : ''}
+              </AppText>
+              <AppText variant="caption" weight="medium" style={{ color: glass.muted }} numberOfLines={1}>
+                {role ? getRoleLabel(role) : t('business.not_a_member_short')}
+                {active ? t('business.active_suffix') : ''}
               </AppText>
             </View>
             {active && <Check size={18} color={glass.accent} />}
           </TouchableOpacity>
         );
       })}
+
+      {canDelete && (
+        <AppText variant="caption" weight="medium" style={{ color: glass.muted, marginTop: 8, textAlign: 'center' }}>
+          {t('business.hold_for_options')}
+        </AppText>
+      )}
     </View>
   );
 }
@@ -412,40 +545,66 @@ function MenuRow({ icon: Icon, label, onPress, last }: { icon: any; label: strin
 
 // ---------- People ----------
 
-function PeoplePanel({ businessId, people, devices, registers, locations, canManage, glass }: {
-  businessId: string; people: any[]; devices: any[]; registers: any[]; locations: any[]; canManage: boolean; glass: any;
+function PeoplePanel({ businessId, people, devices, registers, locations, canManage, canAssignRoles, glass }: {
+  businessId: string; people: any[]; devices: any[]; registers: any[]; locations: any[]; canManage: boolean; canAssignRoles: boolean; glass: any;
 }) {
   const { t } = useSettings();
   const [showAdd, setShowAdd] = useState(false);
+  const [editingPermissions, setEditingPermissions] = useState<any | null>(null);
+
+  const activeCount = people.filter((p) => p.isActive).length;
 
   return (
     <View>
       <SectionHeader icon={Users} title={t('business.people')} actionLabel={canManage ? t('business.add_person') : undefined} onAction={() => canManage && setShowAdd(true)} glass={glass} />
+      <AppText variant="caption" weight="medium" style={{ color: glass.muted, marginBottom: 10 }}>
+        {t('business.people_hint', { business: '', active: String(activeCount), total: String(people.length) })}
+      </AppText>
 
       {canManage && <CloudPairingSection glass={glass} />}
 
-      {people.length === 0 && <EmptyState text={t('business.add_team_members')} />}
+      {people.length === 0 && (
+        <EmptyState icon={Users} title={t('business.no_people_title')} text={t('business.add_team_members')} />
+      )}
 
       {people.map((p) => {
         const device = devices.find((d) => d.userId === p.id && d.status !== 'removed');
         const register = registers.find((r) => r.id === p.assignedRegisterId);
         const location = locations.find((l) => l.id === p.assignedLocationId);
-        const assignment = [device?.name, register?.name, location?.name].filter(Boolean).join(' · ');
+        const hasAssignment = !!(device?.name || register?.name || location?.name);
+        const permCount = Object.values(effectivePermissions(p)).filter((v) => v === true || v === 'approval').length;
+        const isOwner = !!p.isOwner || p.role === 'owner';
         return (
-          <View key={p.id} style={[styles.listCard, { backgroundColor: glass.bgCard, borderColor: glass.border }]}>
-            <View style={[styles.avatar, { backgroundColor: glass.accentGlass }]}>
-              {p.isOwner ? <Crown size={18} color={glass.fg} /> : <AppText variant="body" weight="bold" style={{ color: glass.fg }}>{p.name.slice(0, 1).toUpperCase()}</AppText>}
+          <View key={p.id} style={[styles.listCard, { backgroundColor: glass.bgCard, borderColor: glass.border, opacity: p.isActive ? 1 : 0.55 }]}>
+            <View style={[styles.avatar, { backgroundColor: isOwner ? '#f1c40f22' : glass.accentGlass }]}>
+              {isOwner ? <Crown size={18} color={glass.fg} /> : <AppText variant="body" weight="bold" style={{ color: glass.fg }}>{p.name.slice(0, 1).toUpperCase()}</AppText>}
             </View>
             <View style={{ flex: 1 }}>
-              <AppText variant="body" weight="bold" style={{ color: glass.fg }}>{p.name}{p.isOwner ? '  👑' : ''}</AppText>
-              <AppText variant="caption" weight="medium" style={{ color: glass.muted }}>{p.roleName || getRoleLabel(p.role)}{p.isActive ? '' : t('business.disabled_suffix')}</AppText>
-              {assignment && (
-                <AppText variant="micro" weight="medium" style={{ color: glass.muted, marginTop: 2 }} numberOfLines={1}>
-                  {device ? '📱 ' + device.name : ''}{device ? (register || location ? ' · ' : '') : ''}{register ? '🖨 ' + register.name : ''}{register && location ? ' · ' : ''}{location ? '📍 ' + location.name : ''}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <AppText variant="body" weight="bold" style={{ color: glass.fg }} numberOfLines={1}>{p.name}</AppText>
+                {isOwner && <Crown size={13} color="#f1c40f" />}
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
+                <View style={[styles.roleBadge, { backgroundColor: glass.accentGlass, borderColor: glass.border }]}>
+                  <AppText variant="micro" weight="bold" style={{ color: glass.fg }}>{getRoleLabel(p.role)}</AppText>
+                </View>
+                <AppText variant="micro" weight="medium" style={{ color: glass.muted }}>
+                  {t('business.permissions_count', { count: String(permCount) })}
+                </AppText>
+                {!p.isActive && (
+                  <View style={[styles.roleBadge, { backgroundColor: '#e74c3c22', borderColor: glass.border }]}>
+                    <AppText variant="micro" weight="bold" style={{ color: '#e74c3c' }}>{t('business.status_disabled_label')}</AppText>
+                  </View>
+                )}
+              </View>
+              {hasAssignment && (
+                <AppText variant="micro" weight="medium" style={{ color: glass.muted, marginTop: 3 }} numberOfLines={1}>
+                  {[device?.name ? '📱 ' + device.name : '', register?.name ? '🖨 ' + register.name : '', location?.name ? '📍 ' + location.name : '']
+                    .filter(Boolean).join('  ·  ')}
                 </AppText>
               )}
             </View>
-            {canManage && !p.isOwner && (
+            {canManage && (
               <TouchableOpacity onPress={() => showUserActions(p)} style={[styles.smallBtn, { backgroundColor: glass.accentGlass }]}>
                 <AppText variant="caption" weight="bold" style={{ color: glass.fg }}>…</AppText>
               </TouchableOpacity>
@@ -454,28 +613,48 @@ function PeoplePanel({ businessId, people, devices, registers, locations, canMan
         );
       })}
 
+      {!canAssignRoles && people.length > 0 && (
+        <AppText variant="caption" weight="medium" style={{ color: glass.muted, marginTop: 10, textAlign: 'center' }}>
+          {t('business.role_readonly_note')}
+        </AppText>
+      )}
+
       {showAdd && (
         <AddPersonModal businessId={businessId} devices={devices} registers={registers} locations={locations} onClose={() => setShowAdd(false)} glass={glass} />
+      )}
+      {editingPermissions && (
+        <MemberPermissionsModal
+          member={editingPermissions}
+          businessId={businessId}
+          onClose={() => setEditingPermissions(null)}
+          glass={glass}
+        />
       )}
     </View>
   );
 
   function showUserActions(p: any) {
-    const actions: { text: string; style?: 'destructive' | 'default' | 'cancel'; onPress?: () => void }[] = [
-      { text: t('business.change_role'), onPress: () => changeRole(p) },
-      { text: t('business.assign_device'), onPress: () => pickDevice(p) },
-      { text: t('business.assign_register'), onPress: () => pickRegister(p) },
-      { text: t('business.assign_location'), onPress: () => pickLocation(p) },
-    ];
+    const isOwner = !!p.isOwner || p.role === 'owner';
+    const actions: { text: string; style?: 'destructive' | 'default' | 'cancel'; onPress?: () => void }[] = [];
+    if (canAssignRoles) {
+      actions.push({ text: t('business.change_role'), onPress: () => changeRole(p) });
+      actions.push({ text: t('business.edit_permissions'), onPress: () => setEditingPermissions(p) });
+    }
+    actions.push({ text: t('business.assign_device'), onPress: () => pickDevice(p) });
+    actions.push({ text: t('business.assign_register'), onPress: () => pickRegister(p) });
+    actions.push({ text: t('business.assign_location'), onPress: () => pickLocation(p) });
     if (p.isActive) {
       actions.push({
         text: t('business.deactivate'), style: 'destructive',
         onPress: () => {
-          const confirm = () => { try { setUserActive(p.id, false); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); } catch (e: any) { Alert.alert('Cannot deactivate', e?.message || 'Unknown error'); } };
-          if (p.isOwner) {
-            Alert.alert('Deactivate Owner?', `${p.name} is an OWNER and will lose access on all their devices.`, [
+          const confirm = () => {
+            try { setUserActive(p.id, false); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); }
+            catch (e: any) { Alert.alert(t('business.cannot_deactivate'), e?.message || t('business.error_unknown')); }
+          };
+          if (isOwner) {
+            Alert.alert(t('business.deactivate_owner_title'), t('business.deactivate_owner_msg', { name: p.name }), [
               { text: t('common.cancel'), style: 'cancel' },
-              { text: 'Deactivate', style: 'destructive', onPress: confirm },
+              { text: t('business.deactivate'), style: 'destructive', onPress: confirm },
             ]);
           } else confirm();
         },
@@ -485,13 +664,17 @@ function PeoplePanel({ businessId, people, devices, registers, locations, canMan
     }
     actions.push({
       text: t('business.remove_person'), style: 'destructive', onPress: () => {
-        Alert.alert(t('business.remove_person_title', { name: p.name }), p.isOwner ? `${p.name} is an OWNER — removing them ends their owner access for every device they use.` : t('business.remove_person_msg'), [
-          { text: t('common.cancel'), style: 'cancel' },
-          {
-            text: t('business.remove'), style: 'destructive',
-            onPress: () => { try { removeUser(p.id); } catch (e: any) { Alert.alert('Cannot remove', e?.message || 'Unknown error'); } },
-          },
-        ]);
+        Alert.alert(
+          t('business.remove_person_title', { name: p.name }),
+          isOwner ? t('business.remove_owner_msg', { name: p.name }) : t('business.remove_person_msg'),
+          [
+            { text: t('common.cancel'), style: 'cancel' },
+            {
+              text: t('business.remove'), style: 'destructive',
+              onPress: () => { try { removeUser(p.id); } catch (e: any) { Alert.alert(t('business.cannot_remove'), e?.message || t('business.error_unknown')); } },
+            },
+          ]
+        );
       },
     });
     actions.push({ text: t('common.cancel'), style: 'cancel' });
@@ -534,16 +717,14 @@ function PeoplePanel({ businessId, people, devices, registers, locations, canMan
   }
 
   function changeRole(p: any) {
-    const labels = SURFACED_BUILTIN_ROLES.map((k) => ({ key: k, label: getBuiltinRole(k)?.name || k }));
-    const custom = getCustomRoles(businessId).map((r) => ({ key: r.key, label: r.name }));
+    const roles = getRolesForBusiness(businessId);
     Alert.alert(t('business.change_role'), t('business.select_role_for', { name: p.name }), [
-      ...labels.map((r) => ({
-        text: r.label,
-        onPress: () => { updateUserRole(p.id, r.key); Haptics.selectionAsync(); },
-      })),
-      ...custom.map((r) => ({
-        text: r.label,
-        onPress: () => { updateUserRole(p.id, r.key); Haptics.selectionAsync(); },
+      ...roles.map((r) => ({
+        text: r.name + (r.memberCount ? ` (${r.memberCount})` : ''),
+        onPress: () => {
+          try { updateUserRole(p.id, r.key); Haptics.selectionAsync(); }
+          catch (e: any) { Alert.alert(t('teams.error_role'), e?.message || t('business.error_unknown')); }
+        },
       })),
       { text: t('common.cancel'), style: 'cancel' },
     ]);
@@ -554,17 +735,46 @@ function AddPersonModal({ businessId, devices, registers, locations, onClose, gl
   businessId: string; devices: any[]; registers: any[]; locations: any[]; onClose: () => void; glass: any;
 }) {
   const { t } = useSettings();
+  const { showToast } = useToast();
   const [name, setName] = useState('');
   const [role, setRole] = useState<string>('cashier');
   const [phone, setPhone] = useState('');
+  const [username, setUsername] = useState('');
+  const [pin, setPin] = useState('');
   const [registerId, setRegisterId] = useState('');
   const [locationId, setLocationId] = useState('');
-  const customRoles = getCustomRoles(businessId);
+  const [error, setError] = useState('');
+  const roles = getRolesForBusiness(businessId);
 
   const submit = () => {
-    if (!name.trim()) { Alert.alert(t('business.name_required')); return; }
-    addUser({ businessId, name: name.trim(), role, phone, assignedRegisterId: registerId || undefined, assignedLocationId: locationId || undefined });
+    setError('');
+    const trimmedName = name.trim();
+    const trimmedUser = username.trim();
+    if (!trimmedName) { setError(t('business.name_required')); return; }
+    if (!trimmedUser || trimmedUser.length < 3) { setError(t('business.username_required')); return; }
+    if (pin.length !== 6) { setError(t('business.pin_required')); return; }
+    // Sign-in identity is unique inside the business.
+    if (getUsers(businessId).some((u) => u.username?.toLowerCase() === trimmedUser.toLowerCase())) {
+      setError(t('business.username_taken'));
+      return;
+    }
+    try {
+      addUser({
+        businessId,
+        name: trimmedName,
+        role,
+        phone: phone.trim() || undefined,
+        username: trimmedUser,
+        pin,
+        assignedRegisterId: registerId || undefined,
+        assignedLocationId: locationId || undefined,
+      });
+    } catch (e: any) {
+      setError(e?.message || t('business.error_unknown'));
+      return;
+    }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    showToast(t('business.person_added', { name: trimmedName }), 'success');
     onClose();
   };
 
@@ -577,22 +787,31 @@ function AddPersonModal({ businessId, devices, registers, locations, onClose, gl
 
           <TextInput style={[styles.input, { borderColor: glass.border, color: glass.fg }]} placeholder={t('business.name')} placeholderTextColor={glass.muted} value={name} onChangeText={setName} />
           <TextInput style={[styles.input, { borderColor: glass.border, color: glass.fg }]} placeholder={t('business.phone_optional')} placeholderTextColor={glass.muted} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+          <TextInput style={[styles.input, { borderColor: glass.border, color: glass.fg }]} placeholder={t('business.username_label')} placeholderTextColor={glass.muted} value={username} onChangeText={setUsername} autoCapitalize="none" />
+          <TextInput
+            style={[styles.input, { borderColor: glass.border, color: glass.fg, letterSpacing: 3, textAlign: 'center' }]}
+            placeholder={t('business.pin_label')}
+            placeholderTextColor={glass.muted}
+            value={pin}
+            onChangeText={(v) => setPin(v.replace(/\D/g, '').slice(0, 6))}
+            keyboardType="numeric"
+            maxLength={6}
+            secureTextEntry
+          />
+          <AppText variant="micro" weight="medium" style={{ color: glass.muted, marginTop: 6 }}>{t('business.pin_helper')}</AppText>
 
           <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: glass.muted, marginTop: 12, marginBottom: 6 }}>{t('business.role')}</AppText>
           <View style={styles.roleWrap}>
-            {SURFACED_BUILTIN_ROLES.filter((k) => k !== 'owner').map((k) => (
-              <TouchableOpacity key={k} onPress={() => { Haptics.selectionAsync(); setRole(k); }}
-                style={[styles.roleChip, { backgroundColor: role === k ? glass.fg : glass.accentGlass, borderColor: glass.border }]}>
-                <AppText variant="caption" weight="bold" style={{ color: role === k ? glass.bg : glass.fg }}>{getBuiltinRole(k)?.name}</AppText>
-              </TouchableOpacity>
-            ))}
-            {customRoles.map((r) => (
+            {roles.map((r) => (
               <TouchableOpacity key={r.key} onPress={() => { Haptics.selectionAsync(); setRole(r.key); }}
                 style={[styles.roleChip, { backgroundColor: role === r.key ? glass.fg : glass.accentGlass, borderColor: glass.border }]}>
                 <AppText variant="caption" weight="bold" style={{ color: role === r.key ? glass.bg : glass.fg }}>{r.name}</AppText>
               </TouchableOpacity>
             ))}
           </View>
+          {!!error && (
+            <AppText variant="caption" weight="bold" style={{ color: '#e74c3c', marginTop: 10, textAlign: 'center' }}>{error}</AppText>
+          )}
 
           {registers.length > 0 && (
             <>
@@ -644,7 +863,159 @@ function AddPersonModal({ businessId, devices, registers, locations, onClose, gl
   );
 }
 
+// ---------- Per-member permissions ----------
+
+/**
+ * Edit a single member's effective permissions. Values cycle
+ * Allow -> Deny -> Requires approval; saving writes the exact merged set so the
+ * role's other permissions are preserved and the change syncs to every device.
+ */
+function MemberPermissionsModal({ member, businessId, onClose, glass }: {
+  member: any; businessId: string; onClose: () => void; glass: any;
+}) {
+  const { t } = useSettings();
+  const { showToast } = useToast();
+  const [draft, setDraft] = useState<PermissionSet>(() => ({ ...effectivePermissions(member) }));
+  const [query, setQuery] = useState('');
+  const [saving, setSaving] = useState(false);
+  const scopes = [...new Set(PERMISSION_CATALOG.map((p) => p.scope))] as PermissionScope[];
+
+  const cycle = (key: string) => {
+    Haptics.selectionAsync();
+    const order: PermissionValue[] = [true, false, 'approval'];
+    const current = (draft[key] ?? false) as PermissionValue;
+    const next = order[(Math.max(0, order.indexOf(current)) + 1) % order.length];
+    setDraft((d) => ({ ...d, [key]: next }));
+  };
+
+  const save = () => {
+    setSaving(true);
+    try {
+      // Persist only the differences from the role defaults, but carry every
+      // permission so no previously granted key is dropped.
+      updateUserPermissions(member.id, draft);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showToast(t('business.permissions_saved', { name: member.name }), 'success');
+      onClose();
+    } catch (e: any) {
+      showToast(e?.message || t('business.error_unknown'), 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const reset = () => {
+    // Drop the member's per-user overrides so they follow their role again.
+    try {
+      resetUserPermissions(member.id);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showToast(t('business.permissions_reset', { name: member.name }), 'success');
+      onClose();
+    } catch (e: any) {
+      showToast(e?.message || t('business.error_unknown'), 'error');
+    }
+  };
+
+  const filteredScopes = scopes.filter((scope) => {
+    if (!query.trim()) return true;
+    const q = query.trim().toLowerCase();
+    return PERMISSION_CATALOG.some((p) => p.scope === scope && (
+      p.label.toLowerCase().includes(q) || p.key.toLowerCase().includes(q)
+    ));
+  });
+
+  return (
+    <Modal transparent animationType="fade" visible onRequestClose={onClose}>
+      <KeyboardAvoidingView style={styles.modalWrap} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={[styles.modalCard, { backgroundColor: glass.bgCard, borderColor: glass.border, maxHeight: '90%' }]}>
+          <View style={styles.headerTitle}>
+            <View style={{ flex: 1 }}>
+              <AppText variant="title" weight="bold" style={{ color: glass.fg }} numberOfLines={1}>{member.name}</AppText>
+              <AppText variant="caption" weight="medium" style={{ color: glass.muted }}>
+                {t('business.permissions_for_role', { role: getRoleLabel(member.role) })}
+              </AppText>
+            </View>
+            <TouchableOpacity onPress={onClose} hitSlop={10}><X size={20} color={glass.muted} /></TouchableOpacity>
+          </View>
+
+          <View style={[styles.permLegend, { borderColor: glass.border }]}>
+            {([true, 'approval', false] as PermissionValue[]).map((v) => (
+              <View key={String(v)} style={styles.permLegendItem}>
+                <View style={[styles.permDot, { backgroundColor: permColor(v) }]} />
+                <AppText variant="micro" weight="bold" style={{ color: glass.muted }}>
+                  {v === true ? t('business.perm_allow') : v === 'approval' ? t('business.perm_approval_full') : t('business.perm_deny')}
+                </AppText>
+              </View>
+            ))}
+          </View>
+
+          <View style={[styles.searchRow, { borderColor: glass.border }]}>
+            <SlidersHorizontal size={14} color={glass.muted} />
+            <TextInput
+              style={[styles.searchInput, { color: glass.fg }]}
+              placeholder={t('business.search_permissions')}
+              placeholderTextColor={glass.muted}
+              value={query}
+              onChangeText={setQuery}
+            />
+          </View>
+
+          <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            {filteredScopes.map((scope) => {
+              const defs = PERMISSION_CATALOG.filter((p) => p.scope === scope && (
+                !query.trim() || p.label.toLowerCase().includes(query.trim().toLowerCase()) || p.key.toLowerCase().includes(query.trim().toLowerCase())
+              ));
+              if (!defs.length) return null;
+              return (
+                <View key={scope} style={{ marginBottom: 10 }}>
+                  <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: glass.fg, marginBottom: 4 }}>
+                    {SCOPE_LABELS[scope]}
+                  </AppText>
+                  {defs.map((d) => {
+                    const value = (draft[d.key] ?? false) as PermissionValue;
+                    return (
+                      <TouchableOpacity key={d.key} onPress={() => cycle(d.key)} style={[styles.permRow, { borderBottomColor: glass.border }]}>
+                        <View style={{ flex: 1, paddingRight: 8 }}>
+                          <AppText variant="body" weight="bold" style={{ color: glass.fg }} numberOfLines={1}>{d.label}</AppText>
+                          <AppText variant="micro" weight="medium" style={{ color: glass.muted }} numberOfLines={1}>{d.description}</AppText>
+                        </View>
+                        <View style={[styles.permBadge, { backgroundColor: permColor(value) }]}>
+                          <AppText variant="micro" weight="bold" style={{ color: '#fff' }}>
+                            {value === true ? t('business.perm_allow') : value === 'approval' ? t('business.perm_approval_full') : t('business.perm_deny')}
+                          </AppText>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              );
+            })}
+            <View style={{ height: 8 }} />
+          </ScrollView>
+
+          <View style={styles.actions}>
+            <TouchableOpacity onPress={reset} style={[styles.btn, { backgroundColor: glass.accentGlass }]} disabled={saving}>
+              <AppText variant="body" weight="bold" style={{ color: glass.fg }}>{t('business.reset_permissions')}</AppText>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={save} style={[styles.btn, styles.btnPrimary, { backgroundColor: glass.fg, opacity: saving ? 0.6 : 1 }]} disabled={saving}>
+              <AppText variant="body" weight="bold" style={{ color: glass.bg }}>{t('common.save')}</AppText>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 // ---------- Devices ----------
+
+/** Device states grouped the way an owner reasons about them. */
+const DEVICE_GROUPS: { key: string; labelKey: string; color: string; statuses: Device['status'][] }[] = [
+  { key: 'active', labelKey: 'business.group_active', color: '#2ecc71', statuses: ['active'] },
+  { key: 'pending', labelKey: 'business.group_pending', color: '#f1c40f', statuses: ['pending'] },
+  { key: 'locked', labelKey: 'business.group_locked', color: '#f39c12', statuses: ['locked'] },
+  { key: 'unauthorized', labelKey: 'business.group_unauthorized', color: '#e74c3c', statuses: ['disabled', 'removed'] },
+];
 
 function DevicesPanel({ businessId, devices, people, canManage, glass }: {
   businessId: string; devices: Device[]; people: any[]; canManage: boolean; glass: any;
@@ -653,6 +1024,12 @@ function DevicesPanel({ businessId, devices, people, canManage, glass }: {
   const [showAdd, setShowAdd] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
 
+  const business = getBusiness(businessId);
+  const activeCount = devices.filter((d) => d.status === 'active').length;
+  const limit = business ? deviceLimitStatus(business, activeCount) : null;
+  const totalAllowed = limit ? Math.max(activeCount + limit.availableMobile, activeCount, 1) : activeCount;
+  const atCap = !!limit && !limit.allowed;
+
   return (
     <View>
       <View style={styles.headerRow}>
@@ -660,50 +1037,101 @@ function DevicesPanel({ businessId, devices, people, canManage, glass }: {
           <View style={[styles.iconBox, { backgroundColor: glass.accentGlass }]}><Smartphone size={18} color={glass.fg} /></View>
           <AppText variant="title" weight="bold" style={{ color: glass.fg }}>{t('business.devices')}</AppText>
         </View>
-        {canManage && (
-          <View style={styles.headerActions}>
-            <TouchableOpacity onPress={() => router.push('/pairing-qr' as any)} style={[styles.smallBtn, { backgroundColor: glass.accentGlass }]}>
-              <QrCode size={15} color={glass.fg} />
-              <AppText variant="caption" weight="bold" style={{ color: glass.fg, marginLeft: 4 }}>{t('business.qr_pair')}</AppText>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setShowInvite(true)} style={[styles.smallBtn, { backgroundColor: glass.accentGlass }]}>
-              <Link2 size={15} color={glass.fg} />
-              <AppText variant="caption" weight="bold" style={{ color: glass.fg, marginLeft: 4 }}>{t('business.invite')}</AppText>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setShowAdd(true)} style={[styles.smallBtn, { backgroundColor: glass.fg }]}>
-              <Plus size={15} color={glass.bg} />
-              <AppText variant="caption" weight="bold" style={{ color: glass.bg, marginLeft: 4 }}>{t('business.add_device_short')}</AppText>
-            </TouchableOpacity>
-          </View>
-        )}
       </View>
 
-      {canManage && <JoinRequestsSection businessId={businessId} people={people} glass={glass} />}
-
-      {devices.map((d) => (
-        <View key={d.id} style={[styles.listCard, { backgroundColor: glass.bgCard, borderColor: glass.border }]}>
-          <View style={[styles.statusDot, { backgroundColor: d.status === 'active' ? '#2ecc71' : d.status === 'pending' ? '#f1c40f' : '#e74c3c' }]} />
-          <View style={{ flex: 1 }}>
-            <AppText variant="body" weight="bold" style={{ color: glass.fg }}>{d.name}</AppText>
-            <AppText variant="caption" weight="medium" style={{ color: glass.muted }}>
-              {statusLabel(d.status, t)} · {platformLabel(d.platform, t)}{d.userId ? ' · ' + (people.find((p) => p.id === d.userId)?.name || '') : ''}{d.role ? ' · ' + getRoleLabel(d.role) : ''}
+      {/* Subscription device allowance */}
+      {!!limit && (
+        <View style={[styles.warnCard, { backgroundColor: atCap ? '#f39c1222' : glass.accentGlass, borderColor: glass.border }]}>
+          <View style={styles.headerRow}>
+            <AppText variant="body" weight="bold" style={{ color: glass.fg }}>{t('business.plan_usage')}</AppText>
+            <AppText variant="caption" weight="bold" style={{ color: glass.fg }}>
+              {t('business.device_usage', { used: String(activeCount), total: String(totalAllowed) })}
             </AppText>
           </View>
-          {canManage && (
-            <TouchableOpacity onPress={() => deviceActions(d)} style={[styles.smallBtn, { backgroundColor: glass.accentGlass }]}>
-              <AppText variant="caption" weight="bold" style={{ color: glass.fg }}>…</AppText>
+          <View style={[styles.progressTrack, { backgroundColor: glass.border }]}>
+            <View style={[styles.progressFill, {
+              backgroundColor: atCap ? '#e67e22' : '#2ecc71',
+              width: `${Math.min(100, Math.max(4, Math.round((activeCount / Math.max(1, totalAllowed)) * 100)))}%`,
+            }]} />
+          </View>
+          <AppText variant="micro" weight="medium" style={{ color: glass.muted, marginTop: 6 }}>
+            {atCap
+              ? t('business.device_limit_reached', { count: String(activeCount) })
+              : t('business.devices_available', { count: String(Math.max(0, totalAllowed - activeCount)) })}
+          </AppText>
+          {atCap && canManage && (
+            <TouchableOpacity
+              onPress={() => { Haptics.selectionAsync(); router.push('/subscription/addons' as any); }}
+              style={[styles.smallBtn, { backgroundColor: glass.fg, marginTop: 10, alignSelf: 'flex-start', paddingHorizontal: 12 }]}
+            >
+              <Plus size={14} color={glass.bg} />
+              <AppText variant="caption" weight="bold" style={{ color: glass.bg, marginLeft: 4 }}>{t('business.buy_more_devices')}</AppText>
             </TouchableOpacity>
           )}
         </View>
-      ))}
+      )}
 
-      {devices.filter((d) => d.status === 'pending').length > 0 && (
-        <View style={[styles.warnCard, { backgroundColor: glass.accentGlass, borderColor: glass.border }]}>
-          <AppText variant="body" weight="bold" style={{ color: glass.fg }}>
-            {t('business.pending_devices', { count: String(devices.filter((d) => d.status === 'pending').length) })}
-          </AppText>
+      {canManage && (
+        <View style={[styles.headerActions, { marginTop: 10 }]}>
+          <TouchableOpacity onPress={() => router.push('/pairing-qr' as any)} style={[styles.smallBtn, { backgroundColor: glass.accentGlass }]}>
+            <QrCode size={15} color={glass.fg} />
+            <AppText variant="caption" weight="bold" style={{ color: glass.fg, marginLeft: 4 }}>{t('business.qr_pair')}</AppText>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setShowInvite(true)} style={[styles.smallBtn, { backgroundColor: glass.accentGlass }]}>
+            <Link2 size={15} color={glass.fg} />
+            <AppText variant="caption" weight="bold" style={{ color: glass.fg, marginLeft: 4 }}>{t('business.invite')}</AppText>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setShowAdd(true)} style={[styles.smallBtn, { backgroundColor: glass.fg }]}>
+            <Plus size={15} color={glass.bg} />
+            <AppText variant="caption" weight="bold" style={{ color: glass.bg, marginLeft: 4 }}>{t('business.add_device_short')}</AppText>
+          </TouchableOpacity>
         </View>
       )}
+
+      {canManage && <JoinRequestsSection businessId={businessId} people={people} glass={glass} />}
+
+      {devices.length === 0 && (
+        <EmptyState
+          icon={Smartphone}
+          title={t('business.no_devices_title')}
+          text={canManage ? t('business.add_device_first') : t('business.no_devices_readonly')}
+        />
+      )}
+
+      {DEVICE_GROUPS.map((group) => {
+        const list = devices.filter((d) => group.statuses.includes(d.status));
+        if (!list.length) return null;
+        return (
+          <View key={group.key}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14, marginBottom: 6 }}>
+              <View style={[styles.statusDot, { backgroundColor: group.color }]} />
+              <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: glass.muted }}>
+                {t(group.labelKey)} ({list.length})
+              </AppText>
+            </View>
+            {list.map((d) => (
+              <View key={d.id} style={[styles.listCard, { backgroundColor: glass.bgCard, borderColor: glass.border }]}>
+                <View style={[styles.statusDot, { backgroundColor: group.color }]} />
+                <View style={{ flex: 1 }}>
+                  <AppText variant="body" weight="bold" style={{ color: glass.fg }}>
+                    {d.name}{d.isPrimary ? '  ★' : ''}
+                  </AppText>
+                  <AppText variant="caption" weight="medium" style={{ color: glass.muted }} numberOfLines={1}>
+                    {statusLabel(d.status, t)} · {platformLabel(d.platform, t)}
+                    {d.userId ? ' · ' + (people.find((p) => p.id === d.userId)?.name || t('business.member_id', { id: d.userId.slice(0, 6) })) : ''}
+                    {d.role ? ' · ' + getRoleLabel(d.role) : ''}
+                  </AppText>
+                </View>
+                {canManage && (
+                  <TouchableOpacity onPress={() => deviceActions(d)} style={[styles.smallBtn, { backgroundColor: glass.accentGlass }]}>
+                    <AppText variant="caption" weight="bold" style={{ color: glass.fg }}>…</AppText>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ))}
+          </View>
+        );
+      })}
 
       {canManage && <CloudDevicesSection people={people} glass={glass} />}
 
@@ -736,13 +1164,27 @@ function DevicesPanel({ businessId, devices, people, canManage, glass }: {
     }
   }
 
+  /** Approve a pending device and bind it to its real person + role. */
   function approveLocal(d: Device) {
-    // Assign to a selected person if any; otherwise keep unassigned-active.
-    // Owners are valid assignees too — any member may be linked to a device.
-    const persons = people;
-    if (persons.length === 1) approveDevice(d.id, persons[0].id, persons[0].role);
-    else approveDevice(d.id, d.userId || '', d.role || 'cashier');
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    const assign = (userId: string, role: string) => {
+      try {
+        approveDevice(d.id, userId, role);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch (e: any) {
+        Alert.alert(t('business.cannot_change_status'), e?.message || t('business.unable_update_status'));
+      }
+    };
+    if (people.length === 0) {
+      Alert.alert(t('business.no_people_title'), t('business.add_team_members'));
+      return;
+    }
+    const assigned = d.userId ? people.find((p) => p.id === d.userId) : undefined;
+    if (assigned) { assign(assigned.id, assigned.role); return; }
+    if (people.length === 1) { assign(people[0].id, people[0].role); return; }
+    Alert.alert(t('business.approve'), t('business.assign_device_question'), [
+      ...people.map((p) => ({ text: `${p.name} · ${getRoleLabel(p.role)}`, onPress: () => assign(p.id, p.role) })),
+      { text: t('common.cancel'), style: 'cancel' as const },
+    ]);
   }
 
   function renameLocal(d: Device) {
@@ -817,6 +1259,14 @@ function AddDeviceModal({ businessId, people, onClose, glass }: { businessId: st
 
   const submit = () => {
     if (!name.trim()) { Alert.alert(t('business.name_required')); return; }
+    // Never register more devices than the subscription allows.
+    if (!canAddDevice(businessId)) {
+      Alert.alert(
+        t('business.device_limit_title'),
+        t('business.device_limit_reached', { count: String(getActiveDeviceCount(businessId)) }),
+      );
+      return;
+    }
     const person = people.find((p) => p.id === userId);
     addDevice({ businessId, name: name.trim(), platform, userId: person?.id, role: person?.role, registerId: registerId || undefined }, '');
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -901,7 +1351,7 @@ function InviteModal({ businessId, canAdd, activeCount, onClose, glass }: {
   const [invite, setInvite] = useState<null | { id: string; code: string; expiresAt: string; qrUri: string }>(null);
   const [name, setName] = useState('');
   const [role, setRole] = useState('cashier');
-  const roles: BuiltinRoleKey[] = ['cashier', 'inventory', 'manager', 'reports', 'accountant'];
+  const roles = getRolesForBusiness(businessId).filter((r) => r.key !== 'owner');
   // Nearby team devices in Joining Mode, shown so the owner can identify who
   // is waiting to join ("Team · device name").
   const [nearbyTeam, setNearbyTeam] = useState<Array<{ deviceId: string; deviceName: string; platform: string; role?: string }>>([]);
@@ -1032,9 +1482,9 @@ function InviteModal({ businessId, canAdd, activeCount, onClose, glass }: {
               <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: glass.muted, marginTop: 12 }}>{t('business.requested_role')}</AppText>
               <View style={styles.roleWrap}>
                 {roles.map((r) => (
-                  <TouchableOpacity key={r} onPress={() => { Haptics.selectionAsync(); setRole(r); }}
-                    style={[styles.roleChip, { backgroundColor: role === r ? glass.fg : glass.accentGlass, borderColor: glass.border }]}>
-                    <AppText variant="caption" weight="bold" style={{ color: role === r ? glass.bg : glass.fg }}>{getBuiltinRole(r)?.name || r}</AppText>
+                  <TouchableOpacity key={r.key} onPress={() => { Haptics.selectionAsync(); setRole(r.key); }}
+                    style={[styles.roleChip, { backgroundColor: role === r.key ? glass.fg : glass.accentGlass, borderColor: glass.border }]}>
+                    <AppText variant="caption" weight="bold" style={{ color: role === r.key ? glass.bg : glass.fg }}>{r.name}</AppText>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -1518,83 +1968,266 @@ function RegistersPanel({ businessId, registers, locations, canManage, glass }: 
   );
 }
 
-// ---------- Permissions ----------
+// ---------- Permissions & Roles ----------
 
+/**
+ * Roles & Permissions hub.
+ *
+ * Built-in roles are shared, versioned templates that ship with the app, so
+ * they are shown read-only: an owner "duplicates" one into an editable custom
+ * role. Custom roles are stored in `business_roles`, assigned to members, and
+ * sync to every device — editing one re-applies its permissions to its members.
+ */
 function PermissionsPanel({ businessId, canManage, glass }: { businessId: string; canManage: boolean; glass: any }) {
   const { t } = useSettings();
-  const [selectedRole, setSelectedRole] = useState<BuiltinRoleKey>('cashier');
-  const role = getBuiltinRole(selectedRole)!;
-  const [edits, setEdits] = useState<Record<string, PermissionValue>>({});
+  const { showToast } = useToast();
+  const [editing, setEditing] = useState<{ key: string | null; isSystem: boolean; name: string } | null>(null);
+  const roles = getRolesForBusiness(businessId);
 
-  const scopes = [...new Set(PERMISSION_CATALOG.map((p) => p.scope))];
+  const totalPerms = PERMISSION_CATALOG.length;
 
   return (
     <View>
-      <SectionHeader icon={KeyRound} title={t('business.permissions')} glass={glass} />
-      {!canManage && <AppText variant="caption" weight="medium" style={{ color: glass.muted, marginBottom: 10 }}>{t('business.only_owner_change_perm')}</AppText>}
+      <SectionHeader
+        icon={KeyRound}
+        title={t('business.permissions_roles')}
+        actionLabel={canManage ? t('business.new_role') : undefined}
+        onAction={() => canManage && setEditing({ key: null, isSystem: false, name: '' })}
+        glass={glass}
+      />
+      <AppText variant="caption" weight="medium" style={{ color: glass.muted, marginBottom: 10 }}>
+        {canManage ? t('business.permissions_hint') : t('business.only_owner_change_perm')}
+      </AppText>
 
-      <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: glass.muted, marginBottom: 6 }}>{t('business.role')}</AppText>
-      <View style={styles.roleWrap}>
-        {SURFACED_BUILTIN_ROLES.filter((k) => k !== 'owner').map((k) => (
-          <TouchableOpacity key={k} onPress={() => { Haptics.selectionAsync(); setSelectedRole(k); setEdits({}); }}
-            style={[styles.roleChip, { backgroundColor: selectedRole === k ? glass.fg : glass.accentGlass, borderColor: glass.border }]}>
-            <AppText variant="caption" weight="bold" style={{ color: selectedRole === k ? glass.bg : glass.fg }}>{getBuiltinRole(k)?.name}</AppText>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {scopes.map((scope) => {
-        const defs = PERMISSION_CATALOG.filter((p) => p.scope === scope);
-        const effectiveScope = scope as PermissionScope;
-        const valueFor = (key: string): PermissionValue => edits[key] !== undefined ? edits[key] : role.permissions[key] ?? false;
+      {roles.map((r) => {
+        const allowed = Object.values(r.permissions).filter((v) => v === true).length;
+        const approval = Object.values(r.permissions).filter((v) => v === 'approval').length;
         return (
-          <View key={scope} style={[styles.listCard, { backgroundColor: glass.bgCard, borderColor: glass.border, marginTop: 12 }]}>
-            <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: glass.fg, marginBottom: 4 }}>{SCOPE_LABELS[effectiveScope]}</AppText>
-            {defs.map((d) => {
-              const v = valueFor(d.key);
-              return (
-                <View key={d.key} style={[styles.permRow, { borderBottomColor: glass.border }]}>
-                  <View style={{ flex: 1, paddingRight: 8 }}>
-                    <AppText variant="body" weight="bold" style={{ color: glass.fg }}>{d.label}</AppText>
-                    <AppText variant="caption" weight="medium" style={{ color: glass.muted }}>{d.description}</AppText>
-                  </View>
-                  <TouchableOpacity disabled={!canManage} onPress={() => { Haptics.selectionAsync(); cycleValue(d.key); }}
-                    style={[styles.permBadge, { backgroundColor: permColor(v), borderColor: glass.border }]}>
-                    <AppText variant="caption" weight="bold" style={{ color: v ? '#fff' : glass.fg }}>{v === 'approval' ? t('business.perm_approval') : permLabel(v)}</AppText>
-                  </TouchableOpacity>
+          <TouchableOpacity
+            key={r.key}
+            onPress={() => { Haptics.selectionAsync(); setEditing({ key: r.key, isSystem: r.isSystem, name: r.name }); }}
+            style={[styles.listCard, { backgroundColor: glass.bgCard, borderColor: glass.border, alignItems: 'flex-start' }]}
+          >
+            <View style={[styles.avatar, { backgroundColor: r.isSystem ? glass.accentGlass : '#8e44ad22' }]}>
+              {r.key === 'owner' ? <Crown size={18} color={glass.fg} /> : <Shield size={18} color={glass.fg} />}
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <AppText variant="body" weight="bold" style={{ color: glass.fg }} numberOfLines={1}>{r.name}</AppText>
+                <View style={[styles.roleBadge, { backgroundColor: r.isSystem ? glass.accentGlass : '#8e44ad22', borderColor: glass.border }]}>
+                  <AppText variant="micro" weight="bold" style={{ color: glass.fg }}>
+                    {r.isSystem ? t('business.role_builtin') : t('business.role_custom')}
+                  </AppText>
                 </View>
-              );
-            })}
-          </View>
+              </View>
+              {!!r.description && (
+                <AppText variant="micro" weight="medium" style={{ color: glass.muted, marginTop: 2 }} numberOfLines={2}>{r.description}</AppText>
+              )}
+              <AppText variant="micro" weight="medium" style={{ color: glass.muted, marginTop: 4 }}>
+                {t('business.role_summary', {
+                  members: String(r.memberCount),
+                  allowed: String(allowed),
+                  total: String(totalPerms),
+                })}{approval > 0 ? ` · ${t('business.role_approval_count', { count: String(approval) })}` : ''}
+              </AppText>
+            </View>
+            <ChevronRight size={18} color={glass.muted} />
+          </TouchableOpacity>
         );
       })}
 
-      {canManage && Object.keys(edits).length > 0 && (
-        <TouchableOpacity onPress={() => {
-          const merged = { ...role.permissions, ...edits };
-          createCustomRole(businessId, role.name + ' (custom)', merged, 'Customized copy of ' + role.name);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          setEdits({});
-        }} style={[styles.btn, styles.btnPrimary, { backgroundColor: glass.fg, marginTop: 16 }]}>
-          <AppText variant="body" weight="bold" style={{ color: glass.bg }}>{t('business.save_custom_role')}</AppText>
-        </TouchableOpacity>
+      {roles.filter((r) => !r.isSystem).length === 0 && (
+        <AppText variant="caption" weight="medium" style={{ color: glass.muted, marginTop: 10, textAlign: 'center' }}>
+          {t('business.no_custom_roles')}
+        </AppText>
       )}
 
-      {canManage && Object.keys(edits).length > 0 && (
-        <AppText variant="caption" weight="medium" style={{ color: glass.muted, marginTop: 6 }}>
-          {t('business.custom_role_saved', { role: role.name })}
-        </AppText>
+      {editing && (
+        <RoleEditorModal
+          businessId={businessId}
+          roleKey={editing.key}
+          isSystem={editing.isSystem}
+          canManage={canManage}
+          glass={glass}
+          onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); showToast(t('business.role_saved'), 'success'); }}
+        />
       )}
     </View>
   );
+}
 
-  function cycleValue(key: string) {
+/** Role viewer/editor. Built-in roles are read-only unless "duplicate" is used. */
+function RoleEditorModal({ businessId, roleKey, isSystem, canManage, glass, onClose, onSaved }: {
+  businessId: string; roleKey: string | null; isSystem: boolean; canManage: boolean; glass: any;
+  onClose: () => void; onSaved: () => void;
+}) {
+  const { t } = useSettings();
+  const existingCustom = roleKey && !isSystem ? getCustomRole(roleKey, businessId) : undefined;
+  const builtin = roleKey && isSystem ? getBuiltinRole(roleKey as BuiltinRoleKey) : undefined;
+
+  const [name, setName] = useState(existingCustom?.name ?? (builtin ? `${builtin.name} (custom)` : ''));
+  const [draft, setDraft] = useState<PermissionSet>(() => ({
+    ...((existingCustom?.permissions ?? builtin?.permissions ?? {}) as PermissionSet),
+  }));
+  const [saving, setSaving] = useState(false);
+  const scopes = [...new Set(PERMISSION_CATALOG.map((p) => p.scope))] as PermissionScope[];
+
+  const readOnly = !canManage || (isSystem && !name.trim());
+  const isNew = !roleKey;
+
+  const cycle = (key: string) => {
+    if (!canManage) return;
+    Haptics.selectionAsync();
     const order: PermissionValue[] = [true, false, 'approval'];
-    const current = edits[key] !== undefined ? edits[key] : role.permissions[key] ?? false;
-    const idx = order.indexOf(current as any);
-    const next = order[(idx + 1) % order.length];
-    setEdits((e) => ({ ...e, [key]: next }));
-  }
+    const current = (draft[key] ?? false) as PermissionValue;
+    const next = order[(Math.max(0, order.indexOf(current)) + 1) % order.length];
+    setDraft((d) => ({ ...d, [key]: next }));
+  };
+
+  const save = () => {
+    if (!canManage) return;
+    if (!name.trim()) { Alert.alert(t('business.role_name_required')); return; }
+    setSaving(true);
+    try {
+      if (existingCustom) {
+        // Editing a custom role updates it in place — members follow it live.
+        updateCustomRole(existingCustom.key, { name, permissions: draft }, businessId);
+      } else {
+        // New role, or a customized copy of a built-in template.
+        createCustomRole(businessId, name.trim(), draft, t('business.custom_role_desc'));
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      onSaved();
+    } catch (e: any) {
+      Alert.alert(t('business.error_unknown'), e?.message || t('business.error_unknown'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = () => {
+    if (!existingCustom) return;
+    Alert.alert(t('business.delete_role_title'), t('business.delete_role_msg', { name: existingCustom.name }), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('common.delete'), style: 'destructive',
+        onPress: () => {
+          try {
+            const res = deleteCustomRole(existingCustom.key, businessId);
+            if (res.reassigned > 0) {
+              Alert.alert(t('business.role_deleted_title'), t('business.role_deleted_msg', { name: existingCustom.name, count: String(res.reassigned) }));
+            }
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            onClose();
+          } catch (e: any) {
+            Alert.alert(t('business.error_unknown'), e?.message || t('business.error_unknown'));
+          }
+        },
+      },
+    ]);
+  };
+
+  return (
+    <Modal transparent animationType="fade" visible onRequestClose={onClose}>
+      <KeyboardAvoidingView style={styles.modalWrap} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={[styles.modalCard, { backgroundColor: glass.bgCard, borderColor: glass.border, maxHeight: '92%' }]}>
+          <View style={styles.headerTitle}>
+            <View style={{ flex: 1 }}>
+              <AppText variant="title" weight="bold" style={{ color: glass.fg }} numberOfLines={1}>
+                {isNew ? t('business.new_role') : name || roleKey}
+              </AppText>
+              {isSystem && (
+                <AppText variant="caption" weight="medium" style={{ color: glass.muted }}>
+                  {t('business.builtin_role_note')}
+                </AppText>
+              )}
+            </View>
+            <TouchableOpacity onPress={onClose} hitSlop={10}><X size={20} color={glass.muted} /></TouchableOpacity>
+          </View>
+
+          {canManage && (
+            <TextInput
+              style={[styles.input, { borderColor: glass.border, color: glass.fg }]}
+              placeholder={t('business.role_name')}
+              placeholderTextColor={glass.muted}
+              value={name}
+              onChangeText={setName}
+            />
+          )}
+
+          <View style={[styles.permLegend, { borderColor: glass.border }]}>
+            {([true, 'approval', false] as PermissionValue[]).map((v) => (
+              <View key={String(v)} style={styles.permLegendItem}>
+                <View style={[styles.permDot, { backgroundColor: permColor(v) }]} />
+                <AppText variant="micro" weight="bold" style={{ color: glass.muted }}>
+                  {v === true ? t('business.perm_allow') : v === 'approval' ? t('business.perm_approval_full') : t('business.perm_deny')}
+                </AppText>
+              </View>
+            ))}
+          </View>
+
+          <ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            {scopes.map((scope) => {
+              const defs = PERMISSION_CATALOG.filter((p) => p.scope === scope);
+              if (!defs.length) return null;
+              return (
+                <View key={scope} style={{ marginBottom: 10 }}>
+                  <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: glass.fg, marginBottom: 4 }}>
+                    {SCOPE_LABELS[scope]}
+                  </AppText>
+                  {defs.map((d) => {
+                    const value = (draft[d.key] ?? false) as PermissionValue;
+                    return (
+                      <TouchableOpacity
+                        key={d.key}
+                        disabled={!canManage}
+                        onPress={() => cycle(d.key)}
+                        style={[styles.permRow, { borderBottomColor: glass.border }]}
+                      >
+                        <View style={{ flex: 1, paddingRight: 8 }}>
+                          <AppText variant="body" weight="bold" style={{ color: glass.fg }} numberOfLines={1}>{d.label}</AppText>
+                          <AppText variant="micro" weight="medium" style={{ color: glass.muted }} numberOfLines={1}>{d.description}</AppText>
+                        </View>
+                        <View style={[styles.permBadge, { backgroundColor: permColor(value) }]}>
+                          <AppText variant="micro" weight="bold" style={{ color: '#fff' }}>
+                            {value === true ? t('business.perm_allow') : value === 'approval' ? t('business.perm_approval_full') : t('business.perm_deny')}
+                          </AppText>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              );
+            })}
+            <View style={{ height: 8 }} />
+          </ScrollView>
+
+          {!canManage && (
+            <AppText variant="caption" weight="medium" style={{ color: glass.muted, marginTop: 8, textAlign: 'center' }}>
+              {t('business.only_owner_change_perm')}
+            </AppText>
+          )}
+
+          {canManage && (
+            <View style={styles.actions}>
+              {existingCustom && (
+                <TouchableOpacity onPress={remove} style={[styles.btn, { backgroundColor: '#e74c3c22' }]} disabled={saving}>
+                  <Trash2 size={16} color="#e74c3c" />
+                  <AppText variant="body" weight="bold" style={{ color: '#e74c3c', marginLeft: 6 }}>{t('common.delete')}</AppText>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity onPress={save} style={[styles.btn, styles.btnPrimary, { backgroundColor: glass.fg, opacity: saving ? 0.6 : 1 }]} disabled={saving || readOnly}>
+                <AppText variant="body" weight="bold" style={{ color: glass.bg }}>
+                  {isSystem ? t('business.duplicate_role') : t('common.save')}
+                </AppText>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
 }
 
 function permColor(v: PermissionValue): string {
@@ -1602,17 +2235,12 @@ function permColor(v: PermissionValue): string {
   if (v === 'approval') return '#f39c12';
   return '#e74c3c';
 }
-function permLabel(v: PermissionValue): string {
-  if (v === true) return '✓';
-  if (v === 'approval') return 'Appr';
-  return '✕';
-}
 
 // ---------- Ownership ----------
 
 function OwnershipPanel({ businessId, canTransfer, glass }: { businessId: string; canTransfer: boolean; glass: any }) {
   const { t } = useSettings();
-  const people = getUsers(businessId).filter((p) => !p.isOwner);
+  const people = getUsers(businessId).filter((p) => !p.isOwner && p.role !== 'owner');
   const [selectedId, setSelectedId] = useState('');
 
   return (
@@ -1631,9 +2259,17 @@ function OwnershipPanel({ businessId, canTransfer, glass }: { businessId: string
         </TouchableOpacity>
       ))}
 
-      {people.length === 0 && <EmptyState text={t('business.add_person_first')} />}
+      {people.length === 0 && (
+        <EmptyState icon={Crown} title={t('business.transfer_ownership')} text={t('business.add_person_first')} />
+      )}
 
-      {selectedId && (
+      {!canTransfer && (
+        <AppText variant="caption" weight="medium" style={{ color: glass.muted, marginTop: 10, textAlign: 'center' }}>
+          {t('business.transfer_permission_note')}
+        </AppText>
+      )}
+
+      {selectedId && canTransfer && (
         <TouchableOpacity onPress={() => {
           Alert.alert(t('business.transfer_confirm_title'), t('business.transfer_confirm_msg'), [
             { text: t('common.cancel'), style: 'cancel' },
@@ -1669,11 +2305,15 @@ function SectionHeader({ icon: Icon, title, actionLabel, onAction, glass }: {
   );
 }
 
-function EmptyState({ text }: { text: string }) {
+function EmptyState({ text, title, icon: Icon }: { text: string; title?: string; icon?: any }) {
   const glass = useGlass();
   return (
     <View style={[styles.emptyCard, { backgroundColor: glass.bgCard, borderColor: glass.border }]}>
-      <AppText variant="body" weight="medium" style={{ color: glass.muted, textAlign: 'center' }}>{text}</AppText>
+      {Icon ? <Icon size={36} color={glass.muted} /> : null}
+      {title ? (
+        <AppText variant="body" weight="bold" style={{ color: glass.fg, textAlign: 'center', marginTop: Icon ? 10 : 0 }}>{title}</AppText>
+      ) : null}
+      <AppText variant="caption" weight="medium" style={{ color: glass.muted, textAlign: 'center', marginTop: 4 }}>{text}</AppText>
     </View>
   );
 }
@@ -1684,8 +2324,19 @@ function getRoleLabel(role: string): string {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, gap: 8 },
   closeBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  chipBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 36, paddingHorizontal: 10, borderRadius: 18, borderWidth: 1 },
+  roleBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1, alignSelf: 'flex-start' },
+  tabBar: { borderBottomWidth: 1 },
+  tabPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 18, borderWidth: 1 },
+  progressTrack: { height: 8, borderRadius: 4, overflow: 'hidden', marginTop: 8 },
+  progressFill: { height: 8, borderRadius: 4 },
+  permLegend: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 10, borderBottomWidth: 1, marginBottom: 6 },
+  permLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  permDot: { width: 10, height: 10, borderRadius: 5 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 12, paddingHorizontal: 10, height: 40, marginBottom: 8 },
+  searchInput: { flex: 1, fontSize: 13, paddingVertical: 0 },
   ownerBanner: { alignItems: 'center', padding: 24, borderRadius: 16, borderWidth: 1, marginBottom: 16 },
   cardRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
   statCard: { flex: 1, alignItems: 'center', padding: 14, borderRadius: 14, borderWidth: 1 },

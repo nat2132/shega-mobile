@@ -1,6 +1,7 @@
 import { getDB } from '@/database/db';
 import {
   getBusiness, getThisDeviceId, addUser, addDevice, setActiveBusiness, setCurrentUserId,
+  setMembershipUserId, resolveMembershipForBusiness,
 } from '@/services/businessService';
 import { wsSyncClient } from '@/services/wsSyncClient';
 import { Business } from '@shega/shared';
@@ -321,7 +322,12 @@ export function restoreBusinessFromJoin(info: {
   } catch { /* ignore */ }
   const existing = getBusiness(info.businessId);
   if (existing) {
+    // Re-enter a business we already know: rebind THIS device to the account's
+    // own membership (never the owner) and make it the active business.
+    const memberId = resolveMembershipForBusiness(info.businessId);
+    if (memberId) setMembershipUserId(info.businessId, memberId);
     setActiveBusiness(info.businessId);
+    if (memberId) setCurrentUserId(memberId);
     return existing;
   }
   const now = new Date().toISOString();
@@ -363,5 +369,8 @@ export function restoreBusinessFromJoin(info: {
   }, deviceId);
   setActiveBusiness(info.businessId);
   setCurrentUserId(person.id);
+  // Remember which membership is "me" in this business so later switches
+  // resolve the joiner's own role instead of the business owner's.
+  setMembershipUserId(info.businessId, person.id);
   return getBusiness(info.businessId)!;
 }

@@ -5,6 +5,7 @@ import { Fonts } from '@/constants/theme';
 import { useDialog } from '@/context/DialogContext';
 import { useSettings } from '@/context/SettingsContext';
 import { deleteItem, ItemData, updateItem } from '@/database/db';
+import { useWriteGuard } from '@/hooks/useWriteGuard';
 import { playBad, playNice } from '@/services/soundService';
 import { ProductImageGallery } from '@/components/ProductImageGallery';
 import { parseProductImages, serializeProductImages } from '@/utils/productImages';
@@ -53,6 +54,7 @@ import { getInventoryGlass } from './glass-inventory';
 
 const ItemDetailsScreen = ({ item, onClose }: { item: ItemData; onClose?: () => void }) => {
   const { colors, calendarType, language, t } = useSettings();
+  const { guard } = useWriteGuard();
   const G = getInventoryGlass(colors);
   const styles = useMemo(() => createStyles(colors, G), [colors, G]);
   const dialog = useDialog();
@@ -70,6 +72,7 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData; onClose?: () => 
   if (!item) return null;
 
   const handleSave = () => {
+    if (!guard()) return;
     if (!editForm.name || !editForm.name.trim()) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       dialog.alert({ title: t('common.error'), message: 'Product name is required', iconType: 'danger' });
@@ -111,6 +114,7 @@ const ItemDetailsScreen = ({ item, onClose }: { item: ItemData; onClose?: () => 
   };
 
   const handleDelete = () => {
+    if (!guard()) return;
     const success = deleteItem(item.id);
     if (success) {
       setShowDeleteConfirm(false);
@@ -587,7 +591,7 @@ const createStyles = (colors: any, G: any) =>
       borderWidth: 1,
       overflow: 'hidden',
       alignItems: 'center',
-      justify: 'center',
+      justifyContent: 'center',
     },
     statusBadge: {
       flexDirection: 'row',

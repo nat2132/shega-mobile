@@ -45,7 +45,8 @@ import {
   getUser,
   removeUser,
   setUserActive,
-  updateUserPermissions,
+  setUserPermission,
+  resetUserPermissions,
   updateUserRole,
   updateUserMemberDetails,
 } from '@/services/businessService';
@@ -312,11 +313,31 @@ export default function TeamsScreen({ onClose }: Props) {
     Haptics.selectionAsync();
     const next: PermissionValue = current === true ? false : true;
     try {
-      updateUserPermissions(userId, { [key]: next });
+      // Merge into the member's effective set so changing one permission never
+      // wipes the others they were granted.
+      setUserPermission(userId, key, next);
       triggerRefresh();
     } catch (e: any) {
       Alert.alert(t('teams.error_permission'), e?.message || t('teams.error_unknown'));
     }
+  };
+
+  const handlePermissionReset = (userId: string, name: string) => {
+    if (!canAssignRoles) return;
+    Alert.alert(t('teams.reset_permissions'), t('teams.reset_permissions_msg', { name }), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('teams.reset_permissions'),
+        onPress: () => {
+          try {
+            resetUserPermissions(userId);
+            triggerRefresh();
+          } catch (e: any) {
+            Alert.alert(t('teams.error_permission'), e?.message || t('teams.error_unknown'));
+          }
+        },
+      },
+    ]);
   };
 
   const editingUser = editing ? getUser(editing) : null;
@@ -522,6 +543,7 @@ export default function TeamsScreen({ onClose }: Props) {
         onRoleChange={handleRoleChange}
         onToggleActive={handleToggleActive}
         onPermissionChange={handlePermissionChange}
+        onPermissionReset={handlePermissionReset}
         roleLabel={roleLabel}
         permLabel={permLabel}
         permDesc={permDesc}
@@ -549,9 +571,9 @@ const AddMemberSheet: React.FC<{
     accent: colors.primary,
   };
   const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
+  const [memberPin, setMemberPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
   const [avatar, setAvatar] = useState<string | null>(null);
   const [role, setRole] = useState<string>('cashier');
   const [error, setError] = useState('');
@@ -581,8 +603,6 @@ const AddMemberSheet: React.FC<{
   const submit = () => {
     setError('');
     const trimmedName = name.trim();
-    const trimmedEmail = email.trim();
-    const trimmedPhone = phone.trim();
     const trimmedUsername = username.trim();
 
     if (!businessId) {
@@ -593,41 +613,39 @@ const AddMemberSheet: React.FC<{
       setError('Member name must be at least 2 characters.');
       return;
     }
-    if (trimmedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-      setError('Please enter a valid email address.');
+    if (!trimmedUsername || trimmedUsername.length < 3) {
+      setError('Username for login must be at least 3 characters.');
       return;
     }
-    if (trimmedPhone && trimmedPhone.replace(/\D/g, '').length < 7) {
-      setError('Phone number must contain at least 7 digits.');
+    if (!memberPin || memberPin.length !== 6) {
+      setError('Login PIN must be exactly 6 digits.');
       return;
     }
-    if (trimmedUsername && trimmedUsername.length < 3) {
-      setError('Username must be at least 3 characters.');
+    if (memberPin !== confirmPin) {
+      setError('Login PINs do not match.');
       return;
     }
-    if (trimmedUsername) {
-      const existingUsers = getUsers(businessId);
-      if (existingUsers.some((u) => u.username?.toLowerCase() === trimmedUsername.toLowerCase())) {
-        setError('This username is already taken by another team member.');
-        return;
-      }
+
+    const existingUsers = getUsers(businessId);
+    if (existingUsers.some((u) => u.username?.toLowerCase() === trimmedUsername.toLowerCase())) {
+      setError('This username is already taken by another team member.');
+      return;
     }
 
     try {
       addUser({
         businessId,
         name: trimmedName,
-        phone: trimmedPhone || undefined,
-        email: trimmedEmail || undefined,
-        username: trimmedUsername || undefined,
+        username: trimmedUsername,
         avatar: avatar || undefined,
         role,
+        pin: memberPin,
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setName('');
-      setPhone('');
-      setEmail('');
       setUsername('');
+      setMemberPin('');
+      setConfirmPin('');
       setAvatar(null);
       setError('');
       setRole('cashier');
@@ -673,11 +691,11 @@ const AddMemberSheet: React.FC<{
 
             <View style={styles.formGroup}>
               <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, letterSpacing: 1.2 }}>
-                {t('teams.name_label')}
+                Full Name *
               </AppText>
               <TextInput
                 style={[styles.input, { color: G.fg, borderColor: G.border, backgroundColor: G.card }]}
-                placeholder={t('teams.name_placeholder')}
+                placeholder="e.g. Abebe Kebede"
                 placeholderTextColor={G.muted}
                 value={name}
                 onChangeText={setName}
@@ -686,40 +704,11 @@ const AddMemberSheet: React.FC<{
 
             <View style={styles.formGroup}>
               <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, letterSpacing: 1.2 }}>
-                {t('common.phone')}
+                Username (For sign-in) *
               </AppText>
               <TextInput
                 style={[styles.input, { color: G.fg, borderColor: G.border, backgroundColor: G.card }]}
-                placeholder={t('form.contact_placeholder')}
-                placeholderTextColor={G.muted}
-                value={phone}
-                onChangeText={setPhone}
-                keyboardType="phone-pad"
-              />
-            </View>
-
-            <View style={styles.formGroup}>
-              <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, letterSpacing: 1.2 }}>
-                Email
-              </AppText>
-              <TextInput
-                style={[styles.input, { color: G.fg, borderColor: G.border, backgroundColor: G.card }]}
-                placeholder="email@example.com"
-                placeholderTextColor={G.muted}
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-            </View>
-
-            <View style={styles.formGroup}>
-              <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, letterSpacing: 1.2 }}>
-                Username (For sign-in)
-              </AppText>
-              <TextInput
-                style={[styles.input, { color: G.fg, borderColor: G.border, backgroundColor: G.card }]}
-                placeholder="username"
+                placeholder="e.g. abebe_cashier"
                 placeholderTextColor={G.muted}
                 value={username}
                 onChangeText={setUsername}
@@ -728,10 +717,10 @@ const AddMemberSheet: React.FC<{
             </View>
 
             <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, letterSpacing: 1.2, marginBottom: 8 }}>
-              {t('teams.role')}
+              {t('teams.role')} *
             </AppText>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
-              {roleOptions.map((r) => {
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+              {roleOptions.filter((r) => r.key !== 'owner').map((r) => {
                 const active = role === r.key;
                 return (
                   <TouchableOpacity
@@ -745,13 +734,49 @@ const AddMemberSheet: React.FC<{
                       { backgroundColor: active ? G.accent : G.card, borderColor: active ? G.accent : G.border },
                     ]}
                   >
-                    {r.key === 'owner' && <Crown size={13} color={active ? '#FFFFFF' : colors.warning} />}
                     <AppText variant="caption" weight="bold" style={{ color: active ? '#FFFFFF' : G.fg }}>
                       {r.isSystem && isBuiltinRole(r.key) ? t(`teams.role_${r.key}`) : r.label}
                     </AppText>
                   </TouchableOpacity>
                 );
               })}
+            </View>
+            <AppText variant="micro" weight="medium" style={{ color: G.muted, marginBottom: 12 }}>
+              {t('teams.permissions_hint')}
+            </AppText>
+
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
+              <View style={[styles.formGroup, { flex: 1 }]}>
+                <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, letterSpacing: 1.2 }}>
+                  6-Digit Login PIN *
+                </AppText>
+                <TextInput
+                  style={[styles.input, { color: G.fg, borderColor: G.border, backgroundColor: G.card, textAlign: 'center', fontSize: 18, letterSpacing: 2 }]}
+                  placeholder="••••••"
+                  placeholderTextColor={G.muted}
+                  value={memberPin}
+                  onChangeText={(v) => setMemberPin(v.replace(/\D/g, ''))}
+                  keyboardType="numeric"
+                  maxLength={6}
+                  secureTextEntry
+                />
+              </View>
+
+              <View style={[styles.formGroup, { flex: 1 }]}>
+                <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, letterSpacing: 1.2 }}>
+                  Confirm PIN *
+                </AppText>
+                <TextInput
+                  style={[styles.input, { color: G.fg, borderColor: G.border, backgroundColor: G.card, textAlign: 'center', fontSize: 18, letterSpacing: 2 }]}
+                  placeholder="••••••"
+                  placeholderTextColor={G.muted}
+                  value={confirmPin}
+                  onChangeText={(v) => setConfirmPin(v.replace(/\D/g, ''))}
+                  keyboardType="numeric"
+                  maxLength={6}
+                  secureTextEntry
+                />
+              </View>
             </View>
 
             {error ? (
@@ -790,6 +815,7 @@ const EditMemberSheet: React.FC<{
   onRoleChange: (userId: string, roleKey: string) => void;
   onToggleActive: (userId: string, next: boolean) => void;
   onPermissionChange: (userId: string, key: string, current: PermissionValue) => void;
+  onPermissionReset: (userId: string, name: string) => void;
   roleLabel: (key: string) => string;
   permLabel: (d: any) => string;
   permDesc: (d: any) => string;
@@ -804,6 +830,7 @@ const EditMemberSheet: React.FC<{
   onRoleChange,
   onToggleActive,
   onPermissionChange,
+  onPermissionReset,
   roleLabel,
   permLabel,
   permDesc,
@@ -1022,10 +1049,16 @@ const EditMemberSheet: React.FC<{
               <View style={styles.sectionBlock}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                   <ShieldCheck size={16} color={G.accent} />
-                  <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, letterSpacing: 1.2 }}>
+                  <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, letterSpacing: 1.2, flex: 1 }}>
                     {t('teams.permissions')}
                   </AppText>
+                  <TouchableOpacity onPress={() => onPermissionReset(user.id, user.name)}>
+                    <AppText variant="micro" weight="bold" style={{ color: G.accent }}>{t('teams.reset_permissions')}</AppText>
+                  </TouchableOpacity>
                 </View>
+                <AppText variant="micro" weight="medium" style={{ color: G.muted, marginBottom: 6 }}>
+                  {t('teams.permissions_hint')}
+                </AppText>
                 {(['sales', 'products', 'inventory', 'customers', 'payments', 'reports', 'team', 'devices', 'settings'] as PermissionScope[]).map((scope) => {
                   const defs = PERMISSION_CATALOG.filter((d) => d.scope === scope);
                   if (!defs.length) return null;

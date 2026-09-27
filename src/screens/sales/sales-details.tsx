@@ -58,6 +58,7 @@ import { ProductImageStack } from "@/components/ProductImageStack";
 import { getSalesGlass } from './glass-sales';
 import { getActiveTaxType } from '@/services/taxService';
 import { getScopedBusinessId } from "@/database/db";
+import { useWriteGuard } from "@/hooks/useWriteGuard";
 import Animated, { FadeInDown, ZoomIn } from "react-native-reanimated";
 const SALES_GLASS = getSalesGlass(LightTheme);
 
@@ -76,6 +77,7 @@ const SaleDetailsScreen = ({
     return { name: at?.name || 'VAT', rate: at?.rate ?? 15 };
   }, [getScopedBusinessId()]);
   const { showToast } = useToast();
+  const { guard } = useWriteGuard();
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState(sale);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -187,6 +189,7 @@ const SaleDetailsScreen = ({
   if (!sale) return null;
 
   const handleSave = () => {
+    if (!guard()) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     if (isBatch) {
@@ -299,6 +302,7 @@ const SaleDetailsScreen = ({
   };
 
   const handleDelete = () => {
+    if (!guard()) return;
     const success = isBatch
       ? deleteSalesByBatchId(sale.batchId)
       : deleteSale(sale.id);
@@ -316,6 +320,7 @@ const SaleDetailsScreen = ({
   };
 
   const handleReturn = () => {
+    if (!guard()) return;
     const qty = parseInt(returnQty) || 0;
     const originalQty = isBatch ? batchItems[0]?.quantity || 1 : sale.quantity || 1;
     const alreadyReturned = returnStats?.totalReturnedQty || 0;

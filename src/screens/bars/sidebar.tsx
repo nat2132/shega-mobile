@@ -77,7 +77,8 @@ const MyStoreMenu: React.FC<SidebarProps> = ({ onClose }) => {
     </Animated.View>
   );
 
-  const bizName = activeBiz?.name || auth.business?.name || userProfile.businessName || 'Shega Business';
+  const rawBiz = (activeBiz?.name || auth.business?.name || userProfile.businessName || '').trim();
+  const bizName = rawBiz && !rawBiz.includes('@') ? rawBiz : 'Shega Business';
   const userName = auth.user?.name || userProfile.name || 'Team Member';
   const userAvatar = auth.user?.avatar || userProfile.avatarUri || null;
 

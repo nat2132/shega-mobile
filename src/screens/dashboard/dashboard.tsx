@@ -5,6 +5,7 @@ import { UserAvatar } from '@/components/UserAvatar';
 import SaleSuccessModal from '@/components/SaleSuccessModal';
 import PremiumTrialBanner from '@/components/PremiumTrialBanner';
 import { useSubscription } from '@/context/SubscriptionContext';
+import { useAccount } from '@/context/AccountContext';
 import { Fonts } from '@/constants/theme';
 import * as Haptics from 'expo-haptics';
 import { router, useFocusEffect } from 'expo-router';
@@ -192,7 +193,11 @@ SparklineChart.displayName = 'SparklineChart';
   const DashboardScreen = () => {
     const { openSidebar } = useSidebar();
     const { userProfile, colors, calendarType, language, timeSystem, t } = useSettings();
-    useEnsureOwnerBusiness(userProfile.businessName, userProfile.name);
+    // The signed-in account is the source of truth for the business name —
+    // userProfile holds hardcoded demo defaults that are never synced from
+    // the account, so using it here seeded businesses with the wrong name.
+    const accountUser = useAccount().user;
+    useEnsureOwnerBusiness(accountUser?.business_name, accountUser?.name, accountUser?.email);
     const { dashboardVisibility, toggleDashboardSection } = useDashboardVisibility();
     const { refreshTrialDays, isFeatureUnlocked } = useSubscription();
     const G = getDashGlass(colors);

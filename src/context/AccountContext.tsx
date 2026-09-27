@@ -129,11 +129,12 @@ export const AccountProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       const res = await registerUser(payload);
       const token = res.token || res.access;
-      const loggedUser: AccountUser = res.user || {
-        id: res.id ?? 0,
-        name: res.name ?? payload.name,
-        email: res.email ?? payload.email,
-        business_name: res.business_name ?? payload.business_name,
+      const uObj = (res.user || {}) as any;
+      const loggedUser: AccountUser = {
+        id: uObj.id ?? res.id ?? 0,
+        name: uObj.name || uObj.full_name || res.name || payload.name,
+        email: uObj.email || res.email || payload.email,
+        business_name: uObj.business_name || res.business_name || payload.business_name,
       };
       if (token) {
         await setStoredToken(token);
@@ -144,8 +145,7 @@ export const AccountProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return true;
     } catch (e) {
       console.error('[Account] Register error', e);
-      if (isOfflineError(e)) throw e;
-      return false;
+      throw e;
     }
   }, []);
 

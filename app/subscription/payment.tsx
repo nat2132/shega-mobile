@@ -3,24 +3,31 @@ import { router, useLocalSearchParams } from 'expo-router';
 import SubscriptionPaymentScreen from '../../src/screens/subscription/subscription-payment';
 import { fetchPlans } from '../../src/services/api';
 import { safeBackOrFallback } from '../../src/services/navigation';
+import { parsePlanEdition } from '@shega/shared';
 
 export default function SubscriptionPayment() {
   const params = useLocalSearchParams<{
     planId?: string;
+    plan_id?: string;
     plan?: string;
     durationMonths?: string;
+    from?: string;
   }>();
 
+  const rawId = params.planId || params.plan_id || '';
+  const initialPlanId = parseInt(rawId, 10);
+
   const [resolvedPlanId, setResolvedPlanId] = useState<number>(
-    parseInt(params.planId || '0', 10),
+    initialPlanId > 0 ? initialPlanId : 1,
   );
 
   // The manage screen navigates here as ?plan=mobile|desktop|both&durationMonths=1
   // instead of carrying a backend planId. Resolve it from the live /api/plans
   // list so the correct edition + duration is submitted to the backend.
   useEffect(() => {
-    const explicitPlanId = parseInt(params.planId || '', 10);
-    if (explicitPlanId) {
+    const rawId = params.planId || params.plan_id || '';
+    const explicitPlanId = parseInt(rawId, 10);
+    if (explicitPlanId > 0) {
       setResolvedPlanId(explicitPlanId);
       return;
     }
@@ -30,28 +37,39 @@ export default function SubscriptionPayment() {
       try {
         const plans = await fetchPlans();
         if (cancelled || !plans?.length) return;
-        const target = (params.plan || '').toLowerCase();
+        // Match on the canonical edition rather than the plan name, so a
+        // backend rename ("Mobile + Desktop (Monthly)") still resolves.
+        const target = parsePlanEdition(params.plan) || 'mobile';
         const months = parseInt(params.durationMonths || '0', 10);
         const match = plans.find(
           (p) =>
-            p.name.toLowerCase() === target &&
+            parsePlanEdition(p.edition ?? p.display_name ?? p.name) === target &&
             (months ? p.duration_months === months : true),
         );
         if (match) setResolvedPlanId(match.id);
       } catch {
-        /* fall through; backend will validate plan_id */
+        /* fall through; default is Plan ID 1 */
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [params.plan, params.planId, params.durationMonths]);
+  }, [params.plan, params.planId, params.plan_id, params.durationMonths]);
+
+  // Coming from the onboarding plan step, going back must land on that same
+  // step (Mobile-only) rather than the full catalogue.
+  const isOnboarding = params.from === 'onboarding';
 
   return (
     <SubscriptionPaymentScreen
       planId={resolvedPlanId}
-      onBack={() => safeBackOrFallback('/subscription/plans')}
-      onSuccess={() => router.replace('/subscription/status' as any)}
+      onBack={() => safeBackOrFallback(isOnboarding ? '/subscription/plans?scope=onboarding' : '/subscription/plans')}
+      // Onboarding always ends with PIN Setup, whether the customer took the
+      // trial or paid. A payment made here stays pending, so they land in
+      // view-only until an admin approves — but the PIN is still theirs to set.
+      onSuccess={() =>
+        router.replace((isOnboarding ? '/create-pin?from=onboarding' : '/subscription/status') as any)
+      }
     />
   );
 }

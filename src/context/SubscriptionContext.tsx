@@ -14,7 +14,8 @@ import {
   applyServerSubscriptionStatus,
   SubscriptionData,
 } from '@/database/db';
-import { fetchSubscriptionStatus, isRateLimited } from '@/services/api';
+import { fetchSubscriptionStatus, fetchCustomerPayments, isRateLimited } from '@/services/api';
+import { evaluateAccess, type AccessVerdict } from '@/utils/write-gate';
 
 export const PREMIUM_FEATURES = [
   'reports',
@@ -108,7 +109,7 @@ export const FEATURE_LABELS: Record<PremiumFeature, { name: string; description:
   },
 };
 
-const BASIC_FEATURES = ['inventory', 'sales', 'contacts', 'adjustments'];
+const CORE_FEATURES = ['inventory', 'sales', 'contacts', 'adjustments'];
 
 interface SubscriptionContextType {
   subscription: SubscriptionData | null;
@@ -135,8 +136,15 @@ interface SubscriptionContextType {
   cancelCurrentSubscription: () => Promise<boolean>;
   renewCurrentSubscription: (durationMonths: number, price: number) => Promise<boolean>;
   isFeatureUnlocked: (feature: string) => boolean;
-  isBasicFeature: (feature: string) => boolean;
+  isCoreFeature: (feature: string) => boolean;
   isFeatureLocked: (feature: string) => boolean;
+  /** Full view-only verdict, including whether a trial/term has simply run out. */
+  writeAccess: AccessVerdict;
+  /**
+   * Guard for a write action. Returns true when the write may proceed; when it
+   * returns false the caller should show the renew prompt and abort.
+   */
+  requireWrite: () => boolean;
   refreshTrialDays: () => Promise<void>;
   payments: any[];
   renewals: any[];
@@ -147,6 +155,8 @@ const SubscriptionContext = createContext<SubscriptionContextType | undefined>(u
 
 export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
+  /** Bumped by the expiry timer so the access verdict re-evaluates on its own. */
+  const [now, setNow] = useState(() => Date.now());
   const [isLoading, setIsLoading] = useState(true);
   const [trialDaysRemaining, setTrialDaysRemaining] = useState(0);
   const [payments, setPayments] = useState<any[]>([]);
@@ -183,10 +193,23 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         planName: serverStatus.plan_name || null,
         expiresAt: serverStatus.expires_at || null,
       });
+
+      try {
+        const remotePayments = await fetchCustomerPayments();
+        if (remotePayments && Array.isArray(remotePayments) && remotePayments.length > 0) {
+          setPayments(remotePayments.map((p: any) => ({
+            id: p.id,
+            planName: p.plan_name || p.description || 'Subscription',
+            transactionId: p.transaction_id || `TXN-${p.id}`,
+            amount: p.amount,
+            status: p.status === 'approved' ? 'verified' : p.status,
+            createdAt: p.created_at,
+          })));
+        }
+      } catch {}
+
       await refresh();
     } catch (error: any) {
-      // Swallow offline / 401 / 429: keep relying on the local cache. We do
-      // surface a transient 429 hint to the UI via state so callers can back off.
       if (isRateLimited(error)) {
         console.warn('[Subscription] sync throttled; backing off.');
       }
@@ -237,31 +260,67 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return isPremiumFeatureUnlocked(feature);
   }, []);
 
-  const isBasicFeature = useCallback((feature: string) => {
-    return BASIC_FEATURES.includes(feature);
+  const isCoreFeature = useCallback((feature: string) => {
+    return CORE_FEATURES.includes(feature);
   }, []);
 
   // Access is not tiered: the plans differ by EDITION (Mobile / Desktop /
   // Mobile + Desktop), not by capability, so an active or trial subscription
-  // unlocks every feature. Only the not-yet-paid states lock anything.
-  const LOCKED_STATUSES = ['expired', 'cancelled', 'rejected', 'pending_verification', 'pending_payment', 'payment_rejected'];
-
-  const isFeatureLocked = useCallback((feature: string) => {
-    if (!PREMIUM_FEATURES.includes(feature as any)) return false;
-    if (!subscription) return true;
-    return LOCKED_STATUSES.includes(subscription.status || '');
-  }, [subscription]);
+  // unlocks every feature. Only the not-yet-paid or lapsed states lock anything.
+  const isFeatureLocked = useCallback(
+    (feature: string) => {
+      if (!PREMIUM_FEATURES.includes(feature as any)) return false;
+      if (!subscription) return true;
+      return !evaluateAccess({
+        status: subscription.status,
+        expiresAt: subscription.expiresAt,
+        trialEndsAt: subscription.trialEndsAt,
+        isTrial: subscription.status === 'trial',
+      }).allowed;
+    },
+    [subscription],
+  );
 
   const refreshTrialDays = useCallback(async () => {
     setTrialDaysRemaining(getTrialDaysRemaining());
   }, []);
 
   const isTrial = subscription?.status === 'trial';
-  // View-only: waiting on approval, rejected, cancelled, or lapsed. Sales and
-  // edit actions stay locked until the subscription is restored.
-  const isReadOnly = LOCKED_STATUSES.includes(subscription?.status || '');
+
+  // Re-render exactly when the current term ends, so a trial or a paid period
+  // that runs out flips the app into view-only on its own. Without this the
+  // verdict would only refresh on the next sync or app launch, leaving an
+  // expired install editable while it sits open.
+  useEffect(() => {
+    const boundaries = [subscription?.trialEndsAt, subscription?.expiresAt]
+      .map((value) => (value ? new Date(value).getTime() : Number.NaN))
+      .filter((time) => Number.isFinite(time) && time > Date.now());
+    if (boundaries.length === 0) return;
+
+    // +1s so the deadline itself satisfies `end <= now`.
+    const delay = Math.min(...boundaries) - Date.now() + 1000;
+    const timer = setTimeout(() => setNow(Date.now()), Math.min(delay, 2_147_483_647));
+    return () => clearTimeout(timer);
+  }, [subscription?.trialEndsAt, subscription?.expiresAt]);
+
+  // View-only covers both the backend's status AND the clock: a trial or a paid
+  // term that has run out locks writes even if the last sync still reported
+  // `trial`/`active` (offline device, or nobody synced yet).
+  const accessVerdict = evaluateAccess(
+    subscription
+      ? {
+          status: subscription.status,
+          expiresAt: subscription.expiresAt,
+          trialEndsAt: subscription.trialEndsAt,
+          isTrial,
+        }
+      : null,
+    now,
+  );
+  const isReadOnly = !accessVerdict.allowed;
   const isPremium = !isReadOnly && (subscription?.status === 'active' || isTrial);
-  const isExpired = subscription?.status === 'expired';
+  const isExpired = subscription?.status === 'expired'
+    || (!accessVerdict.allowed && (accessVerdict.reason === 'expired' || accessVerdict.reason === 'trial_ended'));
 
   const daysUntilExpiry = (() => {
     if (!subscription?.expiresAt) return 0;
@@ -272,6 +331,8 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
   })();
 
   const isExpiringSoon = daysUntilExpiry <= 7 && daysUntilExpiry > 0 && subscription?.status === 'active';
+
+  const requireWrite = useCallback(() => accessVerdict.allowed, [accessVerdict]);
 
   return (
     <SubscriptionContext.Provider
@@ -292,8 +353,10 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         cancelCurrentSubscription,
         renewCurrentSubscription,
         isFeatureUnlocked,
-        isBasicFeature,
+        isCoreFeature,
         isFeatureLocked,
+        writeAccess: accessVerdict,
+        requireWrite,
         refreshTrialDays,
         payments,
         renewals,

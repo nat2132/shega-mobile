@@ -21,6 +21,7 @@
 
 import { BorderRadius, Fonts } from '@/constants/theme';
 import { useDataChangedRefresh } from '@/hooks/useDataChangedRefresh';
+import { useWriteGuard } from '@/hooks/useWriteGuard';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSettings } from '@/context/SettingsContext';
 import {
@@ -523,6 +524,7 @@ const DebtDetailScreen: React.FC<{
   language: string;
 }> = ({ customer, onBack, onChanged, calendarType, language }) => {
   const { colors, t } = useSettings();
+  const { guard } = useWriteGuard();
   const G = getDashGlass(colors);
   const styles = useMemo(() => createStyles(G), [G]);
   const [tab, setTab] = useState<DetailTab>('items');
@@ -564,6 +566,7 @@ const DebtDetailScreen: React.FC<{
 
   // Pay-all flow
   const handlePayAll = () => {
+    if (!guard()) return;
     Alert.alert(
       t('debt.pay_all_title'),
       t('debt.pay_all_msg', {
@@ -591,6 +594,7 @@ const DebtDetailScreen: React.FC<{
 
   // Pay-selected flow
   const handlePaySelected = () => {
+    if (!guard()) return;
     if (selectedSaleIds.length === 0) {
       Alert.alert(t('debt.select_items_title'), t('debt.select_items_msg'));
       return;

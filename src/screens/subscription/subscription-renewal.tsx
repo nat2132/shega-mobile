@@ -17,6 +17,7 @@ import { AppText } from '@/components/ui';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSubscription } from '@/context/SubscriptionContext';
+import { planEditionLabel } from '@/utils/plan-edition';
 import { useRouter } from 'expo-router';
 
 const SubscriptionRenewalScreen = () => {
@@ -25,12 +26,7 @@ const SubscriptionRenewalScreen = () => {
   const router = useRouter();
   const G = { bg: colors.background, card: colors.card, border: colors.border, text: colors.text, muted: colors.textSecondary, fg: colors.primary };
 
-  const handleRenewPremium = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    router.push('/subscription/plans');
-  };
-
-  const handleRenewBasic = () => {
+  const handleRenew = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.push('/subscription/plans');
   };
@@ -62,14 +58,7 @@ const SubscriptionRenewalScreen = () => {
               {t('subscription.plan')}
             </AppText>
             <AppText variant="body" weight="bold" style={{ color: G.text }}>
-              {(() => {
-                const plan = (subscription?.plan || '').toLowerCase();
-                if (plan.includes('desktop') && plan.includes('mobile')) return t('subscription.plan_both');
-                if (plan.includes('premium')) return t('subscription.plan_both');
-                if (plan.includes('desktop')) return t('subscription.plan_desktop');
-                if (plan.includes('mobile') || plan.includes('basic')) return t('subscription.plan_mobile');
-                return subscription?.plan || t('common.na');
-              })()}
+              {planEditionLabel(subscription, t, subscription?.plan || t('common.na'))}
             </AppText>
           </View>
           <View style={styles.statusRow}>
@@ -135,7 +124,7 @@ const SubscriptionRenewalScreen = () => {
             <View style={styles.accessItem}>
               <Lock size={16} color="#EF4444" />
               <AppText variant="body" weight="medium" style={{ color: G.muted }}>
-                {t('subscription.premium_analytics')}
+                {t('subscription.advanced_analytics')}
               </AppText>
             </View>
           </View>
@@ -147,23 +136,12 @@ const SubscriptionRenewalScreen = () => {
           </AppText>
           <TouchableOpacity
             style={[styles.renewButton, { backgroundColor: '#D4AF37' }]}
-            onPress={handleRenewPremium}
+            onPress={handleRenew}
             activeOpacity={0.9}
           >
             <Crown size={22} color="#FFF" />
             <AppText variant="heading" weight="bold" style={styles.renewButtonText}>
-              {t('subscription.renew_premium')}
-            </AppText>
-            <ArrowRight size={20} color="#FFF" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.renewButton, { backgroundColor: colors.primary, borderWidth: 1, borderColor: colors.border }]}
-            onPress={handleRenewBasic}
-            activeOpacity={0.9}
-          >
-            <Shield size={22} color="#FFF" />
-            <AppText variant="heading" weight="bold" style={styles.renewButtonText}>
-              {t('subscription.renew_basic')}
+              {t('subscription.renew_plan')}
             </AppText>
             <ArrowRight size={20} color="#FFF" />
           </TouchableOpacity>
