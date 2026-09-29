@@ -22,7 +22,13 @@ import { validateInviteCode, normalizeInviteCode, INVITE_CODE_EQ } from './invit
 import { bumpDataVersion } from './dataVersion';
 import { getThisDeviceName } from './deviceIdentity';
 import { PROTOCOL_VERSION } from '@shega/shared';
-import { type PairingHandshakeAck } from '@shega/shared';
+import { type PairingHandshakeAck, type MembershipCredential } from '@shega/shared';
+import {
+  beginJoinChallenge,
+  completeJoinChallenge,
+  getJoinerCredential,
+  issueJoinerCredential,
+} from './hubCredentials';
 import { markConnected, markFirstSync, markHeartbeat, markDisconnected } from './syncDiagnostics';
 import * as Crypto from 'expo-crypto';
 
@@ -68,6 +74,16 @@ interface TcpClient {
   businessId: string | null;
   lastHeartbeat: number;
   buffer?: string;
+  /**
+   * P3 handshake state: a challenge is open and this socket owes us a proof.
+   *
+   * Distinct from `paired`. `paired` used to be set by DEVICE_JOIN_SUBMIT so a
+   * joiner could poll its status, which meant a socket that had merely *asked to
+   * join* was indistinguishable from one the owner had actually admitted — and
+   * every sync handler gates on `paired`. This flag lets a socket be a known
+   * joiner without being a granted data channel.
+   */
+  pendingAuth?: { credential: MembershipCredential; sessionId: string; deviceId: string };
 }
 
 const joinWaiters = new Map<string, any>();
@@ -404,6 +420,10 @@ function handleMessage(client: TcpClient, data: string): void {
       handlePairRequest(client, msg);
       break;
 
+    case 'AUTH_PROOF':
+      void handleAuthProof(client, msg);
+      break;
+
     case 'SYNC_PUSH':
       handleSyncPush(client, msg);
       break;
@@ -467,9 +487,18 @@ function handlePeripheralMessage(senderClient: TcpClient, msg: any): void {
 }
 
 function handlePairRequest(client: TcpClient, msg: any): void {
-  const { device_id, name, token, business_id } = msg.payload || {};
+  const { device_id, name, token, business_id, credential } = msg.payload || {};
   if (!device_id) {
     sendError(client.socket, 'PAIR_FAILED', 'device_id required');
+    return;
+  }
+
+  // P3: a presented credential takes the authenticated path. The token check
+  // below is the legacy fallback and is only reached when no credential rides
+  // along — so a device that has been approved and re-keyed never falls back to
+  // a shared bearer secret.
+  if (credential) {
+    void handleCredentialPairRequest(client, msg, device_id, name, business_id, credential);
     return;
   }
 
@@ -534,6 +563,144 @@ function handlePairRequest(client: TcpClient, msg: any): void {
   });
 
   console.log(`[MobileSync] Device paired: ${device_id} (${name || 'unknown'})`);
+}
+
+/**
+ * P3 — the credential path of PAIR_REQUEST.
+ *
+ * Mirrors the desktop hub exactly (see websocket-server.ts): the credential
+ * must be one this hub actually issued, the signature is verified over the
+ * PRESENTED body so an edited field is caught, and the socket is only marked
+ * `paired` after a valid proof arrives.
+ */
+async function handleCredentialPairRequest(
+  client: TcpClient,
+  msg: any,
+  deviceId: string,
+  name: string | undefined,
+  businessId: string | undefined,
+  credential: MembershipCredential,
+): Promise<void> {
+  const deny = (reason: string, message: string) => {
+    client.pendingAuth = undefined;
+    sendTo(client.socket, {
+      type: 'AUTH_DENY',
+      requestId: msg.requestId,
+      payload: { reason, message },
+    });
+  };
+
+  const stored = await getJoinerCredential(deviceId);
+  if (!stored) {
+    deny('no_credential', 'No credential found for this device. Re-approval required.');
+    return;
+  }
+  // Must be the exact credential this hub issued. Comparing signatures alone
+  // would not catch an edited signed field (e.g. an escalated role leaves the
+  // signature untouched), so the presented body is verified below as well.
+  if (credential?.signature !== stored.signature) {
+    deny('credential_mismatch', 'Credential mismatch. Re-approval required.');
+    return;
+  }
+
+  const hubBizId = getCurrentBusinessId();
+  if (!hubBizId) {
+    deny('no_business', 'No active business on this hub');
+    return;
+  }
+  const bizId = credential.businessId || businessId || hubBizId;
+  if (bizId !== hubBizId) {
+    deny('business_mismatch', 'Business membership mismatch');
+    return;
+  }
+
+  // A revoked device is refused even with a genuine credential.
+  try {
+    const row = getDB().getFirstSync(
+      "SELECT status FROM devices WHERE id = ? OR uuid = ?", [deviceId, deviceId]
+    ) as any;
+    if (row && (row.status || '') === 'revoked') {
+      deny('revoked', 'Device was unpaired by the owner. A new pairing is required.');
+      return;
+    }
+  } catch { /* devices table may not exist yet */ }
+
+  const begun = await beginJoinChallenge(credential, bizId);
+  if ('error' in begun) {
+    deny(begun.error, `Credential rejected: ${begun.error}`);
+    return;
+  }
+
+  client.deviceId = deviceId;
+  client.pendingAuth = { credential: stored, sessionId: begun.challenge.sessionId, deviceId };
+
+  sendTo(client.socket, {
+    type: 'AUTH_CHALLENGE',
+    requestId: msg.requestId,
+    payload: begun.challenge,
+  });
+}
+
+/** P3 — verify the joiner's proof and, on success, grant the socket. */
+async function handleAuthProof(client: TcpClient, msg: any): Promise<void> {
+  const proof = msg.payload;
+  const deny = (reason: string, message: string) => {
+    client.pendingAuth = undefined;
+    sendTo(client.socket, {
+      type: 'AUTH_DENY',
+      requestId: msg.requestId,
+      payload: { reason, message },
+    });
+  };
+
+  if (!client.pendingAuth) {
+    deny('no_pending_challenge', 'No pending challenge for this connection');
+    return;
+  }
+  const { credential, sessionId, deviceId } = client.pendingAuth;
+  if (!proof || proof.sessionId !== sessionId) {
+    deny('session_mismatch', 'Session ID mismatch');
+    return;
+  }
+
+  const res = await completeJoinChallenge(credential, proof);
+  if (!res.ok) {
+    deny(res.reason || 'invalid_proof', `Authentication failed: ${res.reason || 'invalid_proof'}`);
+    try { client.socket?.destroy?.(); } catch { /* already gone */ }
+    return;
+  }
+
+  client.pendingAuth = undefined;
+  const bizId = res.businessId || getCurrentBusinessId();
+  try {
+    getDB().runSync(
+      `INSERT OR REPLACE INTO devices
+         (id, business_id, user_id, name, platform, status, uuid, created_at, updated_at, last_seen_at)
+       VALUES (?, ?, NULL, ?, 'mobile', 'pending', ?, ?, ?, ?)`,
+      [deviceId, bizId, msg.payload?.name || deviceId.slice(0, 8), deviceId,
+        new Date().toISOString(), new Date().toISOString(), new Date().toISOString()]
+    );
+  } catch { /* roster mirror is best-effort */ }
+
+  client.paired = true;
+  client.businessId = bizId;
+  touchDevice(deviceId);
+  markConnected(deviceId, { transport: 'lan-tcp', role: 'joiner', protocolVersion: PROTOCOL_VERSION });
+
+  sendTo(client.socket, {
+    type: 'AUTH_OK',
+    requestId: msg.requestId,
+    payload: { role: res.role, businessId: res.businessId, sessionId },
+  });
+  sendTo(client.socket, {
+    type: 'PAIR_RESPONSE',
+    payload: {
+      success: true,
+      hubId: getDeviceId(),
+      schemaVersion: PROTOCOL_VERSION,
+    },
+  });
+  console.log(`[MobileSync] Device authenticated: ${deviceId} (role=${res.role ?? 'unknown'})`);
 }
 
 function broadcastChanges(originSocket: any, changes: Change[]): void {
@@ -693,9 +860,11 @@ function ensureJoinTables(): void {
       decided_at TEXT,
       assigned_name TEXT,
       assigned_avatar TEXT,
-      assigned_permissions TEXT
+      assigned_permissions TEXT,
+      joiner_public_key TEXT,
+      poll_token TEXT
     )`);
-  for (const col of ['assigned_name TEXT', 'assigned_avatar TEXT', 'assigned_permissions TEXT']) {
+  for (const col of ['assigned_name TEXT', 'assigned_avatar TEXT', 'assigned_permissions TEXT', 'joiner_public_key TEXT', 'poll_token TEXT']) {
     try { db.runSync(`ALTER TABLE device_requests ADD COLUMN ${col}`); } catch { /* already present */ }
   }
 }
@@ -767,8 +936,21 @@ function handleDeviceHello(client: TcpClient, msg: any): void {
     businessId = biz?.uuid ?? null;
   } catch { /* brand-new install has no business yet */ }
   // An open invitation rides along so a joiner on a network with multicast
-  // blocked can still join. Same trust level as the mDNS beacon: short-lived,
-  // LAN-scoped, and still requiring the owner's approval.
+  // blocked can still join (join-existing.tsx falls back to this when the
+  // discovery beacon carried no code).
+  //
+  // RESIDUAL RISK, stated honestly: DEVICE_HELLO is unauthenticated, so this
+  // hands an open invite code to anyone who can reach the port. An earlier
+  // comment here claimed "same trust level as the mDNS beacon" — that was
+  // wrong, since the mDNS beacon publishes the pairing TOKEN, which is far
+  // stronger than an invite code.
+  //
+  // What this actually costs: a stranger can submit a join request and appear
+  // in the owner's approval list. It does NOT grant access — the owner must
+  // still approve, and only then is a signed credential issued (P3). So this is
+  // a nuisance/spam vector, not a compromise, and removing it would push
+  // blocked-multicast joiners onto the code-less radar-tap path instead.
+  // Whether to accept that tradeoff is a product call, not a security fix.
   try {
     const row = getDB().getFirstSync(
       "SELECT code FROM invitations WHERE status = 'open' ORDER BY created_at DESC LIMIT 1",
@@ -791,6 +973,10 @@ function handleDeviceHello(client: TcpClient, msg: any): void {
 }
 
 function handleJoinSubmit(client: TcpClient, msg: any): void {
+  void handleJoinSubmitAsync(client, msg);
+}
+
+async function handleJoinSubmitAsync(client: TcpClient, msg: any): Promise<void> {
   const p = msg.payload || {};
   if (!p.code || !p.joinerDeviceId) {
     sendError(client.socket, 'DEVICE_JOIN_FAILED', 'code and joinerDeviceId required');
@@ -810,17 +996,36 @@ function handleJoinSubmit(client: TcpClient, msg: any): void {
     [canonicalBizId, p.joinerDeviceId],
   ) as any;
   const requestId = existing?.id ?? `jr-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
-  if (!existing) {
+  const stagedRole = p.role ?? inv.role ?? 'cashier';
+  // P3: a per-request poll token, returned only to the submitter. See
+  // isJoinPollAuthorised for why the unauthenticated join channel cannot treat
+  // "approved" as sufficient to hand out a grant.
+  const pollToken = `${Crypto.randomUUID()}${Crypto.randomUUID()}`.replace(/-/g, '');
+  if (existing) {
+    // A radar-configured joiner may have been staged before it sent its public
+    // key; fill it in so approval can still mint a credential.
+    if (p.joinerPublicKey) {
+      try { db.runSync('UPDATE device_requests SET joiner_public_key = ? WHERE id = ?', [p.joinerPublicKey, existing.id]); } catch { /* column absent on older installs */ }
+    }
+    // Re-submitting mints a fresh token: the joiner that re-asks is the one
+    // that gets to collect, and the old token is invalidated with it.
+    try { db.runSync('UPDATE device_requests SET poll_token = ? WHERE id = ?', [pollToken, existing.id]); } catch { /* column absent */ }
+  } else {
     db.runSync(
       `INSERT INTO device_requests
-         (id, business_id, code, joiner_device_id, joiner_name, joiner_model, joiner_user, role, platform, status, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+         (id, business_id, code, joiner_device_id, joiner_name, joiner_model, joiner_user, role, platform, status, created_at, joiner_public_key, poll_token)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`,
       [requestId, canonicalBizId, normalizeInviteCode(p.code), p.joinerDeviceId, p.joinerName ?? null,
-       p.joinerModel ?? null, p.joinerUser ?? 'New Member', p.role ?? inv.role ?? 'cashier',
-       p.platform ?? 'mobile', new Date().toISOString()],
+       p.joinerModel ?? null, p.joinerUser ?? 'New Member', stagedRole,
+       p.platform ?? 'mobile', new Date().toISOString(), p.joinerPublicKey ?? null, pollToken],
     );
   }
-  client.paired = true; // joiners may poll status through this connection
+  // NOTE: `paired` is deliberately NOT set here. It used to be, with the
+  // comment "joiners may poll status through this connection" — but `paired` is
+  // the flag every sync handler gates on, so a socket that had merely ASKED to
+  // join was handed a full data channel before the owner approved anything.
+  // Polling status needs no such grant: handleJoinStatus is reachable while
+  // unpaired, and `client.deviceId` below is all it uses to answer.
   client.deviceId = p.joinerDeviceId;
   joinWaiters.set(p.joinerDeviceId, client.socket);
   // Pre-configured in the owner's Add-Team radar: apply the assigned identity
@@ -847,17 +1052,69 @@ function handleJoinSubmit(client: TcpClient, msg: any): void {
         );
         void req;
       } catch { /* roster mirror is best-effort */ }
-    } catch { /* fall back to the manual approval flow below */ }
-    sendTo(client.socket, { type: 'DEVICE_JOIN_ACK', requestId: msg.requestId, payload: { requestId, status: 'approved', handshake: buildMobileHandshakeAck({ requestId, status: 'approved', business_id: canonicalBizId }) } });
-    console.log(`[MobileSync] Device join auto-approved (pre-configured): ${p.joinerDeviceId}`);
-    return;
+
+      // P3: approval is the moment the device earns its credential. Issued here
+      // as well as on the manual path so an auto-approved joiner is not left on
+      // the weaker token flow just because the owner used the radar.
+      const autoRole = pre.role ?? p.role ?? inv.role ?? 'cashier';
+      const credential = p.joinerPublicKey
+        ? await issueJoinerCredential({
+            businessId: canonicalBizId,
+            deviceId: p.joinerDeviceId,
+            devicePublicKey: p.joinerPublicKey,
+            role: autoRole,
+          })
+        : null;
+      // The joiner is now genuinely admitted, so this socket may sync. It is set
+      // here (not at submit) because auto-approval is a real owner decision.
+      client.paired = true;
+      client.businessId = canonicalBizId;
+      sendTo(client.socket, {
+        type: 'DEVICE_JOIN_ACK',
+        requestId: msg.requestId,
+        payload: {
+          requestId,
+          status: 'approved',
+          // Credential for a P3 joiner, legacy token only for one that sent no
+          // public key. Never both — see resolveApprovedCredential's doc comment.
+          ...(credential
+            ? { credential }
+            : (p.joinerPublicKey ? {} : { pairingToken: getMobilePairingToken() })),
+          // Returned to the submitter, who must present it to collect the grant
+          // on a later status poll.
+          pollToken: pollToken,
+          handshake: buildMobileHandshakeAck({ requestId, status: 'approved', business_id: canonicalBizId }),
+        },
+      });
+      console.log(`[MobileSync] Device join auto-approved (pre-configured): ${p.joinerDeviceId}`);
+      return;
+    } catch (e) {
+      // A failed auto-approval must not leave the joiner hanging with no
+      // answer: fall through to the manual path so the owner sees the request.
+      console.warn('[MobileSync] auto-approval failed, falling back to manual:', e);
+    }
   }
-  sendTo(client.socket, { type: 'DEVICE_JOIN_ACK', requestId: msg.requestId, payload: { requestId, status: 'pending', handshake: buildMobileHandshakeAck({ requestId, status: 'pending', business_id: canonicalBizId }) } });
+  sendTo(client.socket, {
+    type: 'DEVICE_JOIN_ACK',
+    requestId: msg.requestId,
+    payload: {
+      requestId,
+      status: 'pending',
+      // The submitter is the only party that learns this; it is what authorises
+      // collecting the credential once the owner decides.
+      pollToken: pollToken,
+      handshake: buildMobileHandshakeAck({ requestId, status: 'pending', business_id: canonicalBizId }),
+    },
+  });
   console.log(`[MobileSync] Device join staged: ${p.joinerDeviceId} -> ${canonicalBizId}`);
 }
 
 function handleJoinStatus(client: TcpClient, msg: any): void {
-  const { code, joinerDeviceId } = msg.payload || {};
+  void handleJoinStatusAsync(client, msg);
+}
+
+async function handleJoinStatusAsync(client: TcpClient, msg: any): Promise<void> {
+  const { code, joinerDeviceId, pollToken } = msg.payload || {};
   if (!joinerDeviceId) {
     sendError(client.socket, 'DEVICE_JOIN_FAILED', 'joinerDeviceId required');
     return;
@@ -890,17 +1147,82 @@ function handleJoinStatus(client: TcpClient, msg: any): void {
     assignedName: row.assigned_name ?? null,
     assignedAvatar: row.assigned_avatar ?? null,
     assignedPermissions: row.assigned_permissions ? safeParse(row.assigned_permissions) : null,
+    // Only the joiner's own public key, which is public by construction. It is
+    // what lets an approval that predates this build still mint a credential.
+    joinerPublicKey: row.joiner_public_key ?? null,
   } : null;
   const payload: any = { record };
-  // Approval grants the hub pairing credential in-band (same as desktop).
-  if (record && record.status === 'approved') payload.pairingToken = getMobilePairingToken();
+
+  if (record && record.status === 'approved') {
+    // The grant goes ONLY to the joiner that submitted. This channel is
+    // unauthenticated by design (that is what lets an unknown device ask to
+    // join), so without this check anyone who learned an approved device id
+    // could poll for its credential — and, for a legacy device, the hub-wide
+    // pairing token. Such a caller can still read the low-sensitivity record.
+    if (!isJoinPollAuthorised(row, pollToken)) {
+      console.warn(`[MobileSync] approved join polled without a valid poll token — grant withheld: ${joinerDeviceId}`);
+    } else {
+      // P3 grant rule (mirrors the desktop's approvalGrant()): a joiner that sent
+      // a public key gets the signed credential and nothing else; only a joiner
+      // too old to do the handshake gets the legacy bearer token. Handing a
+      // modern device both would leave it holding a network-wide shared secret
+      // it keeps using, which is exactly what this migration exists to stop.
+      const credential = await resolveApprovedCredential(joinerDeviceId, record);
+      if (credential) {
+        payload.credential = credential;
+      } else if (!record.joinerPublicKey) {
+        payload.pairingToken = getMobilePairingToken();
+      }
+    }
+  }
+
   // Explicit connection acknowledgement for the joiner's session tracker.
   payload.handshake = buildMobileHandshakeAck(row);
   sendTo(client.socket, { type: 'DEVICE_JOIN_RESPONSE', requestId: msg.requestId, payload });
 }
 
+/**
+ * Whether a status poll comes from the joiner that actually submitted.
+ *
+ * Mirrors the desktop's isJoinPollAuthorised: without it, "approved" would be
+ * enough for any caller that knows a device id to collect the credential (or,
+ * worse, the hub-wide legacy token).
+ */
+function isJoinPollAuthorised(row: any, presented: any): boolean {
+  const expected = row?.poll_token ? String(row.poll_token) : '';
+  if (!expected) return false;
+  const given = String(presented ?? '');
+  if (given.length !== expected.length) return false;
+  let diff = 0;
+  for (let i = 0; i < given.length; i++) diff |= given.charCodeAt(i) ^ expected.charCodeAt(i);
+  return diff === 0;
+}
+
 function safeParse(json: string): any {
   try { return JSON.parse(json); } catch { return null; }
+}
+
+/**
+ * The credential an approved joiner should receive, minting it if needed.
+ *
+ * Backfills rather than returning null: an approval decided before the joiner
+ * sent a public key (or by a build that did not issue one) has nothing stored,
+ * and silently downgrading such a device to the bearer token is how the weaker
+ * path spread in the first place.
+ */
+async function resolveApprovedCredential(
+  joinerDeviceId: string,
+  record: { businessId: string; role?: string | null; joinerPublicKey?: string | null },
+): Promise<MembershipCredential | null> {
+  const existing = await getJoinerCredential(joinerDeviceId);
+  if (existing) return existing;
+  if (!record.joinerPublicKey) return null;
+  return issueJoinerCredential({
+    businessId: String(record.businessId),
+    deviceId: joinerDeviceId,
+    devicePublicKey: record.joinerPublicKey,
+    role: record.role || 'cashier',
+  });
 }
 
 function handleJoinList(client: TcpClient, msg: any): void {
@@ -911,6 +1233,10 @@ function handleJoinList(client: TcpClient, msg: any): void {
 }
 
 function handleJoinDecide(client: TcpClient, msg: any): void {
+  void handleJoinDecideAsync(client, msg);
+}
+
+async function handleJoinDecideAsync(client: TcpClient, msg: any): Promise<void> {
   const p = msg.payload || {};
   if (!p.requestId || !['approved', 'rejected'].includes(p.decision)) {
     sendError(client.socket, 'DEVICE_JOIN_FAILED', 'requestId and valid decision required');
@@ -955,6 +1281,18 @@ function handleJoinDecide(client: TcpClient, msg: any): void {
     touchDevice(row.joiner_device_id);
   }
   const updated = db.getFirstSync('SELECT * FROM device_requests WHERE id = ?', [p.requestId]) as any;
+  // P3: mint the credential at the moment of approval so the owner's decision
+  // and the device's authentication material are created together. Falling
+  // back to the joiner's stored public key covers approvals decided by a build
+  // that predates the credential, and by joins staged without a key.
+  const issued = p.decision === 'approved' && updated.joiner_public_key
+    ? await issueJoinerCredential({
+        businessId: String(updated.business_id),
+        deviceId: updated.joiner_device_id,
+        devicePublicKey: String(updated.joiner_public_key),
+        role: updated.role || 'cashier',
+      })
+    : null;
   const decisionPayload = {
     record: {
       requestId: updated.id,
@@ -972,8 +1310,12 @@ function handleJoinDecide(client: TcpClient, msg: any): void {
       assignedName: updated.assigned_name ?? null,
       assignedAvatar: updated.assigned_avatar ?? null,
       assignedPermissions: updated.assigned_permissions ? safeParse(updated.assigned_permissions) : null,
+      joinerPublicKey: updated.joiner_public_key ?? null,
     },
-    pairingToken: p.decision === 'approved' ? getMobilePairingToken() : undefined,
+    // Legacy token only for a joiner that sent no public key, and never
+    // alongside a credential — the same rule as resolveApprovedCredential().
+    pairingToken: p.decision === 'approved' && !updated.joiner_public_key ? getMobilePairingToken() : undefined,
+    ...(issued ? { credential: issued } : {}),
     handshake: buildMobileHandshakeAck(updated, row.joiner_device_id),
   };
 

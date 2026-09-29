@@ -20,10 +20,8 @@ export default function RegisterRoute() {
 }
 
 async function handlePostRegister() {
-  const { resolveJoinResume } = await import('../src/services/postAuthRouter');
-  const resumeRoute = await resolveJoinResume();
   // Signup-first onboarding: account creation is the FIRST step, so a fresh
   // account continues into the business setup wizard, which pre-fills the
   // owner identity from the account and skips its welcome/choose-path stage.
-  router.replace((resumeRoute ?? '/setup-wizard?from=register') as never);
+  router.replace('/setup-wizard?from=register' as never);
 }

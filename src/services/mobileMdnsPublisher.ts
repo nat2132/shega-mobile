@@ -17,7 +17,7 @@
 
 import { PROTOCOL_VERSION } from '@shega/shared';
 import { getDeviceId } from './syncService';
-import { getMobilePairingToken, getMobileSyncPort } from './mobileSyncServer';
+import { getMobileSyncPort } from './mobileSyncServer';
 import { mdnsRegistry } from './mobileMdnsRegistry';
 
 let warnedMissing = false;
@@ -70,10 +70,15 @@ export function publishMobileHub(): void {
       device_id: deviceId,
       schema_version: String(PROTOCOL_VERSION),
       port: String(port),
-      pairing_token: getMobilePairingToken(),
       platform: 'mobile',
       business_id: businessId || '',
       capabilities: 'lan,sync,mobile',
+      // P3: pairing_token is intentionally absent. mDNS TXT records are readable
+      // by every device on the subnet, so broadcasting the hub's shared bearer
+      // here gave it to anyone merely listening. Peers authenticate with a
+      // signed membership credential instead; a build too old for that is still
+      // ACCEPTED, it just has to receive the token out of band (owner-issued or
+      // via the hub QR, which is a physical channel rather than a passive one).
     },
   });
 }

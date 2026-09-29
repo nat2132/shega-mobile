@@ -593,14 +593,9 @@ export default function SetupWizardScreen() {
               <View style={{ marginTop: 32 }}>
                 <PrimaryButton label="Create a New Business" onPress={() => go('name')} icon={<ArrowRight size={17} color={G.bg} />} />
                 {!cameFromSignup && (
-                  <>
-                    <View style={{ marginTop: 12 }}>
-                      <GhostButton label="Join an Existing Business" onPress={() => router.replace('/join-existing' as any)} />
-                    </View>
-                    <View style={{ marginTop: 12 }}>
-                      <GhostButton label="Already have an account? Sign in" onPress={() => router.replace('/user-signin' as any)} />
-                    </View>
-                  </>
+                  <View style={{ marginTop: 12 }}>
+                    <GhostButton label="Already have an account? Sign in" onPress={() => router.replace('/user-signin' as any)} />
+                  </View>
                 )}
               </View>
             </Animated.View>

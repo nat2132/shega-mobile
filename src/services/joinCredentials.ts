@@ -27,6 +27,34 @@ import { JoinerAuthenticator, type MembershipCredential } from '@shega/shared';
 import { getDeviceIdentity, type DeviceIdentity } from './deviceKeys';
 
 const CREDENTIAL_KEY = 'shega:membershipCredential';
+/**
+ * Per-request poll token for the in-flight join.
+ *
+ * The join channel is unauthenticated, so the hub only hands out a credential
+ * (or the legacy token) to whoever presents this. Persisted because the join
+ * outlives an app restart — a joiner that is killed while waiting for the owner
+ * must still be able to collect its credential when it comes back.
+ */
+const POLL_TOKEN_KEY = 'shega:joinPollToken';
+
+export async function saveJoinPollToken(token: string | null | undefined): Promise<void> {
+  try {
+    if (!token) return;
+    await storage().setItem(POLL_TOKEN_KEY, String(token));
+  } catch { /* the joiner can still collect nothing this release; it re-submits */ }
+}
+
+export async function loadJoinPollToken(): Promise<string | null> {
+  try {
+    return (await storage().getItem(POLL_TOKEN_KEY)) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function clearJoinPollToken(): Promise<void> {
+  try { await storage().removeItem(POLL_TOKEN_KEY); } catch { /* nothing to clear */ }
+}
 
 function storage(): any {
   const mod = require('@react-native-async-storage/async-storage');

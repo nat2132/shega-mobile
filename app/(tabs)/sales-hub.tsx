@@ -1,26 +1,11 @@
 import SalesDashboard from '../../src/screens/sales/sales';
-import CashierPOS from '../../src/screens/sales/cashier-pos';
-import { useBusinessAuth } from '@/hooks/useBusinessAuth';
-import { View } from 'react-native';
-import { useSettings } from '@/context/SettingsContext';
 
+/**
+ * Sales tab. This used to fork on the user's role — a cashier (or any custom
+ * role without catalog/inventory powers) got a stripped-down POS surface and
+ * everyone else the full sales dashboard. Mobile no longer has roles: every
+ * account on a device is a full local account, so there is one surface.
+ */
 export default function SalesScreen() {
-  const auth = useBusinessAuth();
-  const { colors } = useSettings();
-
-  // Cashiers (and any custom role without catalog/inventory powers) get the
-  // focused POS surface; management roles keep the full sales dashboard.
-  const isCashierExperience =
-    auth.role === 'cashier' ||
-    (!auth.can('products.edit') && !auth.can('inventory.adjust') && !auth.can('reports.viewAll'));
-
-  if (isCashierExperience) {
-    return (
-      <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <CashierPOS />
-      </View>
-    );
-  }
-
   return <SalesDashboard />;
 }

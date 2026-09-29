@@ -53,6 +53,7 @@ import {
   Palette,
   Printer,
   RefreshCw,
+  ScanLine,
   Shield,
   Sliders,
   Store,
@@ -69,8 +70,8 @@ import { BottomSheet } from '@/components/BottomSheet';
 import { AppListItem, AppText } from '@/components/ui';
 import { PeripheralCenter } from './devices/peripherals';
 import { PosHubScreen } from './devices/PosHubScreen';
+import { ScanForDesktopScreen } from './devices/ScanForDesktopScreen';
 import { usePermissions } from '@/hooks/usePermissions';
-import { useBusinessAuth } from '@/hooks/useBusinessAuth';
 import { BusinessSwitcher } from '@/components/BusinessSwitcher';
 import PremiumFeatureGate from '@/components/PremiumFeatureGate';
 import { useWarehouse } from '@/context/WarehouseContext';
@@ -441,16 +442,11 @@ const SettingsScreen = () => {
   const [showWarehouse, setShowWarehouse] = useState(false);
   const [showDevices, setShowDevices] = useState(false);
   const [showPosHub, setShowPosHub] = useState(false);
+  const [showScanForDesktop, setShowScanForDesktop] = useState(false);
   const [showSyncCenter, setShowSyncCenter] = useState(false);
   const [showTax, setShowTax] = useState(false);
 
   const { canManageDevices } = usePermissions();
-  const authBiz = useBusinessAuth();
-  // Cashier experience: view-only profile + the essentials only.
-  const cashierMode =
-    authBiz.role === 'cashier' ||
-    (!authBiz.can('products.edit') && !authBiz.can('inventory.adjust') && !authBiz.can('reports.viewAll'));
-
   const { activeWarehouse, warehouses } = useWarehouse();
   const { checkForUpdates, state: updateState } = useUpdate();
   const { refresh: refreshSubscription } = useSubscription();
@@ -506,8 +502,7 @@ const SettingsScreen = () => {
         <Animated.View entering={FadeInDown.duration(600)} style={styles.bannerSection}>
           <TouchableOpacity 
             activeOpacity={0.9} 
-            onPress={cashierMode ? undefined : () => handleOpenSub(setShowProfile)}
-            disabled={cashierMode}
+            onPress={() => handleOpenSub(setShowProfile)}
             style={[styles.profileBanner, { backgroundColor: G.bgCard, borderColor: G.border, padding: 18 }]}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, width: '100%' }}>
@@ -538,7 +533,7 @@ const SettingsScreen = () => {
                   </AppText>
                 </View>
 
-                {!cashierMode && (
+                {(
                   <View style={[styles.profileLinkBtn, { backgroundColor: G.accentGlass, marginTop: 6 }]}>
                     <AppText variant="caption" weight="bold" style={[styles.profileLinkText, { color: G.fg }]} numberOfLines={1}>
                       {t('profile.edit')}
@@ -554,7 +549,7 @@ const SettingsScreen = () => {
         {/* Service Intelligence Grid */}
         <View style={styles.gridSection}>
           <View style={styles.gridRow}>
-            {!cashierMode && (
+            {(
             <ConfigurationGridItem 
               icon={Shield} 
               title={t('settings.security')} 
@@ -562,7 +557,7 @@ const SettingsScreen = () => {
               color={G.fg}
             />
             )}
-            {!cashierMode && (
+            {(
             <ConfigurationGridItem 
               icon={Bell} 
               title={t('settings.notifications')} 
@@ -585,7 +580,7 @@ const SettingsScreen = () => {
               color={G.fg}
             />
           </View>
-          {!cashierMode && (
+          {(
           <View style={styles.gridRow}>
             <ConfigurationGridItem
               icon={Sliders}
@@ -598,7 +593,7 @@ const SettingsScreen = () => {
         </View>
 
         {/* Warehouse Section */}
-        {!cashierMode && featureFlags.warehousesEnabled && (
+        {featureFlags.warehousesEnabled && (
         <View style={styles.ledgerSection}>
           <View style={styles.sectionHead}>
             <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: G.muted }]} numberOfLines={1}>{t('inv.warehouses_title')}</AppText>
@@ -617,7 +612,7 @@ const SettingsScreen = () => {
         )}
 
         {/* Business Features — progressive disclosure toggles */}
-        {!cashierMode && (
+        {(
         <View style={styles.ledgerSection}>
           <View style={styles.sectionHead}>
             <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: G.muted }]} numberOfLines={1}>Business Features</AppText>
@@ -702,7 +697,7 @@ const SettingsScreen = () => {
         </View>
 
         {/* Devices & Peripherals */}
-        {!cashierMode && canManageDevices ? (
+        {canManageDevices ? (
           <View style={styles.ledgerSection}>
             <View style={styles.sectionHead}>
               <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: G.muted }]} numberOfLines={1}>{t('devices.title')}</AppText>
@@ -717,6 +712,12 @@ const SettingsScreen = () => {
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowDevices(true); }}
               />
               <SettingLedgerItem
+                icon={ScanLine}
+                title="Use as Barcode Scanner"
+                subtitle="Scan straight into the connected Shega Desktop cart"
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowScanForDesktop(true); }}
+              />
+              <SettingLedgerItem
                 icon={Wifi}
                 title="POS Hub"
                 subtitle="Let other devices connect to this phone"
@@ -727,7 +728,7 @@ const SettingsScreen = () => {
         ) : null}
 
         {/* Dashboard Customization */}
-        {!cashierMode && (
+        {(
         <View style={styles.ledgerSection}>
           <View style={styles.sectionHead}>
             <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: G.muted }]} numberOfLines={1}>{t('settings.dashboard')}</AppText>
@@ -817,7 +818,7 @@ const SettingsScreen = () => {
         </View>
 
         {/* Advanced System Ledger */}
-        {!cashierMode && (
+        {(
         <View style={styles.ledgerSection}>
           <View style={styles.sectionHead}>
             <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: G.muted }]} numberOfLines={1}>{t('settings.advanced')}</AppText>
@@ -903,6 +904,18 @@ const SettingsScreen = () => {
       <BottomSheet visible={showDevices} onClose={() => setShowDevices(false)}>
         <PeripheralCenter onClose={() => setShowDevices(false)} />
       </BottomSheet>
+
+      {/* Use this phone as a barcode scanner for the connected desktop.
+          Full screen rather than a sheet so the camera can take over in place. */}
+      <Modal
+        visible={showScanForDesktop}
+        animationType="slide"
+        onRequestClose={() => setShowScanForDesktop(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: G.bg }}>
+          <ScanForDesktopScreen onClose={() => setShowScanForDesktop(false)} />
+        </View>
+      </Modal>
 
       {/* POS Hub — this phone as the main connector */}
       <BottomSheet visible={showPosHub} onClose={() => setShowPosHub(false)}>

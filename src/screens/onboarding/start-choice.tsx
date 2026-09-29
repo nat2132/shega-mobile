@@ -3,13 +3,18 @@
  *
  * Startup used to go straight to account creation, which made the app feel like
  * it had already decided for the user. A lot of installs are neither brand new
- * nor brand new devices — someone reinstalling the app, joining a business that
- * already exists, or signing back into a business they already own — and every
- * one of those was funnelled through "create an account" first.
+ * nor brand new devices — someone reinstalling the app, or signing back into a
+ * business they already own — and every one of those was funnelled through
+ * "create an account" first.
  *
- * This screen is the single decision point, and it offers all three paths:
+ * Connecting this device to an existing business is deliberately NOT an option
+ * here. A new install always creates or signs into its own local account first,
+ * and the user links devices later from Settings → Connected Devices. That keeps
+ * startup about the account on this device rather than about someone else's
+ * business, and keeps a device link from being the thing that defines a user.
+ *
+ * This screen is the single decision point, and it offers two paths:
  *   • Create a business  → owner onboarding (/register)
- *   • Join a business    → pair with an owner's invite (/join-existing)
  *   • Log in             → returning user (/login)
  *
  * Each option is a full-width card, and the screen is a plain centred column so
@@ -20,14 +25,14 @@ import React, { useCallback } from 'react';
 import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { ChevronRight, LogIn, Store, Users } from 'lucide-react-native';
+import { ChevronRight, LogIn, Store } from 'lucide-react-native';
 
 import { AppText } from '@/components/ui';
 import { useSettings } from '@/context/SettingsContext';
 import { getGlass } from './glass-theme';
 
 type StartOption = {
-  key: 'create' | 'join' | 'login';
+  key: 'create' | 'login';
   title: string;
   subtitle: string;
   /** Secondary lines, for people who aren't sure which one they need. */
@@ -51,18 +56,10 @@ export default function StartChoiceScreen() {
       key: 'create',
       title: 'Create a business',
       subtitle: 'Set up a brand-new Shega business on this device.',
-      hint: 'You become the owner and can invite your team afterwards.',
+      hint: 'You become the owner. Connect other devices from Settings later.',
       route: '/register',
       icon: <Store size={20} color={G.fg} />,
       primary: true,
-    },
-    {
-      key: 'join',
-      title: 'Join a business',
-      subtitle: 'Pair this device with an owner who already has one.',
-      hint: 'They open an invite on their device; you approve to get your role.',
-      route: '/join-existing',
-      icon: <Users size={20} color={G.fg} />,
     },
     {
       key: 'login',

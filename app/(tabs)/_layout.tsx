@@ -7,7 +7,6 @@ import RemoteLockListener from '@/components/RemoteLockListener';
 import { useSettings } from '@/context/SettingsContext';
 import { useAuth } from '@/context/AuthContext';
 import { useWarehouse } from '@/context/WarehouseContext';
-import { useBusinessAuth } from '@/hooks/useBusinessAuth';
 import WarehouseSelectorModal from '../../src/screens/settings/warehouse-selector';
 
 type NavKey = 'dashboard' | 'sales-hub' | 'inventory' | 'settings' | 'summary' | 'suppliers';
@@ -18,35 +17,13 @@ type NavKey = 'dashboard' | 'sales-hub' | 'inventory' | 'settings' | 'summary' |
  * The same catalog drives the dashboard quick-actions and the sidebar.
  */
 /**
- * The "cashier experience": cashiers and any custom role that can sell but
- * holds no catalog/inventory/full-report powers. Those users get the focused
- * POS surface and a two-button bottom bar (Sales + Settings).
+ * Tab visibility.
+ *
+ * Mobile has no roles: every account on a device is a full local account, so
+ * every tab is visible. Premium/feature gates still apply inside the screens
+ * (PremiumFeatureGate), which is where plan differences belong.
  */
-function isCashierExperience(auth: ReturnType<typeof useBusinessAuth>): boolean {
-  return (
-    auth.role === 'cashier' ||
-    (!auth.can('products.edit') && !auth.can('inventory.adjust') && !auth.can('reports.viewAll'))
-  );
-}
-
-function tabPermission(can: (key: string) => boolean, key: NavKey): boolean {
-  switch (key) {
-    case 'dashboard':
-    case 'settings':
-      return true;
-    case 'sales-hub':
-      return can('sales.create') || can('sales.viewAll') || can('sales.refund');
-    case 'inventory':
-      return can('inventory.receive') || can('inventory.adjust') || can('inventory.count') || can('inventory.transfer') || can('inventory.suppliers');
-    case 'summary':
-      return can('reports.viewOwn') || can('reports.viewAll');
-    case 'suppliers':
-      return can('inventory.suppliers');
-  }
-}
-
-/** Any of these unlocks a tab. Settings stays visible (its sections are gated individually). */
-function settingsPermission(can: (key: string) => boolean): boolean {
+function tabVisible(_key: NavKey): boolean {
   return true;
 }
 
@@ -54,10 +31,8 @@ export default function TabsLayout() {
   const { t, featureFlags } = useSettings();
   const { isAuthenticated } = useAuth();
   const { warehouses, activeWarehouseId } = useWarehouse();
-  const auth = useBusinessAuth();
   const navigationState = useRootNavigationState();
   const [showWarehouseSelector, setShowWarehouseSelector] = useState(false);
-  const cashierMode = isCashierExperience(auth);
 
   useEffect(() => {
     if (!navigationState?.key) return;
@@ -65,13 +40,7 @@ export default function TabsLayout() {
       router.replace('/verify-pin');
       return;
     }
-    if (cashierMode) {
-      const activeRouteName = navigationState?.routes?.[navigationState.index]?.name;
-      if (activeRouteName === 'dashboard' || activeRouteName === 'inventory' || activeRouteName === 'suppliers' || activeRouteName === 'summary') {
-        router.replace('/(tabs)/sales-hub');
-      }
-    }
-  }, [isAuthenticated, navigationState?.key, cashierMode]);
+  }, [isAuthenticated, navigationState?.key]);
 
   useEffect(() => {
     if (!featureFlags.warehousesEnabled) {
@@ -87,17 +56,13 @@ export default function TabsLayout() {
     }
   }, [featureFlags.warehousesEnabled, warehouses, activeWarehouseId]);
 
-  const visible = (key: NavKey) => {
-    // Cashier bottom bar: only Sales + Settings.
-    if (cashierMode && key !== 'sales-hub' && key !== 'settings') return false;
-    return key === 'settings' ? settingsPermission(auth.can) : tabPermission(auth.can, key);
-  };
+  const visible = (key: NavKey) => tabVisible(key);
 
   return (
     <>
       <Tabs 
         tabBar={props => <CustomTabBar {...props} />}
-        initialRouteName={cashierMode ? 'sales-hub' : 'dashboard'}
+        initialRouteName="dashboard"
         screenOptions={{
           headerShown: false,
         }}

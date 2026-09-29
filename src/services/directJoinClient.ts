@@ -94,11 +94,54 @@ export async function directDeviceHello(target: DirectJoinTarget): Promise<any |
 /** Submit a join request to a mobile hub. */
 export async function directSubmitJoin(target: DirectJoinTarget, payload: any): Promise<any> {
   console.log(`[pair] Submitting direct join request to ${target.host}:${target.port}...`);
-  const res = await rpc(target, { type: 'DEVICE_JOIN_SUBMIT', payload });
+  // P3: attach this device's public key so the owner can issue a membership
+  // credential on approval. Done here rather than in the caller so every join
+  // path gets it, including the radar-tap one that never sets a code.
+  let joinerPublicKey: string | undefined;
+  try {
+    const deviceId = String(payload?.joinerDeviceId ?? '');
+    if (deviceId) {
+      const { getDevicePublicKey } = require('./deviceKeys');
+      joinerPublicKey = (await getDevicePublicKey(deviceId)) ?? undefined;
+    }
+  } catch (e) {
+    console.warn('[pair] could not read device public key for join submit:', e);
+  }
+  const res = await rpc(target, {
+    type: 'DEVICE_JOIN_SUBMIT',
+    payload: { ...payload, ...(joinerPublicKey ? { joinerPublicKey } : {}) },
+  });
   const p = res?.payload ?? {};
   const handshake = p.handshake ?? extractHandshake(p);
   console.log(`[pair] directSubmitJoin response from ${target.host}:${target.port}: status=${p.status || 'pending'}, handshake.ok=${!!handshake?.ok}`);
+  // Keep the poll token: it is what later authorises collecting the credential.
+  if (p?.record?.pollToken || p?.pollToken) {
+    const { saveJoinPollToken } = require('./joinCredentials');
+    await saveJoinPollToken(p?.record?.pollToken ?? p?.pollToken);
+  }
+  // An auto-approved radar join returns its credential straight away.
+  await captureCredential(p?.credential);
   return { ...p, handshake };
+}
+
+/**
+ * Persist a credential the hub just issued.
+ *
+ * A hub that mints one it cannot persist (keystore hiccup, storage full) must
+ * not leave the joiner believing it holds a credential it will fail to present,
+ * so this reports rather than swallows the outcome.
+ */
+async function captureCredential(credential: any): Promise<void> {
+  if (!credential) return;
+  try {
+    const { acceptMembershipCredential } = require('./joinCredentials');
+    const ok = await acceptMembershipCredential(credential);
+    console.log(ok
+      ? '[pair] Stored membership credential for authenticated handshakes'
+      : '[pair] Rejected membership credential — not issued to this device');
+  } catch (e) {
+    console.warn('[pair] credential store failed:', e);
+  }
 }
 
 /** Extract a handshake ack from a raw hub payload (best-effort fallback). */
@@ -119,20 +162,38 @@ function extractHandshake(p: any): { ok?: boolean; hubDeviceId?: string; hubName
   };
 }
 
-/** Poll a join request's status. Returns { record, pairingToken? }.
+/**
+ * Poll a join request's status. Returns { record, pairingToken?, credential? }.
+ *
+ * `pollToken` is required to collect the grant: the hub only hands out a
+ * credential (or the legacy token) to the socket that actually submitted the
+ * request. A stranger who learns an approved device id can still read the
+ * record — status, role, business — but gets no authentication material.
+ *
  * The invite code is OPTIONAL: radar-tap admission (owner tapped the joiner on
  * the radar — no invite code was ever typed) polls code-less, keyed purely by
  * joinerDeviceId. Both the desktop HTTP hub and the mobile TCP hub accept an
  * empty code and fall back to the joiner_device_id lookup.
  */
-export async function directJoinStatus(target: DirectJoinTarget, code: string | null | undefined, joinerDeviceId: string): Promise<any> {
+export async function directJoinStatus(
+  target: DirectJoinTarget,
+  code: string | null | undefined,
+  joinerDeviceId: string,
+  pollToken?: string | null,
+): Promise<any> {
   const res = await rpc(target, {
     type: 'DEVICE_JOIN_STATUS',
-    payload: { ...(code ? { code } : {}), joinerDeviceId },
+    payload: {
+      ...(code ? { code } : {}),
+      joinerDeviceId,
+      ...(pollToken ? { pollToken } : {}),
+    },
   });
   const p = res?.payload ?? {};
   const handshake = p.handshake ?? extractHandshake(p);
-  console.log(`[pair] directJoinStatus target: ${target.host}:${target.port}, status: ${p?.record?.status || 'pending'}, handshake.ok: ${!!handshake?.ok}`);
+  console.log(`[pair] directJoinStatus target: ${target.host}:${target.port}, status: ${p?.record?.status || 'pending'}, handshake.ok: ${!!handshake?.ok}, credential: ${!!p?.credential}`);
+  // P3: an approved decision carries the signed membership credential.
+  await captureCredential(p?.credential);
   return { ...p, handshake };
 }
 

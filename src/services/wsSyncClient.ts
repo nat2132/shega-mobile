@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import { getDB } from '../database/db';
 import { applyChange, APPLY_ORDER, CORE_BUSINESS_SCOPED_ENTITIES, resolveLocalBusinessId, persistPeerDevice, getHubSeqCursor, setHubSeqCursor } from './syncService';
-import { DEVICE_JOIN_MSG, PERIPHERAL_MSG, changeChecksum, computeReceiptWatermark, pruneableSeqs, type ReceiptedChange } from '@shega/shared';
+import { DEVICE_JOIN_MSG, PERIPHERAL_MSG, changeChecksum, computeReceiptWatermark, pruneableSeqs, type ReceiptedChange, type PeripheralScanPushResult } from '@shega/shared';
 import { markConnected, markFirstSync, markHeartbeat, markDisconnected, setPeerCounters } from './syncDiagnostics';
 import { getJoinerHandle, acceptMembershipCredential } from './joinCredentials';
 
@@ -545,6 +545,13 @@ export class WsSyncClient extends EventEmitter {
             })
             .catch((e) => logger.warn('[WS] credential store failed:', e));
         }
+        // P3: keep the poll token from our own submit — it is what later
+        // authorises collecting the credential on the status poll.
+        const pollToken = msg.payload?.pollToken ?? msg.payload?.record?.pollToken;
+        if (pollToken) {
+          const { saveJoinPollToken } = require('./joinCredentials');
+          saveJoinPollToken(pollToken).catch((e: any) => logger.warn('[WS] poll token store failed:', e));
+        }
         this.emit('joinDecision', msg.payload);
         this.resolvePending(msg.requestId, msg.payload, msg.type);
         break;
@@ -568,6 +575,12 @@ export class WsSyncClient extends EventEmitter {
 
       case PERIPHERAL_MSG.ACK:
       case PERIPHERAL_MSG.RESPONSE:
+        this.resolvePending(msg.requestId, msg.payload, msg.type);
+        break;
+
+      case PERIPHERAL_MSG.SCAN_PUSH_RESULT:
+        // Desktop's verdict for a phone-initiated "Use as Barcode Scanner"
+        // push, correlated by the requestId we sent.
         this.resolvePending(msg.requestId, msg.payload, msg.type);
         break;
 
@@ -809,7 +822,11 @@ export class WsSyncClient extends EventEmitter {
 
   async checkDeviceJoinStatus(code: string, joinerDeviceId: string): Promise<any> {
     if (!this._isConnected) throw new Error('Not connected to hub');
-    return this.sendRequest(DEVICE_JOIN_MSG.STATUS, { code, joinerDeviceId });
+    // P3: the poll token is what authorises collecting the credential; without
+    // it the hub returns the decision but withholds the grant.
+    const { loadJoinPollToken } = require('./joinCredentials');
+    const pollToken = await loadJoinPollToken();
+    return this.sendRequest(DEVICE_JOIN_MSG.STATUS, { code, joinerDeviceId, ...(pollToken ? { pollToken } : {}) });
   }
 
   // ---------- Desktop user invites (QR join) ----------
@@ -867,6 +884,23 @@ export class WsSyncClient extends EventEmitter {
       model: Platform.OS === 'ios' ? 'iPhone' : 'Android',
       platform: 'mobile',
       kinds,
+    });
+  }
+
+  /**
+   * Push a user-initiated scan to the desktop ("Use as Barcode Scanner").
+   *
+   * Unlike `sendScanResult`, nothing was requested of us: the phone scanned on
+   * its own and the desktop answers with a verdict — added / not_found /
+   * out_of_stock / no_active_sale / unavailable.
+   */
+  async pushScan(barcode: string, symbology?: string): Promise<PeripheralScanPushResult> {
+    if (!this._isConnected) throw new Error('Not connected to Shega Desktop');
+    const { getThisDeviceId } = await import('@/services/businessService');
+    return this.sendRequest(PERIPHERAL_MSG.SCAN_PUSH, {
+      barcode,
+      symbology,
+      deviceId: getThisDeviceId() || this.config?.deviceId,
     });
   }
 
@@ -1323,6 +1357,11 @@ export const wsSyncClient = new (class extends EventEmitter {
 
   sendScanResult(requestId: string, barcode: string, symbology?: string) {
     this.instance?.sendScanResult(requestId, barcode, symbology);
+  }
+
+  /** Push a user-initiated scan and resolve with the desktop's verdict. */
+  pushScan(barcode: string, symbology?: string) {
+    return this.instance?.pushScan(barcode, symbology);
   }
 
   sendCaptureResult(requestId: string, result: { dataUrl?: string; text?: string; mode: string; cancelled?: boolean }) {

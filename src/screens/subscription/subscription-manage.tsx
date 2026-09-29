@@ -490,19 +490,9 @@ const PLAN_EDITIONS = [
                       {t('subscription.addons_manage')}
                     </AppText>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.renewButton, { backgroundColor: colors.card, borderColor: colors.border }]}
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                      router.push('/subscription/add-device' as any);
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <Smartphone size={18} color={gold} />
-                    <AppText variant="body" weight="bold" style={{ color: gold }}>
-                      {t('subscription.add_device')}
-                    </AppText>
-                  </TouchableOpacity>
+                  {/* Connecting a device is free and lives in Settings →
+                      Connected Devices, so there is no paid add-device action
+                      or destination here any more. */}
                   <TouchableOpacity
                     style={[styles.renewButton, { backgroundColor: colors.card, borderColor: colors.border }]}
                     onPress={() => {

@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { ArrowLeft, Smartphone, Monitor, Briefcase, Plus, Minus, ShieldCheck, AlertCircle } from 'lucide-react-native';
+import { ArrowLeft, Briefcase, Plus, Minus, ShieldCheck, AlertCircle } from 'lucide-react-native';
 import { useSettings } from '@/context/SettingsContext';
 import { AppText } from '@/components/ui';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -21,16 +21,19 @@ import { fetchSubscriptionStatus, createPayment, fetchPlans, handleApiError, typ
 import { isOfflineError, OFFLINE_MESSAGE } from '@/services/connectivity';
 import { safeBackOrFallback } from '@/services/navigation';
 
-type AddonKey = 'additional_mobile_device' | 'additional_desktop_device' | 'additional_business';
+/**
+ * Adding a business is the only paid add-on (ETB 2,500 each). Connecting a
+ * device is free, so there is no per-device add-on to buy — the plan's
+ * included_* fields say which platforms it unlocks, not how many devices.
+ */
+type AddonKey = 'additional_business';
 
 interface AddonOption {
   key: AddonKey;
-  priceKey: 'addon_mobile_price' | 'addon_desktop_price' | 'addon_business_price';
+  priceKey: 'addon_business_price';
   icon: React.ReactNode;
   titleKey: string;
   descKey: string;
-  allocatedKey: 'mobile' | 'desktop' | 'businesses';
-  usedKey: 'mobile' | 'desktop';
 }
 
 export default function SubscriptionAddonsScreen() {
@@ -67,18 +70,10 @@ export default function SubscriptionAddonsScreen() {
 
   // The customer's current plan owns add-on pricing (server-computed amounts).
   // A missing server price disables the option rather than guessing a number.
-  const unitPrice = (key: AddonKey): number | null => {
-    switch (key) {
-      case 'additional_mobile_device': return currentPlan?.addon_mobile_price ?? null;
-      case 'additional_desktop_device': return currentPlan?.addon_desktop_price ?? null;
-      case 'additional_business': return currentPlan?.addon_business_price ?? null;
-    }
-  };
+  const unitPrice = (_key: AddonKey): number | null => currentPlan?.addon_business_price ?? null;
 
   const OPTIONS: AddonOption[] = useMemo(() => [
-    { key: 'additional_mobile_device', priceKey: 'addon_mobile_price', icon: <Smartphone size={20} color={gold} />, titleKey: 'subscription.add_mobile_device', descKey: 'subscription.add_mobile_device_desc', allocatedKey: 'mobile', usedKey: 'mobile' },
-    { key: 'additional_desktop_device', priceKey: 'addon_desktop_price', icon: <Monitor size={20} color={gold} />, titleKey: 'subscription.add_desktop_device', descKey: 'subscription.add_desktop_device_desc', allocatedKey: 'desktop', usedKey: 'desktop' },
-    { key: 'additional_business', priceKey: 'addon_business_price', icon: <Briefcase size={20} color={gold} />, titleKey: 'subscription.add_business', descKey: 'subscription.add_business_desc', allocatedKey: 'businesses', usedKey: 'mobile' },
+    { key: 'additional_business', priceKey: 'addon_business_price', icon: <Briefcase size={20} color={gold} />, titleKey: 'subscription.add_business', descKey: 'subscription.add_business_desc' },
   ], [gold]);
 
   const selectedOption = OPTIONS.find((o) => o.key === selected) ?? null;
@@ -188,12 +183,8 @@ export default function SubscriptionAddonsScreen() {
           {fullAccess && (
             <>
               {OPTIONS.map((opt, idx) => {
-                const allocated = opt.allocatedKey === 'businesses'
-                  ? status?.businesses?.allocated ?? 0
-                  : status?.devices?.[opt.allocatedKey as 'mobile' | 'desktop']?.allocated ?? 0;
-                const used = opt.allocatedKey === 'businesses'
-                  ? status?.businesses?.used ?? 0
-                  : status?.devices?.[opt.usedKey]?.used ?? 0;
+                const allocated = status?.businesses?.allocated ?? 0;
+                const used = status?.businesses?.used ?? 0;
                 const unit = unitPrice(opt.key);
                 const isSelected = selected === opt.key;
                 return (

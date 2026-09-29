@@ -57,38 +57,25 @@ export default function Index() {
             // An interrupted run already has a language, so it skips straight
             // to the choice (and no longer has to guess "register").
             //
-            // The start screen offers create-a-business / join-a-business /
-            // log-in. Going straight to /register made the app look like it had
-            // already decided the user was opening a brand new business, even
-            // for a reinstall or a member joining someone else's business.
+            // The start screen offers create-a-business / log-in. Going straight
+            // to /register made the app look like it had already decided the
+            // user was opening a brand new business, even on a reinstall.
+            // Connecting to another device happens later from Settings.
             target = fromFirstRun ? '/language-select' : '/start-choice';
           }
         } else {
-          // 2. Resume a mid-join pairing request BEFORE the sign-in/subscription
-          // gates: the pairing request lives on the backend, so after a restart
-          // the joiner drops back into Waiting for Approval (or completes an
-          // approval that landed while the app was closed). Nothing here
-          // re-issues the one-time code.
-          const { resolveJoinResume } = await import('../src/services/postAuthRouter');
-          const resumeRoute = await resolveJoinResume();
-          if (resumeRoute) {
-            target = resumeRoute;
+          // 2. Local business-user sign-in gate (username+PIN). This is the
+          // account on THIS device: each device keeps its own users, and
+          // connecting devices never creates or imports one.
+          const { getBusinesses } = await import('../src/services/businessService');
+          if (getBusinesses().length > 0) {
+            target = '/user-signin';
           } else {
-            // Business-user sign-in gate (username+PIN). Once a business exists,
-            // a team member signs in with their business credentials instead of
-            // the old device-wide PIN. First-time users set username+PIN inside
-            // the screen itself, so this is always the gate for an onboarding
-            // business. Owners fresh from the setup wizard also pass here.
-            const { getBusinesses } = await import('../src/services/businessService');
-            if (getBusinesses().length > 0) {
-              target = '/user-signin';
-            } else {
-              // 3. Check subscription + license gate.
-              setPhase('subscription');
-              const { resolvePostAuthRoute } = await import('../src/services/postAuthRouter');
-              target = await resolvePostAuthRoute();
-              if (!target) target = '/(tabs)/dashboard';
-            }
+            // 3. Check subscription + license gate.
+            setPhase('subscription');
+            const { resolvePostAuthRoute } = await import('../src/services/postAuthRouter');
+            target = await resolvePostAuthRoute();
+            if (!target) target = '/(tabs)/dashboard';
           }
         }
         if (cancelled) return;

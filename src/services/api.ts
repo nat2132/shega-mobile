@@ -161,8 +161,7 @@ export interface Plan {
   duration_months: number;
   features?: string[];
   description?: string;
-  addon_mobile_price?: number;
-  addon_desktop_price?: number;
+  /** Recurring add-on price per extra business. Devices are never billed. */
   addon_business_price?: number;
 }
 
@@ -220,10 +219,10 @@ export interface SubscriptionStatusInfo {
     desktop?: { allocated?: number; used?: number };
   };
   businesses?: { allocated?: number; used?: number };
+  // Device connections are free, so the recurring breakdown bills businesses
+  // only.
   monthly?: {
     base_price?: number;
-    additional_mobile_devices?: number;
-    additional_desktop_devices?: number;
     additional_businesses?: number;
     total?: number;
   };
@@ -511,7 +510,7 @@ export const fetchPlans = (): Promise<Plan[]> =>
 export const createPayment = (payload: {
   plan_id?: number;
   transaction_id: string;
-  payment_type?: 'subscription' | 'renewal' | 'additional_mobile_device' | 'additional_desktop_device' | 'additional_business';
+  payment_type?: 'subscription' | 'renewal' | 'additional_business';
   quantity?: number;
 }): Promise<PaymentInfo> =>
   request<PaymentInfo>('/api/payments/create/', { method: 'POST', body: payload, auth: true });
@@ -729,9 +728,12 @@ export interface CostBreakdown {
     price: number;
     included: { mobile: number; desktop: number; businesses: number };
   };
+  /** Device usage only — connecting a device is free and never billed. */
+  devices: {
+    mobile: { included: number; active: number; billed: boolean };
+    desktop: { included: number; active: number; billed: boolean };
+  };
   addons: {
-    mobile: { owned: number; active: number; unit_price: number; monthly_total: number };
-    desktop: { owned: number; active: number; unit_price: number; monthly_total: number };
     businesses: { owned: number; active: number; unit_price: number; monthly_total: number };
   };
   total_monthly: number;
@@ -740,36 +742,13 @@ export interface CostBreakdown {
 export const fetchCostBreakdown = (licenseId: number): Promise<CostBreakdown> =>
   request<CostBreakdown>(`/api/customers/licenses/${licenseId}/cost-breakdown`, { auth: true });
 
-export interface DeviceEntitlement {
-  id: number;
-  customer_id: number;
-  license_id: number;
-  payment_id: number;
-  device_type: 'MOBILE' | 'DESKTOP';
-  quantity: number;
-  /**
-   * Server vocabulary (licenses_deviceentitlement.status): available | assigned |
-   * expired. This was typed `'available' | 'used'`, so any code comparing against
-   * `used` was checking a value the server never emits and every consumed slot
-   * read as still available. `used` is kept for payloads cached from older
-   * builds.
-   */
-  status: 'available' | 'assigned' | 'expired' | 'used';
-  assigned_device_id?: number | null;
-  created_at: string;
-  updated_at?: string;
-}
-
-export const fetchDeviceEntitlements = (licenseId: number): Promise<DeviceEntitlement[]> =>
-  request<DeviceEntitlement[]>(`/api/customers/licenses/${licenseId}/entitlements/devices`, { auth: true });
-
 export interface BusinessEntitlement {
   id: number;
   customer_id: number;
   license_id: number;
   payment_id: number;
   quantity: number;
-  /** Server vocabulary: available | created | expired. See DeviceEntitlement. */
+  /** Server vocabulary: available | created | expired. */
   status: 'available' | 'created' | 'expired' | 'used';
   /** Which backend business row this entitlement was consumed by. */
   business_id?: number | null;

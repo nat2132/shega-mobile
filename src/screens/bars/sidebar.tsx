@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { View, TouchableOpacity, Image, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { X, ChevronRight, User as UserIcon, Crown, Truck, Store, Package, Users, Wallet, Building2, Sliders, Shield } from 'lucide-react-native';
+import { X, ChevronRight, User as UserIcon, Crown, Truck, Store, Package, Wallet, Building2, Sliders, Shield } from 'lucide-react-native';
 import { Fonts, Spacing } from '@/constants/theme';
 import { useSettings, PROFILE_IMAGES } from '@/context/SettingsContext';
 import { useSubscription } from '@/context/SubscriptionContext';
@@ -181,13 +181,6 @@ const MyStoreMenu: React.FC<SidebarProps> = ({ onClose }) => {
             label={t('sidebar.business_center')}
             onPress={() => handleRoute('/business-center')}
             delay={150}
-          />
-
-          <MenuItem
-            icon={Users}
-            label={t('sidebar.team_members')}
-            onPress={() => handleRoute('/teams')}
-            delay={200}
           />
 
           <MenuItem
