@@ -22,7 +22,7 @@ const ENV_API_URL: string | undefined =
 export const API_BASE_URL: string =
   process.env.EXPO_PUBLIC_API_URL ||
   ENV_API_URL ||
-  'https://f8bb-196-188-178-187.ngrok-free.app';
+  'https://7313-196-191-60-157.ngrok-free.app';
 
 const TOKEN_KEY = 'shega_access_token';
 const REFRESH_TOKEN_KEY = 'shega_refresh_token';
@@ -206,6 +206,11 @@ export interface SubscriptionStatusInfo {
   expires_at?: string;
   started_at?: string;
   license_key?: string;
+  /**
+   * The License row id. NOT the same as `plan_id`, and required by every
+   * `/api/customers/licenses/:licenseId/...` route.
+   */
+  license_id?: number | null;
   is_trial?: boolean;
   days_remaining?: number;
   trial_days_remaining?: number;
@@ -584,8 +589,17 @@ export const verifyLicense = (payload: { license_key: string }): Promise<License
 export interface CloudSyncPushResult {
   ok: boolean;
   accepted?: number;
+  conflicts?: number;
   last_remote_seq?: number;
   error?: string;
+  /**
+   * Optional per-change outcome map, mirroring the LAN hub's `/sync/push`
+   * response. When present it is authoritative: it says WHICH changes the relay
+   * stored, not just how many. Callers use it to decide what may be pruned from
+   * the outbox. A relay that omits it only gives a count, which is not enough
+   * to prune safely — see syncViaCloud.
+   */
+  results?: { client_seq?: number | null; status?: string; error?: string }[];
 }
 
 /** Push a batch of ChangeEnvelopes to the relay. Empty changes are a no-op. */
@@ -667,6 +681,156 @@ function apiErrorMessage(e: unknown): string {
   const hint = handleApiError(e);
   return hint.message;
 }
+
+// ---------------------------------------------------------------------------
+// Device registration & Business creation (require approved entitlements)
+// ---------------------------------------------------------------------------
+
+export interface DeviceRegistrationResult {
+  success: boolean;
+  message: string;
+  device_id: string;
+  activated_at: string;
+}
+
+export const registerDevice = (licenseId: number, payload: {
+  device_id: string;
+  device_name?: string;
+  operating_system?: string;
+  device_type: 'MOBILE' | 'DESKTOP';
+  idempotency_key?: string;
+}): Promise<DeviceRegistrationResult> =>
+  request<DeviceRegistrationResult>(`/api/customers/licenses/${licenseId}/devices/register`, {
+    method: 'POST',
+    body: payload,
+    auth: true,
+  });
+
+export interface BusinessCreationResult {
+  success: boolean;
+  message: string;
+  business_id: number;
+  business: { id: number; name: string };
+}
+
+export const createBusiness = (licenseId: number, payload: {
+  name: string;
+  idempotency_key?: string;
+}): Promise<BusinessCreationResult> =>
+  request<BusinessCreationResult>(`/api/customers/licenses/${licenseId}/businesses/create`, {
+    method: 'POST',
+    body: payload,
+    auth: true,
+  });
+
+export interface CostBreakdown {
+  base: {
+    name: string;
+    price: number;
+    included: { mobile: number; desktop: number; businesses: number };
+  };
+  addons: {
+    mobile: { owned: number; active: number; unit_price: number; monthly_total: number };
+    desktop: { owned: number; active: number; unit_price: number; monthly_total: number };
+    businesses: { owned: number; active: number; unit_price: number; monthly_total: number };
+  };
+  total_monthly: number;
+}
+
+export const fetchCostBreakdown = (licenseId: number): Promise<CostBreakdown> =>
+  request<CostBreakdown>(`/api/customers/licenses/${licenseId}/cost-breakdown`, { auth: true });
+
+export interface DeviceEntitlement {
+  id: number;
+  customer_id: number;
+  license_id: number;
+  payment_id: number;
+  device_type: 'MOBILE' | 'DESKTOP';
+  quantity: number;
+  /**
+   * Server vocabulary (licenses_deviceentitlement.status): available | assigned |
+   * expired. This was typed `'available' | 'used'`, so any code comparing against
+   * `used` was checking a value the server never emits and every consumed slot
+   * read as still available. `used` is kept for payloads cached from older
+   * builds.
+   */
+  status: 'available' | 'assigned' | 'expired' | 'used';
+  assigned_device_id?: number | null;
+  created_at: string;
+  updated_at?: string;
+}
+
+export const fetchDeviceEntitlements = (licenseId: number): Promise<DeviceEntitlement[]> =>
+  request<DeviceEntitlement[]>(`/api/customers/licenses/${licenseId}/entitlements/devices`, { auth: true });
+
+export interface BusinessEntitlement {
+  id: number;
+  customer_id: number;
+  license_id: number;
+  payment_id: number;
+  quantity: number;
+  /** Server vocabulary: available | created | expired. See DeviceEntitlement. */
+  status: 'available' | 'created' | 'expired' | 'used';
+  /** Which backend business row this entitlement was consumed by. */
+  business_id?: number | null;
+  completed_at?: string | null;
+  created_at: string;
+  updated_at?: string;
+}
+
+export const fetchBusinessEntitlements = (licenseId: number): Promise<BusinessEntitlement[]> =>
+  request<BusinessEntitlement[]>(`/api/customers/licenses/${licenseId}/entitlements/businesses`, { auth: true });
+
+// ---------------------------------------------------------------------------
+// License resolution
+// ---------------------------------------------------------------------------
+
+export interface MyLicense {
+  id: number;
+  license_key: string;
+  plan_id: number | null;
+  status: string;
+  expiry_date: string | null;
+  max_mobile_devices?: number;
+  max_desktop_devices?: number;
+  plan?: { name: string; edition?: PlanEdition } | null;
+}
+
+/** The signed-in account's licenses (ownership-scoped server side). */
+export const fetchMyLicenses = (): Promise<MyLicense[]> =>
+  request<MyLicense[]>('/api/customers/licenses/', { auth: true });
+
+/**
+ * Resolves the backend License row id the account's license-scoped routes need.
+ *
+ * Every `/api/customers/licenses/:licenseId/...` endpoint resolves the id against
+ * the license table, and ownership is checked in the same query, so a wrong id is
+ * a 404 — indistinguishable from "no license". Six call sites used to pass the
+ * literal `1`, which only worked for whichever account happened to own license 1;
+ * for everyone else add-device, add-business, entitlements, connected-devices
+ * and the payment breakdown all silently failed.
+ *
+ * Prefers `license_id` from the subscription status (one cached call), then falls
+ * back to the licenses list. Returns null when the account genuinely has no
+ * license, so callers can tell that apart from a network failure.
+ */
+export const resolveLicenseId = async (): Promise<number | null> => {
+  try {
+    const status = await fetchSubscriptionStatusCached();
+    const fromStatus = Number(status.license_id);
+    if (Number.isInteger(fromStatus) && fromStatus > 0) return fromStatus;
+  } catch {
+    // Fall through to the licenses list; a status failure is not fatal here.
+  }
+  try {
+    const licenses = await fetchMyLicenses();
+    const first = licenses?.[0];
+    const id = Number(first?.id);
+    return Number.isInteger(id) && id > 0 ? id : null;
+  } catch {
+    return null;
+  }
+};
 
 // ---------------------------------------------------------------------------
 // Error handling helpers

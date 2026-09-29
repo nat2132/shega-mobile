@@ -79,6 +79,16 @@ class MobileP2pSyncManager {
       mobileYjs.closeBusiness(this.businessUuid);
       mobileWebRtc.closeAll();
     }
+    // A business switch must drop the previous run's subscriptions. Without
+    // this, every switch stacked another set of 'update'/'peerConnected'
+    // handlers on the shared Yjs/WebRTC emitters: remote updates were then
+    // applied to SQLite N times (N = number of business switches), each pass
+    // re-running reconciliation and bumping the data version, and only the
+    // first start's callbacks referred to the previous business.
+    this.unsubs.forEach((u) => {
+      try { u(); } catch { /* already detached */ }
+    });
+    this.unsubs = [];
     this.businessUuid = businessUuid;
     this.started = true;
 
@@ -116,16 +126,22 @@ class MobileP2pSyncManager {
       }),
     );
 
-    // Signaling: ride the WS sync client's custom message path.
+    // Signaling: ride the WS sync client's custom message path. `onSignal`
+    // returns an unsubscribe; it is retained so a business switch (or shutdown)
+    // detaches the handler instead of leaving one wired to a closed client.
     try {
-      wsSyncClient.onSignal((msg: SignalMessage) => mobileWebRtc.handleSignal(msg));
+      const offSignal = wsSyncClient.onSignal((msg: SignalMessage) => mobileWebRtc.handleSignal(msg));
+      if (typeof offSignal === 'function') this.unsubs.push(offSignal);
       mobileWebRtc.setSignalingSender((to, msg) => wsSyncClient.sendSignal(to, msg));
     } catch { /* signaling unavailable — data channel just won't establish yet */ }
 
     // Tail the sync_outbox so local SQLite mutations land in the Yjs doc.
-    try {
-      this.lastOutboxSeq = (getDB().getFirstSync('SELECT COALESCE(MAX(seq),0) AS m FROM sync_outbox') as any)?.m ?? 0;
-    } catch { this.lastOutboxSeq = 0; }
+    //
+    // Resume at 0, not MAX(seq): the old watermark meant a row written while
+    // the app was closed (or killed mid-pump) was never relayed — the pump
+    // considered everything below MAX already done. Undelivered work is now
+    // identified by status='pending', which survives restarts.
+    this.lastOutboxSeq = 0;
     if (this.outboxTimer) clearInterval(this.outboxTimer);
     this.outboxTimer = setInterval(() => this.pumpOutbox(), 2000);
   }
@@ -161,20 +177,87 @@ class MobileP2pSyncManager {
     if (!this.businessUuid) return;
     const db = getDB();
     try {
-      const rows = db.getAllSync('SELECT seq, entity, entity_uuid, op FROM sync_outbox WHERE seq > ? ORDER BY seq ASC LIMIT 300', [this.lastOutboxSeq]) as any[];
+      // Undelivered work only. `seq > lastOutboxSeq` was a purely in-memory
+      // watermark, so anything queued by a trigger before the app started was
+      // invisible; status is durable, so a crash mid-pump resumes correctly.
+      // Rows already relayed stay out of this query, so a peer that is slow to
+      // subscribe cannot re-receive the whole backlog every 2s.
+      const rows = db.getAllSync(
+        `SELECT seq, entity, entity_uuid, op, row_id, attempts
+           FROM sync_outbox
+          WHERE status IS NULL OR status = 'pending'
+          ORDER BY seq ASC LIMIT 300`,
+      ) as any[];
       for (const row of rows) {
-        this.lastOutboxSeq = row.seq;
+        this.lastOutboxSeq = Math.max(this.lastOutboxSeq, row.seq);
         const collection = MobileP2pSyncManager.ENTITY_TO_COLLECTION[row.entity];
-        if (!collection) continue;
+        if (!collection) {
+          this.markUnsupported(row);
+          continue;
+        }
         const table = COLLECTION_TABLE[collection];
         let payload: Record<string, any> = {};
         try {
           const r = db.getFirstSync(`SELECT * FROM ${table} WHERE uuid = ?`, [row.entity_uuid]) as any;
           if (r) payload = { ...r };
-        } catch { /* row gone */ }
-        mobileYjs.recordLocalChange(this.businessUuid, collection, row.entity_uuid, payload, row.op === 'DELETE');
+        } catch { /* row gone — a delete only needs the uuid */ }
+        try {
+          mobileYjs.recordLocalChange(this.businessUuid, collection, row.entity_uuid, payload, row.op === 'DELETE');
+          this.markRelayed(row);
+        } catch (e: any) {
+          this.markFailed(row, e?.message);
+        }
       }
     } catch { /* db busy — next tick */ }
+  }
+
+  /** Marks a change as handed to the Yjs doc so it is not replayed forever. */
+  private markRelayed(row: any): void {
+    try {
+      getDB().runSync(
+        `UPDATE sync_outbox
+            SET status = 'sent', acked_at = CURRENT_TIMESTAMP, business_id = COALESCE(business_id, ?)
+          WHERE seq = ?`,
+        [this.businessUuid, row.seq],
+      );
+    } catch { /* best effort */ }
+  }
+
+  /**
+   * Some tables have change-capture triggers but no Yjs collection (devices
+   * travel over the pairing/approval protocol instead, and business_roles is
+   * not in the shared model). Marking these 'sent' would falsely imply delivery,
+   * and leaving them 'pending' would re-read them every tick forever, so they
+   * get an explicit terminal status that stays visible for diagnostics.
+   */
+  private markUnsupported(row: any): void {
+    try {
+      getDB().runSync(
+        `UPDATE sync_outbox
+            SET status = 'unsupported', business_id = COALESCE(business_id, ?),
+                last_error = 'no Yjs collection for entity'
+          WHERE seq = ?`,
+        [this.businessUuid, row.seq],
+      );
+    } catch { /* best effort */ }
+  }
+
+  /**
+   * Keeps a failed change in the queue with backoff. Without this a change that
+   * failed once (Yjs doc not ready, business not set) was either lost or retried
+   * in a tight loop.
+   */
+  private markFailed(row: any, message: string): void {
+    try {
+      const attempts = (row.attempts ?? 0) + 1;
+      const backoffSec = Math.min(300, 2 ** Math.min(attempts, 8));
+      getDB().runSync(
+        `UPDATE sync_outbox
+            SET attempts = ?, last_error = ?, next_retry_at = datetime('now', ?)
+          WHERE seq = ?`,
+        [attempts, String(message ?? '').slice(0, 500), `+${backoffSec} seconds`, row.seq],
+      );
+    } catch { /* best effort */ }
   }
 
   /** Called by the outbox watcher for local SQLite mutations. */
@@ -322,9 +405,11 @@ class MobileP2pSyncManager {
   }
 
   shutdown(): void {
-    this.unsubs.forEach((u) => u());
-    this.unsubs = [];
+    this.unsubs.splice(0).forEach((u) => {
+      try { u(); } catch { /* already detached */ }
+    });
     if (this.outboxTimer) { clearInterval(this.outboxTimer); this.outboxTimer = null; }
+    mobileWebRtc.setSignalingSender(null);
     mobileWebRtc.closeAll();
     this.started = false;
   }

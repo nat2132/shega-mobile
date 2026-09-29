@@ -1,9 +1,9 @@
 import { AppText } from '@/components/ui';
 import { useAccount } from '@/context/AccountContext';
-import { AccountUser, fetchMyPayment, PaymentInfo } from '@/services/api';
+import { AccountUser, fetchMyPayment, PaymentInfo, fetchCostBreakdown, resolveLicenseId } from '@/services/api';
 import { isOfflineError, OFFLINE_MESSAGE } from '@/services/connectivity';
 import { notifyPaymentStatus } from '@/services/notificationService';
-import { RefreshCw } from 'lucide-react-native';
+import { RefreshCw, DollarSign, Smartphone, Monitor, Building2 } from 'lucide-react-native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -30,6 +30,7 @@ export default function PaymentStatusScreen({ onContinue, onRenew, user }: Payme
   const [loading, setLoading] = useState(true);
   const [offline, setOffline] = useState(false);
   const notifiedRef = useRef<string | null>(null);
+  const [costBreakdown, setCostBreakdown] = useState<any>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -42,8 +43,19 @@ export default function PaymentStatusScreen({ onContinue, onRenew, user }: Payme
       setPayment(null);
     }
     await refreshStatus();
+    if (subscription?.license_key) {
+      try {
+        // Resolved from the account's own license, not a hardcoded id — the
+        // breakdown route is ownership-scoped, so a wrong id is a silent 404.
+        const licenseId = await resolveLicenseId();
+        if (licenseId) {
+          const breakdown = await fetchCostBreakdown(licenseId);
+          setCostBreakdown(breakdown);
+        }
+      } catch {}
+    }
     setLoading(false);
-  }, [refreshStatus]);
+  }, [refreshStatus, subscription?.license_key]);
 
   useEffect(() => {
     load();
@@ -155,6 +167,19 @@ export default function PaymentStatusScreen({ onContinue, onRenew, user }: Payme
               {expiresAt ? <DetailRow label="Expires" value={formatDate(expiresAt)} /> : null}
               {licenseKey ? <DetailRow label="License Key" value={licenseKey} accent /> : null}
             </View>
+
+            {costBreakdown && (
+              <View style={[styles.detailsCard, { backgroundColor: card, borderColor: border }]}>
+                <AppText variant="caption" weight="bold" style={{ color: fgSecondary, marginBottom: 12, letterSpacing: 1 }}>
+                  MONTHLY COST BREAKDOWN
+                </AppText>
+                <DetailRow label="Base Plan" value={`ETB ${costBreakdown.base.price.toLocaleString()}`} />
+                <DetailRow label="  Mobile Add-ons" value={`×${costBreakdown.addons.mobile.owned} = ETB ${costBreakdown.addons.mobile.monthly_total.toLocaleString()}`} />
+                <DetailRow label="  Desktop Add-ons" value={`×${costBreakdown.addons.desktop.owned} = ETB ${costBreakdown.addons.desktop.monthly_total.toLocaleString()}`} />
+                <DetailRow label="  Business Add-ons" value={`×${costBreakdown.addons.businesses.owned} = ETB ${costBreakdown.addons.businesses.monthly_total.toLocaleString()}`} />
+                <DetailRow label="Total Monthly" value={`ETB ${costBreakdown.total_monthly.toLocaleString()}`} accent />
+              </View>
+            )}
 
             {user ? (
               <View style={[styles.userCard, { backgroundColor: card, borderColor: border }]}>

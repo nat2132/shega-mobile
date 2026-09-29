@@ -30,6 +30,10 @@ import {
   Smartphone,
   Star,
   X,
+  Building2,
+  Loader2,
+  Wifi,
+  WifiOff,
 } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -484,6 +488,32 @@ const PLAN_EDITIONS = [
                     <Plus size={18} color={gold} />
                     <AppText variant="body" weight="bold" style={{ color: gold }}>
                       {t('subscription.addons_manage')}
+                    </AppText>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.renewButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      router.push('/subscription/add-device' as any);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Smartphone size={18} color={gold} />
+                    <AppText variant="body" weight="bold" style={{ color: gold }}>
+                      {t('subscription.add_device')}
+                    </AppText>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.renewButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      router.push('/subscription/add-business' as any);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Building2 size={18} color={gold} />
+                    <AppText variant="body" weight="bold" style={{ color: gold }}>
+                      {t('subscription.add_business')}
                     </AppText>
                   </TouchableOpacity>
                 </Animated.View>

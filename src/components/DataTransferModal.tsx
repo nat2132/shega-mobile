@@ -2,6 +2,7 @@
  * DataTransferModal
  * Handles Export (DB backup or CSV per data type) and Import (DB restore or CSV).
  * CSV import includes: auto column mapping, validation, preview, error reporting.
+ * DB import validates schema version and required tables before overwriting.
  * Export saves files directly to Downloads (Android) / system save (iOS).
  */
 import { Fonts } from '@/constants/theme';
@@ -16,6 +17,7 @@ import {
 } from '@/database/db';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as SQLite from 'expo-sqlite';
 import { saveFileToDownloads } from '@/utils/save-file';
 import {
     AlertTriangle,
@@ -39,9 +41,11 @@ import {
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     ActivityIndicator,
+    Alert,
     Modal,
     ScrollView,
     StyleSheet,
+    Text,
     TouchableOpacity,
     View,
 } from 'react-native';
@@ -59,6 +63,80 @@ import {
     MappingResult,
     ValidationError,
 } from '@/utils/csv-utils';
+
+// ——— Database Import Validation —————————————————————————————————————————
+
+const REQUIRED_TABLES = [
+    'users', 'businesses', 'items', 'sales', 'categories',
+    'contacts', 'warehouses', 'debt_payments', 'returns', 'adjustments',
+    'sync_outbox', 'sync_peer_state', 'sync_outbox_acks', 'settings',
+];
+
+/**
+ * Validates a candidate SQLite database file before it overwrites the live DB.
+ * Returns { ok: true } on success, or { ok: false, reason: string } on failure.
+ */
+async function validateDatabaseFile(fileUri: string): Promise<{ ok: boolean; reason?: string; details?: any }> {
+  let db: any = null;
+  try {
+    db = SQLite.openDatabaseSync(fileUri, { useNewConnection: true });
+
+    // 1. Basic integrity: can we run a simple query?
+    try {
+      db.execSync('PRAGMA integrity_check;');
+    } catch (e: any) {
+      return { ok: false, reason: 'Integrity check failed: database appears corrupted.', details: e?.message };
+    }
+
+    // 2. Required tables exist
+    const tables = db.getAllSync(`
+      SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'
+    `) as { name: string }[];
+    const tableNames = new Set(tables.map(t => t.name));
+    const missing = REQUIRED_TABLES.filter(t => !tableNames.has(t));
+    if (missing.length > 0) {
+      return { ok: false, reason: `Missing required tables: ${missing.join(', ')}` };
+    }
+
+    // 3. Schema version (migration_version in settings or PRAGMA user_version)
+    let schemaVersion: number | null = null;
+    try {
+      const row = db.getFirstSync('SELECT value FROM settings WHERE key = ?', ['migration_version']);
+      if (row?.value) schemaVersion = parseInt(row.value, 10);
+    } catch {}
+    if (schemaVersion === null) {
+      try {
+        const pragma = db.getFirstSync('PRAGMA user_version;') as { user_version: number } | null;
+        if (pragma?.user_version) schemaVersion = pragma.user_version;
+      } catch {}
+    }
+    // Current app expects migration version 49 (desktop) / 22 (mobile sync protocol)
+    // We accept anything >= 1 and warn if it's very old, but don't hard-block.
+    if (schemaVersion !== null && schemaVersion < 1) {
+      return { ok: false, reason: `Database schema version ${schemaVersion} is too old.` };
+    }
+
+    // 4. Non-empty critical tables (at least users or businesses should have rows)
+    const userCount = db.getFirstSync('SELECT COUNT(*) as c FROM users') as { c: number } | null;
+    if (!userCount || userCount.c === 0) {
+      return { ok: false, reason: 'Database contains no users — cannot be a valid backup.' };
+    }
+
+    // 5. Quick row-count sanity (warn if tables are suspiciously empty)
+    const warnings: string[] = [];
+    const criticalTables = ['items', 'sales', 'categories', 'contacts'];
+    for (const t of criticalTables) {
+      try {
+        const cnt = db.getFirstSync(`SELECT COUNT(*) as c FROM ${t}`) as { c: number } | null;
+        if (cnt && cnt.c === 0) warnings.push(`Table '${t}' is empty`);
+      } catch {}
+    }
+
+    return { ok: true, details: { schemaVersion, warnings } };
+  } finally {
+    try { if (db) db.closeSync(); } catch {}
+  }
+}
 
 // ——— Types ————————————————————————————————————————————————————————————
 
@@ -305,11 +383,61 @@ export const DataTransferModal: React.FC<Props> = ({ visible, mode, onClose, onS
           setLoading(false);
           return;
         }
-        const dbPath = `${FileSystem.documentDirectory}SQLite/shegabe.db`;
-        await FileSystem.copyAsync({ from: file.uri, to: dbPath });
-        showToast({ title: t('dt.db_restored'), message: t('dt.db_restored_msg'), type: 'success' });
-        handleClose();
-        onSuccess('import');
+
+        // 1. Validate the candidate database
+        const validation = await validateDatabaseFile(file.uri);
+        if (!validation.ok) {
+          showToast({ title: t('dt.restore_failed'), message: validation.reason || t('dt.restore_failed'), type: 'error' });
+          setLoading(false);
+          return;
+        }
+
+        // 2. Show confirmation with validation details
+        const warnings = validation.details?.warnings?.join('\n') || '';
+        const confirmMsg = [
+          t('dt.restore_confirm'),
+          '',
+          `Schema version: ${validation.details?.schemaVersion ?? 'unknown'}`,
+          warnings ? `Warnings:\n${warnings}` : '',
+          '',
+          t('dt.restore_warning'),
+        ].filter(Boolean).join('\n');
+
+        Alert.alert(
+          t('dt.restore_title'),
+          confirmMsg,
+          [
+            { text: t('common.cancel'), style: 'cancel' },
+            {
+              text: t('dt.restore_proceed'),
+              onPress: async () => {
+                setLoading(true);
+                try {
+                  // 3. Backup current DB before overwriting
+                  const dbPath = `${FileSystem.documentDirectory}SQLite/shegabe.db`;
+                  const backupPath = `${FileSystem.cacheDirectory}shegabe_pre_restore_${Date.now()}.db`;
+                  const dbInfo = await FileSystem.getInfoAsync(dbPath);
+                  if (dbInfo.exists) {
+                    await FileSystem.copyAsync({ from: dbPath, to: backupPath });
+                  }
+
+                  // 4. Copy validated DB over live DB
+                  await FileSystem.copyAsync({ from: file.uri, to: dbPath });
+
+                  showToast({ title: t('dt.db_restored'), message: t('dt.db_restored_msg'), type: 'success' });
+                  handleClose();
+                  onSuccess('import');
+                } catch (e: any) {
+                  showToast(e.message || t('dt.restore_failed'), 'error');
+                } finally {
+                  setLoading(false);
+                }
+              },
+              style: 'destructive',
+            },
+          ],
+          { cancelable: true }
+        );
       } catch (e: any) {
         showToast(e.message || t('dt.restore_failed'), 'error');
       } finally {

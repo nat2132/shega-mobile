@@ -1,5 +1,5 @@
 ﻿import * as Crypto from 'expo-crypto';
-import { changeChecksum, SHARED_SYNC_ENTITIES } from '@shega/shared';
+import { changeChecksum, SHARED_SYNC_ENTITIES, computeReceiptWatermark, pruneableSeqs, type ReceiptedChange } from '@shega/shared';
 import { getDB } from '../database/db';
 import { bumpDataVersion } from './dataVersion';
 
@@ -68,17 +68,24 @@ export interface PendingChange {
 export interface DeviceStatus {
   device_id: string;
   name: string;
-  status: 'online' | 'offline' | 'unknown';
+  /**
+   * `reconnecting` means the peer was seen recently but is not connected right
+   * now — the link dropped and is being retried. Collapsing this into
+   * `offline` made a healthy mid-reconnect device look dead, and collapsing it
+   * into `online` would be a lie, so it is reported as its own state.
+   */
+  status: 'online' | 'offline' | 'reconnecting' | 'unknown';
   last_seen_at: string | null;
   last_sync_at: string | null;
   transport: SyncTransport;
   is_self: boolean;
   model?: string | null;
-  platform?: 'mobile' | 'desktop' | null;
+  platform?: 'desktop' | 'mobile' | null;
   userId?: string | null;
   role?: string | null;
   userName?: string | null;
 }
+
 
 export interface SyncHistoryEntry {
   id: number;
@@ -192,6 +199,27 @@ export function persistPeerDevice(device: {
       [device.deviceId, bizId, device.name ?? device.deviceId.slice(0, 8), device.model ?? null, device.platform ?? 'desktop', now, now, now]
     );
   }
+}
+
+/**
+ * Highest hub outbox seq this device is known to hold durably.
+ *
+ * Shared by the LAN and WebSocket transports on purpose: both talk to the same
+ * hub outbox, so `seq > since` means the same thing in either. A durable prefix
+ * (no holes) is what lets the hub prune, so a failed apply must not advance it.
+ */
+export function getHubSeqCursor(): number {
+  const db = getDB();
+  return Number((db.getFirstSync('SELECT hub_seq FROM sync_cursor WHERE id = 1') as any)?.hub_seq ?? 0) || 0;
+}
+
+/** Persists the durable outbox prefix after a successful apply. */
+export function setHubSeqCursor(seq: number): void {
+  const db = getDB();
+  db.runSync('INSERT OR REPLACE INTO sync_cursor (id, hub_seq, last_sync_at) VALUES (1, ?, ?)', [
+    Math.max(0, Math.floor(seq)),
+    new Date().toISOString(),
+  ]);
 }
 
 export function getSyncStatus(): SyncStatus {
@@ -664,17 +692,19 @@ export async function syncNow(): Promise<{ pushed: number; pulled: number; confl
     pushed = changes.length;
     conflicts = Number(res?.conflicts ?? 0);
     const db = getDB();
-    // Prune only the outbox rows the hub actually merged. Per-change outcomes
-    // (`results`) come back keyed to client_seq; without them, fall back to
-    // deleting everything on a successful push response. Rows the hub could
-    // not apply yet (pending FK) or rejected are retried next round.
+    // Prune only rows the hub explicitly merged. A seq the hub did not report is
+    // unknown, not success, so it stays queued; and an unconfirmed row caps the
+    // prune so one permanent failure cannot discard the changes above it.
     const outcome = Array.isArray(res?.results)
-      ? new Map((res.results as { client_seq: number | null; status: string }[]).map((r) => [r.client_seq, r.status]))
+      ? new Map(
+          (res.results as { client_seq: number | null; status: string }[])
+            // A row without a client_seq can't correspond to any queued change,
+            // so it carries no information about what may be pruned.
+            .filter((r): r is { client_seq: number; status: string } => r.client_seq != null)
+            .map((r) => [r.client_seq, r.status]),
+        )
       : null;
-    const prune = outcome ? seqs.filter((seq) => {
-      const status = outcome.get(seq);
-      return status === 'applied' || status === 'conflict' || status === undefined;
-    }) : seqs;
+    const prune = pruneableSeqs(seqs, outcome);
     if (prune.length) {
       db.runSync('DELETE FROM sync_outbox WHERE seq IN (' + prune.map(() => '?').join(',') + ')', prune);
     }
@@ -687,24 +717,64 @@ export async function syncNow(): Promise<{ pushed: number; pulled: number; confl
   // 3.10: hub asked for a full re-snapshot â€” trust the response even if it was
   // larger than `since`; the cursor below already points at the new lastSeq.
   const changesIn = (pulled?.changes ?? []) as HubChange[];
-  if (changesIn.length > 0) {
-    const sorted = changesIn.slice().sort((a, b) => {
-      const ia = APPLY_ORDER.indexOf(a.entity as SyncEntity);
-      const ib = APPLY_ORDER.indexOf(b.entity as SyncEntity);
-      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
-    });
-    for (const change of sorted) {
-      try {
-        applyChange(change);
-      } catch (e: any) {
-        console.warn('[sync] apply failed', change.entity, change.entity_uuid, e?.message);
-      }
+  // Apply in dependency order (a category before its items, an order before its
+  // lines) while reporting the receipt in seq order. The hub only understands
+  // "everything up to N", so the watermark itself comes from the shared helper.
+  const sorted = changesIn.slice().sort((a, b) => {
+    const ia = APPLY_ORDER.indexOf(a.entity as SyncEntity);
+    const ib = APPLY_ORDER.indexOf(b.entity as SyncEntity);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+  const applied: ReceiptedChange[] = [];
+  for (const change of sorted) {
+    const seq = Number((change as any).seq);
+    try {
+      applyChange(change);
+      applied.push({ seq, outcome: 'applied' });
+    } catch (e: any) {
+      console.warn('[sync] apply failed', change.entity, change.entity_uuid, e?.message);
+      applied.push({ seq, outcome: 'failed' });
     }
   }
-  db.runSync('INSERT OR REPLACE INTO sync_cursor (id, hub_seq, last_sync_at) VALUES (1, ?, ?)', [
-    Number(pulled?.lastSeq ?? since),
-    new Date().toISOString()
-  ]);
+  const pulledLastSeq = Number(pulled?.lastSeq ?? since);
+
+  // Report a delivery receipt so the hub knows these rows are durable here and
+  // may eventually be pruned. The hub advances its own cursor at SEND time, so
+  // without this it prunes on a guess and a crash mid-apply loses changes.
+  //
+  // `acked_upto` MUST be a contiguous prefix of what actually applied. Acking
+  // `lastSeq` when a change in the batch failed would let the hub delete a row
+  // this device never merged — precisely the loss this path exists to prevent.
+  // A full snapshot carries no per-change seqs and rebuilds everything from the
+  // live tables, so the whole range is genuinely present and can be acked.
+  const { ackedUpto, failedSeqs } = computeReceiptWatermark(
+    since,
+    applied,
+    pulledLastSeq,
+    { isSnapshot: pulled?.snapshot === true },
+  );
+  if (ackedUpto > 0) {
+    try {
+      await httpJson(`${hubUrl}/sync/ack`, {
+        method: 'POST',
+        body: JSON.stringify({
+          device_id: deviceId,
+          token,
+          acked_upto: ackedUpto,
+          failed_seqs: failedSeqs,
+        }),
+      });
+    } catch (e: any) {
+      // Best effort: a failed receipt only costs a redundant re-delivery later.
+      console.warn('[sync] receipt not sent', e?.message);
+    }
+  }
+
+  // The local pull cursor is the durable prefix, not the hub's max. Advancing it
+  // to `lastSeq` would mean a change that failed to apply is never requested
+  // again, leaving the device silently short a row while the hub believes it is
+  // delivered. Writing the prefix instead makes the next pull re-request holes.
+  setHubSeqCursor(ackedUpto);
 
   // Persist the hub as a peer device so it appears in Connected Devices
   // and we have its info for auto-reconnect.
@@ -845,7 +915,7 @@ export function getPendingChanges(): PendingChange[] {
 }
 
 /**
- * Get device status grid from local roster + sync metadata.
+ * Get device status grid from local roster + live transport state.
  */
 export function getDeviceStatusList(): DeviceStatus[] {
   const db = getDB();
@@ -869,18 +939,41 @@ export function getDeviceStatusList(): DeviceStatus[] {
       user_id: null, user_name: null, user_role: null });
   }
 
+  // Live transports are the source of truth for "is this device reachable
+  // right now". The stored `last_seen_at` is only a historical hint: it is
+  // written when a device is approved and when a socket closes, and nothing
+  // refreshes it while a connection is simply *alive*. Deriving presence from
+  // it alone therefore reported a device as offline for the whole duration of a
+  // healthy connection, and only started claiming "online" in the 5-minute
+  // window after an actual disconnect — exactly backwards.
+  const live = liveConnectedDevices(selfId);
+
   const now = Date.now();
   return roster.map(d => {
     const lastSeen = d.last_seen_at ? new Date(d.last_seen_at).getTime() : 0;
-    const isOnline = lastSeen > 0 && (now - lastSeen) < 5 * 60 * 1000; // 5 min threshold
+    const ageMs = lastSeen > 0 ? now - lastSeen : Infinity;
     const rawStatus = String(d.status ?? 'unknown').toLowerCase();
+
+    let status: DeviceStatus['status'];
+    if (d.device_id === selfId || live.has(d.device_id)) {
+      status = 'online';
+    } else if (ageMs < RECENTLY_SEEN_MS) {
+      // Seen very recently but not connected: the link dropped and the
+      // reconnect machinery is working on it.
+      status = 'reconnecting';
+    } else if (rawStatus === 'active' || rawStatus === 'online' || rawStatus === 'reconnecting') {
+      status = 'offline';
+    } else {
+      status = 'unknown';
+    }
+
     return {
       device_id: d.device_id,
       name: d.name ?? d.device_id.slice(0, 8),
-      status: isOnline ? 'online' : rawStatus === 'active' || rawStatus === 'online' ? 'offline' : 'unknown',
+      status,
       last_seen_at: d.last_seen_at ?? null,
       last_sync_at: d.last_sync_at ?? null,
-      transport: 'lan' as SyncTransport, // Would need cloud roster sync for cloud devices
+      transport: (live.get(d.device_id) ?? 'lan') as SyncTransport,
       is_self: d.device_id === selfId,
       model: d.model ?? null,
       platform: d.platform === 'desktop' ? 'desktop' : 'mobile',
@@ -889,6 +982,51 @@ export function getDeviceStatusList(): DeviceStatus[] {
       userName: d.user_name ?? null,
     };
   });
+}
+
+/**
+ * How recently a device must have been seen before a non-connected device is
+ * shown as "reconnecting" rather than "offline". Matches the desktop's window
+ * so both apps agree on when a peer counts as mid-recovery.
+ */
+const RECENTLY_SEEN_MS = 5 * 60 * 1000;
+
+/**
+ * Devices with a live connection right now, mapped to the transport carrying
+ * them. Probes each transport that is cheap and side-effect free, and degrades
+ * to an empty map when a module is unavailable — presence reporting must never
+ * be the thing that breaks the app.
+ */
+function liveConnectedDevices(selfId: string | null): Map<string, SyncTransport> {
+  const live = new Map<string, SyncTransport>();
+
+  // This device is by definition online; a live hub socket is positive proof.
+  if (selfId) live.set(selfId, 'lan');
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { wsSyncClient } = require('./wsSyncClient');
+    if (!wsSyncClient.isConnected && selfId) live.delete(selfId);
+  } catch { /* ws client not ready */ }
+
+  // Direct WebRTC data channels.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { mobileWebRtc } = require('./webrtc-manager');
+    for (const p of mobileWebRtc?.getPeers?.() ?? []) {
+      if (p?.deviceId) live.set(p.deviceId, 'lan');
+    }
+  } catch { /* webrtc unavailable */ }
+
+  // Clients currently dialled into *our* hub (we are the owner for these).
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { getConnectedClientIds } = require('./mobileSyncServer');
+    for (const id of getConnectedClientIds?.() ?? []) {
+      if (id) live.set(id, 'lan');
+    }
+  } catch { /* server not running */ }
+
+  return live;
 }
 
 /**
@@ -989,16 +1127,44 @@ export async function syncViaCloud(): Promise<CloudSyncSummary> {
         return { pushed: 0, pulled: 0, applied: 0, conflicts: 0, cursor: getCloudCursor(), reason: pushRes.error || 'push_failed' };
       }
       pushed = changes.length;
-      // The cloud accepts in bulk; prune what the relay acknowledged. Retry
-      // safety comes from the per-change checksum, so over-pruning is avoided
-      // by only dropping the seqs we just sent when the relay reported ok.
-      const accepted = Number(pushRes.accepted ?? changes.length);
-      if (accepted > 0) {
+      conflicts = Number(pushRes.conflicts ?? 0);
+      // Prune only what the relay EXPLICITLY confirmed, per change.
+      //
+      // This used to be a positional slice — `seqs.slice(0, accepted)` — which
+      // assumed the relay accepted a prefix. `accepted` is a bare count, so that
+      // assumption is unsafe: on a partial accept the slice can delete rows the
+      // relay never stored, and those changes are then gone from the device that
+      // owned them.
+      //
+      // Now the cloud path uses the same shared rule as the LAN path above:
+      // pruneableSeqs() against a per-change outcome map, and `null` when the
+      // relay reports no per-change outcomes at all (absence of evidence is not
+      // evidence of success, so nothing is prunable and the batch is re-pushed).
+      //
+      // Not pruning is safe, not merely cautious: every change carries a
+      // checksum and a client_seq, so re-pushing an already-stored row is a
+      // no-op on the relay. Keeping a row costs one retry; dropping an
+      // unconfirmed row costs the data.
+      const outcome = Array.isArray(pushRes.results)
+        ? new Map(
+            (pushRes.results as { client_seq?: number | null; status?: string }[])
+              // A row without a client_seq cannot correspond to any queued
+              // change, so it carries no information about what may be pruned.
+              .filter((r): r is { client_seq: number; status?: string } => r?.client_seq != null)
+              .map((r) => [r.client_seq, String(r.status ?? '')]),
+          )
+        : null;
+      const prune = pruneableSeqs(seqs, outcome);
+      if (prune.length) {
         const db = getDB();
-        const drop = seqs.slice(0, accepted);
-        if (drop.length) {
-          db.runSync('DELETE FROM sync_outbox WHERE seq IN (' + drop.map(() => '?').join(',') + ')', drop);
-        }
+        db.runSync(
+          'DELETE FROM sync_outbox WHERE seq IN (' + prune.map(() => '?').join(',') + ')',
+          prune,
+        );
+      } else if (seqs.length > 0) {
+        console.warn(
+          `[cloud] not pruning: relay confirmed ${pushRes.accepted ?? 0}/${changes.length} changes; keeping the outbox for retry`,
+        );
       }
     }
 

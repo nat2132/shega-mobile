@@ -6,13 +6,13 @@ export default function RegisterRoute() {
   const { from } = useLocalSearchParams<{ from?: string }>();
   return (
     <RegisterScreen
-      // Back only makes sense when signup was reached from inside the wizard;
-      // in the signup-first flow there is no wizard behind us, so back exits
-      // safely to the start route instead.
+      // Back only makes sense when signup was reached from inside the wizard.
+      // Otherwise the start screen is behind us — go straight back to it rather
+      // than through "/" (which would re-run the splash and re-decide the route).
       onBack={() =>
         from === 'onboarding'
           ? safeBackOrFallback('/setup-wizard')
-          : router.replace('/' as never)
+          : router.replace('/start-choice' as any)
       }
       onSuccess={handlePostRegister}
     />

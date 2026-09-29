@@ -60,6 +60,10 @@ export default function JoinExistingScreen() {
   const [joinPhase, setJoinPhase] = useState<'searching' | 'connecting' | 'notfound'>('searching');
   const [selfName] = useState(getThisDeviceName());
   const resolvedRef = useRef<typeof resolved>(null);
+  // Mirror of `stage` for the long-lived discovery listener, which must not be
+  // re-registered (or capture a frozen value) every time the stage advances.
+  const stageRef = useRef<Stage>('idle');
+  stageRef.current = stage;
   const autoTriedRef = useRef<Set<string>>(new Set());
   const connectingRef = useRef(false);
   const preferredTargetRef = useRef<{ host: string; port: number; http?: boolean } | null>(null);
@@ -97,7 +101,7 @@ export default function JoinExistingScreen() {
     inspectNetwork();
     try {
       mobilePairingBeacon.startBrowsing();
-      mobilePairingBeacon.setDiscoverable(true, 'Shega', 'team');
+      mobilePairingBeacon.setDiscoverable(true, 'Shega', 'team', false);
     } catch { /* ignore */ }
   };
 
@@ -106,29 +110,11 @@ export default function JoinExistingScreen() {
   // keeps a live discovery list refreshed without pressing any button.
   useEffect(() => {
     let onTargetFound: any = null;
-    try {
-      mobilePairingBeacon.startBrowsing();
-      mobilePairingBeacon.setDiscoverable(true, 'Shega', 'team');
-      const { connectionManager } = require('@/services/connectionManager');
-      connectionManager.startDiscovery(code);
-
-      onTargetFound = (target: any) => {
-        refreshNearbyList();
-        if (target?.host && stage === 'idle') {
-          const isDesktop = target.platform === 'desktop' || target.port === 5757;
-          resolveCodeLessHub({
-            host: target.host,
-            port: target.port,
-            businessId: target.businessId,
-            businessName: target.businessName || target.deviceName,
-            role: target.role || 'cashier',
-            ownerPlatform: isDesktop ? 'desktop' : 'mobile',
-          });
-        }
-      };
-      connectionManager.on('targetFound', onTargetFound);
-    } catch { /* native mDNS unavailable — manual code entry still works */ }
-
+    // Declared BEFORE the connectionManager.on() registration below: that
+    // handler calls refreshNearbyList(), and because the function was a `const`
+    // declared further down, a target arriving before it was initialised threw
+    // a ReferenceError from inside the emitter — killing the whole discovery
+    // list for the rest of the session.
     const refreshNearbyList = () => {
       try {
         setNearby(mobilePairingBeacon.getNearbyOwners().map(({ beacon, host }) => ({
@@ -143,6 +129,28 @@ export default function JoinExistingScreen() {
         })));
       } catch { /* ignore */ }
     };
+    try {
+      mobilePairingBeacon.startBrowsing();
+      mobilePairingBeacon.setDiscoverable(true, 'Shega', 'team', false);
+      const { connectionManager } = require('@/services/connectionManager');
+      connectionManager.startDiscovery(code);
+
+      onTargetFound = (target: any) => {
+        refreshNearbyList();
+        if (target?.host && stageRef.current === 'idle') {
+          const isDesktop = target.platform === 'desktop' || target.port === 5757;
+          resolveCodeLessHub({
+            host: target.host,
+            port: target.port,
+            businessId: target.businessId,
+            businessName: target.businessName || target.deviceName,
+            role: target.role || 'cashier',
+            ownerPlatform: isDesktop ? 'desktop' : 'mobile',
+          });
+        }
+      };
+      connectionManager.on('targetFound', onTargetFound);
+    } catch { /* native mDNS unavailable — manual code entry still works */ }
 
     const sub = mobilePairingBeacon.onFound(refreshNearbyList);
     const nearbyInterval = setInterval(refreshNearbyList, 1200);
@@ -162,6 +170,10 @@ export default function JoinExistingScreen() {
         connectionManager.stopDiscovery();
       } catch { /* ignore */ }
     };
+    // The stage is read through stageRef, so it is intentionally not a
+    // dependency: adding it would tear down and re-register the browse slot,
+    // the beacon and the sync server on every stage change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /** Resolve a discovered invite and send the join request — no typing. */

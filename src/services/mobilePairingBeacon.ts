@@ -47,6 +47,7 @@ const LEGACY_PAIR_SERVICE_TYPE = 'shega-pos';
 
 /** Warn only once per session — publish attempts repeat and would spam. */
 let warnedZeroconfMissing = false;
+let warnedUdpMissing = false;
 
 interface DiscoveredBeacon {
   beacon: PairingBeacon;
@@ -169,7 +170,13 @@ class MobilePairingBeaconService {
       },
       code: invite.code,
       role: 'owner',
-      expiresAt: invite.expiresAt ?? new Date(Date.now() + 10 * 60_000).toISOString(),
+      // The beacon's expiry MUST match the invitation's, because peers reject
+      // beacons past `expiresAt` (isBeaconLive). A hardcoded 10-minute default
+      // for a 30-minute invite made a working invite stop being discoverable
+      // after 10 minutes, so a joiner who opened the radar a bit late saw no
+      // owner at all even though the code was still valid.
+      expiresAt: invite.expiresAt
+        ?? new Date(Date.now() + 30 * 60_000).toISOString(),
       suggestedRole: (invite.role ?? 'cashier') as any,
     };
     await this.publishBeacon(beacon);
@@ -196,8 +203,12 @@ class MobilePairingBeaconService {
    * Owner/joiner identity is immutable for the lifetime of this app-session:
    * this phone is whatever role it was at first business creation / first join.
    * setDiscoverable never promotes a joiner into an owner.
+   *
+   * @param publish - When false, only starts browsing (mDNS + LAN sweep + UDP)
+   *   without publishing a beacon. Use this for joiners to avoid NSD slot conflicts
+   *   with the owner's invite beacon. Default: true (backward compatible).
    */
-  async setDiscoverable(on: boolean, businessName = 'Shega', role: BeaconRole = 'owner'): Promise<void> {
+  async setDiscoverable(on: boolean, businessName = 'Shega', role: BeaconRole = 'owner', publish = true): Promise<void> {
     if (!on) {
       // Stop a discovery-only beacon only — never kill a live invite beacon
       // that the owner side still needs for the joiner to connect.
@@ -205,6 +216,13 @@ class MobilePairingBeaconService {
       return;
     }
     if (this.published) return; // a stronger beacon is already live
+    
+    if (!publish) {
+      // Joiner mode: only browse, don't publish a beacon.
+      // This avoids NSD slot conflicts with the owner's invite beacon.
+      this.startBrowsing();
+      return;
+    }
 
     const db = getDB();
     const biz = db.getFirstSync(
@@ -262,33 +280,65 @@ class MobilePairingBeaconService {
     // missing multicast permission). This is the "same Wi-Fi but they can't
     // find each other" fix.
     this.startLanSweep();
-    if (!this.isSupported()) {
-      // mDNS native module not linked — the sweep above still finds devices.
-      if (!warnedZeroconfMissing) {
-        warnedZeroconfMissing = true;
-        console.warn('[pair-beacon] zeroconf native module unavailable — using LAN sweep discovery instead. Run `npx expo run:android` to re-link native modules.');
-      }
-      this.browsing = false;
-      return;
+
+    // react-native-tcp-socket@6.4.3 has NO UDP support: its JS API exposes only
+    // connect/createServer/createConnection, there is no `createSocket`, and
+    // neither the Android nor the iOS native module has a datagram
+    // implementation. `udpDiscovery.start()` therefore bails out before it ever
+    // binds, so the phone listens on nothing, answers no desktop PING, and
+    // `getDiscoveredPeers()` is always empty. UDP is a desktop-only transport
+    // here; the LAN sweep above is what makes the phone discoverable, so make
+    // sure it is running even if every other transport is unavailable.
+    if (!udpDiscovery.isSupported() && !warnedUdpMissing) {
+      warnedUdpMissing = true;
+      console.warn('[pair-beacon] UDP discovery unavailable on this platform build (react-native-tcp-socket exposes no UDP API) — relying on mDNS + LAN sweep.');
     }
+
+    // The cache listeners are NOT mDNS-only. `attachBrowseListeners()` is the
+    // ONLY writer of `this.seen` (from mDNS resolutions AND UDP peer replies)
+    // and the ONLY thing that fans entries out to `onFound()` subscribers —
+    // i.e. to every discovery screen's device list. It must therefore be
+    // attached unconditionally: it used to sit behind the `isSupported()` guard
+    // below, so on any build without a linked zeroconf native module (Expo Go,
+    // or a dev build that has not been re-linked since the dependency was
+    // added) the whole event path was dead and screens only ever saw the poll
+    // tick. Attaching it costs nothing when there is no registry to listen to.
     this.attachBrowseListeners();
-    // The registry owns the ONE native discovery slot. Browsing the pairing
-    // service preempts the default `shega-pos` hub browse (which is re-issued
-    // as the legacy pair service below anyway); `restoreDefaultBrowse()` on
-    // stop brings the hub browse back.
-    mdnsRegistry.browse([PAIR_SERVICE_TYPE, LEGACY_PAIR_SERVICE_TYPE]);
+
+    // Only the native mDNS scan is optional. The registry owns the ONE native
+    // discovery slot; browsing the pairing service preempts the default
+    // `shega-pos` hub browse, and `restoreDefaultBrowse()` on stop brings the
+    // hub browse back.
+    if (this.isSupported()) {
+      mdnsRegistry.browse([PAIR_SERVICE_TYPE, LEGACY_PAIR_SERVICE_TYPE]);
+    } else if (!warnedZeroconfMissing) {
+      warnedZeroconfMissing = true;
+      console.warn('[pair-beacon] zeroconf native module unavailable — using UDP broadcast + LAN sweep discovery instead. Run `npx expo run:android` to re-link native modules.');
+    }
+
+    // Browsing IS active regardless of which transports are available. This
+    // used to be left `false` on the no-mDNS path, which lied to
+    // `isBrowsingActive()` and made `startBrowsing()` re-entrant, so a second
+    // caller (e.g. ConnectionManager) would re-run the setup and leak timers.
     this.browsing = true;
-    // Broadcast instant UDP ping to all local interfaces & hotspot subnets
+
+    // Broadcast instant UDP ping to all local interfaces & hotspot subnets.
+    // This is not an mDNS accessory: UDP is the primary transport when
+    // multicast is blocked, and it is how we announce OURSELVES so a peer can
+    // find this phone. It used to be skipped entirely on the no-mDNS path,
+    // which made discovery fail symmetrically on both devices.
     try { udpDiscovery.broadcastPing(); } catch { /* ignore */ }
 
     // Periodic re-scan: devices that enter discovery mode after we started
     // browsing must appear (mDNS caches can miss late advertisers), and stale
     // entries get re-checked. Also auto-start our own discovery beacon so the
-    // device is mutually visible on both sides.
+    // device is mutually visible on both sides. Without this the first
+    // broadcast is a one-shot, so any peer that answers a few hundred ms later
+    // is never heard again.
     if (this.rescanTimer) clearInterval(this.rescanTimer);
     this.rescanTimer = setInterval(() => {
       if (!this.browsing) return;
-      mdnsRegistry.refreshBrowse();
+      if (this.isSupported()) mdnsRegistry.refreshBrowse();
       try { udpDiscovery.broadcastPing(); } catch { /* ignore */ }
     }, 2000);
     console.log('[pair-beacon] browsing for nearby pairing beacons…');
@@ -333,10 +383,17 @@ class MobilePairingBeaconService {
       // relays RNZeroconfServiceRemoved as a service name only.
       const name: string = typeof data === 'string' ? data : data?.name;
       if (!name) return;
+      // Match by the exact mDNS service NAME each advertiser uses. Desktop
+      // publishes `Shega Pair — <businessName>` (truncated to 60) and mobile
+      // publishes `Shega Pair — <deviceId8>`, so the name cannot be
+      // reconstructed from a deviceId the way the old code assumed — a
+      // desktop advertiser that went away left its entry in `seen` forever and
+      // kept showing up as a joinable owner. Resolve the name to a deviceId
+      // through the entries themselves.
       for (const [deviceId, entry] of this.seen) {
-        // Must mirror the deterministic publish name (deviceId, not businessName).
-        const svcName = `Shega Pair — ${deviceId.slice(0, 8)}`;
-        if (name === svcName || name.startsWith(svcName.slice(0, 20))) {
+        const publishedName = `Shega Pair — ${entry.beacon.businessName || deviceId}`.slice(0, 60);
+        const mobileName = `Shega Pair — ${deviceId.slice(0, 8)}`;
+        if (name === mobileName || name === publishedName || name.startsWith(mobileName.slice(0, 20))) {
           this.seen.delete(deviceId);
           this.listeners.forEach((fn) => fn({ ...entry, discoveredAt: 0 }));
         }

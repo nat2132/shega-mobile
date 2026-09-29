@@ -19,6 +19,28 @@ const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const codeN = (n: number) =>
   Array.from({ length: n }, () => CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)]).join('');
 
+/**
+ * Canonical form of an invite code: upper-case alphanumeric only.
+ *
+ * Codes are *displayed* with separators ("K2M-4NP-QW8") but the value that
+ * actually reaches us varies: the user can type it with or without dashes or
+ * spaces, in any case, and the desktop platform may send the canonical form.
+ * Every comparison of an invite/join code MUST go through this helper so a
+ * code always matches regardless of how it was entered.
+ */
+export function normalizeInviteCode(code: string): string {
+  return String(code ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+/**
+ * SQL fragment matching a `code` column against a {@link normalizeInviteCode}
+ * -normalized parameter. SQLite has no regexp, so both sides are normalized
+ * declaratively instead. This also matches rows written before normalization
+ * existed (dashless codes from older builds) and dashed ones from any build.
+ */
+export const INVITE_CODE_EQ =
+  "replace(replace(replace(upper(coalesce(code,'')), '-', ''), ' ', ''), '_', '') = ?";
+
 export interface GeneratedInvitation {
   id: string;
   code: string;
@@ -107,9 +129,13 @@ export function revokeInvitation(id: string): void {
 /** Resolve a code to a local open invitation (returns null if invalid/expired). */
 export function validateInviteCode(code: string): InviteRow | undefined {
   const db = getDB();
-  const normalized = code.trim().toUpperCase();
+  const normalized = normalizeInviteCode(code);
+  // INVITE_CODE_EQ treats a NULL `code` column as '' too, so a code with no
+  // alphanumerics ("", "   ", "!!!") would otherwise resolve to a blank-code
+  // invitation. Reject it before the query.
+  if (!normalized) return undefined;
   const row = db.getFirstSync(
-    `SELECT * FROM invitations WHERE code = ? AND status = 'open'`, [normalized]) as any;
+    `SELECT * FROM invitations WHERE ${INVITE_CODE_EQ} AND status = 'open'`, [normalized]) as any;
   if (!row) return undefined;
   if (row.expires_at && row.expires_at < new Date().toISOString()) {
     db.runSync(`UPDATE invitations SET status = 'expired' WHERE id = ?`, [row.id]);

@@ -11,7 +11,14 @@
  * So we sweep our own /24 and knock on the ports Shega devices already listen on:
  *
  *   5757  desktop sync hub  → raw HTTP `GET /sync/info` (identity)
- *   5759  mobile LAN hub    → `DEVICE_HELLO`            (identity)
+ *   5758  desktop WS hub    → TCP connect only         (presence fallback)
+ *   5759  mobile LAN hub    → `DEVICE_HELLO`           (identity)
+ *
+ * 5758 is probed as a bare TCP connect and only when 5757 did not answer, so
+ * a desktop owner is still discovered when something blocks its HTTP port
+ * (firewall rule, port already bound by a stale process) while its WS listener
+ * is reachable. It yields presence without a name, exactly like the desktop
+ * sweep's equivalent fallback.
  *
  * Both answers are identity-only (name, platform, business name) — no data,
  * no tokens, nothing an attacker on the LAN doesn't already see in an mDNS
@@ -21,6 +28,7 @@
 
 import { Platform } from 'react-native';
 import { getThisDeviceName } from './deviceIdentity';
+import { markPeerFound, countPeerFound } from './syncDiagnostics';
 
 export interface LanSweepHit {
   deviceId: string;
@@ -31,19 +39,56 @@ export interface LanSweepHit {
   businessName?: string | null;
   /** Open invitation the peer is currently advertising, if any. */
   inviteCode?: string | null;
-  via: 'http' | 'hello';
+  via: 'http' | 'hello' | 'port';
 }
 
 const DESKTOP_HTTP_PORT = 5757;
+const DESKTOP_WS_PORT = 5758;
 const MOBILE_PORT = 5759;
-const CONNECT_TIMEOUT_MS = 250;
 const IDENTITY_TIMEOUT_MS = 800;
+const CONNECT_TIMEOUT_MS = 250;
 const CONCURRENCY = 128;
-const CACHE_MS = 2_000;
 const DISCOVERY_TTL_MS = 45_000;
+
+/** How often a host that has answered before is re-probed on its own. */
+const KNOWN_REPROBE_MS = 3_000;
+/** A known host that stops answering is dropped after this long. */
+const KNOWN_STALE_MS = 15_000;
+/** Full /24-plus sweep cadence. The subnet walk is expensive, so it is rare. */
+const FULL_SWEEP_MS = 30_000;
 
 let cache: { at: number; items: LanSweepHit[] } = { at: 0, items: [] };
 let inflight: Promise<LanSweepHit[]> | null = null;
+
+/**
+ * Hosts that answered a previous probe, with the last time they were seen.
+ *
+ * The full sweep walks ~3,800 hosts and takes tens of seconds, so a UI that
+ * awaits it shows a stale list for that whole window — the user taps "refresh"
+ * and the radar does not change. Re-probing just the hosts that have
+ * answered before is ~10 connects, finishes in well under a second, and is
+ * what makes discovery feel instant once a peer is known.
+ */
+const known = new Map<string, { hit: LanSweepHit; lastSeen: number }>();
+let lastFullSweepAt = 0;
+let lastKnownReprobeAt = 0;
+let fullSweepRunning: Promise<LanSweepHit[]> | null = null;
+
+/** Merge fresh hits, refresh known-host liveness, and expire stale entries. */
+function reconcile(fresh: LanSweepHit[]): LanSweepHit[] {
+  const now = Date.now();
+  for (const hit of fresh) known.set(hit.host, { hit, lastSeen: now });
+  for (const [host, entry] of known) {
+    if (now - entry.lastSeen > KNOWN_STALE_MS) known.delete(host);
+  }
+  // P0 telemetry: only the first hit of the current window sets the latency, so
+  // re-observing an already-known host does not re-time the cycle.
+  for (const hit of fresh) {
+    markPeerFound(hit.deviceId, { via: hit.via, host: hit.host, platform: hit.platform });
+  }
+  countPeerFound(fresh.length);
+  return [...known.values()].map((e) => e.hit);
+}
 
 /** This phone's IPv4 on the LAN, or fallback subnets when the platform can't report it. */
 async function ownIPv4(): Promise<string | null> {
@@ -221,6 +266,37 @@ async function probeMobile(host: string): Promise<LanSweepHit | null> {
   }
 }
 
+/**
+ * TCP-connect-only presence probe, used to detect a desktop owner whose HTTP
+ * identity port is unreachable. We still have to reach the hub's real sync
+ * channels to join, so this only affects discoverability, not authorization.
+ */
+async function probeTcpPresence(host: string, port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    let TcpSocket: any;
+    try {
+      TcpSocket = require('react-native-tcp-socket');
+    } catch { return resolve(false); }
+    let settled = false;
+    let socket: any;
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      try { socket?.destroy?.(); } catch { /* already gone */ }
+      resolve(ok);
+    };
+    try {
+      socket = TcpSocket.createConnection({ host, port }, () => finish(true));
+      socket.on('error', () => finish(false));
+      socket.on('close', () => finish(false));
+      socket.setTimeout?.(CONNECT_TIMEOUT_MS, () => finish(false));
+      setTimeout(() => finish(false), CONNECT_TIMEOUT_MS + 200);
+    } catch {
+      finish(false);
+    }
+  });
+}
+
 function toBeaconShape(hit: LanSweepHit) {
   return {
     beacon: {
@@ -241,42 +317,110 @@ function toBeaconShape(hit: LanSweepHit) {
   };
 }
 
+async function probeHost(host: string): Promise<LanSweepHit[]> {
+  const [desktop, mobile] = await Promise.all([probeDesktop(host), probeMobile(host)]);
+  const out: LanSweepHit[] = [];
+  if (desktop) out.push(desktop);
+  if (mobile) out.push(mobile);
+  // Neither identity port answered. A desktop owner may still be running with
+  // its HTTP port unreachable, so fall back to a bare TCP connect on the WS
+  // hub. Presence without a name is still worth showing on the radar.
+  if (!desktop) {
+    const wsOpen = await probeTcpPresence(host, DESKTOP_WS_PORT);
+    if (wsOpen) {
+      out.push({
+        deviceId: `lan-${host}`,
+        deviceName: `Shega device (${host})`,
+        platform: 'desktop',
+        host,
+        port: DESKTOP_WS_PORT,
+        businessName: null,
+        inviteCode: null,
+        via: 'port',
+      });
+    }
+  }
+  return out;
+}
+
+/** Cheap pass over hosts that have already answered once. */
+async function reprobeKnown(): Promise<LanSweepHit[]> {
+  const hosts = [...known.keys()];
+  if (!hosts.length) return [];
+  const out: LanSweepHit[] = [];
+  for (let i = 0; i < hosts.length; i += CONCURRENCY) {
+    const slice = hosts.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(slice.map((h) => probeHost(h).catch(() => [] as LanSweepHit[])));
+    for (const list of results) out.push(...list);
+  }
+  return out;
+}
+
+/** Expensive walk of every candidate host on the phone's subnet. */
 async function runSweep(): Promise<LanSweepHit[]> {
   const ip = await ownIPv4();
   const hosts = hostList(ip);
   const out: LanSweepHit[] = [];
   for (let i = 0; i < hosts.length; i += CONCURRENCY) {
     const slice = hosts.slice(i, i + CONCURRENCY);
-    const results = await Promise.all(
-      slice.map(async (h) => {
-        const [desktop, mobile] = await Promise.all([
-          probeDesktop(h),
-          probeMobile(h),
-        ]);
-        if (desktop) return [desktop, ...(mobile ? [mobile] : [])];
-        return mobile ? [mobile] : [];
-      }),
-    );
+    const results = await Promise.all(slice.map((h) => probeHost(h).catch(() => [] as LanSweepHit[])));
     for (const list of results) out.push(...list);
   }
   return out;
 }
 
 /**
- * Devices found by sweeping the LAN, normalized to the beacon shape so the
- * discovery lists can merge them with mDNS results. Cached + serialized.
+ * Kick off a full subnet sweep without blocking on it. Returns the previous
+ * (or current) result so the caller can render immediately; the discovery
+ * emitter re-renders when the walk finishes.
  */
-export async function sweepLanRaw(): Promise<LanSweepHit[]> {
-  if (Date.now() - cache.at < CACHE_MS) return cache.items;
-  if (inflight) return inflight;
-  inflight = runSweep()
-    .then((items) => {
+export function startFullSweep(): Promise<LanSweepHit[]> {
+  if (fullSweepRunning) return fullSweepRunning;
+  lastFullSweepAt = Date.now();
+  fullSweepRunning = runSweep()
+    .then((fresh) => {
+      const items = reconcile(fresh);
       cache = { at: Date.now(), items };
       return items;
     })
     .catch(() => cache.items)
-    .finally(() => { inflight = null; });
-  return inflight;
+    .finally(() => { fullSweepRunning = null; });
+  return fullSweepRunning;
+}
+
+/**
+ * Devices found by sweeping the LAN, normalized to the beacon shape so the
+ * discovery lists can merge them with mDNS results.
+ *
+ * Never blocks on the subnet walk: known hosts are re-probed inline (fast, so
+ * a returning peer shows up within a refresh) and the full sweep runs in the
+ * background, refreshing the cache for the next poll.
+ */
+export async function sweepLanRaw(): Promise<LanSweepHit[]> {
+  const now = Date.now();
+
+  // Re-probe known hosts inline, but at most every KNOWN_REPROBE_MS.
+  const dueForReprobe = !inflight && now - lastKnownReprobeAt >= KNOWN_REPROBE_MS;
+  if (dueForReprobe) {
+    lastKnownReprobeAt = now;
+    inflight = reprobeKnown()
+      .then((fresh) => {
+        const items = reconcile(fresh);
+        cache = { at: Date.now(), items };
+        return items;
+      })
+      .catch(() => cache.items)
+      .finally(() => { inflight = null; });
+  }
+
+  // Keep a full sweep warm in the background so newly-joined devices are
+  // still found, but only when the subnet is actually due for one.
+  if (!fullSweepRunning && now - lastFullSweepAt >= FULL_SWEEP_MS) {
+    void startFullSweep();
+  }
+
+  if (inflight) return inflight;
+  return cache.items;
 }
 
 /** Nearby devices in the same `{ beacon, host, platform }` shape as beacons. */

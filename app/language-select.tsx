@@ -5,10 +5,10 @@ import FirstLanguageScreen from '../src/screens/onboarding/first-language';
 export default function LanguageSelectRoute() {
   return (
     <FirstLanguageScreen
-      // Signup-first onboarding: language is chosen, then the user creates
-      // their account BEFORE any business setup. The wizard receives the
-      // signed-in identity via /setup-wizard?from=register.
-      onContinue={() => router.replace('/register' as any)}
+      // Language first, then the start screen: create a business / join a
+      // business / log in. Each path continues into its own onboarding
+      // (the wizard receives a signed-in identity via /setup-wizard?from=register).
+      onContinue={() => router.replace('/start-choice' as any)}
     />
   );
 }

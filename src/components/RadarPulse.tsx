@@ -10,7 +10,7 @@
  * cheap on low-end phones and stop cleanly when the screen unmounts.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { AlertTriangle, Check, Loader2, MonitorSmartphone, Radar, Smartphone } from 'lucide-react-native';
 import { AppText } from '@/components/ui';
@@ -59,7 +59,6 @@ export const RadarPulse: React.FC<Props> = ({
   const ring3 = useRef(new Animated.Value(0)).current;
   const breathe = useRef(new Animated.Value(0)).current;
   const listFade = useRef(new Animated.Value(0)).current;
-  const [, forceTick] = useState(0);
 
   const size = compact ? 104 : 148;
   const core = Math.round(size * 0.56);
@@ -88,13 +87,12 @@ export const RadarPulse: React.FC<Props> = ({
     );
     anims.forEach((a) => a.start());
     coreAnim.start();
-    // Ticks the status dot/text refresh; animations themselves are native.
-    const t = setInterval(() => forceTick((n) => n + 1), 2000);
     return () => {
       anims.forEach((a) => a.stop());
       coreAnim.stop();
-      clearInterval(t);
     };
+    // All four values come from useRef, so they are stable for the component's
+    // lifetime and re-running this effect would restart the rings.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

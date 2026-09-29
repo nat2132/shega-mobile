@@ -41,7 +41,13 @@ const BACKOFF_MAX_MS = 5 * 60 * 1000;
 function readEnabled(): boolean {
   const db = getDB();
   const row = db.getFirstSync("SELECT value FROM app_settings WHERE key = 'sync_auto_enabled'") as any;
-  return row?.value === 'true';
+  // Default ON when the user has never expressed a preference. This row was
+  // never seeded, so an absent row meant `undefined === 'true'` => false, and
+  // that silently disabled the entire sync stack (persistent hub socket, peer
+  // sync manager, periodic sync) on every fresh install — devices appeared
+  // paired but could never connect or recover on their own. Only an explicit
+  // 'false' disables sync.
+  return row?.value !== 'false';
 }
 
 function writeEnabled(v: boolean): void {
@@ -231,6 +237,16 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
 
   // Debounced best-effort trigger (used right after a sale is recorded).
   const pending = useRef(false);
+
+  /**
+   * Last connection state we announced to the user. Component-level (not
+   * effect-local) so it survives effect re-runs and prevents a reconnect flap
+   * from re-firing the "Connected" toast.
+   */
+  const connState = useRef<'disconnected' | 'connected'>(
+    wsSyncClient.isConnected ? 'connected' : 'disconnected',
+  );
+
   const requestSync = useCallback(() => {
     if (!enabled) return;
     if (pending.current) return;
@@ -371,15 +387,26 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     // ── Connection & sync lifecycle notifications ──
     // The user should always know which device connected, when sync starts/
     // finishes, and when the connection drops — without opening Sync Center.
-    let wasConnected = false;
+    // The transition flag lives on a component-level ref, not in the effect
+    // closure: the effect re-runs whenever the hub URL or any callback identity
+    // changes, and a closure-local flag resets on each re-run, so a reconnect
+    // flap would re-fire the "Connected" toast every time. A ref survives
+    // re-runs and is keyed to the real connection state instead.
     const notifyConnected = () => {
-      if (wasConnected) return; // dedupe reconnect flaps within one effect run
-      wasConnected = true;
+      if (connState.current === 'connected') return;
+      connState.current = 'connected';
       showToast('Connected to your business hub — syncing now.', 'success');
     };
-    const notifyDisconnected = () => {
-      if (!wasConnected) return;
-      wasConnected = false;
+    const notifyDisconnected = (err?: any) => {
+      if (connState.current === 'disconnected') return;
+      connState.current = 'disconnected';
+      if (wsSyncClient.isAuthorizationBlocked) {
+        showToast(
+          `Not authorized by your business hub: ${wsSyncClient.authorizationBlockReason || 'pairing required'}. Please pair again.`,
+          'error',
+        );
+        return;
+      }
       showToast('Connection lost — syncing paused. Reconnecting automatically…', 'info');
     };
     let syncStartShown = false;
@@ -403,6 +430,8 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     wsSyncClient.on('syncCompleted', notifySyncDone as any);
     wsSyncClient.on('error', notifySyncFailed);
 
+    // Kick the client into connecting. The client is a shared singleton, so we
+    // must not assume this effect owns the socket.
     wsSyncClient.connect({ hubUrl: wsHubUrl, hubToken: getHubToken(), deviceId: device.device_id })
       .catch((e) => console.warn('[SyncContext] WS connect failed:', e));
 
@@ -415,7 +444,12 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       wsSyncClient.off('syncStarted', notifySyncStart);
       wsSyncClient.off('syncCompleted', notifySyncDone as any);
       wsSyncClient.off('error', notifySyncFailed);
-      try { wsSyncClient.disconnect(); } catch {}
+      // Release the socket only if this effect is the one that opened it.
+      // Unconditionally disconnecting on cleanup raced the next effect's
+      // connect: the old teardown could land after the new socket was already
+      // live, killing it and leaving the app permanently "reconnecting" until
+      // the next full app restart.
+      void wsSyncClient.disconnectIfOwner();
     };
   }, [enabled, hubUrlTick, refresh, refreshUnifiedStatus, runSync]);
 

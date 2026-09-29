@@ -2,8 +2,10 @@ import { EventEmitter } from 'events';
 import { Platform } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import { getDB } from '../database/db';
-import { applyChange, APPLY_ORDER, CORE_BUSINESS_SCOPED_ENTITIES, resolveLocalBusinessId, persistPeerDevice } from './syncService';
-import { DEVICE_JOIN_MSG, PERIPHERAL_MSG, changeChecksum } from '@shega/shared';
+import { applyChange, APPLY_ORDER, CORE_BUSINESS_SCOPED_ENTITIES, resolveLocalBusinessId, persistPeerDevice, getHubSeqCursor, setHubSeqCursor } from './syncService';
+import { DEVICE_JOIN_MSG, PERIPHERAL_MSG, changeChecksum, computeReceiptWatermark, pruneableSeqs, type ReceiptedChange } from '@shega/shared';
+import { markConnected, markFirstSync, markHeartbeat, markDisconnected, setPeerCounters } from './syncDiagnostics';
+import { getJoinerHandle, acceptMembershipCredential } from './joinCredentials';
 
 // Simple logger (defined before first use)
 const logger = {
@@ -77,7 +79,19 @@ export class WsSyncClient extends EventEmitter {
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
   private pendingRequests = new Map<string, { resolve: (value: any) => void; reject: (reason: any) => void; timeout: ReturnType<typeof setTimeout> }>();
   private requestCounter = 0;
-  private lastServerSeq = 0;
+  /**
+   * Highest hub outbox seq this device holds durably — the contiguous applied
+   * prefix with no holes.
+   *
+   * This doubles as the pull cursor and as the value receipted via SYNC_APPLIED.
+   * They must be the same number: a hole (a change that failed to apply) has to
+   * be re-requested on the next pull AND must keep its row alive in the hub, so
+   * advancing one without the other would either lose changes or prune changes
+   * this device never merged. Persisted in sync_cursor, shared with the LAN
+   * transport, so an app restart resumes the prefix instead of restarting from
+   * zero (which would stall every future receipt).
+   */
+  private ackedUpto = 0;
   private _isConnected = false;
   private isSyncing = false;
   private messageQueue: any[] = [];
@@ -85,11 +99,54 @@ export class WsSyncClient extends EventEmitter {
   /** Max one reconnect per 30s while offline — satisfies (3.4.2) graceful decay. */
   private readonly MAX_RECONNECT_DELAY_MS = 30_000;
 
+  /**
+   * Monotonic id of the socket that currently owns the connection.
+   *
+   * Every handler installed on a socket captures the id it was created with and
+   * no-ops when it no longer matches. Without this, a socket that was already
+   * superseded (e.g. its 1500ms connect timeout fired, we reconnected, then the
+   * abandoned socket finally emitted `close`) would run `handleDisconnect()` and
+   * tear down the *healthy* newer socket, leaving the client permanently
+   * flapping between "connected" and "reconnecting".
+   */
+  private socketGeneration = 0;
+
+  /**
+   * Liveness watchdog. TCP does not always tell us when a peer goes away: a
+   * phone that walks out of Wi-Fi range, or a router that reboots, silently
+   * black-holes packets instead of sending FIN/RST, so `onclose`/`onerror` never
+   * fire and the socket stays `OPEN` forever. The UI then claims "Connected"
+   * while nothing syncs and nothing reconnects — the single most common cause of
+   * "it says connected but I have to restart the app".
+   *
+   * The client already sends HEARTBEAT every 15s, so liveness is: if we have
+   * sent a heartbeat and heard no HEARTBEAT/HEARTBEAT_ACK back within
+   * HEARTBEAT_TIMEOUT_MS, the link is dead — close it and let the normal
+   * backoff reconnect path run.
+   */
+  private heartbeatTimeout: ReturnType<typeof setTimeout> | null = null;
+  private awaitingAckSince: number | null = null;
+  private lastInboundAt = 0;
+  private readonly HEARTBEAT_INTERVAL_MS = 15_000;
+  private readonly HEARTBEAT_TIMEOUT_MS = 45_000;
+
+  /**
+   * Terminal authorization failure. A revoked device or a wrong pairing token
+   * can never succeed by retrying, so we must stop hammering the hub and tell
+   * the user to re-pair. Cleared by an explicit `connect()` (i.e. a deliberate
+   * new attempt) but never by a reconnect tick.
+   */
+  private authBlocked: { reason: string } | null = null;
+
   constructor() {
     super();
   }
 
   async connect(config: WsSyncClientConfig): Promise<void> {
+    // A deliberate connect is the user (or the pairing flow) asking for a fresh
+    // attempt, so it clears a previous terminal auth failure.
+    this.authBlocked = null;
+
     if (this._isConnected || this.config) {
       // A config already exists (a reconnect timer is armed or a socket is up);
       // this call is a *kick* from connectivity restore — reconnect immediately.
@@ -114,7 +171,15 @@ export class WsSyncClient extends EventEmitter {
    */
   private async openSocket(): Promise<void> {
     if (!this.config) throw new Error('Not configured');
+    // A revoked/incorrectly-paired device must not keep retrying: no amount of
+    // backoff will ever turn a rejected token into an accepted one.
+    if (this.authBlocked) {
+      logger.warn('[WS] Not reconnecting — authorization blocked:', this.authBlocked.reason);
+      return;
+    }
     const config = this.config;
+    const gen = ++this.socketGeneration;
+    const isStale = () => gen !== this.socketGeneration;
 
     return new Promise((resolve, reject) => {
       const wsUrl = config.hubUrl.replace('http://', 'ws://').replace('https://', 'wss://') + '/sync';
@@ -133,6 +198,7 @@ export class WsSyncClient extends EventEmitter {
 
         // Fast 1500ms timeout for LAN socket connection
         let connTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+          if (isStale()) return;
           if (this.ws && !this._isConnected) {
             logger.warn(`[WS] Connection timeout after 1500ms for ${wsUrl}`);
             try { this.ws.close(); } catch {}
@@ -144,20 +210,39 @@ export class WsSyncClient extends EventEmitter {
         this.ws.binaryType = 'arraybuffer';
 
         this.ws.onopen = async () => {
+          if (isStale()) { try { this.ws?.close(); } catch {} return; }
           if (connTimer) { clearTimeout(connTimer); connTimer = null; }
           logger.info('[WS] Connected to hub');
           this._isConnected = true;
           this.reconnectAttempts = 0;
+          this.lastInboundAt = Date.now();
           this.startHeartbeat();
           this.processQueue();
 
           const token = await this.getEffectiveToken();
           if (token) {
-            this.sendPairRequest().then(resolve).catch((e) => {
-              logger.warn('[WS] PAIR failed on open socket:', e?.message);
+            try {
+              await this.sendPairRequest();
+              resolve();
+            } catch (e: any) {
+              const reason = String(e?.message || e || 'pairing failed');
+              // A rejected token, a denied credential, or a revoked device is
+              // terminal: stop retrying and tell the UI a fresh pairing is
+              // required, instead of looping forever on an error that can never
+              // resolve itself. Note the credential reasons are NOT free-form —
+              // they are the shared verifier's codes, so a revoked or tampered
+              // credential blocks here instead of reconnect-looping.
+              if (/invalid pairing token|pairing token required|required a new pairing|unpaired by the owner|^revoked$|^bad_signature$|^untrusted_issuer$|^business_mismatch$|^credential expired$|no credential found|credential mismatch|re-approval required/i.test(reason)) {
+                this.authBlocked = { reason };
+                this.emit('error', new Error(reason));
+                logger.error('[WS] Pairing rejected — reconnect disabled until re-pair:', reason);
+              } else {
+                logger.warn('[WS] PAIR failed on open socket:', reason);
+              }
+              if (isStale()) return;
               try { this.ws?.close(); } catch { /* onclose still fires */ }
-              reject(e);
-            });
+              reject(new Error(reason));
+            }
           } else {
             logger.info('[WS] Connected as unpaired joiner (awaiting owner approval)');
             this.emit('connected');
@@ -166,6 +251,8 @@ export class WsSyncClient extends EventEmitter {
         };
 
         this.ws.onmessage = (event: any) => {
+          if (isStale()) return;
+          this.lastInboundAt = Date.now();
           try {
             const data = event.data instanceof ArrayBuffer
               ? new TextDecoder().decode(event.data)
@@ -179,12 +266,15 @@ export class WsSyncClient extends EventEmitter {
 
         this.ws.onclose = (event: any) => {
           if (connTimer) { clearTimeout(connTimer); connTimer = null; }
+          // A superseded socket closing must NOT tear down the live connection.
+          if (isStale()) return;
           logger.warn(`[WS] Disconnected: ${event.code} ${event.reason}`);
           this.handleDisconnect(event.code === 1000 ? null : new Error(`Connection closed: ${event.code}`));
         };
 
         this.ws.onerror = (error: any) => {
           if (connTimer) { clearTimeout(connTimer); connTimer = null; }
+          if (isStale()) return;
           logger.info('[WS] Notice:', error?.message || 'socket closed');
           reject(error);
         };
@@ -198,6 +288,10 @@ export class WsSyncClient extends EventEmitter {
   retryNow(): void {
     if (this._isConnected) return;
     if (!this.config) return;
+    if (this.authBlocked) {
+      logger.warn('[WS] retryNow ignored — authorization blocked:', this.authBlocked.reason);
+      return;
+    }
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -227,18 +321,58 @@ export class WsSyncClient extends EventEmitter {
     const token = await this.getEffectiveToken();
     if (!token) return;
 
-    await this.sendRequest('PAIR_REQUEST', {
+    const payload: Record<string, unknown> = {
       device_id: this.config.deviceId,
       name: 'Shega Mobile',
       platform: 'mobile',
       token,
-    });
+    };
+
+    // P3: present the membership credential when this device has one. The hub
+    // answers with a challenge instead of PAIR_RESPONSE, and the token becomes
+    // a fallback rather than the only thing standing between a stranger and
+    // the business data.
+    const handle = await getJoinerHandle();
+    if (handle) {
+      payload.credential = handle.joiner.getCredential();
+    }
+
+    const res = await this.sendRequest('PAIR_REQUEST', payload);
+
+    if (res?.__msgType === 'AUTH_CHALLENGE') {
+      await this.answerChallenge(res);
+    }
+  }
+
+  /**
+   * Answer the hub's challenge (P3).
+   *
+   * The proof is signed over the hub's own transcript, so a hub that swaps its
+   * advertised key or replays an old nonce produces a signature that does not
+   * verify. `answer()` refuses outright if the advertised verifier key is not
+   * the credential's issuer — that is the one place a joiner can notice it is
+   * talking to someone who is not the device that signed its credential.
+   */
+  private async answerChallenge(challenge: any): Promise<void> {
+    const handle = await getJoinerHandle();
+    if (!handle) {
+      throw new Error('Hub requested an authenticated handshake but this device has no credential');
+    }
+    const proof = handle.joiner.answer(challenge);
+    const res = await this.sendRequest('AUTH_PROOF', proof);
+    if (res?.__msgType === 'AUTH_DENY') {
+      throw new Error(String(res.reason || 'authentication denied'));
+    }
+    logger.info('[WS] Authenticated handshake completed');
   }
 
   private handleMessage(msg: WsMessage): void {
     switch (msg.type) {
       case 'HEARTBEAT':
         this.send({ type: 'HEARTBEAT_ACK', timestamp: Date.now() });
+        // P0 telemetry: an inbound heartbeat proves the link is alive, which is
+        // exactly what the liveness watchdog uses to re-arm.
+        markHeartbeat('desktop-hub', { transport: 'lan-ws' });
         this.emit('heartbeat', Date.now());
         break;
 
@@ -252,7 +386,13 @@ export class WsSyncClient extends EventEmitter {
       case 'PAIR_RESPONSE':
         if (msg.payload?.success) {
           logger.info('[WS] Paired with hub');
-          this.lastServerSeq = msg.payload?.serverSeq || 0;
+          // Seed the durable prefix from local storage. It must NOT be the hub's
+          // current max seq: that is what the hub has produced, not what this
+          // device holds, and pulling `since = hubMax` would skip everything
+          // written while this device was away. sync_cursor is the real
+          // high-water mark, so a restart resumes the prefix rather than
+          // restarting the receipt sequence at 0 (which would stall receipts).
+          this.ackedUpto = getHubSeqCursor();
           // Persist the rejoin bundle (pairing token + last server seq) so a
           // reopened app can re-dial the hub by token instead of requiring a
           // fresh radar tap + admin re-approve. The hub's approve-by-code path
@@ -264,7 +404,9 @@ export class WsSyncClient extends EventEmitter {
               // token (handlePairRequest compares it to getPairingToken()) —
               // PAIR_RESPONSE never echoes it, so read it from our config.
               pairingToken: String(this.config?.hubToken || '').trim().toUpperCase(),
-              serverSeq: this.lastServerSeq,
+              // Informational only (nothing reads it back); record what the hub
+              // has produced, not what this device has applied.
+              serverSeq: Number(msg.payload?.serverSeq || 0),
             };
             const asyncStorage = require('@react-native-async-storage/async-storage');
             const storage = asyncStorage.default ?? asyncStorage;
@@ -290,13 +432,39 @@ export class WsSyncClient extends EventEmitter {
             console.warn('[WS] Failed to persist hub device:', e);
           }
           this.emit('connected');
+          // P0 telemetry: PAIR_RESPONSE is the point the link is authenticated
+          // and the resume cursor is seeded, so this is "connected".
+          markConnected('desktop-hub', {
+            transport: 'lan-ws',
+            hubUrl: this.config?.hubUrl || '',
+            protocolVersion: msg.payload?.schemaVersion,
+          });
           this.flushPendingInvitePublishes().catch(() => {});
           // Trigger immediate sync on connection to exchange pending outbox/remote changes
           this.syncNow().catch(() => {});
         } else {
           this.emit('error', new Error(msg.payload?.message || 'Pairing failed'));
         }
-        this.resolvePending(msg.requestId, msg.payload);
+        this.resolvePending(msg.requestId, msg.payload, msg.type);
+        break;
+
+      case 'AUTH_CHALLENGE':
+        // Handled by answerChallenge() via the pending PAIR_REQUEST, but a hub
+        // may also send one out of band. Resolve the waiter so the flow cannot
+        // stall on a 30s timeout.
+        this.resolvePending(msg.requestId, msg.payload, 'AUTH_CHALLENGE');
+        break;
+
+      case 'AUTH_OK':
+        this.resolvePending(msg.requestId, msg.payload, 'AUTH_OK');
+        break;
+
+      case 'AUTH_DENY':
+        // Terminal for this credential: a denial is a real decision by the hub,
+        // so stop reconnecting until the owner re-approves.
+        this.authBlocked = { reason: String(msg.payload?.reason || 'authentication denied') };
+        this.emit('error', new Error(this.authBlocked.reason));
+        this.resolvePending(msg.requestId, msg.payload, 'AUTH_DENY');
         break;
 
       case 'SYNC_ACK':
@@ -305,22 +473,45 @@ export class WsSyncClient extends EventEmitter {
           pulled: 0,
           conflicts: msg.payload?.conflicts || 0,
         });
-        // Do NOT advance lastServerSeq here — the serverSeq in SYNC_ACK is the
+        // P0 telemetry: a SYNC_ACK means our push reached the hub and was
+        // merged, so data has flowed in both directions on this link.
+        markFirstSync('desktop-hub', { transport: 'lan-ws', via: 'SYNC_ACK' });
+        setPeerCounters('desktop-hub', { cursor: this.ackedUpto ?? null });
+        // Do NOT advance the cursor here — the serverSeq in SYNC_ACK is the
         // hub's max outbox seq AFTER applying our push. Advancing would skip
-        // the subsequent SYNC_PULL (since=lastServerSeq would be the new max).
-        // The SYNC_CHANGES response (or next pull) will advance the cursor correctly.
-        this.resolvePending(msg.requestId, msg.payload);
+        // the subsequent SYNC_PULL (since would be the new max, so our own
+        // pushes would never echo back). handleIncomingChanges advances it.
+        this.resolvePending(msg.requestId, msg.payload, msg.type);
         break;
 
       case 'SYNC_CHANGES':
-        this.handleIncomingChanges(msg.payload?.changes || []);
-        this.lastServerSeq = msg.payload?.lastSeq || this.lastServerSeq;
-        this.emit('syncCompleted', {
-          pushed: 0,
-          pulled: msg.payload?.changes?.length || 0,
-          conflicts: 0,
-        });
-        this.resolvePending(msg.requestId, msg.payload);
+        // The receipt must be derived from what actually applied, so this is
+        // awaited before the ack is sent (previously the apply was fire-and-
+        // forget and the cursor advanced regardless of failures).
+        //
+        // The cursor is deliberately NOT set to `lastSeq` here: a change that
+        // failed to apply would then never be re-requested, and its row would
+        // sit in the hub forever. handleIncomingChanges advances it only over
+        // the contiguous prefix that actually merged.
+        this.handleIncomingChanges(msg.payload?.changes || [], !!msg.payload?.snapshot, Number(msg.payload?.lastSeq || 0))
+          .then(() => {
+            this.emit('syncCompleted', {
+              pushed: 0,
+              pulled: msg.payload?.changes?.length || 0,
+              conflicts: 0,
+            });
+            // P0 telemetry: the batch was applied and the durable prefix
+            // advanced, so this is the "first sync" milestone.
+            markFirstSync('desktop-hub', { transport: 'lan-ws', via: 'SYNC_CHANGES' });
+            setPeerCounters('desktop-hub', { cursor: this.ackedUpto ?? null });
+            this.resolvePending(msg.requestId, msg.payload, msg.type);
+          })
+          .catch((e: any) => {
+            // Never advance the cursor on an unexpected failure: the hub keeps
+            // the rows, and the next pull re-delivers them.
+            logger.warn('[WS] Incoming batch failed:', e?.message);
+            this.resolvePending(msg.requestId, msg.payload, msg.type);
+          });
         break;
 
       case 'DATA_CHANGED':
@@ -337,8 +528,25 @@ export class WsSyncClient extends EventEmitter {
 
       case DEVICE_JOIN_MSG.ACK:
       case DEVICE_JOIN_MSG.RESPONSE:
+        // P3: an approved decision carries the signed membership credential.
+        // Store it here — this is the only channel that delivers it, and the
+        // next connection's challenge is answered from it. Fire-and-forget:
+        // handleMessage is synchronous and the joiner's own flow does not wait
+        // on the keystore write.
+        if (msg.payload?.credential) {
+          acceptMembershipCredential(msg.payload.credential)
+            .then((ok) => {
+              // Deliberately NOT a markConnected() call: holding a credential is
+              // authorization, not connectivity. P0 telemetry treats PAIR_RESPONSE
+              // as the "connected" milestone and this must not move it earlier.
+              logger.info(ok
+                ? '[WS] Stored membership credential for authenticated handshakes'
+                : '[WS] Rejected membership credential — not issued to this device');
+            })
+            .catch((e) => logger.warn('[WS] credential store failed:', e));
+        }
         this.emit('joinDecision', msg.payload);
-        this.resolvePending(msg.requestId, msg.payload);
+        this.resolvePending(msg.requestId, msg.payload, msg.type);
         break;
 
       case PERIPHERAL_MSG.HELLO:
@@ -360,19 +568,19 @@ export class WsSyncClient extends EventEmitter {
 
       case PERIPHERAL_MSG.ACK:
       case PERIPHERAL_MSG.RESPONSE:
-        this.resolvePending(msg.requestId, msg.payload);
+        this.resolvePending(msg.requestId, msg.payload, msg.type);
         break;
 
       case 'SYNC_VERIFY_RESPONSE':
-        this.resolvePending(msg.requestId, msg.payload);
+        this.resolvePending(msg.requestId, msg.payload, msg.type);
         break;
 
       case 'INVITE_RESPONSE':
-        this.resolvePending(msg.requestId, msg.payload);
+        this.resolvePending(msg.requestId, msg.payload, msg.type);
         break;
 
       case 'RESYNC_RESPONSE':
-        this.resolvePending(msg.requestId, msg.payload);
+        this.resolvePending(msg.requestId, msg.payload, msg.type);
         break;
 
       case 'P2P_SIGNAL':
@@ -399,8 +607,31 @@ export class WsSyncClient extends EventEmitter {
     }
   }
 
-  private async handleIncomingChanges(changes: any[]): Promise<void> {
-    if (!changes.length) return;
+  /**
+   * Advances the durable prefix (pull cursor + receipt high-water mark) and
+   * persists it. Only ever called with a value at or below the last receipt, so
+   * it can move forward but never regress or skip a hole.
+   */
+  private advanceDurablePrefix(next: number, failedSeqs: number[] = []): void {
+    if (!(next > this.ackedUpto)) return;
+    this.ackedUpto = next;
+    try {
+      setHubSeqCursor(next);
+    } catch (e: any) {
+      // A failed persist only costs a re-pull; the receipt is still truthful.
+      logger.warn('[WS] Failed to persist sync cursor:', e?.message);
+    }
+    this.sendAppliedAck(next, failedSeqs);
+  }
+
+  private async handleIncomingChanges(changes: any[], isSnapshot = false, batchLastSeq = 0): Promise<void> {
+    if (!changes.length) {
+      // An empty incremental batch still advances the receipt: there is nothing
+      // outstanding at or below lastSeq. Without this the hub would hold rows
+      // this client has already seen for a batch that legitimately had none.
+      if (!isSnapshot) this.advanceDurablePrefix(batchLastSeq);
+      return;
+    }
 
     const sorted = changes.slice().sort((a: any, b: any) => {
       const ia = APPLY_ORDER.indexOf(a.entity);
@@ -408,13 +639,42 @@ export class WsSyncClient extends EventEmitter {
       return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
     });
 
+    // Apply in dependency order but report the receipt in seq order — the hub
+    // only understands "everything up to N", so the watermark math is shared
+    // with the LAN transport rather than reimplemented here.
+    const applied: ReceiptedChange[] = [];
     for (const change of sorted) {
+      const seq = Number(change?.seq);
       try {
         await this.applyChange(change);
+        applied.push({ seq, outcome: 'applied' });
       } catch (e: any) {
         logger.warn('[WS] Apply failed:', change.entity, change.entity_uuid, e?.message);
+        applied.push({ seq, outcome: 'failed' });
       }
     }
+
+    const { ackedUpto, failedSeqs } = computeReceiptWatermark(
+      this.ackedUpto,
+      applied,
+      batchLastSeq,
+      { isSnapshot },
+    );
+    this.advanceDurablePrefix(ackedUpto, failedSeqs);
+  }
+
+  /**
+   * Tells the hub that changes up to `ackedUpto` are durable here, so it may
+   * prune them once every other active peer has confirmed the same. Sent
+   * fire-and-forget: a lost receipt only costs a redundant re-delivery, since
+   * applying the same change twice is idempotent.
+   */
+  private sendAppliedAck(ackedUpto: number, failedSeqs: number[]): void {
+    if (ackedUpto <= 0) return;
+    this.send({
+      type: 'SYNC_APPLIED',
+      payload: { acked_upto: ackedUpto, failed_seqs: failedSeqs },
+    });
   }
 
   private async applyChange(change: any): Promise<void> {
@@ -448,7 +708,18 @@ export class WsSyncClient extends EventEmitter {
 
   async submitDeviceJoinRequest(payload: any): Promise<any> {
     if (!this._isConnected) throw new Error('Not connected to hub');
-    return this.sendRequest(DEVICE_JOIN_MSG.SUBMIT, payload);
+    // P3: attach this device's public key so the hub can issue a membership
+    // credential when the owner approves. Without it the approval can only
+    // grant the legacy token, and the next connection stays unauthenticated.
+    let joinerPublicKey: string | undefined;
+    try {
+      const deviceId = String(payload?.joinerDeviceId ?? this.config?.deviceId ?? await this.getDeviceId());
+      const { getDevicePublicKey } = require('./deviceKeys');
+      joinerPublicKey = (await getDevicePublicKey(deviceId)) ?? undefined;
+    } catch (e) {
+      logger.warn('[WS] could not read device public key for join submit:', e);
+    }
+    return this.sendRequest(DEVICE_JOIN_MSG.SUBMIT, { ...payload, ...(joinerPublicKey ? { joinerPublicKey } : {}) });
   }
 
   async listDeviceJoinRequests(businessId: string): Promise<any[]> {
@@ -641,29 +912,34 @@ export class WsSyncClient extends EventEmitter {
     try {
       const { changes, seqs } = await this.buildChangesFromOutbox();
       if (changes.length > 0) {
-        const pushResult = await this.sendRequest('SYNC_PUSH', { changes, client_seq: this.lastServerSeq });
+        // The hub folds this into its per-connection pull baseline, so it must be
+        // the durable prefix (what actually merged here), never the hub's max.
+        const pushResult = await this.sendRequest('SYNC_PUSH', { changes, client_seq: this.ackedUpto });
         totalPushed = pushResult.applied || 0;
         totalConflicts = pushResult.conflicts || 0;
 
         const db = getDB();
-        // Prune only rows the hub merged. Per-change outcomes arrive keyed to
-        // client_seq; without them fall back to deleting on success. Pending/
-        // skipped rows (e.g. unresolved item FK) stay queued for retry.
+        // Prune only rows the hub explicitly merged. A seq the hub did not report
+        // is unknown, not success, so it stays queued; and an unconfirmed row caps
+        // the prune so one permanent failure cannot discard the changes above it.
         const outcome = Array.isArray(pushResult.results)
-          ? new Map((pushResult.results as { client_seq: number | null; status: string }[]).map((r) => [r.client_seq, r.status]))
+          ? new Map(
+              (pushResult.results as { client_seq: number | null; status: string }[])
+                // A row without a client_seq can't correspond to any queued
+                // change, so it carries no information about what may be pruned.
+                .filter((r): r is { client_seq: number; status: string } => r.client_seq != null)
+                .map((r) => [r.client_seq, r.status]),
+            )
           : null;
-        const prune = outcome
-          ? seqs.filter((seq) => {
-              const status = outcome.get(seq);
-              return status === 'applied' || status === 'conflict' || status === undefined;
-            })
-          : seqs;
+        const prune = pruneableSeqs(seqs, outcome);
         if (prune.length) {
           db.runSync('DELETE FROM sync_outbox WHERE seq IN (' + prune.map(() => '?').join(',') + ')', prune);
         }
       }
 
-      const pullResult = await this.sendRequest('SYNC_PULL', { since: this.lastServerSeq });
+      // Pull from the durable prefix, not the hub's max: a change that failed to
+      // apply leaves a hole, and the hub must re-deliver it next time.
+      const pullResult = await this.sendRequest('SYNC_PULL', { since: this.ackedUpto });
       totalPulled = pullResult.changes?.length || 0;
 
       const result: SyncResult = { pushed: totalPushed, pulled: totalPulled, conflicts: totalConflicts };
@@ -719,7 +995,7 @@ export class WsSyncClient extends EventEmitter {
     });
   }
 
-  private resolvePending(requestId: string | undefined, payload: any): void {
+  private resolvePending(requestId: string | undefined, payload: any, msgType?: string): void {
     if (!requestId) return;
     const pending = this.pendingRequests.get(requestId);
     if (pending) {
@@ -727,7 +1003,10 @@ export class WsSyncClient extends EventEmitter {
       this.pendingRequests.delete(requestId);
       // Flatten the handshake ack onto the resolved payload so callers that
       // track a pairing session see the connection acknowledged immediately.
-      pending.resolve({ ...payload, handshake: payload.handshake });
+      // `__msgType` is the message TYPE, which the payload cannot always supply:
+      // the P3 handshake turns one request into a challenge, and the caller has
+      // to know which of the two replies it just got.
+      pending.resolve({ ...payload, __msgType: msgType });
     }
   }
 
@@ -762,23 +1041,84 @@ export class WsSyncClient extends EventEmitter {
   }
 
   private startHeartbeat(): void {
+    this.stopHeartbeat();
     this.heartbeatInterval = setInterval(() => {
       if (this.ws && this.ws.readyState === 1) {
         this.send({ type: 'HEARTBEAT', timestamp: Date.now() });
+        this.armHeartbeatWatchdog();
       }
-    }, 15000);
+    }, this.HEARTBEAT_INTERVAL_MS);
+    this.lastInboundAt = Date.now();
   }
 
-  private handleDisconnect(error: Error | null): void {
-    this._isConnected = false;
+  /**
+   * Arm the liveness deadline. Any inbound frame (ACK, data, push) calls
+   * `lastInboundAt` and implicitly proves the link is alive, so the watchdog is
+   * re-armed from `lastInboundAt` rather than from when the heartbeat was sent.
+   */
+  private armHeartbeatWatchdog(): void {
+    if (this.heartbeatTimeout) clearTimeout(this.heartbeatTimeout);
+    this.heartbeatTimeout = setTimeout(() => {
+      this.heartbeatTimeout = null;
+      if (!this._isConnected) return;
+      const silentFor = Date.now() - (this.lastInboundAt || Date.now());
+      if (silentFor < this.HEARTBEAT_TIMEOUT_MS) {
+        // Traffic arrived after arming — still healthy, wait for the next beat.
+        this.armHeartbeatWatchdog();
+        return;
+      }
+      logger.warn(`[WS] Heartbeat timeout — no traffic for ${Math.round(silentFor / 1000)}s, treating link as dead`);
+      // Force the socket closed so the normal onclose → handleDisconnect path
+      // runs and the capped backoff reconnects. Without this the socket stays
+      // OPEN forever on a silently dropped network.
+      try { this.ws?.close(); } catch { /* fall through to explicit handling */ }
+      this.handleDisconnect(new Error('Connection lost: no heartbeat response'));
+    }, this.HEARTBEAT_TIMEOUT_MS);
+  }
+
+  private stopHeartbeat(): void {
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
     }
+    if (this.heartbeatTimeout) {
+      clearTimeout(this.heartbeatTimeout);
+      this.heartbeatTimeout = null;
+    }
+    this.awaitingAckSince = null;
+  }
+
+  private handleDisconnect(error: Error | null): void {
+    // Invalidate in-flight handlers: the socket that is going away must not be
+    // able to clobber a socket opened by the reconnect that follows.
+    this.socketGeneration++;
+    this._isConnected = false;
+    this.stopHeartbeat();
+    // P0 telemetry: a disconnect is the other half of the reconnect story — the
+    // diagnostics view needs the gap to judge link stability.
+    markDisconnected('desktop-hub');
+
+    // Reject in-flight requests so callers (and their UI spinners) do not hang
+    // until their own timeout expires on a connection that is already gone.
+    this.rejectAllPending('Connection lost');
 
     this.emit('disconnected', error);
 
-    const delay = Math.min(this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts), this.MAX_RECONNECT_DELAY_MS);
+    // An explicit disconnect() or a terminal auth failure must not be followed
+    // by a reconnect: there is nothing to reconnect to, and retrying an
+    // unrecoverable error forever is what produced "Reconnecting…" that never
+    // resolves.
+    if (!this.config) return;
+    if (this.authBlocked) return;
+
+    // Exponential backoff with jitter. Without jitter, every device that lost
+    // the same hub at the same moment retries in lockstep and re-creates the
+    // thundering herd the delay exists to prevent.
+    const base = Math.min(
+      this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts),
+      this.MAX_RECONNECT_DELAY_MS,
+    );
+    const delay = Math.round(base * (0.8 + Math.random() * 0.4));
     this.reconnectAttempts++;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = setTimeout(() => {
@@ -786,43 +1126,101 @@ export class WsSyncClient extends EventEmitter {
       if (!this.config) return;
       this.openSocket().catch((e) => logger.warn('[WS] reconnect failed:', e?.message));
     }, delay);
+    logger.info(`[WS] Reconnecting in ${Math.round(delay / 100) / 10}s (attempt ${this.reconnectAttempts})`);
   }
 
   async disconnect(): Promise<void> {
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = null;
-    }
+    this.stopHeartbeat();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+    // Invalidate before closing so the socket's own onclose is ignored and
+    // cannot arm a reconnect for a connection we are deliberately tearing down.
+    this.socketGeneration++;
     if (this.ws) {
-      this.ws.close();
+      try { this.ws.close(); } catch { /* already gone */ }
       this.ws = null;
     }
     this.config = null;
     this._isConnected = false;
+    this.authBlocked = null;
+    this.rejectAllPending('Disconnected');
+  }
+
+  /** True when the hub rejected our credentials — a new pairing is required. */
+  get isAuthorizationBlocked(): boolean {
+    return this.authBlocked !== null;
+  }
+
+  get authorizationBlockReason(): string | null {
+    return this.authBlocked?.reason ?? null;
+  }
+
+  private rejectAllPending(reason: string): void {
+    for (const [, pending] of this.pendingRequests) {
+      if (pending.timeout) clearTimeout(pending.timeout);
+      try { pending.reject(new Error(reason)); } catch { /* already settled */ }
+    }
+    this.pendingRequests.clear();
   }
 
   get isConnectedNow(): boolean {
     return this._isConnected && this.ws?.readyState === 1;
+  }
+
+  /** True once a hub endpoint is known, even while the socket is down. */
+  get hasConfig(): boolean {
+    return this.config !== null;
   }
 }
 
 // Singleton wrapper
 export const wsSyncClient = new (class extends EventEmitter {
   private instance: WsSyncClient | null = null;
+  /** Instance events are forwarded once; re-wiring would duplicate every event. */
+  private wired = false;
+  /**
+   * True once this facade has opened a socket (as opposed to merely kicking an
+   * already-configured client). Only the owner should tear the connection down;
+   * a component that merely re-rendered must not drop a live hub connection.
+   */
+  private ownsConnection = false;
+
+  private ensureInstance(): WsSyncClient {
+    if (!this.instance) this.instance = new WsSyncClient();
+    if (!this.wired) {
+      this.wired = true;
+      this.instance.on('connected', () => this.emit('connected'));
+      this.instance.on('disconnected', (err: any) => this.emit('disconnected', err));
+      this.instance.on('syncCompleted', (r: any) => this.emit('syncCompleted', r));
+      this.instance.on('conflict', (c: any) => this.emit('conflict', c));
+      this.instance.on('error', (e: any) => this.emit('error', e));
+    }
+    return this.instance;
+  }
 
   async connect(config: any) {
-    if (this.instance) await this.instance.disconnect();
-    this.instance = new WsSyncClient();
-    this.instance.on('connected', () => this.emit('connected'));
-    this.instance.on('disconnected', (err: any) => this.emit('disconnected', err));
-    this.instance.on('syncCompleted', (r: any) => this.emit('syncCompleted', r));
-    this.instance.on('conflict', (c: any) => this.emit('conflict', c));
-    this.instance.on('error', (e: any) => this.emit('error', e));
-    return this.instance.connect(config);
+    // Reuse a live instance instead of building a new one. The previous
+    // behaviour tore down the socket (and every in-flight request, cursor and
+    // pending PAIR) on each call, so a re-run of the owning effect — a hub-URL
+    // change, a settings toggle, a remount — became a full reconnect that also
+    // discarded state. `instance.connect()` is already idempotent: with a
+    // config present it becomes a `retryNow()` kick.
+    const wasConfigured = this.instance?.isConnectedNow || (this.instance?.hasConfig ?? false);
+    const res = await this.ensureInstance().connect(config);
+    if (!wasConfigured) this.ownsConnection = true;
+    return res;
+  }
+
+  /**
+   * Release the connection only if this facade is the one that opened it.
+   * A passive caller that merely re-rendered must not drop a live socket.
+   */
+  async disconnectIfOwner() {
+    if (!this.ownsConnection) return;
+    this.ownsConnection = false;
+    await this.disconnect();
   }
 
   async syncNow() {
@@ -869,10 +1267,25 @@ export const wsSyncClient = new (class extends EventEmitter {
   async disconnect() {
     await this.instance?.disconnect();
     this.instance = null;
+    this.wired = false;
+    this.ownsConnection = false;
   }
 
   get isConnected() {
     return this.instance?.isConnectedNow ?? false;
+  }
+
+  /**
+   * True when the hub rejected this device's credentials. Retrying cannot fix
+   * it — the user has to pair again — so the UI must say so instead of showing
+   * an endless "Reconnecting…".
+   */
+  get isAuthorizationBlocked() {
+    return this.instance?.isAuthorizationBlocked ?? false;
+  }
+
+  get authorizationBlockReason() {
+    return this.instance?.authorizationBlockReason ?? null;
   }
 
   // Peripheral pass-through — forward instance events + methods

@@ -1040,6 +1040,10 @@ export function setDeviceStatus(deviceId: string, status: Device['status']): voi
   notifyLocalDataChanged();
 }
 
+export function removeDevice(deviceId: string): void {
+  setDeviceStatus(deviceId, 'removed');
+}
+
 export function renameDevice(deviceId: string, name: string): void {
   const db = getDB();
   db.runSync('UPDATE devices SET name = ?, updated_at = ?, is_synced = 0 WHERE id = ?', [name.trim(), new Date().toISOString(), deviceId]);

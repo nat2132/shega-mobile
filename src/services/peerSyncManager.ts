@@ -34,6 +34,12 @@ import {
   publishMobileHub,
   unpublishMobileHub,
 } from './mobileMdnsPublisher';
+import {
+  beginCycle,
+  endCycle,
+  markConnected,
+  markFirstSync,
+} from './syncDiagnostics';
 import type {
   SyncTransport,
   SyncHealth,
@@ -64,6 +70,24 @@ export interface PeerSyncState {
 
 const LAN_SYNC_INTERVAL_MS = 5_000;    // 5s for fast real-time sync
 const DISCOVERY_INTERVAL_MS = 10_000;   // 10s for peer discovery
+
+/**
+ * `fetch` with a hard timeout.
+ *
+ * Uses AbortController rather than `AbortSignal.timeout()` because the latter is
+ * not reliably present across Hermes versions, and an unbounded `fetch` to an
+ * address that stopped answering would otherwise stall the discovery cycle for
+ * the whole platform socket timeout.
+ */
+async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { signal: controller.signal, cache: 'no-store' });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 // ─── State ──────────────────────────────────────────────────────────────────
 
@@ -115,6 +139,16 @@ async function performLanSync(): Promise<{ pushed: number; pulled: number; confl
   try {
     const result = await lanSyncNow();
     lastError = null;
+    // P0 telemetry: a completed LAN round trip means the link is authenticated
+    // and data has flowed, so it closes both the "connected" and "first sync"
+    // milestones for the HTTP/TCP peer path.
+    markConnected('lan-hub', { transport: 'lan-http' });
+    markFirstSync('lan-hub', {
+      transport: 'lan-http',
+      pushed: result?.pushed,
+      pulled: result?.pulled,
+      conflicts: result?.conflicts,
+    });
     return result;
   } catch (e: any) {
     lastError = e?.message;
@@ -176,6 +210,19 @@ async function performDiscoveryCycle(): Promise<void> {
     } catch { /* radar not open or no sweep yet */ }
   }
 
+  // Last-resort recovery: no announcement at all, but we have a hub we have
+  // synced with before. Its address may simply have changed (DHCP lease, a
+  // different subnet after a network switch) while mDNS stayed silent. Re-probe
+  // the stored endpoint directly so a restart or a network change recovers
+  // without waiting for the owner to re-announce.
+  if (peers.length === 0 && hubUrl) {
+    const reachable = await probeHubUrl(hubUrl);
+    if (reachable) {
+      currentMode = detectMode();
+      return;
+    }
+  }
+
   // Auto-connect / Auto-upgrade: if we discovered a hub on the LAN, adopt or update to the direct LAN endpoint
   if (peers.length > 0) {
     const peer = peers[0];
@@ -195,6 +242,22 @@ async function performDiscoveryCycle(): Promise<void> {
   // If we're a hub and there are no peer hubs, stay as hub
   // If we're a hub and there are peer hubs, we could be both
   currentMode = detectMode();
+}
+
+/**
+ * Directly probe a previously-used hub URL. Used only when discovery is silent,
+ * so it cannot turn a working discovery path into a slow one.
+ */
+async function probeHubUrl(hubUrl: string): Promise<boolean> {
+  try {
+    const res = await fetchWithTimeout(`${hubUrl}/sync/info`, 1500);
+    if (!res.ok) return false;
+    const info = await res.json();
+    console.log('[PeerSync] Discovery silent but the stored hub answered — keeping connection');
+    return !!info;
+  } catch {
+    return false;
+  }
 }
 
 // ─── Public API ─────────────────────────────────────────────────────────────
@@ -227,18 +290,24 @@ export async function startPeerSyncManager(): Promise<void> {
   }
 
   // Event-driven triggers: a hub appearing/disappearing on the LAN is the
-  // strongest reconnect signal (device cames back online / network restored /
-  // network switched). React to it immediately instead of waiting up to
-  // 15s (discovery poll) to pick the hub back up.
+  // strongest reconnect signal (device came back online / network restored /
+  // network switched). React to it immediately instead of waiting for the
+  // DISCOVERY_INTERVAL_MS (10s) or LAN_SYNC_INTERVAL_MS (5s) polls to pick the
+  // hub back up.
   const onHubUp = (hub: { deviceId: string }) => {
     console.log(`[PeerSync] Hub appeared: ${hub.deviceId}`);
+    // P0 telemetry: open the window on the real trigger so time-to-peer and
+    // time-to-connected are measured from the hub appearing, not from the next
+    // periodic tick.
+    beginCycle('hub-up');
     performDiscoveryCycle()
       .then(() => {
         const mode = detectMode();
         if (mode === 'client' || mode === 'both') return performLanSync();
         return null;
       })
-      .catch((e: any) => console.warn('[PeerSync] hub-up cycle failed:', e?.message));
+      .catch((e: any) => console.warn('[PeerSync] hub-up cycle failed:', e?.message))
+      .finally(() => { endCycle({ mode: currentMode }); });
   };
   const onHubDown = (hub: { deviceId: string }) => {
     console.log(`[PeerSync] Hub went away: ${hub.deviceId}`);
@@ -255,13 +324,16 @@ export async function startPeerSyncManager(): Promise<void> {
   console.log(`[PeerSync] Initial mode: ${currentMode}`);
 
   // Run one discovery + sync cycle immediately so a freshly opened app
-  // connects to a visible hub right away instead of waiting 15–30s.
+  // connects to a visible hub right away instead of waiting for the first
+  // interval tick.
   (async () => {
+    beginCycle('startup');
     try {
       await performDiscoveryCycle();
       const mode = detectMode();
       if (mode === 'client' || mode === 'both') await performLanSync();
     } catch (e: any) { console.warn('[PeerSync] initial cycle failed:', e?.message); }
+    finally { endCycle({ mode: currentMode }); }
   })();
 
   // Start periodic sync cycles
@@ -269,13 +341,29 @@ export async function startPeerSyncManager(): Promise<void> {
   lanTimer = setInterval(async () => {
     const mode = detectMode();
     if (mode === 'client' || mode === 'both') {
-      await performLanSync();
+      beginCycle('interval-lan');
+      // try/finally so a throwing sync can never leave a telemetry cycle open,
+      // and so the rejection never escapes the timer as an unhandled promise.
+      try {
+        await performLanSync();
+      } catch (e) {
+        console.warn('[PeerSync] Interval LAN sync failed:', e);
+      } finally {
+        endCycle({ mode });
+      }
     }
   }, LAN_SYNC_INTERVAL_MS);
 
   if (discoveryTimer) clearInterval(discoveryTimer);
   discoveryTimer = setInterval(async () => {
-    await performDiscoveryCycle();
+    beginCycle('interval-discovery');
+    try {
+      await performDiscoveryCycle();
+    } catch (e) {
+      console.warn('[PeerSync] Interval discovery cycle failed:', e);
+    } finally {
+      endCycle({ mode: currentMode });
+    }
   }, DISCOVERY_INTERVAL_MS);
 
   console.log('[PeerSync] Peer sync manager started');

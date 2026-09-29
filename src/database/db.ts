@@ -1419,6 +1419,125 @@ export const initDB = () => {
   addColumnIfMissing('sync_outbox', 'transport', "TEXT DEFAULT 'lan'");
   addColumnIfMissing('sync_outbox', 'retry_count', 'INTEGER DEFAULT 0');
   addColumnIfMissing('sync_outbox', 'source_device', 'TEXT');
+
+  // ── Offline-first reliability (account / outbox / backup) ──────────────────
+  //
+  // sync_outbox previously carried only (entity, entity_uuid, op, row_id),
+  // which breaks three things an offline-first POS cannot tolerate:
+  //   1. crdt.ts groups the vector clock by `sync_outbox.device_id`, a column
+  //      that never existed on this platform, so getVectorClock() raised
+  //      "no such column: device_id" every time it was called.
+  //   2. Nothing recorded whether a change ever reached a peer, so a restart
+  //      could not tell delivered work from undelivered work.
+  //   3. Nothing survived a crash between "row written" and "row relayed" —
+  //      the pump resumed from MAX(seq), silently skipping everything the app
+  //      had not yet managed to send.
+  addColumnIfMissing('sync_outbox', 'device_id', 'TEXT');
+  addColumnIfMissing('sync_outbox', 'business_id', 'TEXT');
+  addColumnIfMissing('sync_outbox', 'change_id', 'TEXT');
+  addColumnIfMissing('sync_outbox', 'payload', 'TEXT');
+  addColumnIfMissing('sync_outbox', 'status', "TEXT DEFAULT 'pending'");
+  addColumnIfMissing('sync_outbox', 'attempts', 'INTEGER DEFAULT 0');
+  addColumnIfMissing('sync_outbox', 'next_retry_at', 'TEXT');
+  addColumnIfMissing('sync_outbox', 'last_error', 'TEXT');
+  addColumnIfMissing('sync_outbox', 'acked_at', 'TEXT');
+  addColumnIfMissing('sync_outbox', 'acked_by', 'TEXT');
+  addColumnIfMissing('sync_outbox', 'row_version', 'INTEGER DEFAULT 1');
+
+  // Backfill rows written before these columns existed, then keep them filled
+  // for new rows. One trigger on sync_outbox covers every entity trigger
+  // (there are dozens) without editing any of them.
+  try {
+    database.execSync(`
+      UPDATE sync_outbox
+         SET device_id = (SELECT device_id FROM sync_meta WHERE id = 1)
+       WHERE device_id IS NULL;
+      UPDATE sync_outbox SET status = 'pending' WHERE status IS NULL;
+      CREATE TRIGGER IF NOT EXISTS trg_sync_outbox_ai AFTER INSERT ON sync_outbox BEGIN
+        UPDATE sync_outbox
+           SET device_id = COALESCE(NEW.device_id, (SELECT device_id FROM sync_meta WHERE id = 1)),
+               change_id = COALESCE(NEW.change_id, printf('%s:%d',
+                 COALESCE(NEW.device_id, (SELECT device_id FROM sync_meta WHERE id = 1)), NEW.seq))
+         WHERE seq = NEW.seq;
+      END;
+    `);
+  } catch (e: any) {
+    console.warn('sync_outbox reliability wiring: ', e?.message);
+  }
+  database.execSync(`CREATE INDEX IF NOT EXISTS idx_sync_outbox_status ON sync_outbox(status, seq);`);
+  database.execSync(`CREATE INDEX IF NOT EXISTS idx_sync_outbox_change ON sync_outbox(change_id);`);
+
+  // Conflicts were stored as "incoming only", so keeping the local version
+  // (and whether it was ever resolved) was impossible — a conflict could not
+  // be shown to the user or audited.
+  addColumnIfMissing('sync_conflicts', 'local_payload', 'TEXT');
+  addColumnIfMissing('sync_conflicts', 'device_id', 'TEXT');
+  addColumnIfMissing('sync_conflicts', 'business_id', 'TEXT');
+  addColumnIfMissing('sync_conflicts', 'local_updated_at', 'TEXT');
+  addColumnIfMissing('sync_conflicts', 'status', "TEXT DEFAULT 'open'");
+  addColumnIfMissing('sync_conflicts', 'resolution', 'TEXT');
+  addColumnIfMissing('sync_conflicts', 'resolved_at', 'TEXT');
+  database.execSync(`CREATE INDEX IF NOT EXISTS idx_sync_conflicts_status ON sync_conflicts(status, id);`);
+
+  // Which cloud account this installation belongs to. Deliberately holds no
+  // credentials: access/refresh tokens live in expo-secure-store, and this
+  // table is readable by anything with file access to the app sandbox.
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS account_link (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      account_id INTEGER,
+      username TEXT,
+      email TEXT,
+      server_url TEXT,
+      installation_id TEXT,
+      status TEXT NOT NULL DEFAULT 'unlinked',
+      linked_at TEXT,
+      last_verified_at TEXT,
+      last_online_at TEXT,
+      notes TEXT
+    );
+  `);
+
+  // Cloud-recovery bookkeeping: how far this install has been backed up, so a
+  // restore can be validated against a known-good point.
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS backup_state (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      last_backup_at TEXT,
+      last_backup_seq INTEGER DEFAULT 0,
+      last_backup_id TEXT,
+      last_restore_at TEXT,
+      last_status TEXT,
+      last_error TEXT,
+      auto_backup INTEGER NOT NULL DEFAULT 1,
+      retention_count INTEGER NOT NULL DEFAULT 10
+    );
+  `);
+  console.log('Offline-first account/backup tables checked/created.');
+
+  // Per-peer delivery receipts. A single outbox row is relayed to many peers,
+  // so one status column cannot express "peer A acked it, peer B has not".
+  // Rows are only pruned once every known peer has acked (wired up in the sync
+  // reliability phase; recorded here so existing installs get it via the same
+  // additive migration path).
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS sync_outbox_acks (
+      seq INTEGER NOT NULL,
+      peer_device_id TEXT NOT NULL,
+      acked_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (seq, peer_device_id)
+    );
+  `);
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS sync_peer_state (
+      peer_device_id TEXT PRIMARY KEY,
+      last_seq INTEGER NOT NULL DEFAULT 0,
+      last_seen_at TEXT,
+      last_ack_at TEXT,
+      status TEXT NOT NULL DEFAULT 'unknown',
+      pending_count INTEGER NOT NULL DEFAULT 0
+    );
+  `);
   database.execSync(`
     CREATE TABLE IF NOT EXISTS sync_history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2137,6 +2256,7 @@ export const getPriceHistory = (itemId: number, limit: number = 20) => {
 };
 
 export const insertItem = (data: InsertItemData) => {
+  assertWriteAllowed();
   try {
     const database = getDB();
     const statement = database.prepareSync(`
@@ -2740,6 +2860,7 @@ export const insertSale = (saleData: {
   /** user id recorded for activity attribution (defaults to signed-in user) */
   userId?: string | null;
 }) => {
+  assertWriteAllowed();
   const database = getDB();
   beginTransaction(database);
   try {
@@ -2886,6 +3007,7 @@ export const getFilteredSales = (options: FilterOptions) => {
 };
 
 export const insertAdjustment = (adj: any) => {
+  assertWriteAllowed();
   const database = getDB();
   beginTransaction(database);
   try {
@@ -3023,6 +3145,7 @@ export const getFilteredAdjustments = (filters: { type?: string; period?: string
 };
 
 export const deleteAdjustment = (id: number) => {
+  assertWriteAllowed();
   try {
     const database = getDB();
     const bizId = getScopedBusinessId();
@@ -3059,6 +3182,7 @@ export const deleteAdjustment = (id: number) => {
 };
 
 export const updateAdjustment = (adjId: number, data: { quantity?: number, newValue?: number, reason?: string }) => {
+  assertWriteAllowed();
   try {
     const database = getDB();
     const bizId = getScopedBusinessId();
@@ -4193,6 +4317,7 @@ const CHART_LABELS: Record<string, string[]> = {
 };
 
 export const deleteItem = (id: number) => {
+  assertWriteAllowed();
   try {
     const database = getDB();
     const bizId = getScopedBusinessId();
@@ -4208,6 +4333,7 @@ export const deleteItem = (id: number) => {
 };
 
 export const deleteSale = (id: number) => {
+  assertWriteAllowed();
   try {
     const database = getDB();
     const bizId = getScopedBusinessId();
@@ -4317,6 +4443,7 @@ export const getCapitalSummary = (period: string = 'this_month', targetDate?: st
 };
 
 export const updateItem = (id: number, updates: any) => {
+  assertWriteAllowed();
   try {
     const database = getDB();
     const bizId = getScopedBusinessId();
@@ -4396,6 +4523,7 @@ export const updateItem = (id: number, updates: any) => {
 };
 
 export const updateSale = (id: number, updates: any) => {
+  assertWriteAllowed();
   try {
     const database = getDB();
     const bizId = getScopedBusinessId();
@@ -4431,6 +4559,7 @@ export const updateSale = (id: number, updates: any) => {
 };
 
 export const updateSaleItem = (id: number, updates: any) => {
+  assertWriteAllowed();
   try {
     const database = getDB();
     const bizId = getScopedBusinessId();
@@ -5540,6 +5669,7 @@ export const getPeakSalesHoursByItem = (itemId?: number) => {
 // ===================== WAREHOUSE FUNCTIONS =====================
 
 export const insertWarehouse = (data: { name: string; location?: string; contactPerson?: string; phone?: string; notes?: string }) => {
+  assertWriteAllowed();
   try {
     const database = getDB();
     const result = database.prepareSync(`
@@ -5578,6 +5708,7 @@ export const getWarehouseById = (id: number) => {
 };
 
 export const updateWarehouse = (id: number, data: { name?: string; location?: string; contactPerson?: string; phone?: string; notes?: string }) => {
+  assertWriteAllowed();
   try {
     const database = getDB();
     const bizId = getScopedBusinessId();
@@ -5604,6 +5735,7 @@ export const updateWarehouse = (id: number, data: { name?: string; location?: st
 };
 
 export const deleteWarehouse = (id: number) => {
+  assertWriteAllowed();
   try {
     const database = getDB();
     const bizId = getScopedBusinessId();
@@ -5766,6 +5898,7 @@ export interface InsertContactData {
 }
 
 export const insertContact = (data: InsertContactData) => {
+  assertWriteAllowed();
   try {
     const database = getDB();
     const statement = database.prepareSync(`
@@ -5840,6 +5973,7 @@ export const getContactById = (id: number) => {
 };
 
 export const updateContact = (id: number, data: Partial<InsertContactData>) => {
+  assertWriteAllowed();
   try {
     const database = getDB();
     const validColumns = ['fullName', 'category', 'subCategory', 'phone', 'alternatePhone', 'accountNumber', 'notes', 'companyName', 'email', 'address', 'tin', 'supplierCategory', 'paymentType'];
@@ -5865,6 +5999,7 @@ export const updateContact = (id: number, data: Partial<InsertContactData>) => {
 };
 
 export const deleteContact = (id: number) => {
+  assertWriteAllowed();
   try {
     const database = getDB();
     database.runSync('DELETE FROM contacts WHERE id = ?', id);
@@ -6012,6 +6147,7 @@ export const searchSuppliers = (query: string) => {
 };
 
 export const insertSupplier = (data: InsertSupplierData) => {
+  assertWriteAllowed();
   try {
     const database = getDB();
     const statement = database.prepareSync(`
@@ -6047,6 +6183,7 @@ const SUPPLIER_UPDATE_COLUMNS = [
 ];
 
 export const updateSupplier = (id: number, data: Partial<InsertSupplierData> & { isActive?: boolean }) => {
+  assertWriteAllowed();
   try {
     const database = getDB();
     const updates: string[] = [];
@@ -6072,6 +6209,7 @@ export const updateSupplier = (id: number, data: Partial<InsertSupplierData> & {
 };
 
 export const deleteSupplier = (id: number) => {
+  assertWriteAllowed();
   try {
     const database = getDB();
     database.runSync('DELETE FROM item_suppliers WHERE supplierId = ?', id);
@@ -6191,6 +6329,7 @@ export const getSupplierPayments = (supplierId: number): SupplierPayment[] => {
 };
 
 export const insertSupplierPayment = (data: { supplierId: number; amount: number; paidAt?: string; method?: string; note?: string }) => {
+  assertWriteAllowed();
   try {
     if (!data.supplierId || !data.amount || data.amount <= 0) return null;
     const database = getDB();
@@ -6253,6 +6392,7 @@ const mapSupplierOrderRow = (r: any): SupplierOrderRow => {
 // Saves a supplier product order. The order number (SO-xxxx-NNN) is
 // assigned after insert so it can include the stable row id.
 export const insertSupplierOrder = (data: { supplierId: number; items: SupplierOrderItem[]; notes?: string }) => {
+  assertWriteAllowed();
   try {
     if (!data.supplierId || !data.items || data.items.length === 0) return null;
     const database = getDB();
@@ -6292,6 +6432,7 @@ export const getSupplierOrders = (supplierId: number): SupplierOrderRow[] => {
 };
 
 export const deleteSupplierOrder = (id: number) => {
+  assertWriteAllowed();
   try {
     const database = getDB();
     database.runSync('DELETE FROM supplier_orders WHERE id = ?', id);
@@ -6542,6 +6683,7 @@ export const getScopedBusinessId = (): string | null => {
 };
 
 export const insertPack = (data: { itemId: number; packNumber: number; quantity: number; unit: string }) => {
+  assertWriteAllowed();
   try {
     const database = getDB();
     return database.prepareSync(`
@@ -6555,6 +6697,7 @@ export const insertPack = (data: { itemId: number; packNumber: number; quantity:
 };
 
 export const insertPacksBatch = (packs: Array<{ itemId: number; packNumber: number; quantity: number; unit: string }>) => {
+  assertWriteAllowed();
   try {
     const database = getDB();
     const stmt = database.prepareSync(`
@@ -6572,6 +6715,7 @@ export const insertPacksBatch = (packs: Array<{ itemId: number; packNumber: numb
 };
 
 export const insertReturn = (data: { saleId: number; itemId: number; quantity: number; unit: string; unitType: string; totalRefund: number; reason: string; createdAt: string }) => {
+  assertWriteAllowed();
   try {
     const database = getDB();
     const bizId = getScopedBusinessId();
@@ -6942,6 +7086,7 @@ export const insertOrder = (data: {
   notes?: string;
   items: { itemId?: number; itemName: string; quantity: number; unitType: string; unit?: string; price: number }[];
 }) => {
+  assertWriteAllowed();
   try {
     const database = getDB();
     const bizId = getScopedBusinessId();
@@ -7851,3 +7996,83 @@ export const isPremiumFeatureUnlocked = (feature: string): boolean => {
     return false;
   }
 };
+
+// ——— View-only enforcement at the data layer —————————————————————————
+
+const LOCKED_STATUSES = [
+  'expired',
+  'cancelled',
+  'rejected',
+  'pending_verification',
+  'pending_payment',
+  'payment_rejected',
+] as const;
+
+type AccessBlockReason = 'locked_status' | 'trial_ended' | 'expired';
+
+/** Error thrown when a write is attempted without an active subscription. */
+export class SubscriptionRequiredError extends Error {
+  readonly code = 'SUBSCRIPTION_REQUIRED' as const;
+  readonly reason: AccessBlockReason;
+  readonly status: string;
+
+  constructor(reason: AccessBlockReason, status: string) {
+    super(`[SUBSCRIPTION_REQUIRED] Your subscription does not allow editing business data.`);
+    this.name = 'SubscriptionRequiredError';
+    this.reason = reason;
+    this.status = status;
+  }
+}
+
+function isSubscriptionRequiredError(e: unknown): e is SubscriptionRequiredError {
+  return e instanceof SubscriptionRequiredError;
+}
+
+function timeOf(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function evaluateAccessLocal(
+  snapshot: { status?: string | null; expiresAt?: string | null; trialEndsAt?: string | null; isTrial?: boolean } | null,
+  now: number = Date.now()
+): { allowed: true } | { allowed: false; reason: AccessBlockReason; status: string } {
+  const status = (snapshot?.status || '').trim();
+  if (!status) return { allowed: true };
+  if ((LOCKED_STATUSES as readonly string[]).includes(status)) {
+    return { allowed: false, reason: 'locked_status', status };
+  }
+  const isTrial = snapshot?.isTrial ?? status === 'trial';
+  const end = timeOf(isTrial ? snapshot?.trialEndsAt ?? snapshot?.expiresAt : snapshot?.expiresAt);
+  if (end !== null && end <= now) {
+    return { allowed: false, reason: isTrial ? 'trial_ended' : 'expired', status };
+  }
+  return { allowed: true };
+}
+
+export function getWriteAccessVerdict(): { allowed: true } | { allowed: false; reason: AccessBlockReason; status: string } {
+  try {
+    const sub = checkAndExpireSubscription();
+    if (!sub) return { allowed: true };
+    return evaluateAccessLocal({
+      status: sub.status,
+      expiresAt: sub.expiresAt,
+      trialEndsAt: sub.trialEndsAt,
+      isTrial: sub.status === 'trial',
+    });
+  } catch {
+    return { allowed: true };
+  }
+}
+
+export function assertWriteAllowed(): void {
+  const verdict = getWriteAccessVerdict();
+  if (!verdict.allowed) {
+    throw new SubscriptionRequiredError(verdict.reason, verdict.status);
+  }
+}
+
+export function isWriteAllowed(): boolean {
+  return getWriteAccessVerdict().allowed;
+}

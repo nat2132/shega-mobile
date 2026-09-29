@@ -43,14 +43,33 @@ type ConnectionEvents = {
 class MobileConnectionManager extends EventEmitter {
   private searching = false;
   private knownTargets = new Set<string>();
+  /**
+   * Teardown for the subscriptions installed by the current discovery run.
+   *
+   * `startDiscovery` is called every time the pairing screen is opened, and it
+   * used to register a fresh `udpDiscovery.on('peerDiscovered')` listener and a
+   * fresh beacon subscription on each call while `stopDiscovery` removed
+   * neither. N screen visits therefore produced N duplicate `targetFound`
+   * emissions per peer and N live discovery subscriptions — the duplicate rows
+   * in the nearby-devices list, and a steadily growing listener set.
+   */
+  private cleanups: Array<() => void> = [];
+  /** Target map for the active run, so the result is de-duplicated by identity. */
+  private foundMap = new Map<string, DiscoveredTarget>();
 
   /**
    * Run concurrent multi-method discovery.
    * Returns immediately found targets and emits `targetFound` as new peers arrive.
    */
   async startDiscovery(code?: string): Promise<DiscoveredTarget[]> {
+    // Idempotent: a second start while a scan is running is a no-op kick rather
+    // than another full set of subscriptions.
+    if (this.searching) return [...this.foundMap.values()];
+    this.releaseRun();
+
     this.searching = true;
-    const foundMap = new Map<string, DiscoveredTarget>();
+    this.foundMap = new Map<string, DiscoveredTarget>();
+    const foundMap = this.foundMap;
 
     const addTarget = (target: DiscoveredTarget) => {
       if (!target.deviceId && !target.host) return;
@@ -128,7 +147,7 @@ class MobileConnectionManager extends EventEmitter {
     }
 
     // 2. UDP Broadcast Discovery (Instant < 10ms)
-    udpDiscovery.on('peerDiscovered', (peer: DiscoveredUdpPeer) => {
+    const onUdpPeer = (peer: DiscoveredUdpPeer) => {
       addTarget({
         id: peer.deviceId,
         deviceId: peer.deviceId,
@@ -139,7 +158,9 @@ class MobileConnectionManager extends EventEmitter {
         inviteCode: peer.inviteCode ?? null,
         via: 'udp',
       });
-    });
+    };
+    udpDiscovery.on('peerDiscovered', onUdpPeer);
+    this.cleanups.push(() => udpDiscovery.off('peerDiscovered', onUdpPeer));
     udpDiscovery.broadcastPing();
 
     // 3. mDNS / Zeroconf Discovery (Parallel)
@@ -161,6 +182,7 @@ class MobileConnectionManager extends EventEmitter {
           });
         }
       });
+      if (typeof sub === 'function') this.cleanups.push(sub);
     } catch { /* ignore */ }
 
     // 4. LAN Subnet Sweep (Parallel Background)
@@ -212,9 +234,17 @@ class MobileConnectionManager extends EventEmitter {
 
   stopDiscovery(): void {
     this.searching = false;
+    this.releaseRun();
     try {
       mobilePairingBeacon.stopBrowsing();
     } catch { /* ignore */ }
+  }
+
+  /** Detach every subscription installed by the active discovery run. */
+  private releaseRun(): void {
+    this.cleanups.splice(0).forEach((fn) => {
+      try { fn(); } catch { /* already detached */ }
+    });
   }
 }
 

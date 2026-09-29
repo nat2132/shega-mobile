@@ -20,7 +20,7 @@ import {
   getBusinesses, getBusiness, setActiveBusiness, setCurrentUserId,
   setBusinessLogo, getBusinessLogo, resolveMembershipForBusiness, updateBusiness,
   deleteBusiness, getThisDeviceId, getCurrentUserId, getUser, createBusiness,
-  effectivePermissions,
+  effectivePermissions, removeDevice,
 } from '@/services/businessService';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'react-native';
@@ -1021,6 +1021,7 @@ function DevicesPanel({ businessId, devices, people, canManage, glass }: {
   businessId: string; devices: Device[]; people: any[]; canManage: boolean; glass: any;
 }) {
   const { t } = useSettings();
+  const { showToast } = useToast();
   const [showAdd, setShowAdd] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
 
@@ -1123,9 +1124,18 @@ function DevicesPanel({ businessId, devices, people, canManage, glass }: {
                   </AppText>
                 </View>
                 {canManage && (
-                  <TouchableOpacity onPress={() => deviceActions(d)} style={[styles.smallBtn, { backgroundColor: glass.accentGlass }]}>
-                    <AppText variant="caption" weight="bold" style={{ color: glass.fg }}>…</AppText>
-                  </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                    <TouchableOpacity
+                      onPress={() => confirmRemoveDevice(d)}
+                      style={[styles.smallBtn, { backgroundColor: '#e74c3c22', borderColor: '#e74c3c40', borderWidth: 1 }]}
+                    >
+                      <Trash2 size={13} color="#e74c3c" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity onPress={() => deviceActions(d)} style={[styles.smallBtn, { backgroundColor: glass.accentGlass }]}>
+                      <AppText variant="caption" weight="bold" style={{ color: glass.fg }}>…</AppText>
+                    </TouchableOpacity>
+                  </View>
                 )}
               </View>
             ))}
@@ -1144,6 +1154,29 @@ function DevicesPanel({ businessId, devices, people, canManage, glass }: {
     </View>
   );
 
+  function confirmRemoveDevice(d: Device) {
+    Alert.alert(
+      'Remove Device?',
+      `Are you sure you want to remove "${d.name}"? This device will be revoked and disconnected from ${business?.name || 'this business'}.`,
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: 'Remove Device',
+          style: 'destructive',
+          onPress: () => {
+            try {
+              removeDevice(d.id);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              showToast(`Device "${d.name}" removed`, 'success');
+            } catch (e: any) {
+              Alert.alert('Cannot remove device', e?.message || 'Failed to remove device.');
+            }
+          },
+        },
+      ]
+    );
+  }
+
   function deviceActions(d: Device) {
     const opts: { text: string; style?: 'destructive'|'default'|'cancel'; onPress: () => void }[] = [];
     if (d.status === 'pending') opts.push({ text: t('business.approve'), onPress: () => approveLocal(d) });
@@ -1152,6 +1185,13 @@ function DevicesPanel({ businessId, devices, people, canManage, glass }: {
     if (d.status !== 'disabled') opts.push({ text: t('business.disable'), style: 'destructive', onPress: () => safeSetStatus(d, 'disabled') });
     if (d.status !== 'removed' && d.status !== 'disabled') opts.push({ text: t('business.replace'), onPress: () => replaceLocal(d) });
     opts.push({ text: t('business.rename'), onPress: () => renameLocal(d) });
+    if (d.status !== 'removed') {
+      opts.push({
+        text: 'Remove Device',
+        style: 'destructive',
+        onPress: () => confirmRemoveDevice(d),
+      });
+    }
     opts.push({ text: t('common.cancel'), style: 'cancel', onPress: () => {} });
     Alert.alert(d.name, t('business.device_actions'), opts);
   }

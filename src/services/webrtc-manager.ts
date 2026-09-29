@@ -67,6 +67,13 @@ function readIceServersFromEnv(): RTCIceServerLike[] {
 
 const MOBILE_ICE_SERVERS = buildRtcConfiguration(readIceServersFromEnv());
 
+/**
+ * How long a peer may stay in ICE `disconnected` before it is closed so a fresh
+ * redial can replace it. Long enough to cover a routine Wi-Fi handover, short
+ * enough that a truly dead peer doesn't linger in the roster indefinitely.
+ */
+const DISCONNECT_GRACE_MS = 20_000;
+
 /** Redact credentials from a turn: URL so diagnostics never leak a secret. */
 function stripUrlCreds(url: string): string {
   const m = /^(turn|turns):\/\/([^:]+):([^@]+)@(.+)$/.exec(url);
@@ -88,6 +95,8 @@ interface PeerSession {
   businessId: string;
   kind: ConnectionKind;
   connectedAt: number;
+  /** Grace timer armed when ICE reports `disconnected`; see armDisconnectTimer. */
+  disconnectTimer?: ReturnType<typeof setTimeout> | null;
 }
 
 interface MobileWebRtcEvents {
@@ -104,7 +113,8 @@ export class MobileWebRtcManager {
   private myId = 'mobile';
   private businessId = '';
 
-  setSignalingSender(fn: (toDeviceId: string, msg: SignalMessage) => void): void {
+  /** Pass null to detach signaling (e.g. when the hub socket is torn down). */
+  setSignalingSender(fn: ((toDeviceId: string, msg: SignalMessage) => void) | null): void {
     this.signalingSend = fn;
   }
 
@@ -218,7 +228,20 @@ export class MobileWebRtcManager {
     (pc as any).addEventListener('connectionstatechange', () => {
       const state = (pc as any).connectionState;
       this.emit('status', `peer ${deviceId}: ${state}`);
-      if (state === 'failed' || state === 'closed') this.closePeer(deviceId);
+      if (state === 'failed' || state === 'closed') {
+        this.clearDisconnectTimer(session);
+        this.closePeer(deviceId);
+      } else if (state === 'disconnected') {
+        // `disconnected` is frequently transient — ICE can re-establish the
+        // candidate pair on its own, and tearing the peer down immediately
+        // would throw away a working session on every brief Wi-Fi blip. But a
+        // session that never recovers is a zombie: it stays in `sessions`,
+        // blocks the redial path, and keeps looking connected to the device
+        // grid. So give it a grace window, then reap it.
+        this.armDisconnectTimer(session, deviceId);
+      } else if (state === 'connected') {
+        this.clearDisconnectTimer(session);
+      }
     });
 
     (pc as any).addEventListener('datachannel', (ev: any) => this.attachChannel(session, ev.channel));
@@ -304,6 +327,7 @@ export class MobileWebRtcManager {
   closePeer(deviceId: string): void {
     const s = this.sessions.get(deviceId);
     if (!s) return;
+    this.clearDisconnectTimer(s);
     try { s.dc?.close(); } catch {}
     try { s.pc.close(); } catch {}
     this.sessions.delete(deviceId);
@@ -312,6 +336,31 @@ export class MobileWebRtcManager {
 
   closeAll(): void {
     for (const id of [...this.sessions.keys()]) this.closePeer(id);
+  }
+
+  /**
+   * Give a `disconnected` peer a grace window to recover before reaping it.
+   * Reaping closes the peer, which frees the session for a fresh redial.
+   */
+  private armDisconnectTimer(session: PeerSession, deviceId: string): void {
+    this.clearDisconnectTimer(session);
+    const timer = setTimeout(() => {
+      session.disconnectTimer = null;
+      // Only reap if this session is still the live one and still stuck.
+      if (this.sessions.get(deviceId) !== session) return;
+      if ((session.pc as any)?.connectionState === 'connected') return;
+      console.warn(`[WebRTC] Peer ${deviceId} never recovered from disconnected — closing for redial`);
+      this.closePeer(deviceId);
+    }, DISCONNECT_GRACE_MS);
+    (timer as any)?.unref?.();
+    session.disconnectTimer = timer;
+  }
+
+  private clearDisconnectTimer(session: PeerSession): void {
+    if (session.disconnectTimer) {
+      clearTimeout(session.disconnectTimer);
+      session.disconnectTimer = null;
+    }
   }
 }
 

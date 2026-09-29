@@ -39,9 +39,6 @@ const WarehouseSelectorModal: React.FC<WarehouseSelectorProps> = ({ visible, onC
   const [showForm, setShowForm] = useState(false);
   const [formName, setFormName] = useState('');
   const [formLocation, setFormLocation] = useState('');
-  const [formContact, setFormContact] = useState('');
-  const [formPhone, setFormPhone] = useState('');
-  const [formNotes, setFormNotes] = useState('');
 
   useEffect(() => {
     if (visible) refreshWarehouses();
@@ -56,7 +53,7 @@ const WarehouseSelectorModal: React.FC<WarehouseSelectorProps> = ({ visible, onC
       await dialog.alert({ title: t('common.required'), message: t('inv.wh_name_required'), iconType: 'warning' });
       return;
     }
-    const id = insertWarehouse({ name: formName.trim(), location: formLocation, contactPerson: formContact.trim(), phone: formPhone.trim(), notes: formNotes.trim() });
+    const id = insertWarehouse({ name: formName.trim(), location: formLocation });
     if (id) {
       await setActiveWarehouseId(Number(id));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -142,43 +139,8 @@ const WarehouseSelectorModal: React.FC<WarehouseSelectorProps> = ({ visible, onC
                   />
                 </View>
 
-                <View style={styles.inputGroup}>
-                  <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.inputLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('inv.wh_contact_label')}</AppText>
-                  <TextInput
-                    style={[styles.input, { color: G.fg, borderColor: G.border, backgroundColor: G.bg }]}
-                    value={formContact}
-                    onChangeText={setFormContact}
-                    placeholder={t('inv.contact_ph')}
-                    placeholderTextColor={G.fgSecondary}
-                  />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.inputLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('inv.wh_phone_label')}</AppText>
-                  <TextInput
-                    style={[styles.input, { color: G.fg, borderColor: G.border, backgroundColor: G.bg }]}
-                    value={formPhone}
-                    onChangeText={setFormPhone}
-                    placeholder={t('inv.phone_ph')}
-                    placeholderTextColor={G.fgSecondary}
-                    keyboardType="phone-pad"
-                  />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <AppText variant="caption" weight="bold" transform="uppercase" style={[styles.inputLabel, { color: G.fgSecondary }]} numberOfLines={1}>{t('inv.wh_notes_label')}</AppText>
-                  <TextInput
-                    style={[styles.input, { color: G.fg, borderColor: G.border, backgroundColor: G.bg }]}
-                    value={formNotes}
-                    onChangeText={setFormNotes}
-                    placeholder={t('inv.notes_ph')}
-                    placeholderTextColor={G.fgSecondary}
-                    multiline
-                  />
-                </View>
-
                 <View style={styles.formActions}>
-                  <TouchableOpacity onPress={() => { setShowForm(false); setFormName(''); setFormLocation(''); setFormContact(''); setFormPhone(''); setFormNotes(''); }} style={[styles.formBtn, { backgroundColor: G.bg, borderColor: G.border, borderWidth: 1 }]}>
+                  <TouchableOpacity onPress={() => { setShowForm(false); setFormName(''); setFormLocation(''); }} style={[styles.formBtn, { backgroundColor: G.bg, borderColor: G.border, borderWidth: 1 }]}>
                     <AppText variant="body" weight="bold" shrink={false} style={[styles.formBtnText, { color: G.fg }]} numberOfLines={1}>{t('common.cancel')}</AppText>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={handleCreateAndSelect} style={[styles.formBtn, { backgroundColor: G.fg }]}>

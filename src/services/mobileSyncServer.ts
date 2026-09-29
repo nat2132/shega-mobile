@@ -18,11 +18,12 @@
 
 import { getDB } from '../database/db';
 import { getDeviceId, currentOutboxSeq, pruneOutboxEchoes } from './syncService';
-import { validateInviteCode } from './invitationService';
+import { validateInviteCode, normalizeInviteCode, INVITE_CODE_EQ } from './invitationService';
 import { bumpDataVersion } from './dataVersion';
 import { getThisDeviceName } from './deviceIdentity';
 import { PROTOCOL_VERSION } from '@shega/shared';
 import { type PairingHandshakeAck } from '@shega/shared';
+import { markConnected, markFirstSync, markHeartbeat, markDisconnected } from './syncDiagnostics';
 import * as Crypto from 'expo-crypto';
 
 export const MOBILE_SYNC_PORT = 5759;
@@ -70,6 +71,51 @@ interface TcpClient {
 }
 
 const joinWaiters = new Map<string, any>();
+
+// ─── Client liveness reaping ────────────────────────────────────────────────
+
+/**
+ * A client that stops heartbeating is presumed dead and dropped.
+ *
+ * The server relies on the socket's `close`/`error` events to retire clients,
+ * but a half-open TCP connection — peer sleeps, Wi-Fi drops without a FIN, NAT
+ * silently discards the flow — produces neither. The stale entry then keeps
+ * receiving every server broadcast, keeps a stale socket in the connected set
+ * reported to the device grid, and makes a genuinely offline device look alive.
+ *
+ * The client sends a HEARTBEAT every 15s, so 90s is 6 missed beats — long
+ * enough to ride out a brief network blip without dropping a healthy peer.
+ */
+const CLIENT_HEARTBEAT_TIMEOUT_MS = 90_000;
+const CLIENT_REAP_INTERVAL_MS = 30_000;
+let clientReaper: ReturnType<typeof setInterval> | null = null;
+
+function startClientReaper(): void {
+  if (clientReaper) return;
+  clientReaper = setInterval(() => {
+    const now = Date.now();
+    for (const [id, client] of [...clients.entries()]) {
+      if (now - client.lastHeartbeat <= CLIENT_HEARTBEAT_TIMEOUT_MS) continue;
+      const deviceId = client.paired ? client.deviceId : null;
+      console.warn(
+        `[MobileSync] Reaping silent client ${id}${deviceId ? ` (${deviceId})` : ''} — ` +
+        `no heartbeat for ${Math.round((now - client.lastHeartbeat) / 1000)}s`
+      );
+      clients.delete(id);
+      if (deviceId) touchDevice(deviceId, { status: 'offline' });
+      try { client.socket?.destroy?.(); } catch { /* already gone */ }
+    }
+  }, CLIENT_REAP_INTERVAL_MS);
+  // Don't hold the JS runtime awake purely for reaping.
+  (clientReaper as any)?.unref?.();
+}
+
+function stopClientReaper(): void {
+  if (clientReaper) {
+    clearInterval(clientReaper);
+    clientReaper = null;
+  }
+}
 
 // ─── Pairing token management ───────────────────────────────────────────────
 
@@ -342,6 +388,11 @@ function handleMessage(client: TcpClient, data: string): void {
   switch (msg.type) {
     case 'HEARTBEAT':
       client.lastHeartbeat = Date.now();
+      // P0 telemetry: only meaningful once the peer is identified; a heartbeat
+      // from an unpaired socket proves liveness but not membership.
+      if (client.paired && client.deviceId) {
+        markHeartbeat(client.deviceId, { transport: 'lan-tcp' });
+      }
       sendTo(client.socket, { type: 'HEARTBEAT_ACK', timestamp: Date.now() });
       break;
 
@@ -468,6 +519,9 @@ function handlePairRequest(client: TcpClient, msg: any): void {
   client.paired = true;
   client.businessId = bizId;
   touchDevice(device_id);
+  // P0 telemetry: an accepted PAIR_REQUEST is the mobile-hub side of "connected"
+  // — the peer is authenticated and bound to a business.
+  markConnected(device_id, { transport: 'lan-tcp', role: 'joiner', protocolVersion: PROTOCOL_VERSION });
 
   sendTo(client.socket, {
     type: 'PAIR_RESPONSE',
@@ -540,6 +594,9 @@ function handleSyncPush(client: TcpClient, msg: any): void {
   }
 
   const result = applyPush(client.deviceId, changes);
+  // P0 telemetry: the joiner's batch was merged on the hub, so data has flowed
+  // for this link and the first-sync milestone is reached.
+  markFirstSync(client.deviceId, { transport: 'lan-tcp', via: 'SYNC_PUSH' });
   sendTo(client.socket, {
     type: 'SYNC_ACK',
     requestId: msg.requestId,
@@ -586,11 +643,12 @@ function sendError(socket: any, code: string, message: string): void {
 // requests are staged into `device_requests`; the owner's BusinessManagement
 // screen lists and decides them — all locally, all offline.
 
-const normalizeCode = (code: string) => String(code ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-
-// Predicate for the invite-code column used by the hub's device-request
-// lookups. Code is stored upper-cased/normalized via normalizeCode().
-const CODE_COND = "code = ?";
+// Code normalization is NOT local to this module: `invitations` rows are
+// written by invitationService (dashed, e.g. "K2M-4NP-QW8"), joiners submit
+// codes typed by hand, and the approval-status poll below re-reads them. Every
+// side therefore normalizes through the same helper and the same
+// separator-tolerant SQL predicate, or a valid request never matches its row
+// and the owner can never approve it.
 
 /** Local `device_requests` rows for a business, newest decisions last. */
 function listLocalJoinRequests(businessId: string): any[] {
@@ -757,7 +815,7 @@ function handleJoinSubmit(client: TcpClient, msg: any): void {
       `INSERT INTO device_requests
          (id, business_id, code, joiner_device_id, joiner_name, joiner_model, joiner_user, role, platform, status, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
-      [requestId, canonicalBizId, p.code, p.joinerDeviceId, p.joinerName ?? null,
+      [requestId, canonicalBizId, normalizeInviteCode(p.code), p.joinerDeviceId, p.joinerName ?? null,
        p.joinerModel ?? null, p.joinerUser ?? 'New Member', p.role ?? inv.role ?? 'cashier',
        p.platform ?? 'mobile', new Date().toISOString()],
     );
@@ -777,7 +835,7 @@ function handleJoinSubmit(client: TcpClient, msg: any): void {
         [pre.name ?? null, pre.avatar ?? null, pre.permissions ? JSON.stringify(pre.permissions) : null,
          pre.role ?? 'cashier', new Date().toISOString(), requestId],
       );
-      db.runSync("UPDATE invitations SET status = 'used' WHERE code = ?", [p.code]);
+      db.runSync(`UPDATE invitations SET status = 'used' WHERE ${INVITE_CODE_EQ}`, [normalizeInviteCode(p.code)]);
       try {
         const req = db.getFirstSync('SELECT * FROM device_requests WHERE id = ?', [requestId]) as any;
         db.runSync(
@@ -810,10 +868,10 @@ function handleJoinStatus(client: TcpClient, msg: any): void {
   // Code-less admission lookup (radar-tap admission): the owner tapped the
   // joiner on the radar and admitted by device id alone — there is no invite
   // code the joiner typed, so the status poll keys purely on joiner_device_id.
-  const n = code ? normalizeCode(code) : null;
+  const n = code ? normalizeInviteCode(code) : null;
   const row = (n
     ? db.getFirstSync(
-        `SELECT * FROM device_requests WHERE ${CODE_COND} AND joiner_device_id = ?
+        `SELECT * FROM device_requests WHERE ${INVITE_CODE_EQ} AND joiner_device_id = ?
          ORDER BY created_at DESC LIMIT 1`,
         [n, joinerDeviceId],
       )
@@ -883,7 +941,7 @@ function handleJoinDecide(client: TcpClient, msg: any): void {
   if (p.decision === 'approved') {
     // Consume the invite + promote the device on this owner phone so both
     // sides' rosters agree. The joiner learns the outcome via STATUS polling.
-    try { db.runSync("UPDATE invitations SET status = 'used' WHERE code = ?", [row.code]); } catch { /* best-effort */ }
+    try { db.runSync(`UPDATE invitations SET status = 'used' WHERE ${INVITE_CODE_EQ}`, [normalizeInviteCode(row.code)]); } catch { /* best-effort */ }
     const now = new Date().toISOString();
     try {
       db.runSync(
@@ -974,7 +1032,12 @@ export async function startMobileSyncServer(): Promise<boolean> {
       socket.on('close', () => {
         const wasPaired = client.paired && client.deviceId;
         clients.delete(clientId);
-        if (wasPaired) touchDevice(client.deviceId, { status: 'offline' });
+        if (wasPaired) {
+          touchDevice(client.deviceId, { status: 'offline' });
+          // P0 telemetry: a dropped TCP link is the disconnect half of the
+          // mobile-as-hub link-stability story.
+          markDisconnected(client.deviceId);
+        }
         console.log(`[MobileSync] Client disconnected: ${clientId}`);
       });
 
@@ -982,7 +1045,10 @@ export async function startMobileSyncServer(): Promise<boolean> {
         console.warn(`[MobileSync] Client error: ${err.message}`);
         const wasPaired = client.paired && client.deviceId;
         clients.delete(clientId);
-        if (wasPaired) touchDevice(client.deviceId, { status: 'offline' });
+        if (wasPaired) {
+          touchDevice(client.deviceId, { status: 'offline' });
+          markDisconnected(client.deviceId);
+        }
       });
 
       console.log(`[MobileSync] Client connected: ${clientId}`);
@@ -1006,6 +1072,7 @@ export async function startMobileSyncServer(): Promise<boolean> {
       }
     });
     console.log(`[Discovery] Mobile sync server started on 0.0.0.0:${MOBILE_SYNC_PORT}`);
+    startClientReaper();
     return true;
   } catch (e: any) {
     server = null;
@@ -1016,6 +1083,7 @@ export async function startMobileSyncServer(): Promise<boolean> {
 }
 
 export function stopMobileSyncServer(): void {
+  stopClientReaper();
   if (server) {
     try { server.close(); } catch {}
     server = null;
@@ -1026,6 +1094,23 @@ export function stopMobileSyncServer(): void {
 
 export function isMobileSyncServerRunning(): boolean {
   return server !== null;
+}
+
+/**
+ * Device ids of the clients currently connected to *our* hub.
+ *
+ * Presence reporting reads this so a device that is genuinely dialled in shows
+ * as online. Deriving presence only from the stored `last_seen_at` got this
+ * backwards — that column is written at approval and on disconnect, never
+ * refreshed while a connection is alive, so a perfectly healthy device was
+ * reported offline for the whole time it was connected.
+ */
+export function getConnectedClientIds(): string[] {
+  const out: string[] = [];
+  for (const client of clients.values()) {
+    if (client.deviceId) out.push(client.deviceId);
+  }
+  return out;
 }
 
 export function getMobileSyncPort(): number {

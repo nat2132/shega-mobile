@@ -413,6 +413,23 @@ export function ConnectedDevicesScreen({ onBack }: { onBack: () => void }) {
   );
 }
 
+/** One discovered device as rendered on the Add-Team radar. */
+type PairPeer = { id: string; name: string; platform?: string; hasInvite?: boolean; host?: string };
+
+/**
+ * Identity check for the radar's peer list. Discovery notifications arrive far
+ * more often than the visible set actually changes (one per resolved service,
+ * per UDP reply, and once per hit on every LAN sweep pass), so this is what
+ * keeps the card from re-rendering — and re-fading — for nothing.
+ */
+function samePeers(a: PairPeer[], b: PairPeer[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i].id !== b[i].id || a[i].name !== b[i].name || a[i].hasInvite !== b[i].hasInvite) return false;
+  }
+  return true;
+}
+
 /**
  * Pairing card — invitation code + QR first, discovery radar second.
  *
@@ -430,7 +447,7 @@ function PairCard({ businessName, businessId, counts, onClose, G }: {
   G: any;
 }) {
   const [invite, setInvite] = useState<{ code: string; id: string; qrUri: string; expiresAt: string } | null>(null);
-  const [peers, setPeers] = useState<Array<{ id: string; name: string; platform?: string; hasInvite?: boolean }>>([]);
+  const [peers, setPeers] = useState<PairPeer[]>([]);
   const [setupFor, setSetupFor] = useState<{ deviceId: string; name: string } | null>(null);
   const [peerPhase, setPeerPhase] = useState<Record<string, 'idle' | 'approving' | 'waiting'>>({});
   const [selfName] = useState(getThisDeviceName());
@@ -513,19 +530,36 @@ function PairCard({ businessName, businessId, counts, onClose, G }: {
           // Every visible device is a potential team target for the owner.
           // Do not gate on beacon.role — a joiner's phone reports 'owner' in
           // its own discovery beacon (it is the owner of its own session).
-          .map(({ beacon, host }: any) => ({
+          .map(({ beacon, host }: any): PairPeer => ({
             id: beacon.owner?.deviceId || beacon.businessId,
             name: beacon.owner?.deviceName || 'Nearby device',
             platform: beacon.owner?.platform,
             hasInvite: !!beacon.code,
             host,
-          }));
-        setPeers(list);
+          }))
+          // Stable order so a peer flipping between two transports (mDNS vs
+          // LAN sweep) cannot reshuffle the list under the user's finger.
+          .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+        // onFound fires once per peer (and the LAN sweep re-broadcasts every
+        // hit on each pass), so only commit when the visible set really
+        // changed — otherwise the card re-renders dozens of times per sweep.
+        setPeers((prev) => (samePeers(prev, list) ? prev : list));
       } catch { setPeers([]); }
     };
     refresh();
+    // Event-driven: a device that IS found must appear immediately. Polling
+    // alone left the radar on "Searching for nearby devices…" for a full tick
+    // after every hit, and — because onFound was never subscribed here at all
+    // — a hit could sit invisible for as long as the poll took to observe it.
+    const unsubscribe = mobilePairingBeacon.onFound(refresh);
+    // The poll stays as a backstop: it is what drops entries whose beacon has
+    // expired, and it picks up peers that were already cached before we
+    // subscribed.
     const t = setInterval(refresh, 3000);
-    return () => clearInterval(t);
+    return () => {
+      unsubscribe();
+      clearInterval(t);
+    };
   }, []);
 
   const confirmMember = async (cfg: MemberApprovalConfig) => {
@@ -551,7 +585,7 @@ function PairCard({ businessName, businessId, counts, onClose, G }: {
     setSetupFor(null);
   };
 
-  const peerDetail = (p: { id: string; name: string; platform?: string; hasInvite?: boolean }): string => {
+  const peerDetail = (p: PairPeer): string => {
     switch (peerPhase[p.id]) {
       case 'approving': return `Approving ${p.name}…`;
       case 'waiting': return 'Approved — waiting for connection…';

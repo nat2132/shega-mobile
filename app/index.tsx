@@ -53,11 +53,15 @@ export default function Index() {
           if (onboardingDone) {
             target = '/user-signin';
           } else {
-            // Signup-first onboarding: fresh installs pick a language, then
-            // create their account BEFORE the business setup wizard. Only an
-            // interrupted earlier run (no language yet, but not first-run)
-            // re-enters the wizard directly.
-            target = fromFirstRun ? '/language-select' : '/register';
+            // Fresh install: pick a language first, then the start screen.
+            // An interrupted run already has a language, so it skips straight
+            // to the choice (and no longer has to guess "register").
+            //
+            // The start screen offers create-a-business / join-a-business /
+            // log-in. Going straight to /register made the app look like it had
+            // already decided the user was opening a brand new business, even
+            // for a reinstall or a member joining someone else's business.
+            target = fromFirstRun ? '/language-select' : '/start-choice';
           }
         } else {
           // 2. Resume a mid-join pairing request BEFORE the sign-in/subscription
