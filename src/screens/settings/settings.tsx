@@ -50,6 +50,7 @@ import {
   HelpCircle,
   Languages,
   LayoutDashboard,
+  MonitorSmartphone,
   Palette,
   Printer,
   RefreshCw,
@@ -71,6 +72,7 @@ import { AppListItem, AppText } from '@/components/ui';
 import { PeripheralCenter } from './devices/peripherals';
 import { PosHubScreen } from './devices/PosHubScreen';
 import { ScanForDesktopScreen } from './devices/ScanForDesktopScreen';
+import ConnectedDevicesScreen from './devices/ConnectedDevicesScreen';
 import { usePermissions } from '@/hooks/usePermissions';
 import { BusinessSwitcher } from '@/components/BusinessSwitcher';
 import PremiumFeatureGate from '@/components/PremiumFeatureGate';
@@ -440,6 +442,7 @@ const SettingsScreen = () => {
   const [showExportModal, setShowExportModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showWarehouse, setShowWarehouse] = useState(false);
+  const [showConnectedDevices, setShowConnectedDevices] = useState(false);
   const [showDevices, setShowDevices] = useState(false);
   const [showPosHub, setShowPosHub] = useState(false);
   const [showScanForDesktop, setShowScanForDesktop] = useState(false);
@@ -678,54 +681,36 @@ const SettingsScreen = () => {
         </View>
         )}
 
-        {/* Offline-first Sync (Phase 3) — compact summary + link to full §24 Sync Center */}
-        <SyncSettings />
+        {/* Consolidated Connected Devices Section */}
         <View style={styles.ledgerSection}>
           <View style={styles.sectionHead}>
-            <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: G.muted }]} numberOfLines={1}>{t('sync.center_title')}</AppText>
+            <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: G.muted }]} numberOfLines={1}>Connected Devices</AppText>
             <View style={{ flex: 1 }} />
-            <RefreshCw size={20} color={G.muted} />
+            <MonitorSmartphone size={20} color={G.muted} />
           </View>
           <View style={[styles.ledgerGroup, { backgroundColor: G.bgCard, borderColor: G.border }]}>
             <SettingLedgerItem
-              icon={RefreshCw}
-              title={'Sync Center'}
-              subtitle={'Pending · Devices · History · Conflicts'}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowSyncCenter(true); }}
+              icon={MonitorSmartphone}
+              title="Connected Devices"
+              subtitle="Scan QR code, enter pairing code, live devices & status"
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowConnectedDevices(true); }}
             />
-          </View>
-        </View>
-
-        {/* Devices & Peripherals */}
-        {canManageDevices ? (
-          <View style={styles.ledgerSection}>
-            <View style={styles.sectionHead}>
-              <AppText variant="micro" weight="bold" transform="uppercase" style={[styles.ledgerHeader, { color: G.muted }]} numberOfLines={1}>{t('devices.title')}</AppText>
-              <View style={{ flex: 1 }} />
-              <Printer size={20} color={G.muted} />
-            </View>
-            <View style={[styles.ledgerGroup, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+            <SettingLedgerItem
+              icon={ScanLine}
+              title="Use as Barcode Scanner"
+              subtitle="Scan straight into the connected Shega Desktop cart"
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowScanForDesktop(true); }}
+            />
+            {canManageDevices && (
               <SettingLedgerItem
                 icon={Printer}
-                title={t('devices.title')}
-                subtitle={t('devices.settings_subtitle')}
+                title="Hardware & Peripherals"
+                subtitle="Thermal printers, cash drawers, barcode scanners"
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowDevices(true); }}
               />
-              <SettingLedgerItem
-                icon={ScanLine}
-                title="Use as Barcode Scanner"
-                subtitle="Scan straight into the connected Shega Desktop cart"
-                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowScanForDesktop(true); }}
-              />
-              <SettingLedgerItem
-                icon={Wifi}
-                title="POS Hub"
-                subtitle="Let other devices connect to this phone"
-                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowPosHub(true); }}
-              />
-            </View>
+            )}
           </View>
-        ) : null}
+        </View>
 
         {/* Dashboard Customization */}
         {(
@@ -914,6 +899,17 @@ const SettingsScreen = () => {
       >
         <View style={{ flex: 1, backgroundColor: G.bg }}>
           <ScanForDesktopScreen onClose={() => setShowScanForDesktop(false)} />
+        </View>
+      </Modal>
+
+      {/* Consolidated Connected Devices Modal */}
+      <Modal
+        visible={showConnectedDevices}
+        animationType="slide"
+        onRequestClose={() => setShowConnectedDevices(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: G.bg }}>
+          <ConnectedDevicesScreen onBack={() => setShowConnectedDevices(false)} />
         </View>
       </Modal>
 

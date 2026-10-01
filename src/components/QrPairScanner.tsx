@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { X } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 import { useSettings } from '@/context/SettingsContext';
 import { useToast } from '@/context/ToastContext';
 import { AppText } from '@/components/ui';
 import { getSettingsGlass } from '@/screens/settings/glass-settings';
-import { setHubUrl, setHubToken } from '@/services/syncService';
+import { setHubUrl, setHubToken, pairDevice } from '@/services/syncService';
+import { parsePairingData } from '@/services/pairingParser';
 
 interface Props {
   visible: boolean;
@@ -21,22 +23,44 @@ export default function QrPairScanner({ visible, onClose, onPaired }: Props) {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanning, setScanning] = useState(true);
 
-  const handleBarcode = ({ data }: { data: string }) => {
+  const handleBarcode = async ({ data }: { data: string }) => {
     if (!scanning) return;
-    // Accept desktop QRs and mobile-hub QRs (the mobile POS Hub adds
-    // &platform=mobile, which the desktop scanner ignores but we tolerate).
-    const m = /shega:\/\/pair\?url=([^&]+)&token=([^&]+)/.exec(data);
-    if (!m) {
-      showToast('Not a Shega pairing QR', 'error');
+
+    const parsed = parsePairingData(data);
+    if (!parsed.valid) {
+      showToast('Not a valid Shega pairing QR code', 'error');
       return;
     }
-    const url = decodeURIComponent(m[1]);
-    const token = decodeURIComponent(m[2]);
+
     setScanning(false);
-    setHubUrl(url);
-    setHubToken(token);
-    onPaired(url, token);
-    showToast('Paired! Verify with Sync now', 'success');
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    if (parsed.url) {
+      setHubUrl(parsed.url);
+      if (parsed.token) setHubToken(parsed.token);
+      try {
+        await pairDevice();
+      } catch {
+        /* best effort */
+      }
+      onPaired(parsed.url, parsed.token || '');
+      showToast('Paired successfully! Synchronization started automatically.', 'success');
+    } else if (parsed.code) {
+      if (parsed.token) setHubToken(parsed.code);
+      try {
+        const { lookupPairingInvite, acceptPairing } = await import('@/services/pairingService');
+        const inv = await lookupPairingInvite({ code: parsed.code });
+        if (inv) {
+          await acceptPairing({ inviteId: inv.id, personName: 'Shega Mobile' });
+          showToast('Pairing request submitted! Synchronization started automatically.', 'success');
+        } else {
+          showToast(`Pairing code accepted: ${parsed.code}`, 'success');
+        }
+      } catch {
+        showToast(`Pairing code set: ${parsed.code}`, 'success');
+      }
+      onPaired('', parsed.code);
+    }
   };
 
   const reset = () => {

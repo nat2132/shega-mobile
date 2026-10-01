@@ -1,25 +1,56 @@
 /**
- * ConnectedDevicesScreen — the mobile mirror of the desktop Connected Devices
- * panel. Shows every paired Shega device (Mobile or Desktop) with live sync
- * state, connection type, last sync, pending changes; supports pairing via QR
- * / pairing code, rename, revoke, and a per-device detail view.
+ * ConnectedDevicesScreen — Consolidated Connected Devices panel for Shega Mobile.
  *
- * Works for Mobile ↔ Mobile and Mobile ↔ Desktop alike — no hub assumption.
+ * Shows:
+ * 1. Connection / Sync Status banner (Live status, auto-sync active)
+ * 2. Primary Actions: "Scan QR Code", "Enter Pairing Code", "My QR Code"
+ * 3. Connected Devices (online peers/desktops with live status, mode, last sync)
+ * 4. Disconnected / Previously Connected Devices (offline devices with last seen)
+ * 5. Device options: Rename, Device details, Unpair.
+ *
+ * Devices sync business data directly device-to-device automatically in the background.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Image, Modal, ScrollView, StyleSheet, TextInput, TouchableOpacity, View,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  View,
+  ActivityIndicator,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import Clipboard from 'expo-clipboard';
 import {
-  MonitorSmartphone, Monitor, Plus,
-  ShieldOff, Pencil, Check, X, ChevronLeft, RefreshCw, Clock, ChevronRight, Copy,
+  Monitor,
+  Smartphone,
+  ShieldOff,
+  Pencil,
+  Check,
+  X,
+  ChevronLeft,
+  RefreshCw,
+  Clock,
+  ChevronRight,
+  Copy,
+  QrCode,
+  KeyRound,
+  Wifi,
+  WifiOff,
+  CheckCircle2,
+  AlertTriangle,
+  Loader2,
+  Plus,
+  Radio,
 } from 'lucide-react-native';
 import QRCode from 'react-native-qrcode-svg';
+
 import { AppText, AppButton } from '@/components/ui';
 import { useSettings } from '@/context/SettingsContext';
 import { useToast } from '@/context/ToastContext';
+import { useSync } from '@/context/SyncContext';
 import { getSettingsGlass } from '../glass-settings';
 import { mobileP2pSync } from '@/services/p2p-sync-manager';
 import { companionService } from '@/services/companionService';
@@ -33,7 +64,17 @@ import {
   stopMobileSyncServer,
   isMobileSyncServerRunning,
 } from '@/services/mobileSyncServer';
-import { getDeviceId, getDeviceStatusList } from '@/services/syncService';
+import {
+  getDeviceId,
+  getDeviceStatusList,
+  getHubUrl,
+  getHubToken,
+  setHubUrl,
+  setHubToken,
+  pairDevice,
+} from '@/services/syncService';
+import QrPairScanner from '@/components/QrPairScanner';
+import { parsePairingData } from '@/services/pairingParser';
 import { RadarPulse } from '@/components/RadarPulse';
 
 const METHOD_LABEL: Record<string, string> = {
@@ -95,21 +136,26 @@ interface DeviceRow {
 }
 
 export function ConnectedDevicesScreen({ onBack }: { onBack: () => void }) {
-  const { t, colors } = useSettings();
+  const { colors } = useSettings();
   const G = getSettingsGlass(colors);
   const { showToast } = useToast();
+  const { status: syncCtxStatus, busy: syncBusy, runSync } = useSync();
+
   const [devices, setDevices] = useState<DeviceRow[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
-  const [pairOpen, setPairOpen] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [enterCodeOpen, setEnterCodeOpen] = useState(false);
+  const [myQrOpen, setMyQrOpen] = useState(false);
+  const [manualInput, setManualInput] = useState('');
+  const [connectingCode, setConnectingCode] = useState(false);
   const [detail, setDetail] = useState<DeviceRow | null>(null);
+  const [confirmUnpair, setConfirmUnpair] = useState<DeviceRow | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null);
   const [busy, setBusy] = useState(false);
+
   const businessName = getActiveBusiness()?.name || 'this business';
 
   const load = useCallback(() => {
-    // Live WebRTC peers + the synced roster (paired devices with presence,
-    // joined to the users table for name/role) — one merged list, so the owner
-    // sees every connected, offline and pending device with how it connects.
     const live = (mobileP2pSync.getDevices() || []) as Array<any>;
     const byId = new Map<string, DeviceRow>();
     for (const p of live) {
@@ -163,24 +209,75 @@ export function ConnectedDevicesScreen({ onBack }: { onBack: () => void }) {
 
   useEffect(() => {
     load();
-    const t = setInterval(load, 8000);
+    const t = setInterval(load, 6000);
     return () => clearInterval(t);
   }, [load]);
 
-  const discover = () => {
+  const refreshSync = () => {
     Haptics.selectionAsync();
     mobileP2pSync.announce();
     companionService.refreshConnection();
-    showToast('Searching for nearby Shega devices on this network…', 'info');
-    setTimeout(load, 1500);
+    runSync();
+    showToast('Refreshing device connection & syncing…', 'info');
+    setTimeout(load, 1200);
   };
 
-  const [confirmUnpair, setConfirmUnpair] = useState<DeviceRow | null>(null);
+  const handleManualPair = async () => {
+    const trimmed = manualInput.trim();
+    if (!trimmed) {
+      showToast('Enter a pairing code or token', 'error');
+      return;
+    }
+
+    setConnectingCode(true);
+    try {
+      const parsed = parsePairingData(trimmed);
+      if (!parsed.valid) {
+        showToast('Invalid pairing code or format', 'error');
+        setConnectingCode(false);
+        return;
+      }
+
+      if (parsed.url) {
+        setHubUrl(parsed.url);
+        if (parsed.token) setHubToken(parsed.token);
+        try {
+          await pairDevice();
+        } catch { /* best effort */ }
+        runSync();
+        setEnterCodeOpen(false);
+        setManualInput('');
+        showToast('Device connected! Synchronization started automatically.', 'success');
+      } else if (parsed.code) {
+        if (parsed.token) setHubToken(parsed.code);
+        try {
+          const { lookupPairingInvite, acceptPairing } = await import('@/services/pairingService');
+          const inv = await lookupPairingInvite({ code: parsed.code });
+          if (inv) {
+            await acceptPairing({ inviteId: inv.id, personName: 'Shega Mobile' });
+            showToast('Pairing request submitted! Synchronization started automatically.', 'success');
+          } else {
+            showToast(`Pairing code set: ${parsed.code}`, 'success');
+          }
+        } catch {
+          showToast(`Pairing code saved: ${parsed.code}`, 'success');
+        }
+        runSync();
+        setEnterCodeOpen(false);
+        setManualInput('');
+      }
+    } catch (e: any) {
+      showToast(e?.message || 'Could not connect device', 'error');
+    } finally {
+      setConnectingCode(false);
+      load();
+    }
+  };
 
   const revoke = (deviceId: string) => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     mobileP2pSync.revokeDevice(deviceId);
-    showToast('Device unpaired — it must be paired again before it can sync.', 'success');
+    showToast('Device unpaired', 'success');
     setDetail(null);
     setConfirmUnpair(null);
     load();
@@ -203,6 +300,9 @@ export function ConnectedDevicesScreen({ onBack }: { onBack: () => void }) {
     return 'synced';
   };
 
+  const onlineDevices = devices.filter((d) => d.online);
+  const offlineDevices = devices.filter((d) => !d.online);
+
   const renderRow = (d: DeviceRow) => {
     const st = deviceState(d);
     const who = d.userName;
@@ -213,57 +313,135 @@ export function ConnectedDevicesScreen({ onBack }: { onBack: () => void }) {
         style={[styles.row, { backgroundColor: G.bgCard, borderColor: G.border, opacity: d.online ? 1 : 0.65 }]}
         onPress={() => setDetail(d)}
       >
-        <View style={[styles.rowIcon, { backgroundColor: d.online ? (who ? G.accentGlass : G.accentGlass) : G.mutedLight }]}>
-          {who ? (
-            <AppText variant="body" weight="bold" style={{ color: d.online ? G.accent : G.muted, fontSize: 12 }}>
-              {initials(who)}
-            </AppText>
-          ) : (
+        <View style={[styles.rowIcon, { backgroundColor: d.online ? G.accentGlass : G.mutedLight }]}>
+          {d.deviceType === 'desktop' ? (
             <Monitor size={17} color={d.online ? G.accent : G.muted} />
+          ) : (
+            <Smartphone size={17} color={d.online ? G.accent : G.muted} />
           )}
         </View>
+
         <View style={{ flex: 1 }}>
           <AppText variant="body" weight="bold" style={{ color: G.fg }} numberOfLines={1}>
             {d.name || (d.deviceType === 'desktop' ? 'Shega Desktop' : 'Shega Mobile')}
           </AppText>
           <AppText variant="caption" weight="medium" style={{ color: G.muted }} numberOfLines={1}>
-            {who ? `${who} — ` : ''}
+            {who ? `${who} · ` : ''}
             <AppText variant="caption" weight="bold" style={{ color: d.online ? '#2ECC71' : G.muted }}>
               {d.online ? method : `Last seen ${lastSyncLabel((d.lastSeenAt ?? d.connectedAt) || null)}`}
             </AppText>
           </AppText>
         </View>
+
         <View style={styles.stateCol}>
           <View style={[styles.dot, { backgroundColor: STATE_DOT[st] }]} />
           <AppText variant="micro" weight="bold" style={{ color: d.online ? G.fg : G.muted }}>
             {STATE_LABEL[st]}
           </AppText>
         </View>
+
         <View style={styles.syncCol}>
           <Clock size={10} color={G.muted} />
           <AppText variant="micro" weight="bold" style={{ color: G.fg }}>
             {lastSyncLabel(d.lastSyncAt)}
           </AppText>
         </View>
+
         <ChevronRight size={15} color={G.muted} />
       </TouchableOpacity>
     );
   };
 
-  const online = devices.filter((d) => d.online);
-  const offline = devices.filter((d) => !d.online);
-
   return (
     <View style={styles.flex}>
+      {/* Header Bar */}
       <TouchableOpacity onPress={onBack} style={styles.backBar}>
         <ChevronLeft size={22} color={G.fg} />
-        <AppText variant="body" weight="bold" style={{ color: G.fg, flex: 1 }}>Connected Devices</AppText>
-        <TouchableOpacity onPress={discover} style={styles.findBtn}>
-          <RefreshCw size={15} color={G.fg} />
+        <View style={{ flex: 1 }}>
+          <AppText variant="body" weight="bold" style={{ color: G.fg }}>Connected Devices</AppText>
+          <AppText variant="caption" weight="medium" style={{ color: G.muted }}>Automatic Background Sync</AppText>
+        </View>
+        <TouchableOpacity onPress={refreshSync} style={styles.findBtn}>
+          <RefreshCw size={16} color={G.fg} />
         </TouchableOpacity>
       </TouchableOpacity>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* Live Sync / Connection Status Banner */}
+        <View style={[styles.statusHero, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+          <View style={styles.statusHeroRow}>
+            <View style={[styles.statusHeroIcon, { backgroundColor: syncBusy ? '#3498DB20' : onlineDevices.length > 0 ? '#2ECC7120' : '#9AA0A620' }]}>
+              {syncBusy ? (
+                <ActivityIndicator size="small" color="#3498DB" />
+              ) : onlineDevices.length > 0 ? (
+                <Wifi size={20} color="#2ECC71" />
+              ) : (
+                <WifiOff size={20} color={G.muted} />
+              )}
+            </View>
+            <View style={{ flex: 1 }}>
+              <AppText variant="body" weight="bold" style={{ color: G.fg }}>
+                {syncBusy ? 'Syncing changes…' : onlineDevices.length > 0 ? 'Connected & Synchronized' : 'No Devices Connected'}
+              </AppText>
+              <AppText variant="caption" weight="medium" style={{ color: G.muted }}>
+                {onlineDevices.length > 0
+                  ? `${onlineDevices.length} active device${onlineDevices.length === 1 ? '' : 's'} · Background sync on`
+                  : 'Pair a device to sync products, sales, and inventory'}
+              </AppText>
+            </View>
+          </View>
+        </View>
+
+        {/* Primary Action Buttons: Scan QR Code, Enter Pairing Code, My QR Code */}
+        <View style={styles.actionGrid}>
+          <TouchableOpacity
+            style={[styles.actionCard, { backgroundColor: G.accent, borderColor: G.accent }]}
+            onPress={() => {
+              Haptics.selectionAsync();
+              setScannerOpen(true);
+            }}
+          >
+            <QrCode size={22} color="#FFFFFF" />
+            <AppText variant="body" weight="bold" style={{ color: '#FFFFFF', marginTop: 8 }}>
+              Scan QR Code
+            </AppText>
+            <AppText variant="micro" style={{ color: 'rgba(255,255,255,0.8)', textAlign: 'center', marginTop: 2 }}>
+              Point camera at Desktop QR
+            </AppText>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionCard, { backgroundColor: G.bgCard, borderColor: G.border }]}
+            onPress={() => {
+              Haptics.selectionAsync();
+              setEnterCodeOpen(true);
+            }}
+          >
+            <KeyRound size={22} color={G.fg} />
+            <AppText variant="body" weight="bold" style={{ color: G.fg, marginTop: 8 }}>
+              Enter Code
+            </AppText>
+            <AppText variant="micro" style={{ color: G.muted, textAlign: 'center', marginTop: 2 }}>
+              Type pairing code / token
+            </AppText>
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.myQrBtn, { backgroundColor: G.bgCard, borderColor: G.border }]}
+          onPress={() => {
+            Haptics.selectionAsync();
+            setMyQrOpen(true);
+          }}
+        >
+          <QrCode size={18} color={G.fg} />
+          <AppText variant="body" weight="bold" style={{ color: G.fg, flex: 1, marginLeft: 10 }}>
+            Show My QR / Pairing Code
+          </AppText>
+          <ChevronRight size={16} color={G.muted} />
+        </TouchableOpacity>
+
+        {/* Rename bar if active */}
         {renaming ? (
           <View style={[styles.renameCard, { backgroundColor: G.bgCard, borderColor: G.border }]}>
             <TextInput
@@ -283,75 +461,147 @@ export function ConnectedDevicesScreen({ onBack }: { onBack: () => void }) {
           </View>
         ) : null}
 
+        {/* Devices List */}
         {devices.length === 0 ? (
           <View style={[styles.empty, { backgroundColor: G.bgCard, borderColor: G.border }]}>
-            <MonitorSmartphone size={28} color={G.muted} />
-            <AppText variant="body" weight="bold" style={{ color: G.fg, marginTop: 10 }}>No devices yet</AppText>
+            <Monitor size={28} color={G.muted} />
+            <AppText variant="body" weight="bold" style={{ color: G.fg, marginTop: 10 }}>No connected devices</AppText>
             <AppText variant="caption" weight="medium" style={{ color: G.muted, textAlign: 'center', marginTop: 4 }}>
-              Connect another phone or desktop to sync products, sales, inventory and more — directly, device to device.
+              Tap &quot;Scan QR Code&quot; to connect to Shega Desktop or another mobile device. Synchronization starts automatically after connecting.
             </AppText>
           </View>
         ) : (
           <>
-            {online.length > 0 && (
-              <>
-                <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, marginBottom: 8 }}>Connected</AppText>
-                {online.map(renderRow)}
-              </>
+            {onlineDevices.length > 0 && (
+              <View style={{ marginTop: 16 }}>
+                <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, marginBottom: 8 }}>
+                  Connected Devices ({onlineDevices.length})
+                </AppText>
+                {onlineDevices.map(renderRow)}
+              </View>
             )}
-            {offline.length > 0 && (
-              <>
-                <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, marginBottom: 8, marginTop: 16 }}>Offline</AppText>
-                {offline.map(renderRow)}
-              </>
+
+            {offlineDevices.length > 0 && (
+              <View style={{ marginTop: 16 }}>
+                <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, marginBottom: 8 }}>
+                  Disconnected / Previous Devices ({offlineDevices.length})
+                </AppText>
+                {offlineDevices.map(renderRow)}
+              </View>
             )}
           </>
         )}
 
-        <AppButton
-          label="Add Device"
-          variant="primary"
-          fullWidth
-          leftIcon={<Plus size={17} color={G.bg} />}
-          onPress={() => { Haptics.selectionAsync(); setPairOpen(true); }}
-          style={{ marginTop: 18 }}
-        />
-
-        <AppText variant="micro" weight="medium" style={{ color: G.muted, textAlign: 'center', marginTop: 12, paddingHorizontal: 16 }}>
-          Devices sync business data directly over Wi-Fi/P2P — no cloud needed. Each device keeps its own local
-          users and sign-in; connecting a device never creates or copies an account.
+        <AppText variant="micro" weight="medium" style={{ color: G.muted, textAlign: 'center', marginTop: 20, paddingHorizontal: 16 }}>
+          All paired devices synchronize sales, products, and inventory automatically in the background whenever connected to the same network or cloud.
         </AppText>
       </ScrollView>
 
-      {/* Pair modal */}
-      <Modal visible={pairOpen} transparent animationType="fade" onRequestClose={() => setPairOpen(false)}>
-        <View style={styles.modalOverlay}>
-          <PairCard businessName={businessName} businessId={getActiveBusiness()?.id || ''} counts={counts} onClose={() => { mobilePairingBeacon.stopPublishing(); setPairOpen(false); load(); }} G={G} />
-        </View>
+      {/* ── QR Scanner Modal ── */}
+      <QrPairScanner
+        visible={scannerOpen}
+        onClose={() => {
+          setScannerOpen(false);
+          load();
+        }}
+        onPaired={(url, token) => {
+          setScannerOpen(false);
+          runSync();
+          load();
+        }}
+      />
+
+      {/* ── Enter Pairing Code Modal ── */}
+      <Modal visible={enterCodeOpen} transparent animationType="fade" onRequestClose={() => setEnterCodeOpen(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setEnterCodeOpen(false)}>
+          <TouchableOpacity activeOpacity={1} style={[styles.cardModal, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
+              <KeyRound size={20} color={G.fg} style={{ marginRight: 8 }} />
+              <AppText variant="body" weight="bold" style={{ color: G.fg, flex: 1 }}>Enter Pairing Code</AppText>
+              <TouchableOpacity onPress={() => setEnterCodeOpen(false)}>
+                <X size={18} color={G.muted} />
+              </TouchableOpacity>
+            </View>
+
+            <AppText variant="caption" style={{ color: G.muted, marginBottom: 12 }}>
+              Enter the 6-character pairing code or token shown on the Shega Desktop or Mobile POS screen.
+            </AppText>
+
+            <TextInput
+              value={manualInput}
+              onChangeText={setManualInput}
+              placeholder="e.g. ABCDEF or token / IP"
+              placeholderTextColor={G.muted}
+              style={[styles.codeInput, { backgroundColor: G.bg, borderColor: G.border, color: G.fg }]}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              autoFocus
+            />
+
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+              <View style={{ flex: 1 }}>
+                <AppButton label="Cancel" variant="ghost" fullWidth onPress={() => setEnterCodeOpen(false)} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <AppButton
+                  label={connectingCode ? 'Connecting…' : 'Connect'}
+                  variant="primary"
+                  fullWidth
+                  disabled={connectingCode}
+                  onPress={handleManualPair}
+                />
+              </View>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
-      {/* Detail modal */}
+      {/* ── Show My QR Code Modal ── */}
+      <Modal visible={myQrOpen} transparent animationType="fade" onRequestClose={() => setMyQrOpen(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setMyQrOpen(false)}>
+          <TouchableOpacity activeOpacity={1} style={[styles.cardModal, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+              <QrCode size={20} color={G.fg} style={{ marginRight: 8 }} />
+              <AppText variant="body" weight="bold" style={{ color: G.fg, flex: 1 }}>Pairing Code &amp; QR</AppText>
+              <TouchableOpacity onPress={() => setMyQrOpen(false)}>
+                <X size={18} color={G.muted} />
+              </TouchableOpacity>
+            </View>
+
+            <PairCard
+              businessName={businessName}
+              businessId={getActiveBusiness()?.id || ''}
+              counts={counts}
+              onClose={() => setMyQrOpen(false)}
+              G={G}
+            />
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ── Device Detail / Unpair Modal ── */}
       <Modal visible={!!detail} transparent animationType="fade" onRequestClose={() => setDetail(null)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setDetail(null)}>
-          <TouchableOpacity activeOpacity={1} style={[styles.detailCard, { backgroundColor: G.bgCard }]}>
+          <TouchableOpacity activeOpacity={1} style={[styles.cardModal, { backgroundColor: G.bgCard, borderColor: G.border }]}>
             {detail && (
               <>
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
                   <AppText variant="body" weight="bold" style={{ color: G.fg, flex: 1 }}>
                     {detail.name || (detail.deviceType === 'desktop' ? 'Shega Desktop' : 'Shega Mobile')}
                   </AppText>
-                  <TouchableOpacity onPress={() => setRenaming({ id: detail.deviceId, value: detail.name || '' })} style={{ marginRight: 8 }}>
-                    <Pencil size={15} color={G.fg} />
+                  <TouchableOpacity onPress={() => setRenaming({ id: detail.deviceId, value: detail.name || '' })} style={{ marginRight: 10 }}>
+                    <Pencil size={16} color={G.fg} />
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => setDetail(null)}>
-                    <X size={16} color={G.muted} />
+                    <X size={18} color={G.muted} />
                   </TouchableOpacity>
                 </View>
+
                 {[
                   ['Type', detail.deviceType === 'desktop' ? 'Desktop' : 'Mobile'],
                   ['User', detail.userName || '—'],
                   ['Status', STATE_LABEL[deviceState(detail)]],
-                  ['Connection', detail.online ? (METHOD_LABEL[detail.method ?? 'lan'] ?? 'Connected via LAN') : '—'],
+                  ['Connection', detail.online ? (METHOD_LABEL[detail.method ?? 'lan'] ?? 'Connected via LAN') : 'Offline'],
                   ['Last seen', lastSyncLabel((detail.lastSeenAt ?? detail.connectedAt) || null)],
                   ['Last sync', lastSyncLabel(detail.lastSyncAt)],
                   ['Device ID', detail.deviceId],
@@ -361,24 +611,14 @@ export function ConnectedDevicesScreen({ onBack }: { onBack: () => void }) {
                     <AppText variant="caption" weight="bold" style={{ color: G.fg }} numberOfLines={1}>{v}</AppText>
                   </View>
                 ))}
-                <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, marginTop: 14, marginBottom: 6 }}>
-                  Business data
-                </AppText>
-                <View style={styles.countGrid}>
-                  {Object.entries(counts).slice(0, 9).map(([label, n]) => (
-                    <View key={label} style={[styles.countTile, { backgroundColor: G.bg, borderColor: G.border }]}>
-                      <AppText variant="body" weight="bold" style={{ color: G.fg }}>{n.toLocaleString()}</AppText>
-                      <AppText variant="micro" weight="bold" style={{ color: G.muted }}>{label}</AppText>
-                    </View>
-                  ))}
-                </View>
+
                 <AppButton
                   label="Unpair Device"
                   variant="danger"
                   fullWidth
                   leftIcon={<ShieldOff size={15} color="#fff" />}
                   onPress={() => setConfirmUnpair(detail)}
-                  style={{ marginTop: 16 }}
+                  style={{ marginTop: 18 }}
                 />
               </>
             )}
@@ -386,20 +626,28 @@ export function ConnectedDevicesScreen({ onBack }: { onBack: () => void }) {
         </TouchableOpacity>
       </Modal>
 
-      {/* Unpair confirmation */}
+      {/* Unpair Confirmation Modal */}
       <Modal visible={!!confirmUnpair} transparent animationType="fade" onRequestClose={() => setConfirmUnpair(null)}>
-        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setConfirmUnpair(null)}>
-          <TouchableOpacity activeOpacity={1} style={[styles.sheet, { backgroundColor: G.bgCard, borderColor: G.border }]}>
-            <AppText variant="heading" weight="bold" style={{ color: G.fg }}>Unpair &quot;{confirmUnpair?.name || confirmUnpair?.model || 'this device'}&quot;?</AppText>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setConfirmUnpair(null)}>
+          <TouchableOpacity activeOpacity={1} style={[styles.cardModal, { backgroundColor: G.bgCard, borderColor: G.border }]}>
+            <AppText variant="heading" weight="bold" style={{ color: G.fg }}>
+              Unpair &quot;{confirmUnpair?.name || 'this device'}&quot;?
+            </AppText>
             <AppText variant="caption" style={{ color: G.muted, marginTop: 8 }}>
-              It will immediately stop syncing and lose access to {businessName}. Business data is kept on your remaining devices. The device must be paired and approved again before it can sync.
+              This device will stop syncing with {businessName}. Business data is preserved on your remaining devices.
             </AppText>
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
               <View style={{ flex: 1 }}>
                 <AppButton label="Cancel" variant="ghost" fullWidth onPress={() => setConfirmUnpair(null)} />
               </View>
               <View style={{ flex: 1 }}>
-                <AppButton label="Unpair" variant="danger" fullWidth leftIcon={<ShieldOff size={15} color="#fff" />} onPress={() => confirmUnpair && revoke(confirmUnpair.deviceId)} />
+                <AppButton
+                  label="Unpair"
+                  variant="danger"
+                  fullWidth
+                  leftIcon={<ShieldOff size={15} color="#fff" />}
+                  onPress={() => confirmUnpair && revoke(confirmUnpair.deviceId)}
+                />
               </View>
             </View>
           </TouchableOpacity>
@@ -409,32 +657,7 @@ export function ConnectedDevicesScreen({ onBack }: { onBack: () => void }) {
   );
 }
 
-/** One discovered device as rendered on the Add-Team radar. */
-type PairPeer = { id: string; name: string; platform?: string; hasInvite?: boolean; host?: string };
-
-/**
- * Identity check for the radar's peer list. Discovery notifications arrive far
- * more often than the visible set actually changes (one per resolved service,
- * per UDP reply, and once per hit on every LAN sweep pass), so this is what
- * keeps the card from re-rendering — and re-fading — for nothing.
- */
-function samePeers(a: PairPeer[], b: PairPeer[]): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i += 1) {
-    if (a[i].id !== b[i].id || a[i].name !== b[i].name || a[i].hasInvite !== b[i].hasInvite) return false;
-  }
-  return true;
-}
-
-/**
- * Pairing card — invitation code + QR first, discovery radar second.
- *
- * Opens the business's invitation as a live beacon, shows the invite code and
- * its QR so the other device can scan it, type it, or simply be discovered
- * here (which also covers a network that blocks mDNS / broadcast). Selecting a
- * nearby device connects it for business-data sync — no role, no user and no
- * member row is created on either side.
- */
+/** Inner PairCard component for displaying local QR & code */
 function PairCard({ businessName, businessId, counts, onClose, G }: {
   businessName: string;
   businessId: string;
@@ -443,19 +666,10 @@ function PairCard({ businessName, businessId, counts, onClose, G }: {
   G: any;
 }) {
   const [invite, setInvite] = useState<{ code: string; id: string; qrUri: string; expiresAt: string } | null>(null);
-  const [peers, setPeers] = useState<PairPeer[]>([]);
-  const [peerPhase, setPeerPhase] = useState<Record<string, 'idle' | 'approving' | 'waiting'>>({});
-  const [selfName] = useState(getThisDeviceName());
-  const [now, setNow] = useState(Date.now());
   const { showToast } = useToast();
 
   const generate = async () => {
     try {
-      // Offline-first: generate the invitation locally (no cloud dependency),
-      // then advertise a pairing beacon so nearby devices discover us.
-      // Device-only invitation: it carries no role and authorises no user. The
-      // other device joins for BUSINESS-DATA sync and keeps its own local
-      // accounts, sign-in and PIN.
       const inv = generateInvitation({ businessId, platform: 'mobile' });
       mobilePairingBeacon.advertiseInvitation({ id: inv.id, code: inv.code, businessId, expiresAt: inv.expiresAt });
       if (wsSyncClient.isConnected) {
@@ -463,244 +677,171 @@ function PairCard({ businessName, businessId, counts, onClose, G }: {
       }
       setInvite({ code: inv.code, id: inv.id, qrUri: inv.qrUri, expiresAt: inv.expiresAt });
     } catch (e: any) {
-      showToast(e?.message || 'Could not start discovery.', 'error');
+      showToast(e?.message || 'Could not generate code.', 'error');
     }
   };
 
-  React.useEffect(() => { void generate(); }, []);
-
-  // Keep the expiry countdown fresh without any extra polling machinery — the
-  // discovery refresh below already re-renders this card every few seconds.
-  React.useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 10_000);
-    return () => clearInterval(t);
+  useEffect(() => {
+    void generate();
   }, []);
-
-  // Discovery must be ACTIVE on the owner side too, not just publish-only.
-  // Without it the mDNS scan and the LAN sweep — which populate
-  // getNearbyOwners() — stay dormant, so nearby joiners never appear on the
-  // radar even though the joiner has been in Join Business the whole time.
-  // The owner also runs the 5759 join channel during pairing so a discovered
-  // joiner can resolve + submit the invite over TCP with no cloud dependency.
-  const ownServerRef = useRef(false);
-  React.useEffect(() => {
-    try {
-      mobilePairingBeacon.startBrowsing();
-      const bName = businessName || 'Shega';
-      mobilePairingBeacon.setDiscoverable(true, bName, 'owner');
-    } catch { /* native mDNS missing — LAN sweep still runs */ }
-    if (!isMobileSyncServerRunning()) {
-      ownServerRef.current = true;
-      void startMobileSyncServer();
-    }
-    return () => {
-      try { mobilePairingBeacon.stopBrowsing(); } catch { /* ignore */ }
-      try { mobilePairingBeacon.setDiscoverable(false); } catch { /* ignore */ }
-      if (ownServerRef.current) {
-        try { stopMobileSyncServer(); } catch { /* ignore */ }
-      }
-    };
-  }, [businessName]);
-
-  // Live discovery of devices that are visible on this network — refreshed
-  // without a button. The owner sees every nearby device that has turned itself
-  // discoverable (join-mode phones, other owner devices in pairing mode,
-  // desktops in join mode). Discovery is mutual: the moment THIS owner opens an
-  // invite for their business, those devices can see THIS device too.
-  //
-  // What makes a device joinable is not beacon.role (that is the device's own
-  // self-description and can say 'owner' even for a joiner's phone — because the
-  // phone is the owner of its own app session). What makes a join possible is:
-  //   1) the device is visible now (it is in discovery / join mode),
-  //   2) THIS owner has an open invite for their business, and
-  //   3) the owner taps it to connect it.
-  //
-  // So we list every visible nearby device; tapping one pairs the DEVICE for
-  // business-data sync. No code entry, no role selection, no user created.
-  React.useEffect(() => {
-    const refresh = () => {
-      try {
-        const list = mobilePairingBeacon
-          .getNearbyOwners()
-          // The LAN sweep knocks on our own port too — never list this phone.
-          .filter(({ beacon }: any) => beacon?.owner?.deviceId && beacon.owner.deviceId !== getDeviceId())
-          // Every visible device is a potential team target for the owner.
-          // Do not gate on beacon.role — a joiner's phone reports 'owner' in
-          // its own discovery beacon (it is the owner of its own session).
-          .map(({ beacon, host }: any): PairPeer => ({
-            id: beacon.owner?.deviceId || beacon.businessId,
-            name: beacon.owner?.deviceName || 'Nearby device',
-            platform: beacon.owner?.platform,
-            hasInvite: !!beacon.code,
-            host,
-          }))
-          // Stable order so a peer flipping between two transports (mDNS vs
-          // LAN sweep) cannot reshuffle the list under the user's finger.
-          .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-        // onFound fires once per peer (and the LAN sweep re-broadcasts every
-        // hit on each pass), so only commit when the visible set really
-        // changed — otherwise the card re-renders dozens of times per sweep.
-        setPeers((prev) => (samePeers(prev, list) ? prev : list));
-      } catch { setPeers([]); }
-    };
-    refresh();
-    // Event-driven: a device that IS found must appear immediately. Polling
-    // alone left the radar on "Searching for nearby devices…" for a full tick
-    // after every hit, and — because onFound was never subscribed here at all
-    // — a hit could sit invisible for as long as the poll took to observe it.
-    const unsubscribe = mobilePairingBeacon.onFound(refresh);
-    // The poll stays as a backstop: it is what drops entries whose beacon has
-    // expired, and it picks up peers that were already cached before we
-    // subscribed.
-    const t = setInterval(refresh, 3000);
-    return () => {
-      unsubscribe();
-      clearInterval(t);
-    };
-  }, []);
-
-  /**
-   * Pairs one nearby device for business-data sync.
-   *
-   * There is deliberately nothing to configure: no role, no permissions, no
-   * member row. Each device keeps its own local users, sign-in and PIN, and
-   * only business data (products, sales, inventory, customers, suppliers,
-   * debts, stock movements) is exchanged once the two are connected.
-   */
-  const pairDevice = (peer: PairPeer) => {
-    Haptics.selectionAsync();
-    setPeerPhase((x) => ({ ...x, [peer.id]: 'approving' }));
-    preassignJoinIdentity(peer.id, { name: peer.name || 'Shega Device' });
-    if (invite) {
-      mobilePairingBeacon.advertiseInvitation({ id: invite.id, code: invite.code, businessId, expiresAt: invite.expiresAt });
-      if (wsSyncClient.isConnected) {
-        wsSyncClient.publishInvitation({ id: invite.id, businessId, code: invite.code, platform: 'mobile', expiresAt: invite.expiresAt }).catch(() => {});
-      }
-    }
-    showToast(`${peer.name || 'Device'} will start syncing business data as soon as it connects.`, 'success');
-    setPeerPhase((x) => ({ ...x, [peer.id]: 'waiting' }));
-  };
-
-  const peerDetail = (p: PairPeer): string => {
-    switch (peerPhase[p.id]) {
-      case 'approving': return `Connecting ${p.name}…`;
-      case 'waiting': return 'Connected — waiting for it to come online…';
-      default: return `${p.platform === 'desktop' ? 'Desktop' : 'Mobile'}${p.hasInvite ? ' · Ready to connect' : ' · Listening'} · tap to connect`;
-    }
-  };
-
-  const phasePending = Object.values(peerPhase).some((s) => s === 'approving' || s === 'waiting');
-  const radarTone = (Object.values(peerPhase).some((s) => s === 'approving') ? 'connecting'
-    : Object.values(peerPhase).some((s) => s === 'waiting') ? 'connected'
-      : peers.length > 0 ? 'found' : 'searching') as any;
-  const radarStatus = (Object.values(peerPhase).some((s) => s === 'approving') ? 'Connecting device…'
-    : Object.values(peerPhase).some((s) => s === 'waiting') ? 'Connected — waiting for its next sync'
-      : peers.length > 0 ? `${peers.length} device${peers.length === 1 ? '' : 's'} found`
-        : 'Searching for nearby devices…');
 
   return (
-    <TouchableOpacity activeOpacity={1} style={[styles.detailCard, { backgroundColor: G.bgCard }]}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-        <AppText variant="body" weight="bold" style={{ color: G.fg, flex: 1 }}>Add Device</AppText>
-        <TouchableOpacity onPress={onClose}><X size={16} color={G.muted} /></TouchableOpacity>
-      </View>
-
-      {invite && (
-        <View style={{ marginBottom: 16 }}>
-          <AppText variant="micro" weight="bold" transform="uppercase" style={{ color: G.muted, textAlign: 'center', marginBottom: 8 }}>
-            Invitation code — share it or scan the QR
+    <View style={{ alignItems: 'center' }}>
+      {invite ? (
+        <>
+          <AppText variant="caption" weight="medium" style={{ color: G.muted, textAlign: 'center', marginBottom: 8 }}>
+            Scan this QR code from another device or enter the pairing code:
           </AppText>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-            <View style={[styles.codeChip, { backgroundColor: G.bg, borderColor: G.border }]}>
-              <AppText variant="title" weight="bold" style={{ color: G.fg, letterSpacing: 5, fontSize: 20 }}>{invite.code}</AppText>
-            </View>
+
+          <View style={[styles.codeChip, { backgroundColor: G.bg, borderColor: G.border }]}>
+            <AppText variant="title" weight="bold" style={{ color: G.fg, letterSpacing: 4, fontSize: 20 }}>
+              {invite.code}
+            </AppText>
             <TouchableOpacity
               onPress={async () => {
-                try {
-                  const Clipboard = await import('expo-clipboard');
-                  await Clipboard.setStringAsync(invite.code);
-                  showToast('Code copied', 'success');
-                } catch { /* clipboard unavailable */ }
+                await Clipboard.setStringAsync(invite.code);
+                showToast('Pairing code copied', 'success');
               }}
-              style={[styles.copyBtn, { backgroundColor: G.accentGlass, borderColor: G.border }]}
+              style={{ padding: 6 }}
             >
               <Copy size={16} color={G.fg} />
             </TouchableOpacity>
           </View>
-          <View style={{ alignItems: 'center', marginTop: 12 }}>
-            <View style={[styles.qrFrame, { backgroundColor: '#FFFFFF', borderColor: G.border }]}>
-              <QRCode value={invite.qrUri} size={168} />
-            </View>
+
+          <View style={[styles.qrFrame, { backgroundColor: '#FFFFFF', borderColor: G.border, marginTop: 12 }]}>
+            <QRCode value={invite.qrUri} size={160} />
           </View>
-          <AppText variant="micro" weight="medium" style={{ color: G.muted, textAlign: 'center', marginTop: 8 }}>
-            On the other device: Settings → Connected Devices → Add Device, then scan this QR or enter {invite.code}.
-            Valid {Math.max(0, Math.round((new Date(invite.expiresAt).getTime() - now) / 60000))} more min.
+
+          <AppText variant="micro" style={{ color: G.muted, textAlign: 'center', marginTop: 12 }}>
+            Valid for device-to-device pairing. Sync will start automatically once connected.
           </AppText>
-        </View>
+        </>
+      ) : (
+        <ActivityIndicator size="small" color={G.fg} style={{ marginVertical: 20 }} />
       )}
-
-      <RadarPulse
-        glass={G}
-        compact
-        deviceName={selfName}
-        tone={radarTone}
-        status={radarStatus}
-        peers={peers.map((p) => ({
-          id: p.id,
-          name: p.name,
-          platform: p.platform,
-          detail: peerDetail(p),
-          disabled: peerPhase[p.id] === 'approving' || peerPhase[p.id] === 'waiting' || phasePending,
-        }))}
-        onPickPeer={(p) => pairDevice(p)}
-        emptyHint={`On the other device open Shega → Settings → Connected Devices → Add Device. Devices on this Wi-Fi appear here for ${businessName}.`}
-      />
-
-      {Object.keys(counts).length > 0 && (
-        <AppText variant="micro" weight="medium" style={{ color: G.muted, textAlign: 'center', marginTop: 14 }}>
-          Once connected: {Object.entries(counts).slice(0, 3).map(([k, v]) => `${k} ${v}`).join(' · ')} syncs to the new device.
-        </AppText>
-      )}
-
-    </TouchableOpacity>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  backBar: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 20, paddingTop: 56, paddingBottom: 12 },
+  backBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingTop: 56,
+    paddingBottom: 12,
+  },
   findBtn: { padding: 8, borderRadius: 10, backgroundColor: 'rgba(128,128,128,0.12)' },
   scroll: { paddingHorizontal: 20, paddingBottom: 40 },
+
+  statusHero: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 14,
+  },
+  statusHeroRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  statusHeroIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+
+  actionGrid: { flexDirection: 'row', gap: 10, marginBottom: 10 },
+  actionCard: {
+    flex: 1,
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 16,
+    alignItems: 'center',
+    justify: 'center',
+  },
+
+  myQrBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 14,
+  },
+
   row: {
-    flexDirection: 'row', alignItems: 'center', borderRadius: 16, borderWidth: 1,
-    padding: 13, marginBottom: 8, gap: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 13,
+    marginBottom: 8,
+    gap: 10,
   },
   rowIcon: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   stateCol: { alignItems: 'center', gap: 3 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   syncCol: { alignItems: 'center', gap: 2 },
   empty: {
-    borderRadius: 20, borderWidth: 1, padding: 28, alignItems: 'center', marginTop: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 28,
+    alignItems: 'center',
+    marginTop: 8,
   },
+
   renameCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 14, borderWidth: 1, padding: 10, marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 10,
+    marginBottom: 10,
   },
   renameInput: {
-    flex: 1, borderWidth: 1, borderRadius: 10, paddingVertical: 9, paddingHorizontal: 12,
-    fontSize: 14, fontWeight: '600',
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    fontWeight: '600',
   },
-  renameSave: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', padding: 24 },
-  detailCard: { width: '100%', maxWidth: 380, borderRadius: 22, padding: 20 },
+  renameSave: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  cardModal: { width: '100%', maxWidth: 380, borderRadius: 22, padding: 20, borderWidth: 1 },
   detailRow: {
-    flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(128,128,128,0.2)', paddingVertical: 7,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(128,128,128,0.2)',
+    paddingVertical: 7,
   },
-  countGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  countTile: { width: '31%', borderRadius: 10, borderWidth: 1, padding: 8, alignItems: 'center' },
-  qrFrame: { borderRadius: 16, padding: 12, alignItems: 'center', justifyContent: 'center', width: 194, height: 194 },
-  codeChip: { borderRadius: 10, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 8 },
-  copyBtn: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', padding: 24 },
-  sheet: { width: '100%', maxWidth: 360, borderRadius: 20, borderWidth: 1, padding: 20 },
+
+  codeInput: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 2,
+    textAlign: 'center',
+  },
+
+  codeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  qrFrame: { padding: 12, borderRadius: 16, borderWidth: 1 },
 });
+
+export default ConnectedDevicesScreen;
